@@ -81,7 +81,7 @@ func newPrivateB4EventAccountC17WithBytes(bytes *privateB4ByteAccountV2) (*priva
 	if bytes == nil {
 		return nil, session.ResourceExhausted
 	}
-	backing, failure := bytes.reserve(privateB4EventAccountC17SelfCost())
+	backing, failure := bytes.reservePrivateB4Unobserved(privateB4EventAccountC17SelfCost())
 	if failure != "" {
 		return nil, failure
 	}

@@ -34,6 +34,7 @@ type privateB4OwnedMethodPairOwner struct {
 	cond            sync.Cond
 	pair            OwnedMethodPair
 	charge          privateB4ByteLeaseV2
+	resultCharge    privateB4ByteLeaseV2
 	active          uint32
 	admissionClosed bool
 	releaseStarted  bool
@@ -62,8 +63,14 @@ func newPrivateB4OwnedMethodPairOwner(account *privateB4ByteAccountV2, source Ow
 	if account == nil || uint64(len(source.Params)) > math.MaxUint64-uint64(len(source.Result)) {
 		return nil, session.ResourceExhausted
 	}
-	charge, failure := account.reserve(uint64(len(source.Params)) + uint64(len(source.Result)))
-	if failure != "" {
+	var charges [2]privateB4ByteLeaseV2
+	creations := [...]privateB4C15Creation{
+		{siteID: privateC15SiteC15Copy34OwnedPairParams, operation: privateB4C15Operation("copy")},
+		{siteID: privateC15SiteC15Copy35OwnedPairResult, operation: privateB4C15Operation("copy")},
+	}
+	if _, failure := account.reserveManyPrivateB4C15(
+		[]uint64{uint64(len(source.Params)), uint64(len(source.Result))}, creations[:], charges[:],
+	); failure != "" {
 		return nil, failure
 	}
 	pair := source
@@ -75,7 +82,7 @@ func newPrivateB4OwnedMethodPairOwner(account *privateB4ByteAccountV2, source Ow
 		copied := *source.Source
 		pair.Source = &copied
 	}
-	o := &privateB4OwnedMethodPairOwner{pair: pair, charge: charge}
+	o := &privateB4OwnedMethodPairOwner{pair: pair, charge: charges[0], resultCharge: charges[1]}
 	o.cond.L = &o.mu
 	return o, ""
 }
@@ -90,9 +97,13 @@ func (l OwnedMethodPairLease) WithPair(fn func(OwnedMethodPairView) error) error
 		o.mu.Unlock()
 		return ErrOwnedMethodPairLeaseClosed
 	}
+	_ = privateC15SiteC15Alias36OwnedPairCallback
+	if failure := o.charge.account.aliasPrivateB4C15(o.charge.lease, privateC15SiteC15Alias36OwnedPairCallback); failure != "" {
+		o.mu.Unlock()
+		return errors.New(string(failure))
+	}
 	o.active++
 	p := &o.pair
-	_ = privateC15SiteC15Alias36OwnedPairCallback
 	view := OwnedMethodPairView{SessionID: p.SessionID, Generation: p.Generation, Key: p.Key, Method: p.Method, Params: p.Params, Result: p.Result, Write: p.Write, Read: p.Read, Source: p.Source}
 	o.mu.Unlock()
 	defer func() {
@@ -145,6 +156,7 @@ func (l OwnedMethodPairLease) Release() bool {
 	}
 	o.pair = OwnedMethodPair{}
 	o.charge.release()
+	o.resultCharge.release()
 	o.released = true
 	o.cond.Broadcast()
 	o.mu.Unlock()

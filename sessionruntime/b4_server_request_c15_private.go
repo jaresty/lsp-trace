@@ -12,7 +12,7 @@ const (
 	privateB4UnsupportedResponseSuffix = `,"error":{"code":-32601,"message":"Method not found"}}`
 )
 
-func writePrivateB4UnsupportedResponse(ctx context.Context, owner *ownedTransport, writer *lspwire.Writer, account *privateB4ByteAccountV2, frame []byte, observation lspwire.SuccessorReadObservation) (session.Failure, bool) {
+func writePrivateB4UnsupportedResponse(ctx context.Context, owner *ownedTransport, writer *lspwire.Writer, account *privateB4ByteAccountV2, frame []byte, observation lspwire.SuccessorReadObservation, frameOwners ...*privateB4ResponseFrameOwner) (session.Failure, bool) {
 	bodyStart := observation.BodyOffset
 	idStart := bodyStart + observation.RequestIDStart
 	idEnd := bodyStart + observation.RequestIDEnd
@@ -20,6 +20,15 @@ func writePrivateB4UnsupportedResponse(ctx context.Context, owner *ownedTranspor
 		return session.SessionPoisoned, true
 	}
 	_ = privateC15SiteC15Alias45aServerRequestIdToken
+	var frameOwner *privateB4ResponseFrameOwner
+	if len(frameOwners) == 1 {
+		frameOwner = frameOwners[0]
+	} else if len(frameOwners) > 1 {
+		return session.ResourceExhausted, false
+	}
+	if account != nil && account.c15 != nil && (frameOwner == nil || aliasPrivateB4SuccessorAllocation(frameOwner.charge, privateC15SiteC15Alias45aServerRequestIdToken) != "") {
+		return session.ResourceExhausted, false
+	}
 	id := frame[idStart:idEnd]
 	bodyCapacity := uint64(len(privateB4UnsupportedResponsePrefix)) + uint64(len(id)) + uint64(len(privateB4UnsupportedResponseSuffix))
 	if bodyCapacity > uint64(^uint(0)>>1) {
@@ -31,14 +40,16 @@ func writePrivateB4UnsupportedResponse(ctx context.Context, owner *ownedTranspor
 	}
 	headerCapacity := uint64(frameCapacity) - bodyCapacity
 	var leases [2]privateB4ByteLeaseV2
-	_ = privateC15SiteC15Copy45cUnsupportedResponseHeader
-	if _, failure := account.reserveMany([]uint64{bodyCapacity, headerCapacity}, leases[:]); failure != "" {
+	creations := [...]privateB4C15Creation{
+		{siteID: privateC15SiteC15Copy45bUnsupportedResponseBody, operation: privateB4C15Operation("copy")},
+		{siteID: privateC15SiteC15Copy45cUnsupportedResponseHeader, operation: privateB4C15Operation("copy")},
+	}
+	if _, failure := account.reserveManyPrivateB4C15([]uint64{bodyCapacity, headerCapacity}, creations[:], leases[:]); failure != "" {
 		return failure, false
 	}
 	defer leases[1].release()
 	defer leases[0].release()
 
-	_ = privateC15SiteC15Copy45bUnsupportedResponseBody
 	body := make([]byte, int(bodyCapacity))
 	n := copy(body, privateB4UnsupportedResponsePrefix)
 	n += copy(body[n:], id)

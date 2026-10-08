@@ -69,7 +69,7 @@ func newPrivateB4RetainedNotificationOwner(account *privateB4ByteAccountV2, sour
 		return nil, session.ResourceExhausted
 	}
 	_ = privateC15SiteC15Copy28RetainedNotificationSet
-	charge, failure := account.reserve(capacity)
+	charge, failure := account.reservePrivateB4C15(capacity, privateC15SiteC15Copy28RetainedNotificationSet, privateB4C15Operation("copy"))
 	if failure != "" {
 		return nil, failure
 	}
@@ -100,8 +100,12 @@ func (l RetainedNotificationLease) WithNotifications(fn func([]lspwire.Message) 
 		o.mu.Unlock()
 		return ErrRetainedNotificationLeaseClosed
 	}
-	o.active++
 	_ = privateC15SiteC15Alias29NotificationsCallback
+	if failure := o.charge.account.aliasPrivateB4C15(o.charge.lease, privateC15SiteC15Alias29NotificationsCallback); failure != "" {
+		o.mu.Unlock()
+		return ErrRetainedNotificationLeaseClosed
+	}
+	o.active++
 	messages := o.notifications
 	o.mu.Unlock()
 	defer func() {

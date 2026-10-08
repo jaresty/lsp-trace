@@ -73,7 +73,6 @@ func newPrivateB4ByteLedgerV2() (*privateB4ByteLedgerV2, session.Failure) {
 	if !privateB4ByteLedgerV2RepresentationSupported() || privateB4ByteLedgerV2TableBytes > privateB4MaxOwnedBytes {
 		return nil, session.ResourceExhausted
 	}
-	_ = privateC15SiteC15Owner01V2TransactionTable
 	ledger := &privateB4ByteLedgerV2{}
 	ledger.general.live = privateB4ByteLedgerV2TableBytes
 	ledger.general.cumulative = privateB4ByteLedgerV2TableBytes
@@ -118,11 +117,21 @@ func (l *privateB4ByteLedgerV2) releaseTableBacking() bool {
 
 // privateB4ByteAccountV2 is the versioned transaction owner. It deliberately
 // wraps, rather than changes, the frozen legacy ledger and lease layouts.
+type privateB4C15LeaseState struct {
+	objectID uint64
+	siteID   string
+}
+
 type privateB4ByteAccountV2 struct {
-	mu                sync.Mutex
-	table             privateB4ByteLedgerV2
-	terminalRequested bool
-	backingReleased   bool
+	mu                 sync.Mutex
+	table              privateB4ByteLedgerV2
+	terminalRequested  bool
+	backingReleased    bool
+	c15                *privateB4C15CustodyContext
+	c15BackingObjectID uint64
+	c15BackingSiteID   string
+	c15Leases          map[privateB4ByteLease]privateB4C15LeaseState
+	c15ZeroLeases      []privateB4C15LeaseState
 }
 
 type privateB4ByteLeaseV2 struct {
@@ -135,15 +144,38 @@ type privateB4DescriptorLeaseV2 struct {
 	lease   privateB4DescriptorLease
 }
 
-func newPrivateB4ByteAccountV2() (*privateB4ByteAccountV2, session.Failure) {
+func newPrivateB4ByteAccountV2(contexts ...*privateB4C15CustodyContext) (*privateB4ByteAccountV2, session.Failure) {
+	if len(contexts) > 1 {
+		return nil, session.ResourceExhausted
+	}
+	var context *privateB4C15CustodyContext
+	if len(contexts) == 1 {
+		context = contexts[0]
+	}
 	table, failure := newPrivateB4ByteLedgerV2()
 	if failure != "" {
 		return nil, failure
 	}
-	return &privateB4ByteAccountV2{table: *table}, ""
+	account := &privateB4ByteAccountV2{table: *table, c15: context, c15BackingSiteID: privateC15SiteC15Owner01V2TransactionTable}
+	if context != nil {
+		account.c15Leases = make(map[privateB4ByteLease]privateB4C15LeaseState)
+	}
+	_ = privateC15SiteC15Owner01V2TransactionTable
+	if context != nil {
+		objectID, failure := context.create(privateC15SiteC15Owner01V2TransactionTable, privateB4C15Operation("allocation"))
+		if failure != "" {
+			return nil, failure
+		}
+		account.c15BackingObjectID = objectID
+	}
+	return account, ""
 }
 
 func (a *privateB4ByteAccountV2) reserve(capacity uint64) (privateB4ByteLeaseV2, session.Failure) {
+	return a.reservePrivateB4C15(capacity, privateC15SiteC15Owner01V2TransactionTable, privateB4C15Operation("reserve"))
+}
+
+func (a *privateB4ByteAccountV2) reservePrivateB4Unobserved(capacity uint64) (privateB4ByteLeaseV2, session.Failure) {
 	if a == nil {
 		return privateB4ByteLeaseV2{}, session.ResourceExhausted
 	}
@@ -157,6 +189,35 @@ func (a *privateB4ByteAccountV2) reserve(capacity uint64) (privateB4ByteLeaseV2,
 		return privateB4ByteLeaseV2{}, failure
 	}
 	return privateB4ByteLeaseV2{account: a, lease: lease}, ""
+}
+
+func (a *privateB4ByteAccountV2) reservePrivateB4C15(capacity uint64, siteID string, operation privateB4C15Operation) (privateB4ByteLeaseV2, session.Failure) {
+	if a == nil {
+		return privateB4ByteLeaseV2{}, session.ResourceExhausted
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.terminalRequested || a.backingReleased {
+		return privateB4ByteLeaseV2{}, session.ResourceExhausted
+	}
+	if a.c15 == nil {
+		lease, failure := a.table.general.reserve(capacity)
+		if failure != "" {
+			return privateB4ByteLeaseV2{}, failure
+		}
+		return privateB4ByteLeaseV2{account: a, lease: lease}, ""
+	}
+	var dst [1]privateB4ByteLeaseV2
+	plan := &privateB4C15ByteAccountPlan{
+		account:    a,
+		capacities: []uint64{capacity},
+		sites:      []privateB4C15Creation{{siteID: siteID, operation: operation}},
+		dst:        dst[:],
+	}
+	if failure := a.c15.commitPlans(plan); failure != "" {
+		return privateB4ByteLeaseV2{}, failure
+	}
+	return dst[0], ""
 }
 
 func (a *privateB4ByteAccountV2) reserveMany(capacities []uint64, dst []privateB4ByteLeaseV2) (int, session.Failure) {
@@ -179,6 +240,164 @@ func (a *privateB4ByteAccountV2) reserveMany(capacities []uint64, dst []privateB
 	return count, ""
 }
 
+type privateB4C15ByteAccountPlan struct {
+	account     *privateB4ByteAccountV2
+	capacities  []uint64
+	sites       []privateB4C15Creation
+	dst         []privateB4ByteLeaseV2
+	slots       [privateB4ByteSlots]uint16
+	generations [privateB4ByteSlots]uint64
+	objectIDs   [privateB4ByteSlots]uint64
+}
+
+func (p *privateB4C15ByteAccountPlan) preparePrivateB4C15Mutation(c *privateB4C15CustodyContext, sequence, nextObjectID uint64) (privateB4C15PreparedMutation, session.Failure) {
+	if p == nil || p.account == nil || p.account.c15 != c || len(p.capacities) == 0 || len(p.capacities) != len(p.sites) || len(p.capacities) > privateB4ByteSlots || len(p.dst) < len(p.capacities) {
+		return privateB4C15PreparedMutation{}, session.ResourceExhausted
+	}
+	ledger := &p.account.table.general
+	var total uint64
+	ledgerCount := 0
+	for _, capacity := range p.capacities {
+		if capacity > privateB4MaxOwnedBytes || total > privateB4MaxOwnedBytes-capacity || ledger.cumulative > math.MaxUint64-capacity-total {
+			return privateB4C15PreparedMutation{}, session.ResourceExhausted
+		}
+		total += capacity
+		if capacity != 0 {
+			ledgerCount++
+		}
+	}
+	if ledger.live > privateB4MaxOwnedBytes-total || uint64(ledgerCount) > math.MaxUint64-ledger.nextGen {
+		return privateB4C15PreparedMutation{}, session.ResourceExhausted
+	}
+	free := 0
+	for i := range ledger.entries {
+		if !ledger.entries[i].active && free < ledgerCount {
+			p.slots[free] = uint16(i)
+			p.generations[free] = ledger.nextGen + uint64(free) + 1
+			free++
+		}
+	}
+	if free != ledgerCount {
+		return privateB4C15PreparedMutation{}, session.ResourceExhausted
+	}
+	prepared := privateB4C15PreparedMutation{events: make([]privateB4C15Event, len(p.sites)), transitions: make([]privateB4C15PreparedObjectTransition, len(p.sites))}
+	for i, site := range p.sites {
+		if site.siteID == "" || site.operation == "" {
+			return privateB4C15PreparedMutation{}, session.ResourceExhausted
+		}
+		objectID := nextObjectID + uint64(i) + 1
+		p.objectIDs[i] = objectID
+		prepared.events[i] = privateB4C15Event{TransactionID: c.transactionID, ObjectID: c.objectName(objectID), SiteID: site.siteID, Kind: string(site.operation), Sequence: sequence + uint64(i) + 1}
+		prepared.transitions[i] = privateB4C15PreparedObjectTransition{objectID: objectID, state: privateB4C15ObjectState{authority: objectID, siteID: site.siteID}}
+	}
+	prepared.commit = func() {
+		ledgerIndex := 0
+		for i, capacity := range p.capacities {
+			lease := privateB4ByteLeaseV2{account: p.account}
+			if capacity != 0 {
+				slot, generation := p.slots[ledgerIndex], p.generations[ledgerIndex]
+				ledger.entries[slot] = privateB4ByteEntry{capacity: capacity, generation: generation, references: 1, active: true}
+				lease.lease = privateB4ByteLease{ledger: ledger, slot: slot, generation: generation, active: true}
+				ledgerIndex++
+			}
+			p.account.registerPrivateB4C15LeaseLocked(lease.lease, privateB4C15LeaseState{objectID: p.objectIDs[i], siteID: p.sites[i].siteID})
+			p.dst[i] = lease
+		}
+		ledger.nextGen += uint64(ledgerCount)
+		ledger.live += total
+		ledger.cumulative += total
+	}
+	return prepared, ""
+}
+
+func (a *privateB4ByteAccountV2) reserveManyPrivateB4C15(capacities []uint64, sites []privateB4C15Creation, dst []privateB4ByteLeaseV2) (int, session.Failure) {
+	if a == nil {
+		return 0, session.ResourceExhausted
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.terminalRequested || a.backingReleased || (a.c15 != nil && a.c15.frozen) {
+		return 0, session.ResourceExhausted
+	}
+	if a.c15 == nil {
+		var leases [privateB4ByteSlots]privateB4ByteLease
+		count, failure := a.table.general.reserveMany(capacities, leases[:len(capacities)])
+		if failure != "" {
+			return 0, failure
+		}
+		ledgerIndex := 0
+		for i, capacity := range capacities {
+			dst[i] = privateB4ByteLeaseV2{account: a}
+			if capacity != 0 {
+				dst[i].lease = leases[ledgerIndex]
+				ledgerIndex++
+			}
+		}
+		return count, ""
+	}
+	plan := &privateB4C15ByteAccountPlan{account: a, capacities: capacities, sites: sites, dst: dst}
+	if failure := a.c15.commitPlans(plan); failure != "" {
+		return 0, failure
+	}
+	return len(capacities), ""
+}
+
+func (a *privateB4ByteAccountV2) registerPrivateB4C15LeaseLocked(lease privateB4ByteLease, state privateB4C15LeaseState) {
+	if a.c15 == nil || state.objectID == 0 {
+		return
+	}
+	if lease.active {
+		if a.c15Leases == nil {
+			a.c15Leases = make(map[privateB4ByteLease]privateB4C15LeaseState)
+		}
+		a.c15Leases[lease] = state
+		return
+	}
+	a.c15ZeroLeases = append(a.c15ZeroLeases, state)
+}
+
+func (a *privateB4ByteAccountV2) privateB4C15LeaseStateLocked(lease privateB4ByteLease) (privateB4C15LeaseState, bool) {
+	if a.c15 == nil {
+		return privateB4C15LeaseState{}, false
+	}
+	if state, ok := a.c15Leases[lease]; ok {
+		return state, true
+	}
+	if lease.entry() == nil {
+		return privateB4C15LeaseState{}, false
+	}
+	for prior, state := range a.c15Leases {
+		if prior.ledger == lease.ledger && prior.slot == lease.slot {
+			delete(a.c15Leases, prior)
+			a.c15Leases[lease] = state
+			return state, true
+		}
+	}
+	return privateB4C15LeaseState{}, false
+}
+
+func (a *privateB4ByteAccountV2) aliasPrivateB4C15(lease privateB4ByteLease, siteID string) session.Failure {
+	if a == nil || siteID == "" {
+		return session.ResourceExhausted
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	// Terminal request closes new ownership creation, but an already-published
+	// caller lease may continue to create callback-scoped observational aliases
+	// until its exact-once release drops the final backing reference.
+	if a.backingReleased {
+		return session.ResourceExhausted
+	}
+	if a.c15 == nil {
+		return ""
+	}
+	state, ok := a.privateB4C15LeaseStateLocked(lease)
+	if !ok {
+		return session.ResourceExhausted
+	}
+	return a.c15.alias(state.objectID, siteID)
+}
+
 func (h privateB4ByteLeaseV2) alias() privateB4ByteLeaseV2 {
 	if h.account == nil {
 		return privateB4ByteLeaseV2{}
@@ -188,10 +407,16 @@ func (h privateB4ByteLeaseV2) alias() privateB4ByteLeaseV2 {
 	if h.account.terminalRequested || h.account.backingReleased {
 		return privateB4ByteLeaseV2{}
 	}
-	lease := h.lease.alias()
-	if !lease.active {
+	entry := h.lease.entry()
+	if !h.lease.active || entry == nil || entry.references == math.MaxUint32 {
 		return privateB4ByteLeaseV2{}
 	}
+	state, observed := h.account.privateB4C15LeaseStateLocked(h.lease)
+	if observed && h.account.c15.alias(state.objectID, state.siteID) != "" {
+		return privateB4ByteLeaseV2{}
+	}
+	entry.references++
+	lease := privateB4ByteLease{ledger: h.lease.ledger, slot: h.lease.slot, generation: h.lease.generation, active: true}
 	return privateB4ByteLeaseV2{account: h.account, lease: lease}
 }
 
@@ -205,9 +430,15 @@ func (h *privateB4ByteLeaseV2) grow(capacity uint64) (privateB4ByteLeaseV2, uint
 	if a.terminalRequested || a.backingReleased {
 		return privateB4ByteLeaseV2{}, a.table.general.live, session.ResourceExhausted
 	}
+	state, observed := a.privateB4C15LeaseStateLocked(h.lease)
+	oldLease := h.lease
 	lease, peak, failure := h.lease.grow(capacity)
 	if failure != "" {
 		return privateB4ByteLeaseV2{}, peak, failure
+	}
+	if observed {
+		delete(a.c15Leases, oldLease)
+		a.c15Leases[lease] = state
 	}
 	return privateB4ByteLeaseV2{account: a, lease: lease}, peak, ""
 }
@@ -235,39 +466,96 @@ func (h *privateB4ByteLeaseV2) transfer() privateB4ByteLeaseV2 {
 	if a.terminalRequested || a.backingReleased {
 		return privateB4ByteLeaseV2{}
 	}
-	lease := h.lease.transfer()
-	if !lease.active {
+	entry := h.lease.entry()
+	if !h.lease.active || entry == nil || (entry.references == 1 && h.lease.ledger.nextGen == math.MaxUint64) {
 		return privateB4ByteLeaseV2{}
+	}
+	generation := entry.generation
+	if entry.references == 1 {
+		generation = h.lease.ledger.nextGen + 1
+	}
+	state, observed := a.privateB4C15LeaseStateLocked(h.lease)
+	if observed && a.c15.transfer(state.objectID, state.siteID) != "" {
+		return privateB4ByteLeaseV2{}
+	}
+	if entry.references == 1 {
+		h.lease.ledger.nextGen = generation
+		entry.generation = generation
+	}
+	oldLease := h.lease
+	h.lease.active = false
+	lease := privateB4ByteLease{ledger: h.lease.ledger, slot: h.lease.slot, generation: generation, active: true}
+	if observed {
+		delete(a.c15Leases, oldLease)
+		a.c15Leases[lease] = state
 	}
 	return privateB4ByteLeaseV2{account: a, lease: lease}
 }
 
 func (h *privateB4ByteLeaseV2) Release() { h.release() }
 
-func (a *privateB4ByteAccountV2) transferDiagnosticBacking(source *privateB4ByteLeaseV2, destination *managerDiagnosticOwner) (managerDiagnosticLease, session.Failure) {
-	if a == nil || source == nil || source.account != a || destination == nil {
-		return managerDiagnosticLease{}, session.ResourceExhausted
+type privateB4C15DiagnosticTransferPlan struct {
+	account     *privateB4ByteAccountV2
+	destination *managerDiagnosticOwner
+	leases      [2]*privateB4ByteLeaseV2
+	entries     [2]*privateB4ByteEntry
+	capacity    uint64
+	slot        int
+	retained    managerDiagnosticLease
+	objectID    uint64
+}
+
+func (p *privateB4C15DiagnosticTransferPlan) preparePrivateB4C15Mutation(c *privateB4C15CustodyContext, sequence, nextObjectID uint64) (privateB4C15PreparedMutation, session.Failure) {
+	if p == nil || p.account == nil || p.account.c15 != c || p.destination == nil || p.leases[0] == nil {
+		return privateB4C15PreparedMutation{}, session.ResourceExhausted
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	entry := source.lease.entry()
-	if !source.lease.active || entry == nil {
-		return managerDiagnosticLease{}, session.ResourceExhausted
+	p.capacity = 0
+	for i, lease := range p.leases {
+		if lease == nil || lease.account == nil {
+			continue
+		}
+		if lease.account != p.account || !lease.lease.active {
+			return privateB4C15PreparedMutation{}, session.ResourceExhausted
+		}
+		entry := lease.lease.entry()
+		if entry == nil || entry.references != 1 || p.capacity > math.MaxUint64-entry.capacity {
+			return privateB4C15PreparedMutation{}, session.ResourceExhausted
+		}
+		p.entries[i], p.capacity = entry, p.capacity+entry.capacity
 	}
-	if entry.references != 1 {
-		return managerDiagnosticLease{}, session.ResourceExhausted
-	}
-	capacity := entry.capacity
-	slot, failure := destination.preflightSlot(capacity)
+	slot, failure := p.destination.preflightSlot(p.capacity)
 	if failure != "" {
-		return managerDiagnosticLease{}, failure
+		return privateB4C15PreparedMutation{}, failure
 	}
-	retained := destination.installTransferred(slot, capacity)
-	a.table.general.live -= capacity
-	*entry = privateB4ByteEntry{}
-	source.lease.active = false
-	a.maybeReleaseBackingLocked()
-	return retained, ""
+	p.slot = slot
+	p.objectID = nextObjectID + 1
+	prepared := privateB4C15PreparedMutation{
+		events:      []privateB4C15Event{{TransactionID: c.transactionID, ObjectID: c.objectName(p.objectID), SiteID: privateC15SiteC15Owner27FixedDiagnosticHistory, Kind: "allocation", Sequence: sequence + 1}},
+		transitions: []privateB4C15PreparedObjectTransition{{objectID: p.objectID, state: privateB4C15ObjectState{authority: p.objectID, siteID: privateC15SiteC15Owner27FixedDiagnosticHistory}}},
+	}
+	prepared.commit = func() {
+		p.retained = p.destination.installTransferred(p.slot, p.capacity)
+		for i, entry := range p.entries {
+			if entry == nil {
+				continue
+			}
+			p.account.table.general.live -= entry.capacity
+			*entry = privateB4ByteEntry{}
+			lease := p.leases[i]
+			state, observed := p.account.privateB4C15LeaseStateLocked(lease.lease)
+			delete(p.account.c15Leases, lease.lease)
+			lease.lease.active = false
+			if observed {
+				c.release(state.objectID, state.siteID)
+			}
+		}
+		p.account.maybeReleaseBackingLocked()
+	}
+	return prepared, ""
+}
+
+func (a *privateB4ByteAccountV2) transferDiagnosticBacking(source *privateB4ByteLeaseV2, destination *managerDiagnosticOwner) (managerDiagnosticLease, session.Failure) {
+	return a.transferDiagnosticBackingPair(source, nil, destination)
 }
 
 func (a *privateB4ByteAccountV2) transferDiagnosticBackingPair(first, second *privateB4ByteLeaseV2, destination *managerDiagnosticOwner) (managerDiagnosticLease, session.Failure) {
@@ -276,6 +564,13 @@ func (a *privateB4ByteAccountV2) transferDiagnosticBackingPair(first, second *pr
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.c15 != nil {
+		plan := &privateB4C15DiagnosticTransferPlan{account: a, destination: destination, leases: [2]*privateB4ByteLeaseV2{first, second}}
+		if failure := a.c15.commitPlans(plan); failure != "" {
+			return managerDiagnosticLease{}, failure
+		}
+		return plan.retained, ""
+	}
 	entries := [2]*privateB4ByteEntry{first.lease.entry(), nil}
 	if !first.lease.active || entries[0] == nil || entries[0].references != 1 {
 		return managerDiagnosticLease{}, session.ResourceExhausted
@@ -331,7 +626,22 @@ func (h *privateB4ByteLeaseV2) release() {
 	}
 	a := h.account
 	a.mu.Lock()
+	entry := h.lease.entry()
+	state, observed := a.privateB4C15LeaseStateLocked(h.lease)
+	terminal := observed && entry != nil && entry.references == 1
+	if !h.lease.active && a.c15 != nil && len(a.c15ZeroLeases) != 0 {
+		state, observed, terminal = a.c15ZeroLeases[0], true, true
+		a.c15ZeroLeases = a.c15ZeroLeases[1:]
+	}
 	h.lease.release()
+	if observed {
+		if terminal || a.c15.batchOwnershipOnly {
+			a.c15.releaseReference(state.objectID, state.siteID, terminal)
+		}
+		if terminal {
+			delete(a.c15Leases, h.lease)
+		}
+	}
 	a.maybeReleaseBackingLocked()
 	a.mu.Unlock()
 }
@@ -359,7 +669,13 @@ func (a *privateB4ByteAccountV2) requestTerminalRelease() {
 
 func (a *privateB4ByteAccountV2) maybeReleaseBackingLocked() {
 	if a.terminalRequested && !a.backingReleased && a.table.releaseTableBacking() {
+		if a.c15BackingObjectID != 0 {
+			a.c15.release(a.c15BackingObjectID, a.c15BackingSiteID)
+		}
 		a.backingReleased = true
+		if a.c15 != nil {
+			a.c15.freeze()
+		}
 	}
 }
 
@@ -481,9 +797,59 @@ func (h *privateB4SourceIngressLease) release() {
 	}
 }
 
-// transferStates transfers an already deduplicated admission set without
-// allocating a temporary handle array or consuming a general-ledger slot.
+type privateB4C15SourceIngressTransferPlan struct {
+	owner      *privateB4SourceIngressOwner
+	account    *privateB4ByteAccountV2
+	states     map[*privateB4SourceLease]struct{}
+	total      uint64
+	descriptor privateB4DescriptorLeaseV2
+	objectIDs  [4]uint64
+}
+
+func (p *privateB4C15SourceIngressTransferPlan) preparePrivateB4C15Mutation(c *privateB4C15CustodyContext, sequence, nextObjectID uint64) (privateB4C15PreparedMutation, session.Failure) {
+	if p == nil || p.owner == nil || p.account == nil || p.account.c15 != c || len(p.states) == 0 ||
+		p.account.table.descriptor.active || p.account.table.descriptorNextGen == math.MaxUint64 ||
+		p.account.table.general.live > privateB4MaxOwnedBytes-p.total {
+		return privateB4C15PreparedMutation{}, session.ResourceExhausted
+	}
+	creations := [...]privateB4C15Creation{
+		{siteID: privateC15SiteC15Owner04ManagerSourceIngressTable, operation: privateB4C15Operation("allocation")},
+		{siteID: privateC15SiteC15Owner05PerSourceIngressState, operation: privateB4C15Operation("allocation")},
+		{siteID: privateC15SiteC15Copy03PreparedSourceContent, operation: privateB4C15Operation("copy")},
+		{siteID: privateC15SiteC15Copy07TransactionSourceBytes, operation: privateB4C15Operation("copy")},
+	}
+	prepared := privateB4C15PreparedMutation{events: make([]privateB4C15Event, len(creations)+1), transitions: make([]privateB4C15PreparedObjectTransition, len(creations))}
+	for i, creation := range creations {
+		objectID := nextObjectID + uint64(i) + 1
+		p.objectIDs[i] = objectID
+		prepared.events[i] = privateB4C15Event{TransactionID: c.transactionID, ObjectID: c.objectName(objectID), SiteID: creation.siteID, Kind: string(creation.operation), Sequence: sequence + uint64(i) + 1}
+		prepared.transitions[i] = privateB4C15PreparedObjectTransition{objectID: objectID, state: privateB4C15ObjectState{authority: objectID, siteID: creation.siteID}}
+	}
+	prepared.events[len(creations)] = privateB4C15Event{TransactionID: c.transactionID, ObjectID: c.objectName(p.objectIDs[1]), SiteID: privateC15SiteC15Owner08SourceDescriptorTransfer, Kind: "transfer", Sequence: sequence + uint64(len(creations)) + 1}
+	prepared.commit = func() {
+		p.account.table.descriptorNextGen++
+		generation := p.account.table.descriptorNextGen
+		p.account.table.descriptor = privateB4ByteEntry{capacity: p.total, generation: generation, references: 1, active: true}
+		p.account.table.general.live += p.total
+		p.descriptor = privateB4DescriptorLeaseV2{account: p.account, lease: privateB4DescriptorLease{ledger: &p.account.table, generation: generation, active: true}}
+		for source := range p.states {
+			for _, lease := range []*privateB4SourceIngressLease{&source.ingress, &source.contentIngress} {
+				entry := lease.entry()
+				p.owner.live -= entry.capacity
+				*entry = privateB4SourceIngressEntry{}
+				lease.active = false
+			}
+		}
+	}
+	return prepared, ""
+}
+
+// transferStates atomically rebinds stable Manager slot/generation identities
+// from pending source custody to the caller-supplied transaction context.
 func (o *privateB4SourceIngressOwner) transferStates(states map[*privateB4SourceLease]struct{}, dst *privateB4ByteAccountV2) (privateB4DescriptorLeaseV2, session.Failure) {
+	if o == nil || dst == nil {
+		return privateB4DescriptorLeaseV2{}, session.ResourceExhausted
+	}
 	var total uint64
 	for state := range states {
 		if state == nil || state.ingress.owner != o || state.contentIngress.owner != o ||
@@ -498,20 +864,31 @@ func (o *privateB4SourceIngressOwner) transferStates(states map[*privateB4Source
 			total += capacity
 		}
 	}
-	_ = privateC15SiteC15Owner08SourceDescriptorTransfer
-	descriptor, failure := dst.reserveDescriptor(total)
-	if failure != "" {
+	if dst.c15 == nil {
+		descriptor, failure := dst.reserveDescriptor(total)
+		if failure != "" {
+			return privateB4DescriptorLeaseV2{}, failure
+		}
+		for source := range states {
+			for _, lease := range []*privateB4SourceIngressLease{&source.ingress, &source.contentIngress} {
+				entry := lease.entry()
+				o.live -= entry.capacity
+				*entry = privateB4SourceIngressEntry{}
+				lease.active = false
+			}
+		}
+		return descriptor, ""
+	}
+	dst.mu.Lock()
+	defer dst.mu.Unlock()
+	if dst.terminalRequested || dst.backingReleased || dst.c15.frozen {
+		return privateB4DescriptorLeaseV2{}, session.ResourceExhausted
+	}
+	plan := &privateB4C15SourceIngressTransferPlan{owner: o, account: dst, states: states, total: total}
+	if failure := dst.c15.commitPlans(plan); failure != "" {
 		return privateB4DescriptorLeaseV2{}, failure
 	}
-	for state := range states {
-		for _, lease := range []*privateB4SourceIngressLease{&state.ingress, &state.contentIngress} {
-			entry := lease.entry()
-			o.live -= entry.capacity
-			*entry = privateB4SourceIngressEntry{}
-			lease.active = false
-		}
-	}
-	return descriptor, ""
+	return plan.descriptor, ""
 }
 
 func (o *privateB4SourceIngressOwner) transferMany(handles []*privateB4SourceIngressLease, dst *privateB4ByteAccountV2) (privateB4DescriptorLeaseV2, session.Failure) {
@@ -561,8 +938,7 @@ func newPrivateB4ByteLedger() *privateB4ByteLedger { return &privateB4ByteLedger
 // before allocation. The caller owns the returned temporary lease for exactly
 // as long as the copied params remain live.
 func copyPrivateB4Params(account *privateB4ByteAccountV2, params json.RawMessage) (json.RawMessage, privateB4ByteLeaseV2, session.Failure) {
-	_ = privateC15SiteC15Copy02ParamsIngress
-	lease, failure := account.reserve(uint64(len(params)))
+	lease, failure := account.reservePrivateB4C15(uint64(len(params)), privateC15SiteC15Copy02ParamsIngress, privateB4C15Operation("copy"))
 	if failure != "" {
 		return nil, privateB4ByteLeaseV2{}, failure
 	}
@@ -580,7 +956,7 @@ func (a *privateB4ByteAccountV2) reservePrivateB4OutboundTransport(bodyBytes int
 	if frameBytes < int64(bodyBytes) {
 		return privateB4ByteLeaseV2{}, session.ResourceExhausted
 	}
-	return a.reserve(uint64(frameBytes))
+	return a.reservePrivateB4C15(uint64(frameBytes), privateC15SiteC15Owner13OutboundCanonicalFrame, privateB4C15Operation("reserve"))
 }
 
 func (l *privateB4ByteLedger) snapshot() privateB4ByteLedgerSnapshot {
@@ -706,11 +1082,16 @@ func (h *privateB4ByteLease) shrinkExact(capacity uint64) bool {
 
 func (h *privateB4ByteLease) transfer() privateB4ByteLease {
 	entry := h.entry()
-	if h == nil || !h.active || entry == nil || h.ledger.nextGen == math.MaxUint64 {
+	if h == nil || !h.active || entry == nil {
 		return privateB4ByteLease{}
 	}
-	h.ledger.nextGen++
-	entry.generation = h.ledger.nextGen
+	if entry.references == 1 {
+		if h.ledger.nextGen == math.MaxUint64 {
+			return privateB4ByteLease{}
+		}
+		h.ledger.nextGen++
+		entry.generation = h.ledger.nextGen
+	}
 	h.active = false
 	return privateB4ByteLease{ledger: h.ledger, slot: h.slot, generation: entry.generation, active: true}
 }

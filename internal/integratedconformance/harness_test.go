@@ -271,8 +271,13 @@ func ownsC15CurrentPath(path string) bool {
 		"sessionruntime/b4_source_ingress_c15_private_test.go", "sessionruntime/diagnostic_backing_c15_private.go",
 		"sessionruntime/diagnostic_runtime.go", "sessionruntime/private_encoded_request.go",
 		"sessionruntime/b4_c15_candidate_discovery_private_test.go", "sessionruntime/b4_c15_mapping_refresh_private_test.go",
-		"sessionruntime/b4_c15_ownership_registry_private.go", "sessionruntime/b4_c15_ownership_registry_red_private_test.go",
-		"sessionruntime/b4_c15_site_bindings_private.go",
+		"sessionruntime/b4_c15_canonical_mapping_generator_private_test.go", "sessionruntime/b4_c15_ownership_registry_private.go",
+		"sessionruntime/b4_c15_ownership_registry_red_private_test.go", "sessionruntime/b4_owned_method_pair_lease_test.go",
+		"sessionruntime/b4_private_selected_read_lease_v10_test.go",
+		"sessionruntime/b4_c15_site_bindings_private.go", "sessionruntime/b4_event_account_c17_private.go",
+		"sessionruntime/b4_private_lifecycle_packet_test.go", "sessionruntime/diagnostic_history_storage_c15_private.go",
+		"sessionruntime/diagnostic_history_storage_c15_private_test.go", "sessionruntime/adr0011_c17_c15_custody_observer_red_private_test.go",
+		"sessionruntime/adr0011_c17_c15_atomic_batch_observer_red_private_test.go", "sessionruntime/adr0011_c17_c15_observer_contract_private.go",
 	} {
 		if path == owned {
 			return true

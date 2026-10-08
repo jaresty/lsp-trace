@@ -42,7 +42,27 @@ type SuccessorAllocationOwner interface {
 	ReserveSuccessorAllocation(role SuccessorAllocationRole, capacity uint64) (SuccessorAllocationLease, error)
 }
 type SuccessorAllocationLease interface{ Release() }
+
 type SuccessorAllocationRole uint8
+
+func (r SuccessorAllocationRole) C15SiteID() string {
+	switch r {
+	case SuccessorAllocationPrefetch:
+		return privateC15SiteC15Owner14SuccessorPrefetch
+	case SuccessorAllocationHeader:
+		return privateC15SiteC15Owner15SuccessorHeader
+	case SuccessorAllocationConsumeScratch:
+		return privateC15SiteC15Owner16SuccessorConsumeScratch
+	case SuccessorAllocationBody:
+		return privateC15SiteC15Owner17SuccessorBody
+	case SuccessorAllocationOriginalFrame:
+		return privateC15SiteC15Copy18OriginalResponseFrame
+	case SuccessorAllocationDecodedMessage:
+		return privateC15SiteC15Copy23DecodedMessageClone
+	default:
+		return ""
+	}
+}
 
 const (
 	SuccessorAllocationPrefetch SuccessorAllocationRole = iota + 1

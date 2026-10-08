@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -17,10 +16,10 @@ import (
 )
 
 const (
-	privateB4C15MappingSHA256     = "2136b785b0642458f8a55cf9f19422ee40502d1edf4cb980ce6a80852c9e4800"
-	privateB4C15CandidateCount    = 3202
-	privateB4C15CandidateSHA256   = "e0198039f6804c1e3257c45189e22a32a22617d0677a77c9d19c12232d5528c9"
-	privateB4C15DispositionSHA256 = "ef7ff79b258c5950bb964d8f4dbd39eeafd033b82e2038b7a8742de8c15f91f1"
+	privateB4C15MappingSHA256     = "58995c12ef846b597f397666f6bc6867990da04319b846d27d72868e9b3bbdb4"
+	privateB4C15CandidateCount    = 3507
+	privateB4C15CandidateSHA256   = "896f0ba0b962de595590375cb122fdbca42e67ba0c908ba36dd479956c872318"
+	privateB4C15DispositionSHA256 = "6da54493caef29aa7874bc3a3d5c0534aaba646ea127a2011f5ef3426d932f4a"
 	privateB4C15OwnerOpsSHA256    = "6834dc9a157ac944e3141cb85783c36251f92d383c838c205b063a1ac37014ff"
 )
 
@@ -99,8 +98,10 @@ func TestPrivateB4C15RegenerateOfflineCatalog(t *testing.T) {
 		assertPrivateB4C15Generated(t, "classifications.tsv", classificationOut, privateB4C15DispositionSHA256)
 		return
 	}
-	writePrivateB4C15Generated(t, "candidates.tsv", candidateOut, "")
-	writePrivateB4C15Generated(t, "classifications.tsv", classificationOut, "")
+	writePrivateB4C15CatalogAtomically(t, map[string][]byte{
+		"candidates.tsv":      candidateOut,
+		"classifications.tsv": classificationOut,
+	})
 }
 
 func TestPrivateB4C15RegenerationDoesNotReadGeneratedOutputs(t *testing.T) {
@@ -148,88 +149,47 @@ func assertPrivateB4C15Generated(t *testing.T, name string, got []byte, wantHash
 	}
 }
 
-func writePrivateB4C15Generated(t *testing.T, name string, data []byte, wantHash string) {
+func writePrivateB4C15CatalogAtomically(t *testing.T, generated map[string][]byte) {
 	t.Helper()
-	got := fmt.Sprintf("%x", sha256.Sum256(data))
-	if wantHash != "" && got != wantHash {
-		t.Fatalf("ASSERT_C15_GENERATOR_HASH_%s got=%s want=%s", name, got, wantHash)
-	}
-	path := filepath.Join("testdata", "c15-census-v1", name)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	dir := filepath.Join("testdata", "c15-census-v1")
+	stage, err := os.MkdirTemp(dir, ".c15-catalog-")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path+".sha256", []byte(got+"\n"), 0o644); err != nil {
-		t.Fatal(err)
+	defer os.RemoveAll(stage)
+
+	names := []string{"candidates.tsv", "classifications.tsv"}
+	for _, name := range names {
+		data, ok := generated[name]
+		if !ok {
+			t.Fatalf("ASSERT_C15_GENERATOR_MISSING_%s", name)
+		}
+		hash := fmt.Sprintf("%x", sha256.Sum256(data)) + "\n"
+		if err := os.WriteFile(filepath.Join(stage, name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stage, name+".sha256"), []byte(hash), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"candidates.tsv", "candidates.tsv.sha256", "classifications.tsv", "classifications.tsv.sha256"} {
+		if err := os.Rename(filepath.Join(stage, name), filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
 func TestPrivateB4C15ProductionSiteBindings(t *testing.T) {
 	mapping := readPrivateB4C15Mapping(t)
 	repo := filepath.Clean(filepath.Join(packageDir(t), ".."))
-	byPath := map[string][]privateB4C15MappingRow{}
-	for _, row := range mapping.Rows {
-		byPath[row.Path] = append(byPath[row.Path], row)
+	verification, err := privateC15VerifyPersistedMapping(repo, mapping, privateC15SemanticContracts, nil)
+	if err != nil {
+		t.Fatalf("ASSERT_C15_PERSISTED_RESOLVED_AGREEMENT: %v", err)
 	}
-	uses := map[string]int{}
-	for path, rows := range byPath {
-		full := filepath.Join(repo, filepath.FromSlash(path))
-		source, err := os.ReadFile(full)
-		if err != nil {
-			t.Fatal(err)
-		}
-		fset := token.NewFileSet()
-		file, err := parser.ParseFile(fset, full, source, parser.AllErrors)
-		if err != nil {
-			t.Fatalf("ASSERT_C15_PARSE_%s: %v", path, err)
-		}
-		wanted := map[string]privateB4C15MappingRow{}
-		for _, row := range rows {
-			wanted[privateB4C15ConstName(row.SiteID)] = row
-		}
-		ast.Inspect(file, func(n ast.Node) bool {
-			block, ok := n.(*ast.BlockStmt)
-			if !ok {
-				return true
-			}
-			for i, stmt := range block.List {
-				assign, ok := stmt.(*ast.AssignStmt)
-				if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
-					continue
-				}
-				lhs, lok := assign.Lhs[0].(*ast.Ident)
-				rhs, rok := assign.Rhs[0].(*ast.Ident)
-				if !lok || !rok || lhs.Name != "_" {
-					continue
-				}
-				bound := rhs.Name
-				if _, ok := wanted[bound]; !ok {
-					continue
-				}
-				uses[bound]++
-				row := wanted[bound]
-				fn := enclosingFunction(file, stmt.Pos())
-				candidateIndex := i + row.AdjacencyIndex
-				if candidateIndex < 0 || candidateIndex >= len(block.List) || !privateB4C15ExactBindingMatch(row, path, fn, row.AdjacencyRelation, row.AdjacencyIndex, "") {
-					t.Errorf("ASSERT_C15_BIND_EXACT_LOCATION site=%s path=%s function=%s relation=%s index=%d", row.SiteID, path, fn, row.AdjacencyRelation, row.AdjacencyIndex)
-					continue
-				}
-				candidate := block.List[candidateIndex]
-				if statementIsC15Binding(candidate) || astDigest(fset, source, candidate) != row.ASTDigest {
-					t.Errorf("ASSERT_C15_BIND_EXACT_DIGEST site=%s path=%s function=%s relation=%s index=%d", row.SiteID, path, fn, row.AdjacencyRelation, row.AdjacencyIndex)
-				}
-			}
-			return true
-		})
+	if len(verification.Resolved) != 44 || verification.UniqueKeys != 44 || verification.PersistedRows != 44 {
+		t.Fatalf("ASSERT_C15_SEMANTIC_EXACT44 resolved=%d keys=%d persisted=%d", len(verification.Resolved), verification.UniqueKeys, verification.PersistedRows)
 	}
-	for _, row := range mapping.Rows {
-		name := privateB4C15ConstName(row.SiteID)
-		if uses[name] != 1 {
-			t.Errorf("ASSERT_C15_BIND_EXACTLY_ONCE site=%s const=%s uses=%d", row.SiteID, name, uses[name])
-		}
-	}
-	if len(uses) != len(mapping.Rows) {
-		t.Fatalf("ASSERT_C15_BIND_NO_UNBOUND_STALE_DUPLICATE uses=%d mapping=%d", len(uses), len(mapping.Rows))
-	}
+	t.Logf("C15 raw standalone marker uses=%d (diagnostic only; semantic denominator=44; alias43/44 are distinguished by canonical role/call selectors)", verification.RawMarkerUses)
 }
 
 func statementIsC15Binding(stmt ast.Stmt) bool {
@@ -254,7 +214,7 @@ func adjacencyRelation(index int) string {
 	if index > 0 {
 		return "after"
 	}
-	return "invalid"
+	return "self"
 }
 
 func astDigest(fset *token.FileSet, source []byte, n ast.Node) string {

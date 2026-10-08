@@ -175,13 +175,32 @@ func (r *privateB4Reservation) reservePrivateB4ExplicitBytes(capacities []uint64
 	return ""
 }
 
+func (r *privateB4Reservation) reservePrivateB4C15ExplicitBytes(capacities []uint64, creations []privateB4C15Creation) session.Failure {
+	if r == nil || r.explicitBytes == nil || len(capacities) != len(creations) {
+		return session.ResourceExhausted
+	}
+	remaining := r.explicitLeases[r.explicitLeaseCount:]
+	count, failure := r.explicitBytes.reserveManyPrivateB4C15(capacities, creations, remaining)
+	if failure != "" {
+		return failure
+	}
+	r.explicitLeaseCount += count
+	return ""
+}
+
 func (r *privateB4Reservation) reservePrivateB4RequestFrame(capacity uint64) session.Failure {
 	var leases [3]privateB4ByteLeaseV2
+	creations := [...]privateB4C15Creation{
+		{siteID: privateC15SiteC15Owner09RequestFrameCaptureCharge, operation: privateB4C15Operation("reserve")},
+		{siteID: privateC15SiteC15Owner10RequestFrameRetainedCharge, operation: privateB4C15Operation("reserve")},
+		{siteID: privateC15SiteC15Owner11CallerRequestFrame, operation: privateB4C15Operation("reserve")},
+	}
 	_ = privateC15SiteC15Owner09RequestFrameCaptureCharge
-	if _, failure := r.explicitBytes.reserveMany([]uint64{capacity, capacity, capacity}, leases[:]); failure != "" {
+	if _, failure := r.explicitBytes.reserveManyPrivateB4C15([]uint64{capacity, capacity, capacity}, creations[:], leases[:]); failure != "" {
 		return failure
 	}
 	_ = privateC15SiteC15Owner10RequestFrameRetainedCharge
+	_ = privateC15SiteC15Owner11CallerRequestFrame
 	r.requestFrameCapture, r.requestFrameRetained, r.requestFrameCaller = leases[0], leases[1], leases[2]
 	return ""
 }
@@ -248,9 +267,28 @@ type privateB4SuccessorAllocationOwner struct {
 }
 type privateB4SuccessorAllocationLease struct{ lease privateB4ByteLeaseV2 }
 
+func aliasPrivateB4SuccessorAllocation(lease lspwire.SuccessorAllocationLease, siteID string) session.Failure {
+	owned, ok := lease.(*privateB4SuccessorAllocationLease)
+	if !ok || owned == nil || owned.lease.account == nil {
+		return session.ResourceExhausted
+	}
+	return owned.lease.account.aliasPrivateB4C15(owned.lease.lease, siteID)
+}
+
 func (o privateB4SuccessorAllocationOwner) ReserveSuccessorAllocation(role lspwire.SuccessorAllocationRole, capacity uint64) (lspwire.SuccessorAllocationLease, error) {
+	siteID := role.C15SiteID()
+	if role == lspwire.SuccessorAllocationResultToken {
+		siteID = privateC15SiteC15Owner22ResultTokenReplacement
+	}
+	if siteID == "" {
+		return nil, fmt.Errorf("successor allocation refused: unknown role=%d", role)
+	}
+	operation := privateB4C15Operation("reserve")
+	if role == lspwire.SuccessorAllocationOriginalFrame || role == lspwire.SuccessorAllocationDecodedMessage {
+		operation = privateB4C15Operation("copy")
+	}
 	reserve := func() (privateB4ByteLeaseV2, error) {
-		lease, failure := o.account.reserve(capacity)
+		lease, failure := o.account.reservePrivateB4C15(capacity, siteID, operation)
 		if failure != "" {
 			return privateB4ByteLeaseV2{}, fmt.Errorf("%s: role=%d capacity=%d", failure, role, capacity)
 		}
@@ -473,7 +511,11 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 	if hasWorkAccount && workAccount.Snapshot().Identity != owner.Transaction {
 		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
 	}
-	account, accountFailure := newPrivateB4ByteAccountV2()
+	c15, contextFailure := m.privateB4C15ContextFor(req.SessionID, req.Generation, owner.Transaction)
+	if contextFailure != "" {
+		return RoundTripResult{Failure: contextFailure}, B4DefinitionLease{}
+	}
+	account, accountFailure := newPrivateB4ByteAccountV2(c15)
 	if accountFailure != "" {
 		return RoundTripResult{Failure: accountFailure}, B4DefinitionLease{}
 	}
@@ -535,8 +577,12 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 	// allocation. Source bytes are resolved only from exact live Manager-held
 	// prepared document records while Manager.mu is held by admission.
 	handleSize := uint64(unsafe.Sizeof(B4DefinitionSourceLease{}))
-	if uint64(len(owner.TargetSources)) > math.MaxUint64/handleSize ||
-		reservation.reservePrivateB4ExplicitBytes([]uint64{uint64(len(owner.TargetSources)) * handleSize, uint64(len(req.Params))}) != "" {
+	persistentCapacities := []uint64{uint64(len(owner.TargetSources)) * handleSize, uint64(len(req.Params))}
+	persistentCreations := []privateB4C15Creation{
+		{siteID: privateC15SiteC15Copy06SourceLeaseHandleSlice, operation: privateB4C15Operation("copy")},
+		{siteID: privateC15SiteC15Copy37PersistentCaptureParams, operation: privateB4C15Operation("copy")},
+	}
+	if uint64(len(owner.TargetSources)) > math.MaxUint64/handleSize || reservation.reservePrivateB4C15ExplicitBytes(persistentCapacities, persistentCreations) != "" {
 		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
 	}
 	_ = privateC15SiteC15Copy06SourceLeaseHandleSlice
@@ -631,7 +677,6 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
 	}
 	reservation.releasePrivateB4RequestFrameTemporary()
-	_ = privateC15SiteC15Owner11CallerRequestFrame
 	callerCharge := reservation.requestFrameCaller.transfer()
 	if !callerCharge.lease.active {
 		m.releasePrivateB4Locked(reservation)
@@ -993,6 +1038,7 @@ func (m *Manager) retirePrivateB4StoppedLocked(id string, generation uint64, sto
 	if stopped == nil || stopped.record.Generation != generation {
 		return join
 	}
+	m.retirePrivateB4C15ContextLocked(id, generation)
 	stopped.readinessHistory.retireLocked()
 	for i := range m.privateB4Leases {
 		reservation := m.privateB4Leases[i].reservation
@@ -1049,7 +1095,15 @@ func (m *Manager) privateB4CaptureLocked(lease B4DefinitionLease, selection B4De
 	for i := range capture.TargetSources {
 		capacities[4+i] = uint64(len(capture.TargetSources[i].Bytes))
 	}
-	if failure := reservation.reservePrivateB4ExplicitBytes(capacities[:4+len(capture.TargetSources)]); failure != "" {
+	var creations [4 + privateB4MaxSourceDocuments]privateB4C15Creation
+	creations[0] = privateB4C15Creation{siteID: privateC15SiteC15Copy39FinalCaptureRequestFrame, operation: privateB4C15Operation("copy")}
+	creations[1] = privateB4C15Creation{siteID: privateC15SiteC15Copy40FinalCaptureRequestParams, operation: privateB4C15Operation("copy")}
+	creations[2] = privateB4C15Creation{siteID: privateC15SiteC15Copy41FinalCaptureResponseFrame, operation: privateB4C15Operation("copy")}
+	creations[3] = privateB4C15Creation{siteID: privateC15SiteC15Copy42aFinalCaptureTargetSlice, operation: privateB4C15Operation("copy")}
+	for i := range capture.TargetSources {
+		creations[4+i] = privateB4C15Creation{siteID: privateC15SiteC15Copy42bFinalCaptureSourceBytes, operation: privateB4C15Operation("copy")}
+	}
+	if failure := reservation.reservePrivateB4C15ExplicitBytes(capacities[:4+len(capture.TargetSources)], creations[:4+len(capture.TargetSources)]); failure != "" {
 		return nil, PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	_ = privateC15SiteC15Copy39FinalCaptureRequestFrame
@@ -1120,9 +1174,13 @@ func (m *Manager) PreparePrivateB4DefinitionBorrowed(lease B4DefinitionLease, se
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	_ = privateC15SiteC15Alias43BorrowedLexicalResult
+	if aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias43BorrowedLexicalResult) != "" {
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
+	}
 	result, ok := reservation.resultOwner.managerBytes()
 	_ = privateC15SiteC15Alias44BorrowedCaptureValues
-	if !ok || !prepare(PrivateB4DefinitionBorrow{Capture: capture, Result: result, workAccount: reservation.workAccount, workIdentity: reservation.selection.Transaction}) {
+	if !ok || aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias44BorrowedCaptureValues) != "" ||
+		!prepare(PrivateB4DefinitionBorrow{Capture: capture, Result: result, workAccount: reservation.workAccount, workIdentity: reservation.selection.Transaction}) {
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	return capture, PrivateB4Selected
@@ -1138,8 +1196,14 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowed(lease B4DefinitionLease, sel
 		m.mu.Unlock()
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Alias43BorrowedLexicalResult
+	if aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias43BorrowedLexicalResult) != "" {
+		m.mu.Unlock()
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
+	}
 	result, ok := reservation.resultOwner.managerBytes()
-	if !ok {
+	_ = privateC15SiteC15Alias44BorrowedCaptureValues
+	if !ok || aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias44BorrowedCaptureValues) != "" {
 		m.mu.Unlock()
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}

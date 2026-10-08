@@ -19,7 +19,7 @@ type privateB4EventBackingLease struct {
 
 func (o privateB4EventBackingOwner) ReserveEventBacking(bytes uint64) (manageddiagnostic.EventBackingLease, error) {
 	_ = privateC15SiteC15Owner25DiagnosticEventBacking
-	lease, failure := o.account.reserve(bytes)
+	lease, failure := o.account.reservePrivateB4C15(bytes, privateC15SiteC15Owner25DiagnosticEventBacking, privateB4C15Operation("reserve"))
 	if failure != "" {
 		return nil, errors.New(string(failure))
 	}

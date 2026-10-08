@@ -409,7 +409,7 @@ func (m *Manager) describeDiagnosticOperation(h DiagnosticOperationHandle, metho
 		if bytes != 0 {
 			var failure session.Failure
 			_ = privateC15SiteC15Copy26DiagnosticMetadataStrings
-			source, failure = s.account.reserve(bytes)
+			source, failure = s.account.reservePrivateB4C15(bytes, privateC15SiteC15Copy26DiagnosticMetadataStrings, privateB4C15Operation("copy"))
 			if failure != "" {
 				if !s.described {
 					m.omitOpenPrivateDiagnosticLocked(h, s)

@@ -1156,7 +1156,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			if custodialPrivateB4 && read.message.Kind() == lspwire.KindRequest {
 				failure, poison := writePrivateB4CapabilityResponseC17(transaction, read.message.Method, read.message.Params, func() (session.Failure, bool) {
-					return writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor)
+					return writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor, read.frameOwner)
 				})
 				releaseUnselectedFrame()
 				if failure != "" {
@@ -1524,6 +1524,7 @@ type Manager struct {
 	privateB4SourceIngress   *privateB4SourceIngressOwner
 	managerDiagnosticOwner   *managerDiagnosticOwner
 	privateDiagnosticHistory *privateDiagnosticHistory
+	privateB4C15Contexts     map[string]privateB4C15ManagerContext
 	cWireObserver            lspwire.Observer
 	cDecodeEntry             func()
 	cRetainEntry             func()

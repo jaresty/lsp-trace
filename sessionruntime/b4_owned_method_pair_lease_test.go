@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,6 +14,92 @@ import (
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
+
+func runOwnedPairDeadline(t *testing.T, fn func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() { defer close(done); fn() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, true)
+		t.Fatalf("ASSERT_C15_PAIR_DEADLINE\n%s", buf[:n])
+	}
+}
+
+func TestPrivateB4OwnedMethodPairAtomicBatchCausalFixture(t *testing.T) {
+	runOwnedPairDeadline(t, func() {
+		account := mustPrivateB4ByteAccountV2(t)
+		type contextSnapshot struct {
+			account                privateB4ByteLedgerSnapshot
+			sequence, nextObjectID uint64
+			objects                map[uint64]privateB4C15ObjectState
+		}
+		snapshot := func() contextSnapshot {
+			ledger := account.snapshot()
+			account.mu.Lock()
+			defer account.mu.Unlock()
+			objects := make(map[uint64]privateB4C15ObjectState, len(account.c15.objects))
+			for id, state := range account.c15.objects {
+				objects[id] = state
+			}
+			return contextSnapshot{account: ledger, sequence: account.c15.sequence, nextObjectID: account.c15.nextObjectID, objects: objects}
+		}
+
+		privateC15InstallObserver(t, account, func(privateB4C15Event) error { return nil })
+		before := snapshot()
+		seen := 0
+		privateC15InstallObserver(t, account, func(event privateB4C15Event) error {
+			if event.SiteID == privateC15SiteC15Copy34OwnedPairParams || event.SiteID == privateC15SiteC15Copy35OwnedPairResult {
+				seen++
+				if event.SiteID == privateC15SiteC15Copy35OwnedPairResult {
+					return errors.New("refuse second copy")
+				}
+			}
+			return nil
+		})
+		if owner, failure := newPrivateB4OwnedMethodPairOwner(account, OwnedMethodPair{Params: []byte("params"), Result: []byte("result")}); failure != session.ResourceExhausted || owner != nil {
+			t.Fatalf("ASSERT_C15_PAIR_BATCH_REFUSAL failure=%q owner=%v", failure, owner)
+		}
+		afterRefusal := snapshot()
+		if seen != 2 || !reflect.DeepEqual(afterRefusal, before) {
+			t.Fatalf("ASSERT_C15_PAIR_BATCH_REFUSAL_ATOMIC seen=%d before=%+v after=%+v", seen, before, afterRefusal)
+		}
+
+		var events []privateB4C15Event
+		privateC15InstallObserver(t, account, func(event privateB4C15Event) error { events = append(events, event); return nil })
+		owner, failure := newPrivateB4OwnedMethodPairOwner(account, OwnedMethodPair{Params: []byte("params"), Result: []byte("result")})
+		if failure != "" || owner == nil {
+			t.Fatalf("ASSERT_C15_PAIR_BATCH_SUCCESS failure=%q", failure)
+		}
+		if len(events) != 2 || events[0].SiteID != privateC15SiteC15Copy34OwnedPairParams || events[1].SiteID != privateC15SiteC15Copy35OwnedPairResult ||
+			events[1].Sequence != events[0].Sequence+1 || events[0].ObjectID == events[1].ObjectID {
+			t.Fatalf("ASSERT_C15_PAIR_BATCH_CAUSAL events=%+v", events)
+		}
+		lease := OwnedMethodPairLease{owner: owner}
+		if err := lease.WithPair(func(v OwnedMethodPairView) error {
+			if string(v.Params) != "params" || string(v.Result) != "result" {
+				return errors.New("semantic output changed")
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("ASSERT_C15_PAIR_BATCH_OUTPUT err=%v", err)
+		}
+		if !lease.Release() || lease.Release() {
+			t.Fatal("ASSERT_C15_PAIR_BATCH_EXACT_ONCE_OWNER_RELEASE")
+		}
+		terminal := map[string]int{}
+		for _, event := range events {
+			if event.Terminal {
+				terminal[event.ObjectID]++
+			}
+		}
+		if terminal[events[0].ObjectID] != 1 || terminal[events[1].ObjectID] != 1 {
+			t.Fatalf("ASSERT_C15_PAIR_BATCH_EXACT_ONCE_OBJECT_RELEASE terminal=%v events=%+v", terminal, events)
+		}
+	})
+}
 
 func TestPrivateB4OwnedMethodPairLeaseLifecycleTimeoutReleaseRetry(t *testing.T) {
 	f := stageBControls(t)

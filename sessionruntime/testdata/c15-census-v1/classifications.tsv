@@ -1,3 +1,85 @@
+alloc.adr0011.c17.c15.observer.contract.private.newprivateb4c15custodycontext.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.newprivateb4c15custodycontext.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.objectname.call.privateb4c15objectname.1	excluded		ephemeral-runtime	call privateB4C15ObjectName has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.privateb4c15objectname.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.privateb4c15objectname.call.string.1	excluded		ephemeral-runtime	call string has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.observebatch.builtin-append.append.1	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.observebatch.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.observebatch.call.expression.2	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.observebatch.call.recover.1	excluded		ephemeral-runtime	call recover has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.observebatch.call.errors.new.1	excluded		external-library	errors.New is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.observebatch.call.c.observer.1	excluded		external-library	c.observer is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.notify.call.c.nextsequence.1	excluded		external-library	c.nextSequence is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.notify.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.notify.call.c.objectname.1	excluded		external-library	c.objectName is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.notify.call.string.1	excluded		ephemeral-runtime	call string has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.notify.call.c.observebatch.1	excluded		external-library	c.observeBatch is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.notify.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.builtin-make.make.2	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.c.objectname.1	excluded		external-library	c.objectName is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.string.1	excluded		ephemeral-runtime	call string has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.prepareprivateb4c15mutation.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.plan.prepareprivateb4c15mutation.1	excluded		external-library	plan.preparePrivateB4C15Mutation is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.builtin-make.make.2	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.builtin-append.append.1	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.c.observebatch.1	excluded		external-library	c.observeBatch is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.commitplans.call.mutation.commit.1	excluded		external-library	mutation.commit is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.createmany.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.createmany.call.c.commitplans.1	excluded		external-library	c.commitPlans is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.createmany.call.clear.1	excluded		ephemeral-runtime	call clear has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.createmany.call.min.1	excluded		ephemeral-runtime	call min has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.createmany.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.createmany.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.create.call.c.createmany.1	excluded		external-library	c.createMany is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.create.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.create.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.alias.call.c.notify.1	excluded		external-library	c.notify is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.alias.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.transfer.call.c.notify.1	excluded		external-library	c.notify is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.transfer.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.releasereference.call.c.notify.1	excluded		external-library	c.notify is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.releasereference.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.release.call.c.releasereference.1	excluded		external-library	c.releaseReference is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.freeze.call.c.release.1	excluded		external-library	c.release is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.call.privateb4c15batchobserver.1	excluded		ephemeral-runtime	call privateB4C15BatchObserver has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.builtin-make.make.2	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.call.privateb4c15batchobserver.2	excluded		ephemeral-runtime	call privateB4C15BatchObserver has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.observeprivateb4c15custodysite.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.observeprivateb4c15custodysite.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.setprivatec15custodysequencefortest.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.setprivatec15custodysequencefortest.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.call.m.mu.lock.1	excluded		external-library	m.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.call.m.mu.unlock.1	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.builtin-make.make.3	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverchecked.builtin-make.make.4	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.privateb4c15contextfor.call.m.mu.lock.1	excluded		external-library	m.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.privateb4c15contextfor.call.m.mu.unlock.1	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.privateb4c15contextfor.call.newprivateb4c15custodycontext.1	excluded		ephemeral-runtime	call newPrivateB4C15CustodyContext has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.retireprivateb4c15contextlocked.call.context.freeze.1	excluded		external-library	context.freeze is library behavior outside privateB4ByteAccountV2 custody
+alloc.adr0011.c17.c15.observer.contract.private.retireprivateb4c15contextlocked.call.delete.1	excluded		ephemeral-runtime	call delete has no privateB4ByteAccountV2 owner operation at this site
+alloc.adr0011.c17.c15.observer.contract.private.installprivateb4c15batchobserverfortest.call.m.installprivateb4c15batchobserverchecked.1	excluded		external-library	m.installPrivateB4C15BatchObserverChecked is library behavior outside privateB4ByteAccountV2 custody
 alloc.adr0011.p2.deadline.privatep2effectivedeadline.call.requeststart.add.1	excluded		external-library	requestStart.Add is library behavior outside privateB4ByteAccountV2 custody
 alloc.adr0011.p2.deadline.privatep2effectivedeadline.call.attemptstart.add.1	excluded		external-library	attemptStart.Add is library behavior outside privateB4ByteAccountV2 custody
 alloc.adr0011.p2.deadline.privatep2effectivedeadline.call.attempt.after.1	excluded		external-library	attempt.After is library behavior outside privateB4ByteAccountV2 custody
@@ -271,8 +353,18 @@ alloc.b4.capability.event.c17.private.writeprivateb4capabilityresponsec17.call.i
 alloc.b4.capability.event.c17.private.<package>.call.errors.new.1	excluded		external-library	errors.New is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.reserveprivateb4explicitbytes.call.newprivateb4byteaccountv2.1	excluded		ephemeral-runtime	call newPrivateB4ByteAccountV2 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.reserveprivateb4explicitbytes.call.r.explicitbytes.reservemany.1	excluded		external-library	r.explicitBytes.reserveMany is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.reserveprivateb4requestframe.call.r.explicitbytes.reservemany.1	excluded		external-library	r.explicitBytes.reserveMany is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reserveprivateb4c15explicitbytes.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.reserveprivateb4c15explicitbytes.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.reserveprivateb4c15explicitbytes.call.r.explicitbytes.reservemanyprivateb4c15.1	excluded		external-library	r.explicitBytes.reserveManyPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.reserveprivateb4requestframe.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reserveprivateb4requestframe.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reserveprivateb4requestframe.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.reserveprivateb4requestframe.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reserveprivateb4requestframe.call.privateb4c15operation.2	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.reserveprivateb4requestframe.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reserveprivateb4requestframe.call.privateb4c15operation.3	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.reserveprivateb4requestframe.call.r.explicitbytes.reservemanyprivateb4c15.1	excluded		external-library	r.explicitBytes.reserveManyPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reserveprivateb4requestframe.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.releaseprivateb4requestframetemporary.call.r.requestframecapture.release.1	excluded		external-library	r.requestFrameCapture.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.releaseprivateb4requestframetemporary.call.r.requestframeretained.release.1	excluded		external-library	r.requestFrameRetained.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.releaseprivateb4explicitbytes.call.r.releaseprivateb4requestframetemporary.1	excluded		external-library	r.releasePrivateB4RequestFrameTemporary is library behavior outside privateB4ByteAccountV2 custody
@@ -283,14 +375,19 @@ alloc.b4.definition.private.admitprivateb4sourceaccounting.builtin-make.make.1	e
 alloc.b4.definition.private.privateb4sourceaccountingsnapshot.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.privateb4sourceaccountingsnapshot.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.privateb4sourceaccountingsnapshot.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.reservesuccessorallocation.call.o.account.reserve.1	excluded		external-library	o.account.reserve is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.reservesuccessorallocation.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.aliasprivateb4successorallocation.call.owned.lease.account.aliasprivateb4c15.1	excluded		external-library	owned.lease.account.aliasPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reservesuccessorallocation.call.role.c15siteid.1	excluded		external-library	role.C15SiteID is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.reservesuccessorallocation.call.fmt.errorf.1	excluded		external-library	fmt.Errorf is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reservesuccessorallocation.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.reservesuccessorallocation.call.privateb4c15operation.2	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.reservesuccessorallocation.call.o.account.reserveprivateb4c15.1	excluded		external-library	o.account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reservesuccessorallocation.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reservesuccessorallocation.call.fmt.errorf.2	excluded		external-library	fmt.Errorf is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.reservesuccessorallocation.call.reserve.1	excluded		ephemeral-runtime	call reserve has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.reservesuccessorallocation.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.reservesuccessorallocation.call.o.workaccount.withlogicalbufferreservation.1	excluded		external-library	o.workAccount.WithLogicalBufferReservation is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.reservesuccessorallocation.call.reserve.2	excluded		ephemeral-runtime	call reserve has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.reservesuccessorallocation.call.fmt.errorf.2	excluded		external-library	fmt.Errorf is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.reservesuccessorallocation.call.fmt.errorf.3	excluded		external-library	fmt.Errorf is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.reservesuccessorallocation.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.release.call.l.lease.release.1	excluded		external-library	l.lease.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.read.call.r.reader.read.1	excluded		external-library	r.Reader.Read is library behavior outside privateB4ByteAccountV2 custody
@@ -372,24 +469,27 @@ alloc.b4.definition.private.roundtripprivateb4.call.adr0011work.accountfromconte
 alloc.b4.definition.private.roundtripprivateb4.call.workaccount.snapshot.1	excluded		external-library	workAccount.Snapshot is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.newprivateb4byteaccountv2.1	excluded		ephemeral-runtime	call newPrivateB4ByteAccountV2 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.m.privateb4c15contextfor.1	excluded		external-library	m.privateB4C15ContextFor is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.newprivateb4byteaccountv2.1	excluded		ephemeral-runtime	call newPrivateB4ByteAccountV2 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.10	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.11	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.newprivateb4accountc16withbytes.1	excluded		ephemeral-runtime	call newPrivateB4AccountC16WithBytes has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.call.account.requestterminalrelease.1	excluded		external-library	account.requestTerminalRelease is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.12	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.13	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.newprivateb4accountc16withbytes.1	excluded		ephemeral-runtime	call newPrivateB4AccountC16WithBytes has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.account.requestterminalrelease.1	excluded		external-library	account.requestTerminalRelease is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.14	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.15	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.16	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.newprivateb4eventaccountc17withbytes.1	excluded		ephemeral-runtime	call newPrivateB4EventAccountC17WithBytes has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.transaction.c16.profile.requestterminalreleasec16.1	excluded		external-library	transaction.c16.profile.requestTerminalReleaseC16 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.context.background.1	excluded		external-library	context.Background is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.account.requestterminalrelease.2	excluded		external-library	account.requestTerminalRelease is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.15	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.16	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.17	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.18	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.19	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.reservation.sourcedescriptor.release.1	excluded		external-library	reservation.sourceDescriptor.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.reservation.releaseprivateb4explicitbytes.1	excluded		external-library	reservation.releasePrivateB4ExplicitBytes is library behavior outside privateB4ByteAccountV2 custody
@@ -401,33 +501,38 @@ alloc.b4.definition.private.roundtripprivateb4.call.account.requestterminalrelea
 alloc.b4.definition.private.roundtripprivateb4.call.workaccount.seal.1	excluded		external-library	workAccount.Seal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.m.b4paramshook.1	excluded		external-library	m.b4ParamsHook is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.copyprivateb4params.1	excluded		ephemeral-runtime	call copyPrivateB4Params has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.18	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.19	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.20	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.21	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.paramslease.release.1	excluded		external-library	paramsLease.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.unsafe.sizeof.1	excluded		external-library	unsafe.Sizeof is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.20	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.call.reservation.reserveprivateb4explicitbytes.1	excluded		external-library	reservation.reservePrivateB4ExplicitBytes is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.21	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.uint64.3	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.call.uint64.4	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.call.len.5	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.22	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.23	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.uint64.3	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.24	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.25	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.26	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.privateb4c15operation.2	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.uint64.4	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.len.5	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.roundtripprivateb4.call.reservation.reserveprivateb4c15explicitbytes.1	excluded		external-library	reservation.reservePrivateB4C15ExplicitBytes is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.27	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.28	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.len.6	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.copy.1	excluded		ephemeral-runtime	call copy has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.reservation.reserveprivateb4requestframe.1	excluded		external-library	reservation.reservePrivateB4RequestFrame is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.uint64.5	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.24	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.25	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.29	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.30	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.io.readfull.1	excluded		external-library	io.ReadFull is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.26	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.27	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.28	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.31	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.32	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.33	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.m.roundtripwithprivatetransaction.1	excluded		external-library	m.roundTripWithPrivateTransaction is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.receipt.sealruntime.1	excluded		external-library	receipt.SealRuntime is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.adr0011c18.notify.2	excluded		external-library	adr0011c18.Notify is library behavior outside privateB4ByteAccountV2 custody
@@ -435,25 +540,25 @@ alloc.b4.definition.private.roundtripprivateb4.call.adr0011c18.notify.3	excluded
 alloc.b4.definition.private.roundtripprivateb4.call.m.mu.lock.1	excluded		external-library	m.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.m.mu.unlock.1	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.m.privateb4reservationlocked.1	excluded		external-library	m.privateB4ReservationLocked is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.29	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.34	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.result.privateb4servererror.bindretirement.1	excluded		external-library	result.privateB4ServerError.bindRetirement is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.30	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.35	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.result.completedmethodrequestframe.1	excluded		external-library	result.CompletedMethodRequestFrame is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.result.completeddefinitionresponseframe.1	excluded		external-library	result.CompletedDefinitionResponseFrame is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.result.completedrequestwrite.1	excluded		external-library	result.CompletedRequestWrite is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.result.completedresponseread.1	excluded		external-library	result.CompletedResponseRead is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.verifymethodframecorrespondence.1	excluded		ephemeral-runtime	call VerifyMethodFrameCorrespondence has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.expression.release.1	excluded		external-library	expression.Release is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.31	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.expression.release.2	excluded		external-library	expression.Release is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.32	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.expression.release.3	excluded		external-library	expression.Release is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.33	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.expression.release.4	excluded		external-library	expression.Release is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.34	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.1	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.35	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.36	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.expression.release.2	excluded		external-library	expression.Release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.37	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.expression.release.3	excluded		external-library	expression.Release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.38	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.expression.release.4	excluded		external-library	expression.Release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.39	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.1	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.40	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.41	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.builtin-append.append.1	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.expression.2	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.privateb4hash.1	excluded		ephemeral-runtime	call privateB4Hash has no privateB4ByteAccountV2 owner operation at this site
@@ -470,30 +575,30 @@ alloc.b4.definition.private.roundtripprivateb4.call.reservation.requestframecall
 alloc.b4.definition.private.roundtripprivateb4.call.uint64.8	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.len.9	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.2	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.37	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.38	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.42	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.43	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.reservation.releaseprivateb4requestframetemporary.1	excluded		external-library	reservation.releasePrivateB4RequestFrameTemporary is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.reservation.requestframecaller.transfer.1	excluded		external-library	reservation.requestFrameCaller.transfer is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.3	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.39	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.40	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.41	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.42	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.reservation.responseframeowner.acquirecaller.1	excluded		external-library	reservation.responseFrameOwner.acquireCaller is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.43	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.requestlease.release.1	excluded		external-library	requestLease.Release is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.4	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.44	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.45	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.reservation.resultowner.acquirecaller.1	excluded		external-library	reservation.resultOwner.acquireCaller is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.46	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.requestlease.release.2	excluded		external-library	requestLease.Release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.47	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.responselease.release.1	excluded		external-library	responseLease.Release is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.5	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.reservation.responseframeowner.acquirecaller.1	excluded		external-library	reservation.responseFrameOwner.acquireCaller is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.48	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.requestlease.release.1	excluded		external-library	requestLease.Release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.4	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.49	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.50	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.reservation.resultowner.acquirecaller.1	excluded		external-library	reservation.resultOwner.acquireCaller is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.51	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.requestlease.release.2	excluded		external-library	requestLease.Release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.52	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.responselease.release.1	excluded		external-library	responseLease.Release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.call.m.releaseprivateb4locked.5	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.53	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.54	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.roundtripprivateb4.composite-literal.composite.literal.55	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.privateb4queryoccurrenceid.call.sha256.new.1	excluded		external-library	sha256.New is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.privateb4queryoccurrenceid.call.binary.bigendian.putuint64.1	excluded		external-library	binary.BigEndian.PutUint64 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.privateb4queryoccurrenceid.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
@@ -595,6 +700,7 @@ alloc.b4.definition.private.wait.call.context.background.2	excluded		external-li
 alloc.b4.definition.private.wait.call.j.manager.mu.lock.1	excluded		external-library	j.manager.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.wait.call.j.manager.releaseprivateb4locked.1	excluded		external-library	j.manager.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.wait.call.j.manager.mu.unlock.1	excluded		external-library	j.manager.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.retireprivateb4stoppedlocked.call.m.retireprivateb4c15contextlocked.1	excluded		external-library	m.retirePrivateB4C15ContextLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.retireprivateb4stoppedlocked.call.stopped.readinesshistory.retirelocked.1	excluded		external-library	stopped.readinessHistory.retireLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.retireprivateb4stoppedlocked.call.reservation.ownedmethodpair.requestterminal.1	excluded		external-library	reservation.ownedMethodPair.requestTerminal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.retireprivateb4stoppedlocked.call.reservation.retainednotifications.requestterminal.1	excluded		external-library	reservation.retainedNotifications.requestTerminal is library behavior outside privateB4ByteAccountV2 custody
@@ -615,9 +721,20 @@ alloc.b4.definition.private.privateb4capturelocked.call.uint64.4	excluded		ephem
 alloc.b4.definition.private.privateb4capturelocked.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.privateb4capturelocked.call.uint64.5	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.privateb4capturelocked.call.len.5	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.privateb4capturelocked.call.reservation.reserveprivateb4explicitbytes.1	excluded		external-library	reservation.reservePrivateB4ExplicitBytes is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.privateb4capturelocked.call.len.6	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.privateb4capturelocked.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.privateb4capturelocked.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.privateb4capturelocked.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.privateb4capturelocked.call.privateb4c15operation.2	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.privateb4capturelocked.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.privateb4capturelocked.call.privateb4c15operation.3	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.privateb4capturelocked.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.privateb4capturelocked.call.privateb4c15operation.4	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.privateb4capturelocked.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.privateb4capturelocked.call.privateb4c15operation.5	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.privateb4capturelocked.call.reservation.reserveprivateb4c15explicitbytes.1	excluded		external-library	reservation.reservePrivateB4C15ExplicitBytes is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.privateb4capturelocked.call.len.6	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.privateb4capturelocked.call.len.7	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.privateb4capturelocked.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.privateb4capturelocked.builtin-append.append.1	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.privateb4capturelocked.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.privateb4capturelocked.builtin-append.append.2	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
@@ -638,37 +755,44 @@ alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.m.mu.lock.1	
 alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.m.mu.unlock.1	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.m.privateb4capturelocked.1	excluded		external-library	m.privateB4CaptureLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.prepareprivateb4definitionborrowed.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.reservation.resultowner.managerbytes.1	excluded		external-library	reservation.resultOwner.managerBytes is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.prepare.1	excluded		ephemeral-runtime	call prepare has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.aliasprivateb4successorallocation.1	excluded		ephemeral-runtime	call aliasPrivateB4SuccessorAllocation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.prepareprivateb4definitionborrowed.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.reservation.resultowner.managerbytes.1	excluded		external-library	reservation.resultOwner.managerBytes is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.aliasprivateb4successorallocation.2	excluded		ephemeral-runtime	call aliasPrivateB4SuccessorAllocation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.prepareprivateb4definitionborrowed.call.prepare.1	excluded		ephemeral-runtime	call prepare has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.prepareprivateb4definitionborrowed.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.prepareprivateb4definitionborrowed.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.lock.1	excluded		external-library	m.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.privateb4capturelocked.1	excluded		external-library	m.privateB4CaptureLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.1	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.call.reservation.resultowner.managerbytes.1	excluded		external-library	reservation.resultOwner.managerBytes is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.aliasprivateb4successorallocation.1	excluded		ephemeral-runtime	call aliasPrivateB4SuccessorAllocation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.2	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.reservation.resultowner.managerbytes.1	excluded		external-library	reservation.resultOwner.managerBytes is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.aliasprivateb4successorallocation.2	excluded		ephemeral-runtime	call aliasPrivateB4SuccessorAllocation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.3	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.call.prepare.1	excluded		ephemeral-runtime	call prepare has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.4	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.prepare.1	excluded		ephemeral-runtime	call prepare has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.publish.1	excluded		ephemeral-runtime	call publish has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.releaseprivateb4locked.1	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.c16.profile.beginborrow.1	excluded		external-library	c16.profile.beginBorrow is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.4	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.5	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.6	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.c16.profile.endborrow.1	excluded		external-library	c16.profile.endBorrow is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.prepare.2	excluded		ephemeral-runtime	call prepare has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.lock.2	excluded		external-library	m.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.privateb4reservationlocked.1	excluded		external-library	m.privateB4ReservationLocked is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.6	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.releaseprivateb4locked.2	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.7	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.releaseprivateb4locked.2	excluded		external-library	m.releasePrivateB4Locked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.definition.private.commitprivateb4definitionborrowed.call.m.mu.unlock.8	excluded		external-library	m.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowed.call.publish.2	excluded		ephemeral-runtime	call publish has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.definition.private.commitprivateb4definitionborrowedc17.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.definition.private.commitprivateb4definitionborrowedc17.call.m.mu.lock.1	excluded		external-library	m.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
@@ -723,7 +847,7 @@ alloc.b4.event.account.c17.private.privateb4eventaccountc17selfcost.composite-li
 alloc.b4.event.account.c17.private.newprivateb4eventaccountc17.call.newprivateb4byteaccountv2.1	excluded		ephemeral-runtime	call newPrivateB4ByteAccountV2 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.event.account.c17.private.newprivateb4eventaccountc17.call.newprivateb4eventaccountc17withbytes.1	excluded		ephemeral-runtime	call newPrivateB4EventAccountC17WithBytes has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.event.account.c17.private.newprivateb4eventaccountc17.call.bytes.requestterminalrelease.1	excluded		external-library	bytes.requestTerminalRelease is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.event.account.c17.private.newprivateb4eventaccountc17withbytes.call.bytes.reserve.1	excluded		external-library	bytes.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.event.account.c17.private.newprivateb4eventaccountc17withbytes.call.bytes.reserveprivateb4unobserved.1	excluded		external-library	bytes.reservePrivateB4Unobserved is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.event.account.c17.private.newprivateb4eventaccountc17withbytes.call.privateb4eventaccountc17selfcost.1	excluded		ephemeral-runtime	call privateB4EventAccountC17SelfCost has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.event.account.c17.private.newprivateb4eventaccountc17withbytes.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.event.account.c17.private.witheventadmission.call.a.witheventadmissions.1	excluded		external-library	a.withEventAdmissions is library behavior outside privateB4ByteAccountV2 custody
@@ -867,15 +991,35 @@ alloc.b4.explicit.bytes.c15.private.reservedescriptor.composite-literal.composit
 alloc.b4.explicit.bytes.c15.private.reservedescriptor.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reservedescriptor.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.newprivateb4byteaccountv2.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.newprivateb4byteaccountv2.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.newprivateb4byteaccountv2.call.newprivateb4byteledgerv2.1	excluded		ephemeral-runtime	call newPrivateB4ByteLedgerV2 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.newprivateb4byteaccountv2.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.call.a.table.general.reserve.1	excluded		external-library	a.table.general.reserve is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.newprivateb4byteaccountv2.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.newprivateb4byteaccountv2.call.context.create.1	excluded		external-library	context.create is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.newprivateb4byteaccountv2.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.reserve.call.a.reserveprivateb4c15.1	excluded		external-library	a.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4unobserved.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4unobserved.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4unobserved.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4unobserved.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4unobserved.call.a.table.general.reserve.1	excluded		external-library	a.table.general.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4unobserved.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4unobserved.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.call.a.table.general.reserve.1	excluded		external-library	a.table.general.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.call.a.c15.commitplans.1	excluded		external-library	a.c15.commitPlans is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4c15.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reservemany.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reservemany.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reservemany.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
@@ -884,19 +1028,76 @@ alloc.b4.explicit.bytes.c15.private.reservemany.call.a.mu.unlock.1	excluded		ext
 alloc.b4.explicit.bytes.c15.private.reservemany.call.a.table.general.reservemany.1	excluded		external-library	a.table.general.reserveMany is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reservemany.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reservemany.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.5	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.6	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint16.1	excluded		ephemeral-runtime	call uint16 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.7	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.builtin-make.make.2	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.8	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.3	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.c.objectname.1	excluded		external-library	c.objectName is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.string.1	excluded		ephemeral-runtime	call string has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.4	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.10	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.11	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.12	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.p.account.registerprivateb4c15leaselocked.1	excluded		external-library	p.account.registerPrivateB4C15LeaseLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.13	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.5	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.call.a.table.general.reservemany.1	excluded		external-library	a.table.general.reserveMany is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.call.a.c15.commitplans.1	excluded		external-library	a.c15.commitPlans is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reservemanyprivateb4c15.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.registerprivateb4c15leaselocked.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.registerprivateb4c15leaselocked.builtin-append.append.1	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.privateb4c15leasestatelocked.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.privateb4c15leasestatelocked.call.lease.entry.1	excluded		external-library	lease.entry is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.privateb4c15leasestatelocked.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.privateb4c15leasestatelocked.call.delete.1	excluded		ephemeral-runtime	call delete has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.privateb4c15leasestatelocked.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.aliasprivateb4c15.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.aliasprivateb4c15.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.aliasprivateb4c15.call.a.privateb4c15leasestatelocked.1	excluded		external-library	a.privateB4C15LeaseStateLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.aliasprivateb4c15.call.a.c15.alias.1	excluded		external-library	a.c15.alias is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.alias.call.h.account.mu.lock.1	excluded		external-library	h.account.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.alias.call.h.account.mu.unlock.1	excluded		external-library	h.account.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.alias.call.h.lease.alias.1	excluded		external-library	h.lease.alias is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.alias.call.h.lease.entry.1	excluded		external-library	h.lease.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.alias.call.h.account.privateb4c15leasestatelocked.1	excluded		external-library	h.account.privateB4C15LeaseStateLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.alias.call.h.account.c15.alias.1	excluded		external-library	h.account.c15.alias is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.grow.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.grow.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.grow.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.grow.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.grow.call.a.privateb4c15leasestatelocked.1	excluded		external-library	a.privateB4C15LeaseStateLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.grow.call.h.lease.grow.1	excluded		external-library	h.lease.grow is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.grow.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.grow.call.delete.1	excluded		ephemeral-runtime	call delete has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.grow.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.shrinkexact.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.shrinkexact.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
@@ -905,33 +1106,51 @@ alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal
 alloc.b4.explicit.bytes.c15.private.transfer.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transfer.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transfer.call.h.lease.transfer.1	excluded		external-library	h.lease.transfer is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.call.h.lease.entry.1	excluded		external-library	h.lease.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.call.a.privateb4c15leasestatelocked.1	excluded		external-library	a.privateB4C15LeaseStateLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.call.a.c15.transfer.1	excluded		external-library	a.c15.transfer is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.call.delete.1	excluded		ephemeral-runtime	call delete has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.call.h.release.1	excluded		external-library	h.release is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.call.source.lease.entry.1	excluded		external-library	source.lease.entry is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.call.destination.preflightslot.1	excluded		external-library	destination.preflightSlot is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.call.destination.installtransferred.1	excluded		external-library	destination.installTransferred is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.call.a.maybereleasebackinglocked.1	excluded		external-library	a.maybeReleaseBackingLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.14	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.15	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.lease.lease.entry.1	excluded		external-library	lease.lease.entry is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.16	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.p.destination.preflightslot.1	excluded		external-library	p.destination.preflightSlot is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.17	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.18	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.19	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.20	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.c.objectname.2	excluded		external-library	c.objectName is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.21	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.22	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.23	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.p.destination.installtransferred.1	excluded		external-library	p.destination.installTransferred is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.24	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.p.account.privateb4c15leasestatelocked.1	excluded		external-library	p.account.privateB4C15LeaseStateLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.delete.1	excluded		ephemeral-runtime	call delete has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.c.release.1	excluded		external-library	c.release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.p.account.maybereleasebackinglocked.1	excluded		external-library	p.account.maybeReleaseBackingLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbacking.call.a.transferdiagnosticbackingpair.1	excluded		external-library	a.transferDiagnosticBackingPair is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.first.lease.entry.1	excluded		external-library	first.lease.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.second.lease.entry.1	excluded		external-library	second.lease.entry is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.a.c15.commitplans.1	excluded		external-library	a.c15.commitPlans is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.destination.preflightslot.1	excluded		external-library	destination.preflightSlot is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.destination.installtransferred.1	excluded		external-library	destination.installTransferred is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.first.lease.entry.1	excluded		external-library	first.lease.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.second.lease.entry.1	excluded		external-library	second.lease.entry is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.destination.preflightslot.1	excluded		external-library	destination.preflightSlot is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.destination.installtransferred.1	excluded		external-library	destination.installTransferred is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferdiagnosticbackingpair.call.a.maybereleasebackinglocked.1	excluded		external-library	a.maybeReleaseBackingLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reservedescriptor.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reservedescriptor.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
@@ -941,7 +1160,12 @@ alloc.b4.explicit.bytes.c15.private.reservedescriptor.call.a.table.reservedescri
 alloc.b4.explicit.bytes.c15.private.reservedescriptor.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reservedescriptor.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.release.call.h.lease.entry.1	excluded		external-library	h.lease.entry is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.release.call.a.privateb4c15leasestatelocked.1	excluded		external-library	a.privateB4C15LeaseStateLocked is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.release.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.release.call.h.lease.release.1	excluded		external-library	h.lease.release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.release.call.a.c15.releasereference.1	excluded		external-library	a.c15.releaseReference is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.release.call.delete.1	excluded		ephemeral-runtime	call delete has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.release.call.a.maybereleasebackinglocked.1	excluded		external-library	a.maybeReleaseBackingLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.call.a.mu.lock.2	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
@@ -952,6 +1176,8 @@ alloc.b4.explicit.bytes.c15.private.requestterminalrelease.call.a.mu.lock.1	excl
 alloc.b4.explicit.bytes.c15.private.requestterminalrelease.call.a.maybereleasebackinglocked.1	excluded		external-library	a.maybeReleaseBackingLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.requestterminalrelease.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.maybereleasebackinglocked.call.a.table.releasetablebacking.1	excluded		external-library	a.table.releaseTableBacking is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.maybereleasebackinglocked.call.a.c15.release.1	excluded		external-library	a.c15.release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.maybereleasebackinglocked.call.a.c15.freeze.1	excluded		external-library	a.c15.freeze is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.snapshot.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.snapshot.call.a.mu.lock.1	excluded		external-library	a.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.snapshot.call.a.mu.unlock.1	excluded		external-library	a.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
@@ -980,34 +1206,75 @@ alloc.b4.explicit.bytes.c15.private.releasetablebacking.call.entry.state.content
 alloc.b4.explicit.bytes.c15.private.releasetablebacking.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.snapshot.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.snapshot.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reserve.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reserve.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reserve.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reserve.call.uint32.1	excluded		ephemeral-runtime	call uint32 has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.entry.call.int.1	excluded		ephemeral-runtime	call int has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.entry.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.release.call.h.entry.1	excluded		external-library	h.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.call.int.1	excluded		ephemeral-runtime	call int has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.release.call.int.2	excluded		ephemeral-runtime	call int has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.9	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.25	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.26	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.27	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.28	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.privateb4c15operation.2	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.29	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.privateb4c15operation.3	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.30	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.privateb4c15operation.4	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.31	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.builtin-make.make.3	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.10	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.builtin-make.make.4	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.11	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.6	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.32	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.c.objectname.3	excluded		external-library	c.objectName is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.string.2	excluded		ephemeral-runtime	call string has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.7	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.33	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.34	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.12	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.35	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.c.objectname.4	excluded		external-library	c.objectName is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.uint64.8	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.len.13	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.36	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.37	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.38	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.39	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.call.lease.entry.1	excluded		external-library	lease.entry is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.prepareprivateb4c15mutation.composite-literal.composite.literal.40	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.call.state.ingress.entry.1	excluded		external-library	state.ingress.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.call.state.ingress.entry.2	excluded		external-library	state.ingress.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.call.state.contentingress.entry.1	excluded		external-library	state.contentIngress.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.call.state.contentingress.entry.2	excluded		external-library	state.contentIngress.entry is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.call.state.ingress.entry.3	excluded		external-library	state.ingress.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.call.state.contentingress.entry.3	excluded		external-library	state.contentIngress.entry is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferstates.call.dst.reservedescriptor.1	excluded		external-library	dst.reserveDescriptor is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.call.dst.reservedescriptor.1	excluded		external-library	dst.reserveDescriptor is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transferstates.call.lease.entry.1	excluded		external-library	lease.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.call.lease.entry.1	excluded		external-library	lease.entry is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.call.dst.mu.lock.1	excluded		external-library	dst.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.call.dst.mu.unlock.1	excluded		external-library	dst.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.call.dst.c15.commitplans.1	excluded		external-library	dst.c15.commitPlans is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transferstates.composite-literal.composite.literal.10	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transfermany.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.transfermany.call.min.1	excluded		ephemeral-runtime	call min has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.transfermany.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
@@ -1026,9 +1293,10 @@ alloc.b4.explicit.bytes.c15.private.transfermany.composite-literal.composite.lit
 alloc.b4.explicit.bytes.c15.private.transfermany.call.h.entry.4	excluded		external-library	h.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transfermany.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.newprivateb4byteledger.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.copyprivateb4params.call.account.reserve.1	excluded		external-library	account.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.copyprivateb4params.call.account.reserveprivateb4c15.1	excluded		external-library	account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.copyprivateb4params.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.copyprivateb4params.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.copyprivateb4params.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.copyprivateb4params.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.copyprivateb4params.builtin-append.append.1	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.copyprivateb4params.call.json.rawmessage.1	excluded		external-library	json.RawMessage is library behavior outside privateB4ByteAccountV2 custody
@@ -1036,22 +1304,23 @@ alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.composite-
 alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.call.canonicalrequestframebytes.1	excluded		ephemeral-runtime	call canonicalRequestFrameBytes has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.call.int64.1	excluded		ephemeral-runtime	call int64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.call.a.reserve.1	excluded		external-library	a.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.call.a.reserveprivateb4c15.1	excluded		external-library	a.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.explicit.bytes.c15.private.reserveprivateb4outboundtransport.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.snapshot.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.snapshot.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.10	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.11	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.12	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.reserve.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reserve.call.uint16.1	excluded		ephemeral-runtime	call uint16 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reservemany.call.len.5	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reservemany.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.reservemany.call.l.reserve.1	excluded		external-library	l.reserve is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.reservemany.call.panic.1	excluded		ephemeral-runtime	call panic has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.alias.call.h.entry.1	excluded		external-library	h.entry is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.alias.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.call.h.entry.2	excluded		external-library	h.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.release.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.grow.call.h.entry.1	excluded		external-library	h.entry is library behavior outside privateB4ByteAccountV2 custody
@@ -1061,8 +1330,9 @@ alloc.b4.explicit.bytes.c15.private.grow.composite-literal.composite.literal.6	e
 alloc.b4.explicit.bytes.c15.private.grow.call.h.release.1	excluded		external-library	h.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.shrinkexact.call.h.entry.1	excluded		external-library	h.entry is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.transfer.call.h.entry.1	excluded		external-library	h.entry is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.6	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.7	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.8	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.explicit.bytes.c15.private.transfer.composite-literal.composite.literal.9	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.explicit.bytes.c15.private.entry.call.int.2	excluded		ephemeral-runtime	call int has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.explicit.bytes.c15.private.entry.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.object.account.c16.private.<package>.call.uint64.1	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
@@ -1121,7 +1391,13 @@ alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.uint64.1	
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.account.reserve.1	excluded		external-library	account.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.privateb4c15operation.2	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.account.reservemanyprivateb4c15.1	excluded		external-library	account.reserveManyPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.uint64.3	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.uint64.4	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
@@ -1130,15 +1406,19 @@ alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.builtin-append
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.builtin-append.append.2	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.call.expression.2	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.newprivateb4ownedmethodpairowner.composite-literal.composite.literal.5	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.withpair.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.withpair.call.o.mu.unlock.1	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.owned.method.pair.lease.withpair.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.withpair.call.o.charge.account.aliasprivateb4c15.1	excluded		external-library	o.charge.account.aliasPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.withpair.call.o.mu.unlock.2	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.withpair.call.errors.new.1	excluded		external-library	errors.New is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.withpair.call.string.1	excluded		ephemeral-runtime	call string has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.owned.method.pair.lease.withpair.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.withpair.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.withpair.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.withpair.call.o.mu.lock.2	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.withpair.call.o.cond.broadcast.1	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.owned.method.pair.lease.withpair.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.withpair.call.o.mu.unlock.4	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.withpair.call.fn.1	excluded		ephemeral-runtime	call fn has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.owned.method.pair.lease.requestterminal.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.requestterminal.call.o.cond.broadcast.1	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
@@ -1152,6 +1432,7 @@ alloc.b4.owned.method.pair.lease.release.call.o.cond.broadcast.1	excluded		exter
 alloc.b4.owned.method.pair.lease.release.call.o.cond.wait.1	excluded		external-library	o.cond.Wait is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.release.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.release.call.o.charge.release.1	excluded		external-library	o.charge.release is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.owned.method.pair.lease.release.call.o.resultcharge.release.1	excluded		external-library	o.resultCharge.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.release.call.o.cond.broadcast.2	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.owned.method.pair.lease.release.call.o.mu.unlock.2	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.request.frame.lease.<package>.call.errors.new.1	excluded		external-library	errors.New is library behavior outside privateB4ByteAccountV2 custody
@@ -1246,7 +1527,8 @@ alloc.b4.retained.notification.c15.private.retainednotificationcapacity.call.uin
 alloc.b4.retained.notification.c15.private.retainednotificationcapacity.call.uint64.6	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.call.retainednotificationcapacity.1	excluded		ephemeral-runtime	call retainedNotificationCapacity has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.call.account.reserve.1	excluded		external-library	account.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.call.account.reserveprivateb4c15.1	excluded		external-library	account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.call.strings.clone.1	excluded		external-library	strings.Clone is library behavior outside privateB4ByteAccountV2 custody
@@ -1258,11 +1540,13 @@ alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner
 alloc.b4.retained.notification.c15.private.newprivateb4retainednotificationowner.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.notification.c15.private.withnotifications.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.notification.c15.private.withnotifications.call.o.mu.unlock.1	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.notification.c15.private.withnotifications.call.o.charge.account.aliasprivateb4c15.1	excluded		external-library	o.charge.account.aliasPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.notification.c15.private.withnotifications.call.o.mu.unlock.2	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.notification.c15.private.withnotifications.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.notification.c15.private.withnotifications.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.notification.c15.private.withnotifications.call.o.mu.lock.2	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.notification.c15.private.withnotifications.call.o.cond.broadcast.1	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.retained.notification.c15.private.withnotifications.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.notification.c15.private.withnotifications.call.o.mu.unlock.4	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.notification.c15.private.withnotifications.call.fn.1	excluded		ephemeral-runtime	call fn has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.notification.c15.private.requestterminal.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.notification.c15.private.requestterminal.call.o.cond.broadcast.1	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
@@ -1322,18 +1606,21 @@ alloc.b4.retained.response.c15.private.cloneretainedresponse.call.strings.clone.
 alloc.b4.retained.response.c15.private.cloneretainedresponse.call.clone.4	excluded		ephemeral-runtime	call clone has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.call.retainedresponsecapacity.1	excluded		ephemeral-runtime	call retainedResponseCapacity has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.call.account.reserve.1	excluded		external-library	account.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.call.account.reserveprivateb4c15.1	excluded		external-library	account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.call.cloneretainedresponse.1	excluded		ephemeral-runtime	call cloneRetainedResponse has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.newprivateb4retainedresponseowner.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.response.c15.private.withresponses.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.response.c15.private.withresponses.call.o.mu.unlock.1	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.response.c15.private.withresponses.call.o.charge.account.aliasprivateb4c15.1	excluded		external-library	o.charge.account.aliasPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.response.c15.private.withresponses.call.o.mu.unlock.2	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.response.c15.private.withresponses.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.response.c15.private.withresponses.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.withresponses.call.o.mu.lock.2	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.response.c15.private.withresponses.call.o.cond.broadcast.1	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.retained.response.c15.private.withresponses.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.retained.response.c15.private.withresponses.call.o.mu.unlock.4	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.response.c15.private.withresponses.call.fn.1	excluded		ephemeral-runtime	call fn has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.retained.response.c15.private.requestterminal.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.retained.response.c15.private.requestterminal.call.o.cond.broadcast.1	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
@@ -1359,7 +1646,8 @@ alloc.b4.server.error.lease.c15.private.privateb4servererrorcapacity.call.len.1	
 alloc.b4.server.error.lease.c15.private.privateb4servererrorcapacity.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.error.lease.c15.private.privateb4servererrorcapacity.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.call.privateb4servererrorcapacity.1	excluded		ephemeral-runtime	call privateB4ServerErrorCapacity has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.call.account.reserve.1	excluded		external-library	account.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.call.account.reserveprivateb4c15.1	excluded		external-library	account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.call.strings.clone.1	excluded		external-library	strings.Clone is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
@@ -1369,11 +1657,13 @@ alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.call.copy.1
 alloc.b4.server.error.lease.c15.private.newprivateb4servererrorowner.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.withservererror.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.withservererror.call.o.mu.unlock.1	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.error.lease.c15.private.withservererror.call.o.charge.account.aliasprivateb4c15.1	excluded		external-library	o.charge.account.aliasPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.withservererror.call.o.mu.unlock.2	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.error.lease.c15.private.withservererror.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.withservererror.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.error.lease.c15.private.withservererror.call.o.mu.lock.2	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.withservererror.call.o.cond.broadcast.1	excluded		external-library	o.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody
-alloc.b4.server.error.lease.c15.private.withservererror.call.o.mu.unlock.3	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.error.lease.c15.private.withservererror.call.o.mu.unlock.4	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.withservererror.call.fn.1	excluded		ephemeral-runtime	call fn has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.error.lease.c15.private.bindretirement.call.o.mu.lock.1	excluded		external-library	o.mu.Lock is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.error.lease.c15.private.bindretirement.call.o.mu.unlock.1	excluded		external-library	o.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody
@@ -1396,20 +1686,28 @@ alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint6
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.1	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.3	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.3	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.4	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.5	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.aliasprivateb4successorallocation.1	excluded		ephemeral-runtime	call aliasPrivateB4SuccessorAllocation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.3	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.5	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.4	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.6	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.5	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.7	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.6	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint.1	excluded		ephemeral-runtime	call uint has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.canonicalrequestframebytes.1	excluded		ephemeral-runtime	call canonicalRequestFrameBytes has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.int.1	excluded		ephemeral-runtime	call int has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.int64.1	excluded		ephemeral-runtime	call int64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.uint64.7	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.account.reservemany.1	excluded		external-library	account.reserveMany is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.composite-literal.composite.literal.2	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.composite-literal.composite.literal.3	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.privateb4c15operation.2	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.account.reservemanyprivateb4c15.1	excluded		external-library	account.reserveManyPrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.composite-literal.composite.literal.4	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.leases.release.1	excluded		external-library	leases.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.leases.release.2	excluded		external-library	leases.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
@@ -1417,12 +1715,13 @@ alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.int.2
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.copy.1	excluded		ephemeral-runtime	call copy has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.copy.2	excluded		ephemeral-runtime	call copy has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.copy.3	excluded		ephemeral-runtime	call copy has no privateB4ByteAccountV2 owner operation at this site
-alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.6	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
+alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.len.8	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.owner.run.1	excluded		external-library	owner.run is library behavior outside privateB4ByteAccountV2 custody
 alloc.b4.server.request.c15.private.writeprivateb4unsupportedresponse.call.writer.writeencodedbodyprivate.1	excluded		external-library	writer.WriteEncodedBodyPrivate is library behavior outside privateB4ByteAccountV2 custody
 alloc.definition.response.frame.completeddefinitionresponseframe.builtin-append.append.1	excluded		ephemeral-runtime	builtin-append append has no privateB4ByteAccountV2 owner operation at this site
 alloc.definition.response.frame.completeddefinitionresponseframe.call.expression.1	excluded		ephemeral-runtime	call expression has no privateB4ByteAccountV2 owner operation at this site
-alloc.diagnostic.backing.c15.private.reserveeventbacking.call.o.account.reserve.1	excluded		external-library	o.account.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.diagnostic.backing.c15.private.reserveeventbacking.call.o.account.reserveprivateb4c15.1	excluded		external-library	o.account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.diagnostic.backing.c15.private.reserveeventbacking.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
 alloc.diagnostic.backing.c15.private.reserveeventbacking.call.errors.new.1	excluded		external-library	errors.New is library behavior outside privateB4ByteAccountV2 custody
 alloc.diagnostic.backing.c15.private.reserveeventbacking.call.string.1	excluded		ephemeral-runtime	call string has no privateB4ByteAccountV2 owner operation at this site
 alloc.diagnostic.backing.c15.private.reserveeventbacking.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
@@ -1632,7 +1931,8 @@ alloc.diagnostic.runtime.describediagnosticoperation.call.len.1	excluded		epheme
 alloc.diagnostic.runtime.describediagnosticoperation.call.m.omitopenprivatediagnosticlocked.1	excluded		external-library	m.omitOpenPrivateDiagnosticLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.diagnostic.runtime.describediagnosticoperation.call.uint64.2	excluded		ephemeral-runtime	call uint64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.diagnostic.runtime.describediagnosticoperation.call.len.2	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
-alloc.diagnostic.runtime.describediagnosticoperation.call.s.account.reserve.1	excluded		external-library	s.account.reserve is library behavior outside privateB4ByteAccountV2 custody
+alloc.diagnostic.runtime.describediagnosticoperation.call.s.account.reserveprivateb4c15.1	excluded		external-library	s.account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.diagnostic.runtime.describediagnosticoperation.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
 alloc.diagnostic.runtime.describediagnosticoperation.call.m.omitopenprivatediagnosticlocked.2	excluded		external-library	m.omitOpenPrivateDiagnosticLocked is library behavior outside privateB4ByteAccountV2 custody
 alloc.diagnostic.runtime.describediagnosticoperation.call.strings.clone.1	excluded		external-library	strings.Clone is library behavior outside privateB4ByteAccountV2 custody
 alloc.diagnostic.runtime.describediagnosticoperation.call.strings.clone.2	excluded		external-library	strings.Clone is library behavior outside privateB4ByteAccountV2 custody
@@ -1825,8 +2125,13 @@ alloc.private.encoded.request.write.call.len.3	excluded		ephemeral-runtime	call 
 alloc.private.encoded.request.write.call.int64.1	excluded		ephemeral-runtime	call int64 has no privateB4ByteAccountV2 owner operation at this site
 alloc.private.encoded.request.write.call.s.beforereserve.1	excluded		external-library	s.beforeReserve is library behavior outside privateB4ByteAccountV2 custody
 alloc.private.encoded.request.write.call.s.account.reserveprivateb4outboundtransport.1	excluded		external-library	s.account.reservePrivateB4OutboundTransport is library behavior outside privateB4ByteAccountV2 custody
+alloc.private.encoded.request.write.call.s.account.reserveprivateb4c15.1	excluded		external-library	s.account.reservePrivateB4C15 is library behavior outside privateB4ByteAccountV2 custody
+alloc.private.encoded.request.write.call.privateb4c15operation.1	excluded		ephemeral-runtime	call privateB4C15Operation has no privateB4ByteAccountV2 owner operation at this site
+alloc.private.encoded.request.write.call.s.lease.release.1	excluded		external-library	s.lease.release is library behavior outside privateB4ByteAccountV2 custody
+alloc.private.encoded.request.write.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody
 alloc.private.encoded.request.write.builtin-make.make.1	excluded		ephemeral-runtime	builtin-make make has no privateB4ByteAccountV2 owner operation at this site
 alloc.private.encoded.request.write.call.copy.1	excluded		ephemeral-runtime	call copy has no privateB4ByteAccountV2 owner operation at this site
+alloc.private.encoded.request.write.call.copylease.release.1	excluded		external-library	copyLease.release is library behavior outside privateB4ByteAccountV2 custody
 alloc.private.encoded.request.write.call.len.4	excluded		ephemeral-runtime	call len has no privateB4ByteAccountV2 owner operation at this site
 alloc.private.encoded.request.encodeprivateb4request.call.runtime.version.1	excluded		external-library	runtime.Version is library behavior outside privateB4ByteAccountV2 custody
 alloc.private.encoded.request.encodeprivateb4request.composite-literal.composite.literal.1	excluded		external-library	composite.literal is library behavior outside privateB4ByteAccountV2 custody

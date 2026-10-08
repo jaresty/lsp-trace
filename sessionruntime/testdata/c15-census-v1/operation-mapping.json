@@ -19,8 +19,8 @@
       "Capacity": "privateB4ByteLedgerV2TableBytes = uint64((privateB4ByteSlots+1)*24)",
       "Failure": "unsupported representation or capacity overflow -\u003e session.ResourceExhausted",
       "NilDefaultOff": "nil account refuses reserve; ordinary/noncustodial paths do not create account",
-      "ASTDigest": "8bf35d48a2a4b47bf9174ab1fe0084b84734778afb1571f6c6cc29f8b6ecd4ec",
-      "BindingFunction": "newPrivateB4ByteLedgerV2",
+      "ASTDigest": "9aa6eb381f933c31bd3aa7c4363bc6a563f4bee14efad4e53a266f16ee17419f",
+      "BindingFunction": "newPrivateB4ByteAccountV2",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
     },
@@ -73,10 +73,10 @@
       "Capacity": "sum(state.ingress.entry().capacity + state.contentIngress.entry().capacity) over deduplicated states",
       "Failure": "invalid state/overflow/reserve refusal -\u003e session.ResourceExhausted",
       "NilDefaultOff": "private destination account required; no ordinary path",
-      "ASTDigest": "2954beed783a6a031155be04de8f8663ed1e7333062798e8033e01c9e33d4851",
-      "BindingFunction": "transferStates",
-      "AdjacencyRelation": "before",
-      "AdjacencyIndex": -1
+      "ASTDigest": "86a9f3b50e48b35a1a41c3a2eecde2194c1e76ce4c09b1b8ec32c65c994628fa",
+      "BindingFunction": "preparePrivateB4C15Mutation",
+      "AdjacencyRelation": "self",
+      "AdjacencyIndex": 0
     },
     {
       "SiteID": "c15.owner.09.request-frame-capture-charge",
@@ -91,7 +91,7 @@
       "Capacity": "uint64(req.CaptureMethodRequestFrameMaxBytes), later shrinkExact(len(writeFrame))",
       "Failure": "reserve/shrink refusal -\u003e session.ResourceExhausted",
       "NilDefaultOff": "private account required; ordinary request path excluded",
-      "ASTDigest": "1e1eae3c5e29ef738aff6be371459c5caf91606406e854286f56226b4678a202",
+      "ASTDigest": "177229a0465f160502de57eed5573670f1d9daea75a42e6480c95cf01473a4c2",
       "BindingFunction": "reservePrivateB4RequestFrame",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -109,7 +109,7 @@
       "Capacity": "uint64(req.CaptureMethodRequestFrameMaxBytes), later shrinkExact(len(writeFrame))",
       "Failure": "reserve/shrink refusal -\u003e session.ResourceExhausted",
       "NilDefaultOff": "private account required; ordinary request path excluded",
-      "ASTDigest": "f527c958255cb25d5da8422ca7eab85cb54ec95a5c46ae5bdbf4a6161e2d834f",
+      "ASTDigest": "abcd460643daa73fd94c1014d8a3a470580d172a08cb17633dbc2a08e52cc3af",
       "BindingFunction": "reservePrivateB4RequestFrame",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -127,10 +127,10 @@
       "Capacity": "shrinkExact(uint64(len(writeFrame)))",
       "Failure": "inactive transfer -\u003e session.ResourceExhausted",
       "NilDefaultOff": "lease absent on unsuccessful/noncustodial results",
-      "ASTDigest": "e2ebc0f3b9f8608a07f1a2b2363c47ac8ec64fc224fa63c7f3c98737998aaee7",
-      "BindingFunction": "RoundTripPrivateB4",
-      "AdjacencyRelation": "before",
-      "AdjacencyIndex": -1
+      "ASTDigest": "37151f6f5aae0ed584a4fd20f143a183f17259b9b98209e62e981d66306de0a5",
+      "BindingFunction": "reservePrivateB4RequestFrame",
+      "AdjacencyRelation": "after",
+      "AdjacencyIndex": 1
     },
     {
       "SiteID": "c15.owner.13.outbound-canonical-frame",
@@ -253,7 +253,7 @@
       "Capacity": "bytes supplied by manageddiagnostic collector",
       "Failure": "reserve/transfer refusal -\u003e ResourceExhausted",
       "NilDefaultOff": "private diagnostic operation supplies owner; ordinary diagnostics unaffected",
-      "ASTDigest": "b0ec4b7311781c4453c52dd86d674f67c4a4a4f167217364699c61c4916940b3",
+      "ASTDigest": "c4e950cb3ee0000513a9defa6de76645383897fe34b0c2db28abdc0a54b5f7da",
       "BindingFunction": "ReserveEventBacking",
       "AdjacencyRelation": "after",
       "AdjacencyIndex": 1
@@ -289,7 +289,7 @@
       "Capacity": "0 additional; aliases retained notification owner backing",
       "Failure": "nil/closed -\u003e ErrRetainedNotificationLeaseClosed; callback error propagated",
       "NilDefaultOff": "zero source/account nil publishes no lease",
-      "ASTDigest": "dd34c734a0d6046382dd9d0c45ca1bce54195fb56cd0bf6c0870e3cd34f57d88",
+      "ASTDigest": "61adbf130aa7f7df65c7eb455afc8325dfea04bff3b7d5f5424018934b626e9f",
       "BindingFunction": "WithNotifications",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -307,7 +307,7 @@
       "Capacity": "0 additional; aliases retained response owner backing",
       "Failure": "nil/closed -\u003e ErrRetainedResponseLeaseClosed; callback error propagated",
       "NilDefaultOff": "zero source/account nil publishes no lease",
-      "ASTDigest": "dd34c734a0d6046382dd9d0c45ca1bce54195fb56cd0bf6c0870e3cd34f57d88",
+      "ASTDigest": "197ea89f6daeda52794a73bcd39de4453d547ace5a9bbbac25fda75c36573f3b",
       "BindingFunction": "WithResponses",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -325,7 +325,7 @@
       "Capacity": "0 additional; Message string/Data slice alias error owner",
       "Failure": "nil/closed -\u003e ErrServerErrorLeaseClosed; callback error propagated",
       "NilDefaultOff": "nil source/account produces no owner",
-      "ASTDigest": "dd34c734a0d6046382dd9d0c45ca1bce54195fb56cd0bf6c0870e3cd34f57d88",
+      "ASTDigest": "5f49b5782ff41d68ed3330425a11cb5ef011c25c99e3aedaea2e5119bae9b417",
       "BindingFunction": "WithServerError",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -343,7 +343,7 @@
       "Capacity": "0 additional; aliases owned Params/Result",
       "Failure": "nil/closed -\u003e ErrOwnedMethodPairLeaseClosed; callback error propagated",
       "NilDefaultOff": "private pair lease absent unless explicitly requested and successful",
-      "ASTDigest": "e62b8c641f880ed0e4a7c0762430f0746928a12190b2dac9c493e7d270682920",
+      "ASTDigest": "417f62cdaf2bda57d5aefa26758c9bbcbac600651cf2fab51eb092256cfb0c13",
       "BindingFunction": "WithPair",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -415,10 +415,10 @@
       "Capacity": "uint64(len(params))",
       "Failure": "reserve refusal propagated as session.Failure",
       "NilDefaultOff": "nil account refuses; only private path calls helper",
-      "ASTDigest": "15d86c1d750ea7c3536a30be5b902559a7a15b9aefedb2afdb6d160ff6c18d13",
+      "ASTDigest": "388049803246fd465b07dc68325fcf6449d90416ea02936ae8b54b5618232fab",
       "BindingFunction": "copyPrivateB4Params",
-      "AdjacencyRelation": "after",
-      "AdjacencyIndex": 1
+      "AdjacencyRelation": "self",
+      "AdjacencyIndex": 0
     },
     {
       "SiteID": "c15.copy.03.prepared-source-content",
@@ -451,7 +451,7 @@
       "Capacity": "uint64(len(owner.TargetSources))*uint64(unsafe.Sizeof(B4DefinitionSourceLease{}))",
       "Failure": "overflow/reserve refusal -\u003e ResourceExhausted",
       "NilDefaultOff": "only private owner.TargetSources",
-      "ASTDigest": "cafbc3612a3179bf43289f99cc05ab78b63ae83826079c50b0337c131a7a853e",
+      "ASTDigest": "909f8230391891ddb804a21c1ec60b4da4b237d46d17bc632c4f82ae0e4fddfe",
       "BindingFunction": "RoundTripPrivateB4",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -685,7 +685,7 @@
       "Capacity": "uint64(len(capture.RequestFrame))",
       "Failure": "reserve failure -\u003e PrivateB4Unavailable",
       "NilDefaultOff": "capture unavailable for invalid/closed reservation",
-      "ASTDigest": "1d384fbd0823d965011c3ce574954fc498aa0a28df27ff093a03474810755b17",
+      "ASTDigest": "ca0064487e363a883a429e6dcfdbd63cdb319b6cd0c9d4c9bd38e7f8d1d1c056",
       "BindingFunction": "privateB4CaptureLocked",
       "AdjacencyRelation": "before",
       "AdjacencyIndex": -1
@@ -775,10 +775,10 @@
       "Capacity": "len(prefix)+len(id)+len(suffix)",
       "Failure": "span/copy/write -\u003e SessionPoisoned; overflow/reserve -\u003e ResourceExhausted",
       "NilDefaultOff": "only governed private server requests",
-      "ASTDigest": "ca6c97705702da23c3e33f3f26214beaa7a518a7ea1b33e380a6ee915f0c2cb5",
+      "ASTDigest": "de6da7bda1cccaaaf20ced1fadbd1ce06424ae1838849457e6fd59343789d064",
       "BindingFunction": "writePrivateB4UnsupportedResponse",
-      "AdjacencyRelation": "before",
-      "AdjacencyIndex": -1
+      "AdjacencyRelation": "self",
+      "AdjacencyIndex": 0
     },
     {
       "SiteID": "c15.copy.45c.unsupported-response-header",
@@ -793,10 +793,10 @@
       "Capacity": "uint64(canonicalRequestFrameBytes(int(bodyCapacity)))-bodyCapacity",
       "Failure": "overflow/reserve -\u003e ResourceExhausted; write -\u003e SessionPoisoned",
       "NilDefaultOff": "only governed private server requests",
-      "ASTDigest": "b63a12d3db4d04e473e63d32cbb0a08efa3acefae368720f0674cda6c4a29c99",
+      "ASTDigest": "de6da7bda1cccaaaf20ced1fadbd1ce06424ae1838849457e6fd59343789d064",
       "BindingFunction": "writePrivateB4UnsupportedResponse",
-      "AdjacencyRelation": "before",
-      "AdjacencyIndex": -1
+      "AdjacencyRelation": "self",
+      "AdjacencyIndex": 0
     }
   ]
 }
