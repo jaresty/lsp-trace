@@ -1,0 +1,34 @@
+{
+  "schema": "lsp-trace.adr0007.source-text-search.binary-directory-identity.private.v1",
+  "root": ".adr0007-sim-bin",
+  "entries": [
+    {
+      "name": "oracle",
+      "path": ".adr0007-sim-bin/oracle",
+      "bytes": 3571058,
+      "sha256": "sha256:1b0f335217d555e885557eb8267ce8ceacba3107079de6d9e7acf456581464ef",
+      "mode": "-rwxr-xr-x",
+      "regular": true,
+      "executable": true
+    },
+    {
+      "name": "production",
+      "path": ".adr0007-sim-bin/production",
+      "bytes": 3604034,
+      "sha256": "sha256:03195e8bc6bdc7542a3e8a831e067ac04f76d31b6296c2ac70694e11c2fc7980",
+      "mode": "-rwxr-xr-x",
+      "regular": true,
+      "executable": true
+    },
+    {
+      "name": "validator",
+      "path": ".adr0007-sim-bin/contract-validate",
+      "bytes": 3977394,
+      "sha256": "sha256:15e3f14f55bf08100b1bb718115fcdddbc2579fe98709237c1de436e85f845a3",
+      "mode": "-rwxr-xr-x",
+      "regular": true,
+      "executable": true
+    }
+  ],
+  "directory_sha256": "sha256:ae4b46c5c72666c01dfedbd8f47f31627f2befab440e8d9f336403ba75091c5e"
+}
