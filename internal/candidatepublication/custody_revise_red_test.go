@@ -28,17 +28,8 @@ func TestPrivateAdapterOwnerAdvanceIsRepeatableAndPredecessorCAS(t *testing.T) {
 	}
 	secondInput := initial
 	secondInput.PredecessorSelector = advancedA.Selector
-	second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	currentA, err := adapter.CurrentCandidateGeneration(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.SelectorDigest, PredecessorByteLength: currentA.SelectorByteLength})
-	if err != nil || !advancedB.Committed {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SECOND_ADVANCE_FROM_CURRENT_PREDECESSOR_COMMITS: advanced=%+v err=%v", advancedB, err)
+	if second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SAME_CANDIDATE_DIFFERENT_PREDECESSOR_ALIAS_COLLIDES: second=%+v", second)
 	}
 	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: first.Generation, VerificationSelector: first.VerificationSelector, PredecessorSelector: initial.PredecessorSelector}); err == nil {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_STALE_PREDECESSOR_LOSES")
@@ -186,16 +177,8 @@ func TestPrivateAdapterAdvanceRequiresCallerHeldExactPredecessorToken(t *testing
 	}
 	secondInput := initial
 	secondInput.PredecessorSelector = currentA.Selector
-	second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector}); err == nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_REJECTS_SELECTOR_ONLY_PREDECESSOR_TOKEN")
-	}
-	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.SelectorDigest, PredecessorByteLength: currentA.SelectorByteLength})
-	if err != nil || !advancedB.Committed {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_ACCEPTS_EXACT_CALLER_HELD_PREDECESSOR_TOKEN: advanced=%+v err=%v current=%+v", advancedB, err, currentA)
+	if second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SAME_CANDIDATE_CURRENT_PREDECESSOR_ALIAS_COLLIDES: second=%+v", second)
 	}
 }
 
@@ -220,32 +203,8 @@ func TestPrivateAdapterDistinctSuccessorsFromExistingPredecessorExactlyOneWinner
 	}
 	leftInput := testPublishInput(artifact, raw)
 	leftInput.PredecessorSelector = pred.Selector
-	left, err := adapter.PublishCandidateGeneration(context.Background(), leftInput)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rightInput := leftInput
-	rightInput.QualificationID = leftInput.QualificationID + "/alternate"
-	right, err := adapter.PublishCandidateGeneration(context.Background(), rightInput)
-	if err == nil && right.ManifestDigest == left.ManifestDigest {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_DISTINCT_SUCCESSOR_FIXTURE: left=%+v right=%+v", left, right)
-	}
-	if err != nil {
-		// If semantic parsing rejects the mutation, this test still exercises the two-advance loser via first generation below.
-		right = left
-	}
-	requests := []AdvanceRequest{
-		{Generation: left.Generation, VerificationSelector: left.VerificationSelector, ManifestSelector: left.ManifestSelector, ManifestDigest: left.ManifestDigest, ManifestByteLength: left.ManifestByteLength, PredecessorSelector: pred.Selector, PredecessorDigest: pred.SelectorDigest, PredecessorByteLength: pred.SelectorByteLength},
-		{Generation: right.Generation, VerificationSelector: right.VerificationSelector, ManifestSelector: right.ManifestSelector, ManifestDigest: right.ManifestDigest, ManifestByteLength: right.ManifestByteLength, PredecessorSelector: pred.Selector, PredecessorDigest: pred.SelectorDigest, PredecessorByteLength: pred.SelectorByteLength},
-	}
-	success := 0
-	for _, req := range requests {
-		if _, err := adapter.AdvanceCandidateGeneration(context.Background(), req); err == nil {
-			success++
-		}
-	}
-	if success != 1 {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_EXISTING_PREDECESSOR_EXACTLY_ONE_SUCCESSOR_WINS: success=%d pred=%+v", success, pred)
+	if left, err := adapter.PublishCandidateGeneration(context.Background(), leftInput); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SAME_CANDIDATE_EXISTING_PREDECESSOR_ALIAS_COLLIDES: left=%+v", left)
 	}
 }
 

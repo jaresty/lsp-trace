@@ -5,11 +5,70 @@ package candidatepublication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"lsp-trace/internal/publication"
 )
+
+func TestADR0007SameCandidateDifferentQualificationOrdinaryPredecessorIsImmutableAliasCollision(t *testing.T) {
+	root, _ := testPrivateRoot(t)
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, raw := testCandidateBytes(t)
+	firstReq := testPublishInput(artifact, raw)
+	first, err := adapter.PublishCandidateGeneration(context.Background(), firstReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, err := adapter.PublishCandidateGeneration(context.Background(), firstReq)
+	if err != nil || same.Generation != first.Generation || same.ManifestDigest != first.ManifestDigest {
+		t.Fatalf("ASSERT_ADR0007_CANDIDATE_ALIAS_EXACT_CANONICAL_BYTES_IDEMPOTENT: first=%+v same=%+v err=%v", first, same, err)
+	}
+	secondReq := firstReq
+	secondReq.QualificationID = firstReq.QualificationID + "/ordinary-alternate"
+	secondReq.SourceRevision = firstReq.SourceRevision + "-ordinary-alternate"
+	second, err := adapter.PublishCandidateGeneration(context.Background(), secondReq)
+	if err == nil {
+		t.Fatalf("ASSERT_ADR0007_CANDIDATE_ALIAS_SAME_CANDIDATE_DIFFERENT_QUALIFICATION_ORDINARY_PREDECESSOR_COLLIDES: first=%+v second=%+v", first, second)
+	}
+}
+
+func TestADR0007AdvanceReturnsCommittedResultOnPostcommitCASError(t *testing.T) {
+	root, _ := testPrivateRoot(t)
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, raw := testCandidateBytes(t)
+	input := testPublishInput(artifact, raw)
+	published, err := adapter.PublishCandidateGeneration(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := compareAndReplaceBoundFile
+	defer func() { compareAndReplaceBoundFile = original }()
+	postcommitErr := errors.New("synthetic committed postrename verification failure")
+	compareAndReplaceBoundFile = func(ctx context.Context, root *publication.Root, selector string, predecessor publication.BoundFilePredecessor, raw []byte, verify func([]byte) error) (*publication.CompareAndReplaceReceipt, error) {
+		receipt, err := original(ctx, root, selector, predecessor, raw, verify)
+		if err != nil {
+			return receipt, err
+		}
+		receipt.Committed = true
+		receipt.Outcome = publication.CASOutcomeCommittedVerificationFailed
+		receipt.VerificationStatus = publication.CASOutcomeCommittedVerificationFailed
+		return receipt, postcommitErr
+	}
+	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorSelector: input.PredecessorSelector})
+	if err == nil || !advanced.Committed || advanced.Selector != currentSelector || advanced.Generation != published.Generation || advanced.PostcommitVerificationStatus != publication.CASOutcomeCommittedVerificationFailed {
+		t.Fatalf("ASSERT_ADR0007_ADVANCE_POSTCOMMIT_CAS_ERROR_RETURNS_COMMITTED_RESULT_NO_BLIND_RETRY: advanced=%+v err=%v", advanced, err)
+	}
+}
 
 func TestADR0007PublishCandidateGenerationExactAliasCollisionRequiresExactBytes(t *testing.T) {
 	root, _ := testPrivateRoot(t)
@@ -76,14 +135,7 @@ func TestADR0007DefaultManifestAliasMustBeBackedByVerifiedSelectorReceipt(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondReq := firstReq
-	secondReq.QualificationID = firstReq.QualificationID + "/alternate"
-	secondReq.SourceRevision = firstReq.SourceRevision + "-alternate"
-	second, err := adapter.PublishCandidateGeneration(context.Background(), secondReq)
-	if err != nil {
-		t.Fatal(err)
-	}
-	secondManifestBytes, err := root.ReadSelector(second.ManifestSelector, 1<<20)
+	secondManifestBytes, err := root.ReadSelector(first.ManifestSelector, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,11 +143,7 @@ func TestADR0007DefaultManifestAliasMustBeBackedByVerifiedSelectorReceipt(t *tes
 	if err := decodeStrict(secondManifestBytes, &tampered); err != nil {
 		t.Fatal(err)
 	}
-	tampered.CandidateGeneration = first.Generation
-	tampered.CandidateVerificationSelector = first.VerificationSelector
-	tampered.CandidateSelector = first.ArtifactSelector
-	tampered.CandidateDigest = Digest(raw)
-	tampered.CandidateByteLength = uint64(len(raw))
+	tampered.QualificationReceiptDigest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 	aliasBytes, err := json.Marshal(tampered)
 	if err != nil {
 		t.Fatal(err)
