@@ -205,17 +205,34 @@ type envelope struct {
 	Sources                        []sourceWire
 	AdmissionDigest                string
 }
-type work struct{ v, max uint64 }
+type workChargeObserver interface {
+	observeWorkCharge(stage string, before, increment, after uint64, failed bool)
+}
 
-func (w *work) add(k, n uint64) bool {
+type work struct {
+	v, max   uint64
+	observer workChargeObserver
+}
+
+func (w *work) add(stage string, k, n uint64) bool {
+	before := w.v
 	if n != 0 && k > math.MaxUint64/n {
+		if w.observer != nil {
+			w.observer.observeWorkCharge(stage, before, 0, before, true)
+		}
 		return false
 	}
 	x := k * n
 	if w.v > math.MaxUint64-x || w.v+x > w.max {
+		if w.observer != nil {
+			w.observer.observeWorkCharge(stage, before, x, before, true)
+		}
 		return false
 	}
 	w.v += x
+	if w.observer != nil {
+		w.observer.observeWorkCharge(stage, before, x, w.v, false)
+	}
 	return true
 }
 func choose2(n uint64) (uint64, bool) {
@@ -252,7 +269,10 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 		return failure(id, "INVALID_REQUEST", "REQUEST_FIELD"), nil
 	}
 	wk := work{max: limits.MaxWork}
-	if !wk.add(50, 1) || !wk.add(3, uint64(len(raw))) {
+	if observer, ok := c.(workChargeObserver); ok {
+		wk.observer = observer
+	}
+	if !wk.add("BASE", 50, 1) || !wk.add("J", 3, uint64(len(raw))) {
 		return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 	}
 	q, detail := strictRequest(raw)
@@ -275,7 +295,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 		if o, d, x := poll(c); x {
 			return failure(id, o, d), nil
 		}
-		if !wk.add(13, 1) {
+		if !wk.add("M", 13, 1) {
 			return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 		}
 		if m.ID == "" || !norm.NFC.IsNormalString(m.ID) {
@@ -355,7 +375,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 			rows = append(rows, row)
 			continue
 		}
-		if !wk.add(7, 1) || !src.CanonicalPath(m.Path) {
+		if !wk.add("P", 7, 1) || !src.CanonicalPath(m.Path) {
 			if wk.v > wk.max {
 				return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 			}
@@ -373,7 +393,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 		}
 		valid := true
 		for _, r := range m.Ranges {
-			if !wk.add(11, 1) {
+			if !wk.add("R", 11, 1) {
 				return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 			}
 			if rangeStatus(r, s.Bytes) != "" {
@@ -398,7 +418,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 				if o, d, x := poll(c); x {
 					return failure(id, o, d), nil
 				}
-				if !wk.add(19, 1) {
+				if !wk.add("Q", 19, 1) {
 					return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 				}
 				if relation(q.Relation, a, b) {
@@ -407,7 +427,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 			}
 		}
 		cp, _ := choose2(uint64(len(ws)))
-		if !wk.add(29, cp) {
+		if !wk.add("C", 29, cp) {
 			return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 		}
 		sortWitnesses(ws)
@@ -430,11 +450,11 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 	if nw > limits.MaxWitnesses {
 		return failure(id, "RESOURCE_LIMIT", "WITNESSES"), nil
 	}
-	if !wk.add(23, nw) {
+	if !wk.add("X", 23, nw) {
 		return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 	}
 	cp, _ := choose2(uint64(len(ranking)))
-	if !wk.add(29, cp) {
+	if !wk.add("C", 29, cp) {
 		return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 	}
 	sort.SliceStable(ranking, func(i, j int) bool {
@@ -459,7 +479,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 			return failure(id, o, d), nil
 		}
 	}
-	if !wk.add(31, B) {
+	if !wk.add("B", 31, B) {
 		return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 	}
 	if B > limits.MaxOutputBytes {
@@ -731,7 +751,7 @@ func parseEnvelope(raw []byte, w *work, l Limits) (envelope, string, string) {
 		if er != nil || base64.StdEncoding.EncodeToString(bb) != s.Bytes || len(bb) == 0 || !utf8.Valid(bb) || !src.CanonicalPath(s.Path) || s.Revision == "" || !digest(s.FileDigest) || !digest(s.ObjectDigest) || src.Digest(bb) != s.FileDigest || src.Digest(bb) != s.ObjectDigest {
 			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
 		}
-		if !w.add(7, 1) {
+		if !w.add("P", 7, 1) {
 			return e, "RESOURCE_LIMIT", "WORK"
 		}
 		e.Sources = append(e.Sources, s)
@@ -747,7 +767,7 @@ func parseEnvelope(raw []byte, w *work, l Limits) (envelope, string, string) {
 		if n > l.MaxSourceBytes || total > math.MaxUint64-n || total+n > l.MaxTotalSourceBytes {
 			return e, "RESOURCE_LIMIT", "SOURCE_BYTES"
 		}
-		if !w.add(1, n) {
+		if !w.add("S", 1, n) {
 			return e, "RESOURCE_LIMIT", "WORK"
 		}
 		total += n
@@ -780,7 +800,7 @@ func parseEnvelope(raw []byte, w *work, l Limits) (envelope, string, string) {
 		return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_DIGEST"
 	}
 	cp, _ := choose2(uint64(len(ins)))
-	if !w.add(29, cp) {
+	if !w.add("C", 29, cp) {
 		return e, "RESOURCE_LIMIT", "WORK"
 	}
 	return e, "", ""
@@ -824,7 +844,7 @@ func selectorRanges(s Selector, sm map[string]src.SelectedSource, w *work, l Lim
 	out := map[string][]Range{}
 	switch s.Kind {
 	case "EXACT_FILE":
-		if !w.add(7, 1) {
+		if !w.add("P", 7, 1) {
 			return nil, "RESOURCE_LIMIT", "WORK"
 		}
 		x, ok := sm[s.Path]
@@ -838,7 +858,7 @@ func selectorRanges(s Selector, sm map[string]src.SelectedSource, w *work, l Lim
 		}
 		var total uint64
 		for _, u := range s.Union {
-			if !w.add(7, 1) {
+			if !w.add("P", 7, 1) {
 				return nil, "RESOURCE_LIMIT", "WORK"
 			}
 			x, ok := sm[u.Path]
@@ -853,7 +873,7 @@ func selectorRanges(s Selector, sm map[string]src.SelectedSource, w *work, l Lim
 				return nil, "RESOURCE_LIMIT", "TOTAL_RANGES"
 			}
 			for _, r := range u.Ranges {
-				if !w.add(11, 1) {
+				if !w.add("R", 11, 1) {
 					return nil, "RESOURCE_LIMIT", "WORK"
 				}
 				if z := rangeStatus(r, x.Bytes); z != "" {
@@ -863,21 +883,21 @@ func selectorRanges(s Selector, sm map[string]src.SelectedSource, w *work, l Lim
 			}
 		}
 		cp, _ := choose2(uint64(len(s.Union)))
-		w.add(29, cp)
+		w.add("C", 29, cp)
 		for _, u := range s.Union {
 			cp, _ = choose2(uint64(len(u.Ranges)))
-			w.add(29, cp)
+			w.add("C", 29, cp)
 		}
 		for p := range out {
 			sortRanges(out[p])
 			out[p] = dedupRanges(out[p])
 		}
 	case "PATH_PREFIX":
-		if !w.add(7, 1) || !src.CanonicalPath(s.Path) {
+		if !w.add("P", 7, 1) || !src.CanonicalPath(s.Path) {
 			return nil, "INVALID_SELECTOR", "PATH"
 		}
 		for _, p := range s.FrozenPaths {
-			if !w.add(7, 1) || !src.CanonicalPath(p) {
+			if !w.add("P", 7, 1) || !src.CanonicalPath(p) {
 				return nil, "INVALID_SELECTOR", "FROZEN_EXPANSION"
 			}
 		}
@@ -901,7 +921,7 @@ func selectorRanges(s Selector, sm map[string]src.SelectedSource, w *work, l Lim
 			out[p] = []Range{whole(sm[p].Bytes)}
 		}
 		cp, _ := choose2(uint64(len(s.FrozenPaths)))
-		w.add(29, cp)
+		w.add("C", 29, cp)
 	default:
 		return nil, "INVALID_REQUEST", "REQUEST_FIELD"
 	}

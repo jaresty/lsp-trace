@@ -278,39 +278,90 @@ func TestDirectEvaluatorInvalidTuplePrecedesSourceCount(t *testing.T) {
 	}
 }
 
+type workChargeEvent struct {
+	stage                    string
+	before, increment, after uint64
+	failed                   bool
+}
+
+type workTraceControl struct{ events []workChargeEvent }
+
+func (*workTraceControl) Cancelled() bool        { return false }
+func (*workTraceControl) DeadlineExceeded() bool { return false }
+func (c *workTraceControl) observeWorkCharge(stage string, before, increment, after uint64, failed bool) {
+	c.events = append(c.events, workChargeEvent{stage, before, increment, after, failed})
+}
+func firstPositiveStage(events []workChargeEvent, stage string) (workChargeEvent, bool) {
+	for _, e := range events {
+		if e.stage == stage && e.increment > 0 {
+			return e, true
+		}
+	}
+	return workChargeEvent{}, false
+}
+
 func TestDirectEvaluatorStageIsolatedWorkCharges(t *testing.T) {
-	r, b, _ := loadCase(t, "01-exact-intersects")
-	base := PublishedLimits()
 	tests := []struct {
-		stage string
-		exact uint64
+		stage, caseName string
+		wantIncrement   uint64
 	}{
-		{"P", 50},
-		{"R", 2167},
-		{"M", 2180},
-		{"S", 2187},
-		{"Q", 2198},
-		{"X", 2224},
-		{"C", 30000},
+		{"P", "01-exact-intersects", 7},
+		{"R", "01-exact-intersects", 11},
+		{"M", "01-exact-intersects", 13},
+		{"S", "01-exact-intersects", 11},
+		{"Q", "01-exact-intersects", 19},
+		{"X", "01-exact-intersects", 23},
+		{"C", "22-ranking-topk", 87},
+		{"B", "01-exact-intersects", 31 * 914},
 	}
 	for _, tt := range tests {
 		t.Run(tt.stage, func(t *testing.T) {
-			limits := base
-			limits.MaxWork = tt.exact - 1
-			x, err := Evaluate(r, b, StaticControl{}, limits)
+			raw, binding, _ := loadCase(t, tt.caseName)
+			base := PublishedLimits()
+			trace := &workTraceControl{}
+			if _, err := Evaluate(raw, binding, trace, base); err != nil {
+				t.Fatal(err)
+			}
+			boundary, ok := firstPositiveStage(trace.events, tt.stage)
+			if !ok {
+				t.Fatalf("ASSERT stage-%s reached FAIL trace=%+v", tt.stage, trace.events)
+			}
+			if boundary.increment != tt.wantIncrement {
+				t.Fatalf("ASSERT stage-%s coefficient FAIL got=%d want=%d", tt.stage, boundary.increment, tt.wantIncrement)
+			}
+
+			low := base
+			low.MaxWork = boundary.after - 1
+			lowTrace := &workTraceControl{}
+			x, err := Evaluate(raw, binding, lowTrace, low)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if x.Outcome != "RESOURCE_LIMIT" || x.Detail != "WORK" {
-				t.Fatalf("ASSERT stage-%s-one-less FAIL got=%s/%s", tt.stage, x.Outcome, x.Detail)
+			failed, ok := firstPositiveStage(lowTrace.events, tt.stage)
+			if !ok || !failed.failed || failed.before != boundary.before || failed.increment != boundary.increment {
+				t.Fatalf("ASSERT stage-%s immediate-before FAIL event=%+v trace=%+v", tt.stage, failed, lowTrace.events)
 			}
-			limits.MaxWork = tt.exact
-			x, err = Evaluate(r, b, StaticControl{}, limits)
+			if x.Outcome != "RESOURCE_LIMIT" || x.Detail != "WORK" {
+				t.Fatalf("ASSERT stage-%s immediate-before terminal FAIL got=%s/%s", tt.stage, x.Outcome, x.Detail)
+			}
+
+			exact := base
+			exact.MaxWork = boundary.after
+			exactTrace := &workTraceControl{}
+			exactResult, err := Evaluate(raw, binding, exactTrace, exact)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if x.Outcome != "RESOURCE_LIMIT" || x.Detail != "WORK" {
-				t.Fatalf("ASSERT stage-%s-exact-next-charge FAIL got=%s/%s", tt.stage, x.Outcome, x.Detail)
+			crossed, ok := firstPositiveStage(exactTrace.events, tt.stage)
+			if !ok || crossed.failed || crossed.after != boundary.after {
+				t.Fatalf("ASSERT stage-%s exact-crossing FAIL event=%+v trace=%+v", tt.stage, crossed, exactTrace.events)
+			}
+			if tt.stage == "B" {
+				if exactResult.Outcome != "COMPLETE" {
+					t.Fatalf("ASSERT stage-B completion-after-crossing FAIL got=%s/%s", exactResult.Outcome, exactResult.Detail)
+				}
+			} else if len(exactTrace.events) <= len(lowTrace.events) {
+				t.Fatalf("ASSERT stage-%s next-checkpoint FAIL low=%d exact=%d", tt.stage, len(lowTrace.events), len(exactTrace.events))
 			}
 		})
 	}
