@@ -355,6 +355,27 @@ A candidate policy fails if these cases collapse unrelated expected groups, hide
 
 Qualification must demonstrate deterministic replay for exact input bytes, receipt set, occurrence ledger, policy, algorithm/profile, numeric contract, seed, limits, and environment. Input permutation must produce the same canonical result. Every result remains `authority=0`, `accepted=false`, and `completeness=UNKNOWN`, including a passing qualification result.
 
+## Follow-on inventory orchestration goal
+
+The intended product experience is that a user may ask a goal such as “find features that do X” without manually assembling every acquisition and inventory stage. A future orchestrator may recognize that the request requires a provisional feature inventory, inspect whether a compatible immutable inventory already exists, determine which evidence is missing or stale, and run a bounded incremental pipeline:
+
+```text
+feature-discovery intent
+→ inventory/cache assessment
+→ managed workspace/session establishment
+→ bounded CALLS, definition, reference, and source-context acquisition
+→ immutable occurrence admission and typed grouping-input composition
+→ qualified Program C/Leiden segmentation
+→ ADR 0007 Describe, Search, Group, and optional Location/source-text filtering
+→ evidence-linked candidate presentation
+```
+
+This ADR supplies the trustworthy acquisition, occurrence, source-context, grouping-input, identity, accounting, retention, and replay substrate for that experience. ADR 0007 supplies bounded interpretation and candidate retrieval. Neither ADR currently specifies or authorizes the intent recognizer, inventory planner, cache-freshness policy, incremental orchestration transaction, consolidated result contract, or public CLI/MCP dispatch surface. Those responsibilities require a separately versioned bridge contract or follow-on ADR.
+
+The orchestrator must not create “magic” by hiding evidence expansion. It must disclose what was reused or freshly captured, exact inventory and policy identities, omissions, stale or unavailable evidence, reached limits, terminal outcomes, and why each candidate matched. It may reuse custody-valid immutable results and incrementally acquire missing evidence, but it cannot treat cache presence as freshness, infer completeness from successful execution, silently broaden workspace or disclosure scope, invoke unqualified grouping policy, repair semantic attempts, or raise `authority=0`, `accepted=false`, `completeness=UNKNOWN`, or unresolved feature identity.
+
+This section records an integration goal and missing contract; it does not authorize implementation, production dispatch, automatic model invocation, public interfaces, release, or migration of historical artifacts.
+
 ## Sequencing
 
 1. **ADR 0007 first:** retain its immutable provisional-inventory, authority, correction, and CALLS-only outward-consumer contracts. This ADR extends only the available grouping-input families.
@@ -422,5 +443,6 @@ Rejected for the initial version. Representative and outward-consumer semantics 
 7. Which replay environment dimensions are required for byte-identical numerical replay across supported platforms?
 8. Which future ADR, if any, may define reference-aware representatives or outward consumers?
 9. Which CLI/MCP names and advertisement profiles should expose the new family after qualification and separate implementation authorization?
+10. Which follow-on ADR or bridge contract owns feature-discovery intent recognition, inventory/cache assessment, incremental capture planning, end-to-end orchestration, and consolidated candidate presentation?
 
 Authorized implementation and qualification work may proceed while these decisions remain open. Until the relevant contracts and policy decisions are frozen and the matching grouping policy is independently qualified, definition/reference grouping remains disabled and admission fails closed with `GROUPING_POLICY_UNQUALIFIED`. Public CLI/MCP enablement requires its separate qualification and authorization; ADR 0010 attribution still waits for the immutable inventory and anchors.
