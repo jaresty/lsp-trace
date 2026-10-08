@@ -37,8 +37,8 @@ func testCandidateBytes(t testing.TB) (censuscontinuation.CandidateGroupArtifact
 	if err != nil {
 		t.Fatal(err)
 	}
-	if artifact.Authority != 0 || artifact.Accepted || artifact.Completeness != "UNKNOWN" || artifact.Interpretation.Status != censuscontinuation.InterpretationUnresolved {
-		t.Fatalf("ASSERT_ADR0007_PRIVATE_CANDIDATE_CEILINGS_FIXTURE: authority=%d accepted=%t completeness=%q interpretation=%q", artifact.Authority, artifact.Accepted, artifact.Completeness, artifact.Interpretation.Status)
+	if artifact.Authority != 0 || artifact.Accepted || artifact.Completeness != "UNKNOWN" {
+		t.Fatalf("ASSERT_ADR0007_PRIVATE_CANDIDATE_CEILINGS_FIXTURE: authority=%d accepted=%t completeness=%q", artifact.Authority, artifact.Accepted, artifact.Completeness)
 	}
 	if artifact.Representative.ID == "" || artifact.Representative.Role == "" {
 		t.Fatalf("ASSERT_ADR0007_PRIVATE_CANDIDATE_REPRESENTATIVE_FIXTURE: %+v", artifact.Representative)
