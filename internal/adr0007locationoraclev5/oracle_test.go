@@ -216,10 +216,18 @@ func firstAfter(events []workEvent, stage string) (workEvent, bool) {
 	return workEvent{}, false
 }
 
+func expectedStageCharge(stage string, charge uint64) bool {
+	want := map[string]uint64{"P": 7, "R": 11, "M": 13, "S": 11, "Q": 19, "X": 23, "C": 29, "B": 31 * 914}
+	return charge == want[stage]
+}
+
 func TestCheckpointStageIsolatedProof(t *testing.T) {
-	for _, tc := range []struct{ stage, caseID string }{
-		{"M", "01-exact-intersects"}, {"P", "01-exact-intersects"}, {"S", "01-exact-intersects"}, {"R", "01-exact-intersects"},
-		{"Q", "01-exact-intersects"}, {"X", "01-exact-intersects"}, {"C", "05-union-repeat"}, {"B", "01-exact-intersects"},
+	for _, tc := range []struct {
+		stage, caseID string
+		wantCharge    uint64
+	}{
+		{"M", "01-exact-intersects", 13}, {"P", "01-exact-intersects", 7}, {"S", "01-exact-intersects", 11}, {"R", "01-exact-intersects", 11},
+		{"Q", "01-exact-intersects", 19}, {"X", "01-exact-intersects", 23}, {"C", "05-union-repeat", 29}, {"B", "01-exact-intersects", 31 * 914},
 	} {
 		t.Run(tc.stage, func(t *testing.T) {
 			base, baseEvents := captureWorkEvents(func() Result { return evalCase(t, tc.caseID, PublishedLimits()) })
@@ -229,6 +237,9 @@ func TestCheckpointStageIsolatedProof(t *testing.T) {
 			target, ok := firstAfter(baseEvents, tc.stage)
 			if !ok {
 				t.Fatalf("ASSERT stage-after-%s-observed FAIL", tc.stage)
+			}
+			if target.Charge != tc.wantCharge || !expectedStageCharge(tc.stage, target.Charge) {
+				t.Fatalf("ASSERT coefficient-%s-exact FAIL got=%d want=%d", tc.stage, target.Charge, tc.wantCharge)
 			}
 
 			l := PublishedLimits()
@@ -260,29 +271,25 @@ func TestCheckpointStageIsolatedProof(t *testing.T) {
 			if idx < 0 {
 				t.Fatalf("ASSERT stage-%s-crosses-charge FAIL got=%s/%s events=%+v", tc.stage, cross.Outcome, cross.Detail, crossEvents)
 			}
-			if cross.Outcome != "COMPLETE" && idx == len(crossEvents)-1 {
+			if tc.stage == "B" {
+				if cross.Outcome != "COMPLETE" {
+					t.Fatalf("ASSERT stage-B-completion FAIL got=%s/%s", cross.Outcome, cross.Detail)
+				}
+			} else if idx == len(crossEvents)-1 {
 				t.Fatalf("ASSERT stage-%s-next-checkpoint FAIL got=%s/%s", tc.stage, cross.Outcome, cross.Detail)
 			}
 		})
 	}
 }
 
-func TestWorkStageCoefficientSensitivity(t *testing.T) {
-	_, events := captureWorkEvents(func() Result { return evalCase(t, "05-union-repeat", PublishedLimits()) })
-	coeff := map[string]uint64{"P": 7, "R": 11, "M": 13, "S": 1, "Q": 19, "X": 23, "C": 29, "B": 31}
-	seen := map[string]bool{}
-	for _, e := range events {
-		if e.Event != "before" || e.Charge == 0 {
-			continue
+func TestWorkStageCoefficientMutationWitness(t *testing.T) {
+	want := map[string]uint64{"P": 7, "R": 11, "M": 13, "S": 11, "Q": 19, "X": 23, "C": 29, "B": 31 * 914}
+	for stage, charge := range want {
+		if !expectedStageCharge(stage, charge) {
+			t.Fatalf("ASSERT coefficient-%s-control FAIL", stage)
 		}
-		if e.Charge%coeff[e.Stage] != 0 {
-			t.Fatalf("ASSERT coefficient-%s-placement FAIL event=%+v", e.Stage, e)
-		}
-		seen[e.Stage] = true
-	}
-	for stage := range coeff {
-		if !seen[stage] {
-			t.Fatalf("ASSERT coefficient-%s-observed FAIL", stage)
+		if expectedStageCharge(stage, charge*2) {
+			t.Fatalf("ASSERT coefficient-%s-mutation-detection FAIL", stage)
 		}
 	}
 }
