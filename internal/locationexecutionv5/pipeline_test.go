@@ -183,6 +183,26 @@ func TestVerifyRejectsPersistedResultMutationDespiteProducerAttemptDigest(t *tes
 	if err := Verify(execRoot, frozenRoot, repoRoot); err != nil {
 		t.Fatalf("valid fixture rejected: %v", err)
 	}
+	target := cases[0].CaseID
+	reviewPath := filepath.Join(execRoot, "attempts", target, "REVIEW.json")
+	reviewOriginal, err := os.ReadFile(reviewPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var review Review
+	if err := readStrict(reviewPath, &review); err != nil {
+		t.Fatal(err)
+	}
+	review.DerivationDigest = hash([]byte("mutated derivation custody"))
+	if err := os.WriteFile(reviewPath, canon(review), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(execRoot, frozenRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "review recompute "+target) {
+		t.Fatalf("expected derivation custody rejection for %s, got %v", target, err)
+	}
+	if err := os.WriteFile(reviewPath, reviewOriginal, 0644); err != nil {
+		t.Fatal(err)
+	}
 	boundaryPath := filepath.Join(execRoot, "boundaries", "W", "BOUNDARY_REPLAY.json")
 	boundaryOriginal, err := os.ReadFile(boundaryPath)
 	if err != nil {
@@ -202,7 +222,6 @@ func TestVerifyRejectsPersistedResultMutationDespiteProducerAttemptDigest(t *tes
 	if err := os.WriteFile(boundaryPath, boundaryOriginal, 0644); err != nil {
 		t.Fatal(err)
 	}
-	target := cases[0].CaseID
 	resultPath := filepath.Join(execRoot, "attempts", target, "RESULT.json")
 	var persisted eval.Result
 	if err := readStrict(resultPath, &persisted); err != nil {

@@ -1136,15 +1136,20 @@ func Verify(execRoot, frozenRoot, repoRoot string) error {
 		if err != nil {
 			return err
 		}
+		derivationPath := filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "DERIVATION.json")
+		_, dd, err := readFile(derivationPath)
+		if err != nil {
+			return err
+		}
 		var d Derivation
-		if err := readStrict(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "DERIVATION.json"), &d); err != nil {
+		if err := readStrict(derivationPath, &d); err != nil {
 			return err
 		}
 		recomputedDerivation := Derivation{Schema: d.Schema, CaseID: c.CaseID, Algorithm: d.Algorithm, RequestDigest: d.RequestDigest, BindingDigest: d.BindingDigest, ConditionDigest: d.ConditionDigest, ResultDigest: d.ResultDigest, Outcome: res.Outcome, Detail: res.Detail, Inputs: []string{"REQUEST.raw.json", "BINDING.json|BINDING.ABSENT", "CONDITION.json"}}
 		if d.RequestDigest != "" && d.RequestDigest != rd || d.BindingDigest != "" && d.BindingDigest != bd || d.ConditionDigest != "" && d.ConditionDigest != cd || d.ResultDigest != "" && d.ResultDigest != hash(prod) {
 			return fmt.Errorf("derivation digest recompute %s", c.CaseID)
 		}
-		if rv.AssignmentID != c.Reviewer.AssignmentID || !bytes.Equal(prod, ob) || rv.ProducerResultDigest != pa.ResultDigest || rv.OracleResultDigest != od || !rv.ByteEqual || rv.Verdict != "ACCEPT" || !rv.DerivationRecomputed || !contains(rv.State, "SEPARATE_CHILD_PROCESS") || !bytes.Equal(canon(recomputedDerivation), canon(d)) {
+		if rv.AssignmentID != c.Reviewer.AssignmentID || !bytes.Equal(prod, ob) || rv.ProducerResultDigest != pa.ResultDigest || rv.OracleResultDigest != od || rv.DerivationDigest != dd || !rv.ByteEqual || rv.Verdict != "ACCEPT" || !rv.DerivationRecomputed || !contains(rv.State, "SEPARATE_CHILD_PROCESS") || !bytes.Equal(canon(recomputedDerivation), canon(d)) {
 			return fmt.Errorf("review recompute %s", c.CaseID)
 		}
 		bindings++
