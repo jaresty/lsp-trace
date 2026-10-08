@@ -633,8 +633,8 @@ func decodeEnvelope(raw []byte, l Limits, meter *workMeter) (envelopeWire, []sou
 		expected := map[string]bool{"schema": true, "outcome": true}
 		switch e.Outcome {
 		case "INVALID_REQUEST":
-			expected["detail"] = true
-			if e.Detail == "" || e.DuplicatePath != "" || e.Input != nil {
+			expected["detail"], expected["input"] = true, true
+			if e.Detail == "" || e.DuplicatePath != "" || e.Input == nil {
 				return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
 			}
 		case "INVALID_SOURCE", "RESOURCE_LIMIT":

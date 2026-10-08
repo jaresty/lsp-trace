@@ -155,7 +155,7 @@ func TestEnvelopeNonCompleteExactTopLevelFieldSets(t *testing.T) {
 	for _, tc := range []struct {
 		name, valid, wantOutcome, wantDetail, missing, forbidden string
 	}{
-		{"invalid-request", `{"schema":"` + EnvelopeSchema + `","outcome":"INVALID_REQUEST","detail":"REQUEST_FIELD"}`, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_REQUEST", `"detail":"REQUEST_FIELD"`, `,"input":[]`},
+		{"invalid-request", `{"schema":"` + EnvelopeSchema + `","outcome":"INVALID_REQUEST","detail":"REQUEST_FIELD","input":[]}`, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_REQUEST", `,"input":[]`, `,"duplicatePath":"src/a"`},
 		{"invalid-source", `{"schema":"` + EnvelopeSchema + `","outcome":"INVALID_SOURCE","detail":"FILE_DIGEST","input":[` + source + `]}`, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE", `,"input":[` + source + `]`, `,"duplicatePath":"src/a"`},
 		{"duplicate-source", `{"schema":"` + EnvelopeSchema + `","outcome":"DUPLICATE_SOURCE","detail":"DUPLICATE_PATH","duplicatePath":"src/a","input":[` + source + `]}`, "SOURCE_ADMISSION_MISMATCH", "BINDING_DUPLICATE_SOURCE", `,"duplicatePath":"src/a"`, `,"binding":{}`},
 		{"resource-limit", `{"schema":"` + EnvelopeSchema + `","outcome":"RESOURCE_LIMIT","detail":"SOURCES","input":[` + source + `]}`, "RESOURCE_LIMIT", "SOURCES", `,"input":[` + source + `]`, `,"duplicatePath":"src/a"`},
