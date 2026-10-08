@@ -47,7 +47,7 @@ type privateDiagnosticHistory struct {
 }
 
 func privateDiagnosticHistoryRepresentationSupported() bool {
-	return runtime.Version() == privateB4QualifiedGoVersion && runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" &&
+	return runtime.Version() == privateB4QualifiedGoVersion &&
 		unsafe.Sizeof(privateDiagnosticHistorySlot{}) == 528 && unsafe.Alignof(privateDiagnosticHistorySlot{}) == 8 &&
 		unsafe.Sizeof(privateDiagnosticHistory{}) == 542744 && unsafe.Alignof(privateDiagnosticHistory{}) == 8 &&
 		unsafe.Sizeof(privateDiagnosticHistoryRef{}) == 16 && unsafe.Alignof(privateDiagnosticHistoryRef{}) == 8 &&

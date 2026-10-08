@@ -1,3 +1,5 @@
+//go:build linux || darwin
+
 package schemas_test
 
 // Proposal-only synthetic oracles. No production publication, removal, or provider is invoked.

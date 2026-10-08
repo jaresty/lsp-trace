@@ -60,7 +60,7 @@ type privateB4DescriptorLease struct {
 const privateB4ByteLedgerV2TableBytes = uint64((privateB4ByteSlots + 1) * 24)
 
 func privateB4ByteLedgerV2RepresentationSupported() bool {
-	return runtime.Version() == privateB4QualifiedGoVersion && runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" &&
+	return runtime.Version() == privateB4QualifiedGoVersion &&
 		unsafe.Sizeof(privateB4ByteEntry{}) == 24 && unsafe.Alignof(privateB4ByteEntry{}) == 8 &&
 		unsafe.Sizeof(privateB4ByteLedger{}) == 24600 && unsafe.Alignof(privateB4ByteLedger{}) == 8 &&
 		unsafe.Sizeof(privateB4ByteLedgerV2{}) == 24632 && unsafe.Alignof(privateB4ByteLedgerV2{}) == 8

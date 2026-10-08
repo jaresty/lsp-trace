@@ -1,3 +1,5 @@
+//go:build linux || darwin
+
 package adr0007locationv3
 
 import (

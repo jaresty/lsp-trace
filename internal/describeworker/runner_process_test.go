@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 
 	"lsp-trace/internal/censusprogramc"
@@ -380,7 +379,7 @@ func TestRunnerCancellationTimeoutReapsDescendants(t *testing.T) {
 				pidFile := filepath.Join(attemptDir, fmt.Sprintf("pid-%d", attempt))
 				readyFIFO := filepath.Join(attemptDir, fmt.Sprintf("ready-%d", attempt))
 				if tc.cancel {
-					if err := syscall.Mkfifo(readyFIFO, 0600); err != nil {
+					if err := makeRunnerFIFO(readyFIFO); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -419,7 +418,7 @@ func TestRunnerCancellationTimeoutReapsDescendants(t *testing.T) {
 					t.Fatal(err)
 				}
 				pid, _ := strconv.Atoi(strings.TrimSpace(string(pidRaw)))
-				if err := syscall.Kill(pid, 0); err == nil {
+				if runnerProcessAlive(pid) {
 					t.Fatalf("descendant survived: pid=%d", pid)
 				}
 				log, _ := os.ReadFile(logPath)

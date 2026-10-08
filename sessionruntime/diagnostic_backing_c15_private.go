@@ -67,7 +67,7 @@ type managerDiagnosticLease struct {
 }
 
 func managerDiagnosticRepresentationSupported() bool {
-	return runtime.Version() == privateB4QualifiedGoVersion && runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" &&
+	return runtime.Version() == privateB4QualifiedGoVersion &&
 		unsafe.Sizeof(managerDiagnosticEntry{}) == 24 && unsafe.Alignof(managerDiagnosticEntry{}) == 8 &&
 		unsafe.Sizeof(managerDiagnosticLease{}) == 24 && unsafe.Alignof(managerDiagnosticLease{}) == 8 &&
 		unsafe.Sizeof(managerDiagnosticOwner{}) == 24608 && unsafe.Alignof(managerDiagnosticOwner{}) == 8 &&
