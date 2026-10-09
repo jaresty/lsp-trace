@@ -219,7 +219,7 @@ This ADR chooses no numeric degree, multiplicity, weight, or ubiquity threshold.
 1. defines corpora, languages, providers, revisions, expected groupings, and held-out evaluation data;
 2. freezes candidate thresholds and projection rules before held-out execution;
 3. compares and qualifies the applicable **CALLS-only**, **no-CALLS references-only/definition-only/references-plus-definitions**, and **mixed CALLS-plus-definition/reference** modes under explicit family and policy identities; no-CALLS and mixed are required delivery outputs, not just comparisons;
-4. reports false merges, fragmentation, stability, unmatched/no-community rates, shared-node effects, and resource behavior, including a held-out CUE corpus under a pinned `CUE_<PROVIDER>_EXACT_V1` profile;
+4. reports false merges, fragmentation, cross-seed instability, unmatched/no-community rates, shared-node effects, and resource behavior for CALLS-only, every qualified no-CALLS mode, and every qualified mixed mode, including a held-out CUE corpus under a pinned `CUE_<PROVIDER>_EXACT_V1` profile;
 5. includes adversarial high-degree, import, builtin, generated, and shared-helper cases;
 6. records uncertainty and an independent acceptance decision.
 
@@ -256,6 +256,12 @@ The partition remains canonical, but it is no longer sufficient identity. Any ch
 
 A result also records canonical input and output byte lengths, schema identities, executable/library identities where applicable, replay environment, terminal accounting, and immutable predecessor/supersession references. Digest equality establishes byte/identity equality under the canonical contract only; it does not establish truth, completeness, or acceptance.
 
+### Successor instability identity
+
+Every enabled definition/reference-only or mixed grouping mode also requires a separately versioned instability artifact before its live grouping result is considered complete or publishable. That artifact binds the exact `ReferenceGroupingInput`, qualified grouping-policy identity and digest, pair-weight composition digest, every seeded successor grouping-result identity, algorithm implementation and profile, numeric policy, parameters, resource limits, exact seed/run inventory, label-independent community matching, unmatched-community and denominator accounting, failed or incomplete runs, declared thresholds, and publication-blocking outcome.
+
+Historical CALLS-only instability artifacts and canonical bytes remain unchanged. The successor contract is additive and must not reinterpret or silently widen the existing v1 contract. Instability measures sensitivity of the bounded structural partition under declared seeds and perturbations; it establishes neither feature identity, semantic confidence, completeness, acceptance, nor universal stability.
+
 ## Stage 6: CALLS-only consumers and no-CALLS communities
 
 Representative selection and outward-consumer selection remain CALLS-only in the initial version.
@@ -287,6 +293,7 @@ Version separately:
 - reference grouping input and composition receipt;
 - grouping policy;
 - Program C result and logical digest;
+- cross-seed instability request, run inventory, and result;
 - snapshot;
 - target/community packet;
 - checkpoint;
@@ -304,7 +311,7 @@ Replay uses only immutable named artifacts. It cannot query a language server, i
 
 ### CLI and MCP
 
-Future CLI and MCP surfaces, if separately authorized, use additive versioned request/result contracts. They expose explicit input-family and grouping-policy selectors. Omission means `CALLS_ONLY` at every compatibility surface.
+Future CLI and MCP surfaces, if separately authorized, use additive versioned request/result contracts. They expose explicit input-family and grouping-policy selectors. Omission means `CALLS_ONLY` at every compatibility surface. Every enabled definition/reference-only or mixed live grouping result has CLI/MCP parity for its versioned successor instability artifact; a surface that exposes such grouping without its matching instability result is incomplete and remains disabled.
 
 Capability discovery reports support by exact family/version/method/policy tuple. `SUPPORTED` means an implementation contract is present, not that the current server advertises definition/references capability or that a policy is qualified for every corpus.
 
@@ -336,8 +343,10 @@ Go qualification covers:
 - immutable admission and occurrence-to-`PairWeight` composition;
 - direction-preserving policy projections;
 - deterministic canonical ordering, identities, partition bytes, and replay;
-- CLI/MCP parity over the shared kernel when those surfaces are authorized;
-- historical CALLS-only fixtures remaining byte-identical.
+- definition-only, references-only, references-plus-definitions, and mixed CALLS-plus-definition/reference instability campaigns with exact seed/run inventory, label-independent matching, unmatched-community accounting, threshold boundaries, and failed/incomplete publication blocking;
+- independent substitution checks for every instability predecessor identity, digest, byte length, policy, parameter, seed, resource limit, and grouping result;
+- CLI/MCP parity for both grouping and versioned successor instability results over the shared kernel when those surfaces are authorized;
+- historical CALLS-only grouping and instability fixtures remaining byte-identical.
 
 ### Adversarial high-degree collapse cases
 
@@ -421,6 +430,6 @@ Rejected for the initial version. Representative and outward-consumer semantics 
 6. How should a symbol-level reference source with no occurrence range be weighted relative to exact occurrence evidence?
 7. Which replay environment dimensions are required for byte-identical numerical replay across supported platforms?
 8. Which future ADR, if any, may define reference-aware representatives or outward consumers?
-9. Which CLI/MCP names and advertisement profiles should expose the new family after qualification and separate implementation authorization?
+9. Which additive CLI/MCP names, schema versions, and advertisement profiles should expose the new family and its mandatory successor instability result after qualification and separate implementation authorization?
 
 Authorized implementation and qualification work may proceed while these decisions remain open. Until the relevant contracts and policy decisions are frozen and the matching grouping policy is independently qualified, definition/reference grouping remains disabled and admission fails closed with `GROUPING_POLICY_UNQUALIFIED`. Public CLI/MCP enablement requires its separate qualification and authorization; ADR 0010 attribution still waits for the immutable inventory and anchors.
