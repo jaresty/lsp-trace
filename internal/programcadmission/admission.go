@@ -90,11 +90,12 @@ type CompositeSourceBinding struct {
 // CompositeProjectionAdmission is an opaque, validated, non-native Program C input.
 // Its zero value is invalid and only Admit can construct a usable value.
 type CompositeProjectionAdmission struct {
-	nodeIDs      []string
-	occurrences  []Occurrence
-	claimCeiling string
-	source       CompositeSourceBinding
-	valid        bool
+	nodeIDs        []string
+	occurrences    []Occurrence
+	claimCeiling   string
+	source         CompositeSourceBinding
+	canonicalBytes []byte
+	valid          bool
 }
 
 // Occurrence is immutable computation input copied from one validated,
@@ -195,7 +196,7 @@ func Admit(composite []byte) (Result, error) {
 		return Result{}, err
 	}
 	encoded = append(encoded, '\n')
-	admission := CompositeProjectionAdmission{nodeIDs: nodeIDs, occurrences: occurrences, claimCeiling: a.ClaimCeiling, source: source, valid: true}
+	admission := CompositeProjectionAdmission{nodeIDs: nodeIDs, occurrences: occurrences, claimCeiling: a.ClaimCeiling, source: source, canonicalBytes: cloneBytes(composite), valid: true}
 	return Result{Artifact: artifact, Bytes: encoded, Admission: admission}, nil
 }
 
@@ -206,8 +207,8 @@ func CloneCompositeSourceBinding(source CompositeSourceBinding) CompositeSourceB
 
 func cloneSourceBinding(source CompositeSourceBinding) CompositeSourceBinding {
 	clone := source
-	clone.Compatibility.EvidenceSemantics = append(json.RawMessage(nil), source.Compatibility.EvidenceSemantics...)
-	clone.Compatibility.SensitivityPolicy = append(json.RawMessage(nil), source.Compatibility.SensitivityPolicy...)
+	clone.Compatibility.EvidenceSemantics = cloneRaw(source.Compatibility.EvidenceSemantics)
+	clone.Compatibility.SensitivityPolicy = cloneRaw(source.Compatibility.SensitivityPolicy)
 	clone.Constituents = cloneConstituentReferences(source.Constituents)
 	clone.Completeness.PerInput = cloneRawMessages(source.Completeness.PerInput)
 	return clone
@@ -290,10 +291,22 @@ func cloneRaw(in json.RawMessage) json.RawMessage {
 	return out
 }
 
+func cloneBytes(in []byte) []byte {
+	if in == nil {
+		return nil
+	}
+	out := make([]byte, len(in))
+	copy(out, in)
+	return out
+}
+
 func cloneRawMessages(in []json.RawMessage) []json.RawMessage {
+	if in == nil {
+		return nil
+	}
 	out := make([]json.RawMessage, len(in))
 	for i := range in {
-		out[i] = append(json.RawMessage(nil), in[i]...)
+		out[i] = cloneRaw(in[i])
 	}
 	return out
 }

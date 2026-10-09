@@ -5,7 +5,9 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash"
+	"reflect"
 	"sort"
 )
 
@@ -59,6 +61,7 @@ type typedInputIntegrity struct {
 	methodAuthority int
 	methodAccepted  bool
 	methodComplete  string
+	callsAdmission  CompositeProjectionAdmission
 }
 
 type typedInputIntegrityError struct{}
@@ -105,6 +108,7 @@ func PrepareTypedInput(req TypedInputRequest) (TypedInput, error) {
 		if err := appendCalls(&out, req.Calls, seen); err != nil {
 			return TypedInput{}, err
 		}
+		out.integrity.callsAdmission = cloneCompositeProjectionAdmission(req.Calls)
 	}
 	if needMethods {
 		for _, occurrence := range req.Methods.Occurrences() {
@@ -120,6 +124,18 @@ func PrepareTypedInput(req TypedInputRequest) (TypedInput, error) {
 		}
 	}
 	sort.Slice(out.Occurrences, func(i, j int) bool { return out.Occurrences[i].Identity < out.Occurrences[j].Identity })
+	nodes := make(map[string]bool, len(out.integrity.nodes))
+	for _, id := range out.integrity.nodes {
+		nodes[id] = true
+	}
+	for _, occurrence := range out.Occurrences {
+		nodes[occurrence.From], nodes[occurrence.To] = true, true
+	}
+	out.integrity.nodes = out.integrity.nodes[:0]
+	for id := range nodes {
+		out.integrity.nodes = append(out.integrity.nodes, id)
+	}
+	sort.Strings(out.integrity.nodes)
 	out.integrity.selectedKinds = append([]RelationKind(nil), req.Kinds...)
 	sort.Slice(out.integrity.selectedKinds, func(i, j int) bool { return out.integrity.selectedKinds[i] < out.integrity.selectedKinds[j] })
 	out.integrity.methodsEnabled = req.EnableMethods
@@ -157,8 +173,8 @@ func appendCalls(out *TypedInput, admission CompositeProjectionAdmission, seen m
 	out.CompositeID, out.CompositeOutputSHA256, out.ClaimCeiling = source.CompositeID, source.CompositeOutputSHA256, source.ClaimCeiling
 	out.integrity.nodes = append([]string(nil), ids...)
 	out.Occurrences = make([]TypedOccurrence, 0, len(calls))
-	for _, call := range calls {
-		if call.Identity == "" || call.RelationID == "" || seen[call.Identity] || call.Ordinal < 0 || call.From < 0 || call.To < 0 || int(call.From) >= len(ids) || int(call.To) >= len(ids) || call.Weight != 1 {
+	for i, call := range calls {
+		if call.Identity == "" || call.RelationID == "" || seen[call.Identity] || (i > 0 && calls[i-1].Identity >= call.Identity) || call.Ordinal < 0 || call.From < 0 || call.To < 0 || int(call.From) >= len(ids) || int(call.To) >= len(ids) || call.Weight != 1 || call.Provider != source.Compatibility.ServerCommand || call.ProviderVersion != source.Compatibility.ServerVersion || call.Language != source.Compatibility.LanguageID || call.Identity != occurrenceIdentity(source.CompositeID, call.RelationID, call.Ordinal, call.CallSite) {
 			return errors.New("invalid admitted CALLS occurrence")
 		}
 		seen[call.Identity] = true
@@ -171,10 +187,107 @@ func appendCalls(out *TypedInput, admission CompositeProjectionAdmission, seen m
 
 func validateTypedInputIntegrity(in TypedInput) error {
 	expected := typedInputSeal(in)
-	if isZeroSeal(in.integrity.seal) || subtle.ConstantTimeCompare(in.integrity.seal[:], expected[:]) != 1 {
+	if isZeroSeal(in.integrity.seal) || subtle.ConstantTimeCompare(in.integrity.seal[:], expected[:]) != 1 || validateTypedInputStructure(in) != nil {
 		return typedInputIntegrityError{}
 	}
 	return nil
+}
+
+func validateTypedInputStructure(in TypedInput) error {
+	if in.Version != TypedInputVersion || in.Authority != Authority || in.SourceGraphComplete != SourceGraphComplete || len(in.integrity.selectedKinds) == 0 {
+		return typedInputIntegrityError{}
+	}
+	selected := make(map[RelationKind]bool, len(in.integrity.selectedKinds))
+	for i, kind := range in.integrity.selectedKinds {
+		if (i > 0 && in.integrity.selectedKinds[i-1] >= kind) || (kind != TypedCalls && kind != TypedReferencesSymbol && kind != TypedResolvesToDefinition) {
+			return typedInputIntegrityError{}
+		}
+		selected[kind] = true
+	}
+	if (selected[TypedReferencesSymbol] || selected[TypedResolvesToDefinition]) != in.integrity.methodsEnabled {
+		return typedInputIntegrityError{}
+	}
+	if in.integrity.methodsEnabled && (in.integrity.methodClaim != MethodEvidenceClaimCeiling || in.integrity.methodAuthority != 0 || in.integrity.methodAccepted || in.integrity.methodComplete != "UNKNOWN") {
+		return typedInputIntegrityError{}
+	}
+	nodes := make(map[string]bool)
+	var retainedCalls []TypedOccurrence
+	if selected[TypedCalls] {
+		retained := in.integrity.callsAdmission
+		if len(retained.canonicalBytes) == 0 {
+			return typedInputIntegrityError{}
+		}
+		readmitted, err := Admit(retained.canonicalBytes)
+		if err != nil || !reflect.DeepEqual(retained, readmitted.Admission) {
+			return typedInputIntegrityError{}
+		}
+		expectedCalls, err := PrepareTypedInput(TypedInputRequest{Calls: readmitted.Admission, Kinds: []RelationKind{TypedCalls}})
+		if err != nil || in.CompositeID != expectedCalls.CompositeID || in.CompositeOutputSHA256 != expectedCalls.CompositeOutputSHA256 || in.ClaimCeiling != expectedCalls.ClaimCeiling {
+			return typedInputIntegrityError{}
+		}
+		retainedCalls = expectedCalls.Occurrences
+		for _, id := range expectedCalls.integrity.nodes {
+			nodes[id] = true
+		}
+	} else if in.CompositeID != "" || in.CompositeOutputSHA256 != "" || in.ClaimCeiling != "" || in.integrity.callsAdmission.Valid() {
+		return typedInputIntegrityError{}
+	}
+	seen := make(map[string]bool, len(in.Occurrences))
+	pairs := make(map[TypedPair]int)
+	observedCalls := 0
+	for i, occurrence := range in.Occurrences {
+		if occurrence.Identity == "" || occurrence.From == "" || occurrence.To == "" || seen[occurrence.Identity] || !selected[occurrence.Kind] || occurrence.Ordinal < 0 || (i > 0 && in.Occurrences[i-1].Identity >= occurrence.Identity) {
+			return typedInputIntegrityError{}
+		}
+		if occurrence.Kind == TypedCalls && occurrence.RelationID == "" || occurrence.Kind != TypedCalls && occurrence.RelationID != "" {
+			return typedInputIntegrityError{}
+		}
+		if occurrence.Kind == TypedCalls {
+			if observedCalls >= len(retainedCalls) || occurrence != retainedCalls[observedCalls] {
+				return typedInputIntegrityError{}
+			}
+			observedCalls++
+		}
+		seen[occurrence.Identity], nodes[occurrence.From], nodes[occurrence.To] = true, true, true
+		pairs[TypedPair{From: occurrence.From, To: occurrence.To}]++
+	}
+	if observedCalls != len(retainedCalls) {
+		return typedInputIntegrityError{}
+	}
+	canonicalNodes := make([]string, 0, len(nodes))
+	for id := range nodes {
+		canonicalNodes = append(canonicalNodes, id)
+	}
+	sort.Strings(canonicalNodes)
+	if !equalStrings(canonicalNodes, in.integrity.nodes) || len(pairs) != len(in.PairWeights) {
+		return typedInputIntegrityError{}
+	}
+	for pair, weight := range pairs {
+		if weight <= 0 || in.PairWeights[pair] != weight {
+			return typedInputIntegrityError{}
+		}
+	}
+	return nil
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func cloneCompositeProjectionAdmission(in CompositeProjectionAdmission) CompositeProjectionAdmission {
+	return CompositeProjectionAdmission{nodeIDs: in.NodeIdentities(), occurrences: in.Occurrences(), claimCeiling: in.claimCeiling, source: in.SourceBinding(), canonicalBytes: cloneBytes(in.canonicalBytes), valid: in.valid}
+}
+
+func (in TypedInput) retainedCallsAdmission() CompositeProjectionAdmission {
+	return cloneCompositeProjectionAdmission(in.integrity.callsAdmission)
 }
 
 func DirectedWalkCandidates(in TypedInput) ([]MethodCandidate, error) {
@@ -210,6 +323,25 @@ func typedInputSeal(in TypedInput) [sha256.Size]byte {
 	writeSealInt(h, in.integrity.methodAuthority)
 	writeSealBool(h, in.integrity.methodAccepted)
 	writeSealString(h, in.integrity.methodComplete)
+	calls := in.integrity.callsAdmission
+	writeSealBool(h, calls.valid)
+	writeSealStrings(h, calls.nodeIDs)
+	writeSealString(h, calls.claimCeiling)
+	writeSealUint64(h, uint64(len(calls.occurrences)))
+	for _, occurrence := range calls.occurrences {
+		writeSealString(h, occurrence.Identity)
+		writeSealString(h, occurrence.RelationID)
+		writeSealString(h, occurrence.Provider)
+		writeSealString(h, occurrence.ProviderVersion)
+		writeSealString(h, occurrence.Language)
+		writeSealInt(h, int(occurrence.From))
+		writeSealInt(h, int(occurrence.To))
+		writeSealInt(h, occurrence.Ordinal)
+		writeSealString(h, fmt.Sprint(occurrence.CallSite))
+		writeSealString(h, fmt.Sprint(occurrence.Weight))
+	}
+	writeSealString(h, fmt.Sprintf("%#v", calls.source))
+	writeSealBytes(h, calls.canonicalBytes)
 	writeSealUint64(h, uint64(len(in.integrity.selectedKinds)))
 	for _, kind := range in.integrity.selectedKinds {
 		writeSealString(h, string(kind))
@@ -254,6 +386,12 @@ func writeSealStrings(h hash.Hash, values []string) {
 func writeSealString(h hash.Hash, value string) {
 	writeSealUint64(h, uint64(len(value)))
 	_, _ = h.Write([]byte(value))
+}
+
+func writeSealBytes(h hash.Hash, value []byte) {
+	writeSealBool(h, value != nil)
+	writeSealUint64(h, uint64(len(value)))
+	_, _ = h.Write(value)
 }
 
 func writeSealInt(h hash.Hash, value int) { writeSealUint64(h, uint64(int64(value))) }
