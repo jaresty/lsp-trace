@@ -25,6 +25,13 @@ func writeFixture(t *testing.T, name, body string, mode os.FileMode) (string, st
 	sum := sha256.Sum256(raw)
 	return p, "sha256:" + hex.EncodeToString(sum[:])
 }
+func requireDarwinPreflight(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("describe worker preflight is qualified only on Darwin")
+	}
+}
+
 func fixtureConfig(t *testing.T) Config {
 	t.Helper()
 	worker, wd := writeFixture(t, "worker", "#!/bin/sh\nexit 0\n", 0700)
@@ -36,6 +43,7 @@ func fixtureConfig(t *testing.T) Config {
 	return Config{Worker: FilePin{worker, wd}, Model: FilePin{model, md}, Library: FilePin{lib, ld}, SandboxExecutable: FilePin{sandbox, sd}, SandboxProfile: FilePin{profile, pd}, Grammar: FilePin{grammar, gd}, RuntimeIdentity: "runtime-v1", AdapterIdentity: "adapter-v1", ModelIdentity: "model-v1", Limits: Limits{TimeoutMS: 1000, MaxTokens: 64, ContextTokens: 1024, StdoutBytes: 4096, StderrBytes: 1024, WorkBytes: 8192, TempBytes: 8192}}
 }
 func TestPreflightPinsBoundsAndPolicy(t *testing.T) {
+	requireDarwinPreflight(t)
 	c := fixtureConfig(t)
 	if _, err := Preflight(c); err != nil {
 		t.Fatal(err)
@@ -63,6 +71,7 @@ func TestPreflightPinsBoundsAndPolicy(t *testing.T) {
 	}
 }
 func TestPreflightPinFailureSubcodesAreSourceSafe(t *testing.T) {
+	requireDarwinPreflight(t)
 	base := fixtureConfig(t)
 	cases := map[string]struct {
 		mutate func(*Config)

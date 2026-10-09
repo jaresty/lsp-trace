@@ -10,6 +10,7 @@ import (
 )
 
 func TestRecordV2OuterCanonicalityMatchesWorkerV2(t *testing.T) {
+	requireDarwinPreflight(t)
 	request, packet := validRunnerFixture(t)
 	cfg := fixtureConfig(t)
 	cfg.ResponseVersion = ResponseVersionV2
@@ -49,6 +50,7 @@ func TestRecordV2OuterCanonicalityMatchesWorkerV2(t *testing.T) {
 }
 
 func TestRecordV2FailureClassificationIsExactAndSourceSafe(t *testing.T) {
+	requireDarwinPreflight(t)
 	request, packet := validRunnerFixture(t)
 	cfg := fixtureConfig(t)
 	cfg.ResponseVersion = ResponseVersionV2

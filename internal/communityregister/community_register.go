@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"reflect"
 	"sort"
 
 	"lsp-trace/internal/programc"
@@ -81,7 +80,11 @@ func Aggregate(graphRaw []byte, partitionRaw ...[]byte) (Register, error) {
 		if err != nil {
 			return Register{}, fmt.Errorf("partition compatibility recomputation: %w", err)
 		}
-		if !reflect.DeepEqual(p, canonical) {
+		canonicalJSON, err := programcpresentation.JSON(canonical)
+		if err != nil {
+			return Register{}, fmt.Errorf("partition compatibility encoding: %w", err)
+		}
+		if !bytes.Equal(raw, canonicalJSON) {
 			return Register{}, fmt.Errorf("partition %q is incompatible with the admitted graph", p.PartitionSHA256)
 		}
 		if seenPartitions[p.PartitionSHA256] {

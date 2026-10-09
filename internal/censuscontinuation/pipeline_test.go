@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -88,6 +89,9 @@ func (w *countingWorker) Run(_ context.Context, request describerequest.Record, 
 }
 
 func TestHandoffPersistencePreflightReportsCanonicalBytesAndStoreCap(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("exact handoff persistence preflight witness is qualified only on Darwin")
+	}
 	f := newFixture(t)
 	h, err := BuildHandoff(f.input)
 	if err != nil {
