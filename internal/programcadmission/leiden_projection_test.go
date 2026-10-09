@@ -1,6 +1,7 @@
 package programcadmission
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 
@@ -77,6 +78,42 @@ func TestTypedInputAndBridgeRetainExactAdmittedCallsPrivately(t *testing.T) {
 	got := bridge.retainedCallsAdmission()
 	if !reflect.DeepEqual(got.NodeIdentities(), want.NodeIdentities()) || !reflect.DeepEqual(got.Occurrences(), want.Occurrences()) || !reflect.DeepEqual(got.SourceBinding(), want.SourceBinding()) || got.ClaimCeiling() != want.ClaimCeiling() {
 		t.Fatalf("ASSERT_BRIDGE_RETAINS_EXACT_ADMITTED_CALLS got=%+v want=%+v", got, want)
+	}
+}
+
+func TestPreparePrivateLeidenProjectionExposesMethodCanonicalBytesDefensively(t *testing.T) {
+	in := typedMethodLeidenInput(t, []RelationKind{TypedReferencesSymbol, TypedResolvesToDefinition})
+	want := append([]byte(nil), in.integrity.methodCanonicalBytes...)
+	bridge, err := PreparePrivateLeidenProjection(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := bridge.MethodCanonicalBytes()
+	second := bridge.MethodCanonicalBytes()
+	if !bytes.Equal(first, want) || !bytes.Equal(second, want) || len(first) == 0 {
+		t.Fatalf("ASSERT_PRIVATE_LEIDEN_METHOD_CANONICAL_BYTES got=%q want=%q", first, want)
+	}
+	first[0] ^= 0xff
+	if bytes.Equal(first, second) || !bytes.Equal(bridge.MethodCanonicalBytes(), want) {
+		t.Fatal("ASSERT_PRIVATE_LEIDEN_METHOD_CANONICAL_BYTES_DEFENSIVE_COPY")
+	}
+}
+
+func TestPreparePrivateLeidenProjectionExposesRetainedCallsCanonicalBytesDefensively(t *testing.T) {
+	in := mixedRelationIndexInput(t, false)
+	want := append([]byte(nil), in.retainedCallsAdmission().canonicalBytes...)
+	bridge, err := PreparePrivateLeidenProjection(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := bridge.RetainedCallsCanonicalBytes()
+	second := bridge.RetainedCallsCanonicalBytes()
+	if !bytes.Equal(first, want) || !bytes.Equal(second, want) || len(first) == 0 {
+		t.Fatalf("ASSERT_PRIVATE_LEIDEN_RETAINED_CALLS_CANONICAL_BYTES got=%q want=%q", first, want)
+	}
+	first[0] ^= 0xff
+	if bytes.Equal(first, second) || !bytes.Equal(bridge.RetainedCallsCanonicalBytes(), want) {
+		t.Fatal("ASSERT_PRIVATE_LEIDEN_RETAINED_CALLS_CANONICAL_BYTES_DEFENSIVE_COPY")
 	}
 }
 

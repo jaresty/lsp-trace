@@ -16,6 +16,7 @@ type privateLeidenProjection struct {
 	methodAccepted   bool
 	methodComplete   string
 	methodEvidence   []MethodOccurrenceEvidence
+	methodCanonical  []byte
 	methodCommitment []byte
 	claimCeiling     string
 }
@@ -35,6 +36,7 @@ func PreparePrivateLeidenProjection(in TypedInput) (privateLeidenProjection, err
 		methodAccepted:   in.integrity.methodAccepted,
 		methodComplete:   in.integrity.methodComplete,
 		methodEvidence:   append([]MethodOccurrenceEvidence(nil), in.integrity.methodEvidence...),
+		methodCanonical:  append([]byte(nil), in.integrity.methodCanonicalBytes...),
 		methodCommitment: append([]byte(nil), in.integrity.methodCommitmentDigest[:]...),
 	}
 	for pair, weight := range in.PairWeights {
@@ -78,12 +80,21 @@ func (p privateLeidenProjection) MethodCompleteness() string { return p.methodCo
 func (p privateLeidenProjection) MethodEvidence() []MethodOccurrenceEvidence {
 	return append([]MethodOccurrenceEvidence(nil), p.methodEvidence...)
 }
+func (p privateLeidenProjection) MethodCanonicalBytes() []byte {
+	return append([]byte(nil), p.methodCanonical...)
+}
 func (p privateLeidenProjection) MethodCommitment() []byte {
 	return append([]byte(nil), p.methodCommitment...)
 }
 func (p privateLeidenProjection) CombinedClaimCeiling() string { return p.claimCeiling }
 func (p privateLeidenProjection) RetainedCallsAdmission() CompositeProjectionAdmission {
 	return cloneCompositeProjectionAdmission(p.calls)
+}
+func (p privateLeidenProjection) RetainedCallsCanonicalBytes() []byte {
+	if !p.calls.Valid() {
+		return nil
+	}
+	return append([]byte(nil), p.calls.canonicalBytes...)
 }
 func (p privateLeidenProjection) retainedCallsAdmission() CompositeProjectionAdmission {
 	return p.RetainedCallsAdmission()
