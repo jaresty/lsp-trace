@@ -1,0 +1,60 @@
+{
+  "status": "PRIVATE_SYNTHETIC_HELD_DERIVED_PENDING_INDEPENDENT_STAGE2A_REVIEW",
+  "custody": "held-derived artifact from byte-frozen stage1 raw originals; separately authored A4 CAPABILITY_EVENTS claimant, not captured execution",
+  "predecessors": [
+    {
+      "manifest": "../adr0011-b4b-held-synthetic-originals/manifest.json",
+      "sha256": "9d83ad7c3d50358318347cb5429637cf1e73af574b3d2b6b7040272851465e9f"
+    },
+    {
+      "manifest": "../adr0011-b4b-held-query-synthetic-v1/manifest.json",
+      "sha256": "9c8df20103872f1f8f9653496674b4e07339c383369e960d83537f09135a1424"
+    }
+  ],
+  "derivation": {
+    "artifact": "ADR0011-GENERIC-CAPABILITY-EXCHANGE-ARTIFACT/2",
+    "encoding": "ordered 8-byte unsigned big-endian length-prefixed original field bytes",
+    "source_frame_ordinals": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "exchange_pairs": [
+      [
+        0,
+        1
+      ],
+      [
+        3,
+        4
+      ]
+    ],
+    "initialized_notification_ordinal": 2,
+    "target_write_frame_ordinal": 5,
+    "transaction_selector": "sha256:533a291b30a6528974975e2d9f1adda32e82cc0c096610b6866dedcaca9b3cc4",
+    "field_count": 43
+  },
+  "private_fixture_selector": {
+    "role": "CAPABILITY_EVENTS",
+    "method": "references",
+    "session": "s",
+    "generation": "1",
+    "value": "sha256:f2ec8a0082b9c409ef6c1d4efc12cfc3a5e53b0a2a627b1d29803dfa5f38b21f",
+    "meaning": "private recomputation only; not issuance"
+  },
+  "checks": {
+    "a4_validate": "PASS",
+    "independent_length_prefixed_decode": "PASS",
+    "held_frame_correspondence": "PASS",
+    "independent_selector_recomputation": "PASS"
+  },
+  "limitations": [
+    "not B4a SOURCE/QUERY/APPLICABILITY/WRITE envelopes",
+    "not a B4a validated transaction",
+    "no UNKNOWN-to-SUPPORTED execution assertion",
+    "not B4b readiness",
+    "not V6, C, D, production, or public authority"
+  ]
+}

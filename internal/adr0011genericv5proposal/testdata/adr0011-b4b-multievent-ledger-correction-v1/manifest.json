@@ -1,0 +1,36 @@
+{
+  "status": "PRIVATE_SYNTHETIC_PREDICTION_LEDGER_CORRECTION_PENDING_INDEPENDENT_REVIEW",
+  "custody": "additive correction to independently authored M1 prediction; not claimant output or observed execution",
+  "ledger": {
+    "path": "expected-transitions.json",
+    "length": 3653,
+    "sha256": "b236f342d01d57cb73cd3262e169d85f81d2da33418502749a022bd72c7deeb3"
+  },
+  "failed_review_predecessor": {
+    "root": "../adr0011-b4b-multievent-held-originals-v1/manifest.json",
+    "root_sha256": "f2984fd734c6ac81fe3d28ce59494a0ace1c19df046c51246dfaeaa75c762a8d",
+    "ledger": "../adr0011-b4b-multievent-held-originals-v1/expected-transitions.json",
+    "ledger_sha256": "06d7a3c10ee48a0c93f5d5ce152d69fd13ebc4af994660a01ae92edd3b4525c4"
+  },
+  "unchanged_scenario_manifests": [
+    {
+      "path": "../adr0011-b4b-multievent-held-originals-v1/CORE/manifest.json",
+      "sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a"
+    },
+    {
+      "path": "../adr0011-b4b-multievent-held-originals-v1/STATIC_VALID_CONFLICT/manifest.json",
+      "sha256": "ec7c7950b5f42d32010ae7525bf1cef61d25e772c525985d6336b7d0db8fbbfe"
+    },
+    {
+      "path": "../adr0011-b4b-multievent-held-originals-v1/STATIC_MALFORMED_PRECEDENCE/manifest.json",
+      "sha256": "d9ac7e704a44bef2a06d0ac2a1ecbd39a39239e8458804f297c9028a95bb52c9"
+    }
+  ],
+  "rejection_rationale": "Independent M1 review judged the predecessor REVISE: WRITE26 listed reg-1 in both active arrays despite known invalid selector scheme 1bad. A matching acknowledgement records an acknowledged invalid registration, not verified effective active support. The corrected WRITE26 arrays are empty, with MALFORMED precedence and the other seven predictions unchanged.",
+  "scope_limits": [
+    "predictions only; no execution results or claimant generated",
+    "no changes to held frames, contexts, selectors, source bytes, scenario manifests or predecessor ledger",
+    "no B4b code or tests, /2 artifact, A4/B4a envelope, selector issuance, readiness or C/D authority",
+    "private synthetic correction pending independent review; no public authority"
+  ]
+}

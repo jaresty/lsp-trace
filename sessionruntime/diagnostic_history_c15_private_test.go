@@ -11,7 +11,7 @@ import (
 
 func newC15DiagnosticManager(t *testing.T) *Manager {
 	t.Helper()
-	if !managerDiagnosticRepresentationSupported() || !privateDiagnosticHistoryRepresentationSupported() {
+	if !managerDiagnosticRepresentationSupported() || !privateDiagnosticHistoryRepresentationSupported() || !manageddiagnostic.EventRepresentationSupported() {
 		t.Skip("C15 diagnostic storage requires the qualified runtime representation")
 	}
 	owner, failure := newManagerDiagnosticOwner()

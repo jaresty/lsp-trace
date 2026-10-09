@@ -1,0 +1,586 @@
+{
+  "status": "PRIVATE_HELD_SYNTHETIC_PENDING_INDEPENDENT_EXACT_BYTE_REVIEW",
+  "limitations": [
+    "private synthetic held inputs only; pending separate independent exact-byte review",
+    "not claimant output or observed execution",
+    "no B4b status, selector issuance/admission, A4 envelope/B4a claim, CAPABILITY_EVENTS, /2 original, transition execution, or C/D/production authority"
+  ],
+  "bindings": [
+    {
+      "scenario": "CORE",
+      "write_ordinal": 4,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "core-write-4",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-core-4",
+        "wire_id": {
+          "type": "number",
+          "value": 40
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a",
+        "context_sha256": "c21146038771f09f18f79695996405b7687e8c1a52142e72390e07df3fc83200",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "04-references_write.frame",
+        "frame_sha256": "274b6b8b643a18cf3adc2d398b98a6c591b73c54f7692e92b31cacfaf009831e"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "CORE/WRITE4/query.original",
+          "length": 415,
+          "sha256": "62f1b1a5b5f4a8f0db49f747fcdd1e9e1fd1d764a7ca9b4537396ed32366b5aa"
+        },
+        "query_applicability": {
+          "path": "CORE/WRITE4/query-applicability.original",
+          "length": 478,
+          "sha256": "a902a31c67a86d4cdb4b42a4988e0b9266382d2d61219b7f1131648de883db5e"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:7218cb9959d58490b31565c42f1bfea19b21037ae0b9b639a8d5f099f4f5ed5e",
+        "SOURCE": "sha256:b85a60fd0667a775a92a92e389882c31f61841a8c52e54a23afb786982296d14",
+        "QUERY": "sha256:40b7a37fbeb5761cb896fd857f25aeb8592103c393f720034fed630a32c6042a",
+        "QUERY_APPLICABILITY": "sha256:5e53f8f9201dda2ef20c332927cf48d57203b463a84d478977c8a9755502f625"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:7218cb9959d58490b31565c42f1bfea19b21037ae0b9b639a8d5f099f4f5ed5e",
+        "sha256:40b7a37fbeb5761cb896fd857f25aeb8592103c393f720034fed630a32c6042a",
+        "sha256:b85a60fd0667a775a92a92e389882c31f61841a8c52e54a23afb786982296d14",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "core-write-4"
+      ],
+      "ledger_target": {
+        "scenario": "CORE",
+        "write_ordinal": 4,
+        "predicted": "UNKNOWN"
+      }
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 6,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "core-write-6",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-core-6",
+        "wire_id": {
+          "type": "number",
+          "value": 41
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a",
+        "context_sha256": "c21146038771f09f18f79695996405b7687e8c1a52142e72390e07df3fc83200",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "06-references_write.frame",
+        "frame_sha256": "6b5ed61e081488a997eea91b2f2394bd02d276d0da2da2928aa29f24093f2666"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "CORE/WRITE6/query.original",
+          "length": 415,
+          "sha256": "94e9cf9d6777a1e4c158c025648766768a738480facc1d5283e0996650d71ae8"
+        },
+        "query_applicability": {
+          "path": "CORE/WRITE6/query-applicability.original",
+          "length": 478,
+          "sha256": "ef2740ef7a44c72e139b354e4f7838cb4de0d2aa011b6f72a670fdb1710221a3"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:54daa9ac3c2bf4108a383598d5360329504450b7620dacfc079907fab6dc4c62",
+        "SOURCE": "sha256:69dddadef5af8614b48283f1b67865ea8c65ac5b23d66c899e16c162cf8e0116",
+        "QUERY": "sha256:78a7a224b24381cf13676d4a4219661a6ae25702dfe3917313bc392d4d290914",
+        "QUERY_APPLICABILITY": "sha256:bafa0317bdcfc34627d08f96aae41b917890384446ec55fa811cee36341b6040"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:54daa9ac3c2bf4108a383598d5360329504450b7620dacfc079907fab6dc4c62",
+        "sha256:78a7a224b24381cf13676d4a4219661a6ae25702dfe3917313bc392d4d290914",
+        "sha256:69dddadef5af8614b48283f1b67865ea8c65ac5b23d66c899e16c162cf8e0116",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "core-write-6"
+      ],
+      "ledger_target": {
+        "scenario": "CORE",
+        "write_ordinal": 6,
+        "predicted": "SUPPORTED"
+      }
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 8,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "core-write-8",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-core-8",
+        "wire_id": {
+          "type": "number",
+          "value": 42
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a",
+        "context_sha256": "c21146038771f09f18f79695996405b7687e8c1a52142e72390e07df3fc83200",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "08-references_write.frame",
+        "frame_sha256": "33bc4d424b1f74f4ad36cf3806d192a2fcc60b59650186cd0a8bb22e48c71351"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "CORE/WRITE8/query.original",
+          "length": 415,
+          "sha256": "7e4daeb512fcd6289060fd1640ca403c872a243289731b0557db2df14659af4f"
+        },
+        "query_applicability": {
+          "path": "CORE/WRITE8/query-applicability.original",
+          "length": 478,
+          "sha256": "2b436c1840309892c7029893caad23ed8aa7d016f5c8b88672587d6698b2c03e"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:ec784e64bda0c24d0bfd6e62e109014c3aa66e44bfb3b09190dff6b1ec88f17b",
+        "SOURCE": "sha256:5dc27e57340054d7f473a5e2a268ff41bd172cd95389c5cf76e407176f9450ef",
+        "QUERY": "sha256:d8eca45cf7b892d8555e9d48da11aa314bf0072458dc56318d0cfa389cd2ca5b",
+        "QUERY_APPLICABILITY": "sha256:bbed5f68dcaae0fe0fae48abba833501a9d0e2297e0ba27818b31d80133f77d6"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:ec784e64bda0c24d0bfd6e62e109014c3aa66e44bfb3b09190dff6b1ec88f17b",
+        "sha256:d8eca45cf7b892d8555e9d48da11aa314bf0072458dc56318d0cfa389cd2ca5b",
+        "sha256:5dc27e57340054d7f473a5e2a268ff41bd172cd95389c5cf76e407176f9450ef",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "core-write-8"
+      ],
+      "ledger_target": {
+        "scenario": "CORE",
+        "write_ordinal": 8,
+        "predicted": "SUPPORTED"
+      }
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 10,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "core-write-10",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-core-10",
+        "wire_id": {
+          "type": "number",
+          "value": 43
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a",
+        "context_sha256": "c21146038771f09f18f79695996405b7687e8c1a52142e72390e07df3fc83200",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "10-references_write.frame",
+        "frame_sha256": "843cb0edde6eb55a4e8fd4a12afa683fdb2ed833897b4570b1b7d6bfad6f87e4"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "CORE/WRITE10/query.original",
+          "length": 418,
+          "sha256": "49d116551c07493ff3947df8c479587ab63fa3df65de61973832eadd3607aa18"
+        },
+        "query_applicability": {
+          "path": "CORE/WRITE10/query-applicability.original",
+          "length": 479,
+          "sha256": "3b5cba813da4455743359791d649f43480b8721fb98f07dda63e916caec735bf"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:05abce7345a85740e9aa0a704b6f86041c8ba9e50ed05063e6575bee98a64707",
+        "SOURCE": "sha256:9ba23b5477c4b9b9d51c57509a4b9459c3f8f6a2a0eb39b1934401f8a7d5f022",
+        "QUERY": "sha256:0b067ccaf1e31b4a7f51bd921f7283e311ed2eadc0fa21fee26e5c245c4a1a0f",
+        "QUERY_APPLICABILITY": "sha256:9fe32ac4cd32636046fe6b89db7b22c84e20c080e3233dc2067818ceb2b63cad"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:05abce7345a85740e9aa0a704b6f86041c8ba9e50ed05063e6575bee98a64707",
+        "sha256:0b067ccaf1e31b4a7f51bd921f7283e311ed2eadc0fa21fee26e5c245c4a1a0f",
+        "sha256:9ba23b5477c4b9b9d51c57509a4b9459c3f8f6a2a0eb39b1934401f8a7d5f022",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "core-write-10"
+      ],
+      "ledger_target": {
+        "scenario": "CORE",
+        "write_ordinal": 10,
+        "predicted": "SUPPORTED"
+      }
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 12,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "core-write-12",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-core-12",
+        "wire_id": {
+          "type": "number",
+          "value": 44
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a",
+        "context_sha256": "c21146038771f09f18f79695996405b7687e8c1a52142e72390e07df3fc83200",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "12-references_write.frame",
+        "frame_sha256": "ae65dfe8ff5bb74d3f65ee03acdee2aafc4e795dca4748f423a28acaa04963aa"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "CORE/WRITE12/query.original",
+          "length": 418,
+          "sha256": "b8a86d7c3c0944ecfd09828acd423ade1de7edc00c0e36f71b713452828fda0f"
+        },
+        "query_applicability": {
+          "path": "CORE/WRITE12/query-applicability.original",
+          "length": 479,
+          "sha256": "2076c7221d5724ec9c34b9f8499e52d24d8facf2c84608ab17dcd76891134aa3"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:759fc8a383f2f3a93a619dac02d88b97c048e299bf63ba9f73fb46a00a9e3a1c",
+        "SOURCE": "sha256:16611003e5fc38a39a069fa8894e310f055548f209423f0a6f8cb1887d1e5841",
+        "QUERY": "sha256:53215804f9dfd923cd8fc99eb50906c390ef6ef2e8c8f6407192152bcfde53d6",
+        "QUERY_APPLICABILITY": "sha256:95ab4844f2fbdae1edf8a5429bd2cda4ae3b3bbb2e04edc37e1d1459b743052a"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:759fc8a383f2f3a93a619dac02d88b97c048e299bf63ba9f73fb46a00a9e3a1c",
+        "sha256:53215804f9dfd923cd8fc99eb50906c390ef6ef2e8c8f6407192152bcfde53d6",
+        "sha256:16611003e5fc38a39a069fa8894e310f055548f209423f0a6f8cb1887d1e5841",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "core-write-12"
+      ],
+      "ledger_target": {
+        "scenario": "CORE",
+        "write_ordinal": 12,
+        "predicted": "SUPPORTED"
+      }
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 14,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "core-write-14",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-core-14",
+        "wire_id": {
+          "type": "number",
+          "value": 45
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a",
+        "context_sha256": "c21146038771f09f18f79695996405b7687e8c1a52142e72390e07df3fc83200",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "14-references_write.frame",
+        "frame_sha256": "65881766d87bb2c489d92aae2958b71dd438e90d1aca3d53d9171d1a46adb049"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "CORE/WRITE14/query.original",
+          "length": 418,
+          "sha256": "32c4039060f860c65a36f6f87f1c00d129198a6da3b38d72ecc2c744d34347e8"
+        },
+        "query_applicability": {
+          "path": "CORE/WRITE14/query-applicability.original",
+          "length": 479,
+          "sha256": "b56c74c0ae2f80c104f30df453eb79da500d7f9afe47896694cd9c2cd17ee09c"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:1d17c9820e0c57f4f312b947514e88cd3d6f23a13d3cafd9e2d60cb461f1909b",
+        "SOURCE": "sha256:d3abcbf29a6aa86b101b29c8495ade59ae22a3a02c906ba7992d3d1dc0d7ab47",
+        "QUERY": "sha256:1d5be17113974d57c854323f8825009f66bce092ddfe12081e196a0902ff7215",
+        "QUERY_APPLICABILITY": "sha256:2bf16a9175d8bf4b48224350602b50ea7cb1a8ba3a8131722de2e014f6beb375"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:1d17c9820e0c57f4f312b947514e88cd3d6f23a13d3cafd9e2d60cb461f1909b",
+        "sha256:1d5be17113974d57c854323f8825009f66bce092ddfe12081e196a0902ff7215",
+        "sha256:d3abcbf29a6aa86b101b29c8495ade59ae22a3a02c906ba7992d3d1dc0d7ab47",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "core-write-14"
+      ],
+      "ledger_target": {
+        "scenario": "CORE",
+        "write_ordinal": 14,
+        "predicted": "UNSUPPORTED"
+      }
+    },
+    {
+      "scenario": "STATIC_VALID_CONFLICT",
+      "write_ordinal": 20,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "static_valid_conflict-write-20",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-static_valid_conflict-20",
+        "wire_id": {
+          "type": "number",
+          "value": 120
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "ec7c7950b5f42d32010ae7525bf1cef61d25e772c525985d6336b7d0db8fbbfe",
+        "context_sha256": "f0cc65c2c25142b305c6cbf045beefda38a599202aabd7a3887f48136514b852",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "20-references_write.frame",
+        "frame_sha256": "15f0dd17b0def5eba5281f89e053f3fb504298b44fe47518b6865045a4e88c75"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "STATIC_VALID_CONFLICT/WRITE20/query.original",
+          "length": 453,
+          "sha256": "e7d4c737fdbb24e93338d247eeddae4abf1e3d1099d6417f4925841824b56cf0"
+        },
+        "query_applicability": {
+          "path": "STATIC_VALID_CONFLICT/WRITE20/query-applicability.original",
+          "length": 496,
+          "sha256": "647f001578f72e03480ae6a8b6201968019d89f3e3aa8ccf013937e427b174b4"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:390dd4f1d28368d7e0beac0951486778836afa6535de848c866fe636c1fa96bf",
+        "SOURCE": "sha256:d906f6f880444987095bf22e15440b0dab2ec678d35171c1aff029a63bf34ba1",
+        "QUERY": "sha256:801a56a6b6b6d0bf5295b1572b0f24ca33ec3fb6a04ba1578a5ceb4cd5bbf295",
+        "QUERY_APPLICABILITY": "sha256:5282bff23fe9aa9b35235a81918d07b4479faaa32872126f145cca05bbe484ba"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:390dd4f1d28368d7e0beac0951486778836afa6535de848c866fe636c1fa96bf",
+        "sha256:801a56a6b6b6d0bf5295b1572b0f24ca33ec3fb6a04ba1578a5ceb4cd5bbf295",
+        "sha256:d906f6f880444987095bf22e15440b0dab2ec678d35171c1aff029a63bf34ba1",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "static_valid_conflict-write-20"
+      ],
+      "ledger_target": {
+        "scenario": "STATIC_VALID_CONFLICT",
+        "write_ordinal": 20,
+        "predicted": "INVALID_CHRONOLOGY"
+      }
+    },
+    {
+      "scenario": "STATIC_MALFORMED_PRECEDENCE",
+      "write_ordinal": 26,
+      "identity": {
+        "session": "m1-private-session",
+        "generation": 1,
+        "workspace": "file:///w",
+        "transaction": "static_malformed_precedence-write-26",
+        "uri": "file:///w/a.go",
+        "owner_key": "owner-static_malformed_precedence-26",
+        "wire_id": {
+          "type": "number",
+          "value": 220
+        }
+      },
+      "held": {
+        "scenario_manifest_sha256": "d9ac7e704a44bef2a06d0ac2a1ecbd39a39239e8458804f297c9028a95bb52c9",
+        "context_sha256": "eb90f7986702ce93e4c3956764495f4260cccab191caf22b657aaa2328b4cbdb",
+        "source_length": 5,
+        "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+        "frame_filename": "26-references_write.frame",
+        "frame_sha256": "0ff237dd342de4ec6e3c9102d20aa83b6eb8c33da8db0f9084e2fa0cec1dd8db"
+      },
+      "source_version_mapping": {
+        "held_source_version": 1,
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "convention": "explicit author-declared synthetic owner buffer"
+      },
+      "originals": {
+        "query": {
+          "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query.original",
+          "length": 465,
+          "sha256": "bc178b624779b05bed7f427daa6f13658e1a02607802c14ab447792bc1090750"
+        },
+        "query_applicability": {
+          "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-applicability.original",
+          "length": 502,
+          "sha256": "ebbe972d6bbeb086fc02951f01883b6d508ffc965efb98df6f88957b13b2d62f"
+        }
+      },
+      "private_selectors": {
+        "transaction": "sha256:867cac406f17b7cddf6528dd2c0d3d4be5047745261b6217270f656a82e71526",
+        "SOURCE": "sha256:fe0b3640534bd7cffd950a9c562d0f7dc37a24365e33f4070572eeb8c3cd2a78",
+        "QUERY": "sha256:1fd94f827a6c15809d135c4ee6f17c6c7c70cc3ea41d952963ba9a138defe754",
+        "QUERY_APPLICABILITY": "sha256:6ab2ce345c2f9c443c2a67624ced7f2bcf208089b62f59dcbf2b22d6e0b51ef6"
+      },
+      "applicability_decoded_fields": [
+        "ADR0011-GENERIC-QUERY-APPLICABILITY-ARTIFACT/1",
+        "sha256:867cac406f17b7cddf6528dd2c0d3d4be5047745261b6217270f656a82e71526",
+        "sha256:1fd94f827a6c15809d135c4ee6f17c6c7c70cc3ea41d952963ba9a138defe754",
+        "sha256:fe0b3640534bd7cffd950a9c562d0f7dc37a24365e33f4070572eeb8c3cd2a78",
+        "file:///w/a.go",
+        "present",
+        "go",
+        "ORDINARY",
+        "absent",
+        "",
+        "absent",
+        "",
+        "",
+        "file:///w",
+        "m1-private-session",
+        "1",
+        "static_malformed_precedence-write-26"
+      ],
+      "ledger_target": {
+        "scenario": "STATIC_MALFORMED_PRECEDENCE",
+        "write_ordinal": 26,
+        "predicted": "MALFORMED"
+      }
+    }
+  ]
+}

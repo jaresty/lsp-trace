@@ -1,0 +1,127 @@
+{
+  "assets": [
+    {
+      "length": 3323,
+      "path": "CORE/WRITE4/capability-artifact.bin",
+      "sha256": "64fa5904cf2dbbd8ae853c4ded9f14834c7e192c4517a02759cf45cdc1ad13b8"
+    },
+    {
+      "length": 9368,
+      "path": "CORE/WRITE4/capability-envelope.json",
+      "sha256": "1bdae5a7ba12e2a828390059f96e8ab3ca32a83b6111b3deaa640b53c5a344fd"
+    },
+    {
+      "length": 3323,
+      "path": "CORE/WRITE6/capability-artifact.bin",
+      "sha256": "6ca36b790277baaa5eba4d6b2bea439183a5b56adbdc18494872a31a783688ba"
+    },
+    {
+      "length": 9368,
+      "path": "CORE/WRITE6/capability-envelope.json",
+      "sha256": "9845a49321d1171135560ac5d152479223e8d62eae162ba982292fa2dd9faae8"
+    },
+    {
+      "length": 3323,
+      "path": "CORE/WRITE8/capability-artifact.bin",
+      "sha256": "0da87edffafb499d1d30fbf5ab672f1e2dbb9da66bf9c0c9811a90214a25cc56"
+    },
+    {
+      "length": 9368,
+      "path": "CORE/WRITE8/capability-envelope.json",
+      "sha256": "2ec35389f7897e2faadebaa6818f8cd64f7685e02935b64e8e8b1d47b4c24d94"
+    },
+    {
+      "length": 3324,
+      "path": "CORE/WRITE10/capability-artifact.bin",
+      "sha256": "4fb7e28d0949d2e13aa876e4dc8c9e51e3895637fca1d28040eaa0bb533453f9"
+    },
+    {
+      "length": 9375,
+      "path": "CORE/WRITE10/capability-envelope.json",
+      "sha256": "98aa61812f38bf78ffb56573b12f4739612ba2a1fcd3dfde23d7d74dd734c28b"
+    },
+    {
+      "length": 3324,
+      "path": "CORE/WRITE12/capability-artifact.bin",
+      "sha256": "62a9728c4d8fb898037489b9b2a329d7df46ae00e142f3d5c2e90cb879d90f88"
+    },
+    {
+      "length": 9375,
+      "path": "CORE/WRITE12/capability-envelope.json",
+      "sha256": "7a28e4d904f3aa29957fd7048a6bcb3e1d546b79abbcd95e6a85a5dba78090e6"
+    },
+    {
+      "length": 3324,
+      "path": "CORE/WRITE14/capability-artifact.bin",
+      "sha256": "475ed6fe1ee3d9cd98e98edfee6b8d7ce9f3743893733bf2c95095be41d5902b"
+    },
+    {
+      "length": 9375,
+      "path": "CORE/WRITE14/capability-envelope.json",
+      "sha256": "7beae6fadec14b68a2438af016bf18624ec28a6b21c9e3af7963d10b571f72e4"
+    },
+    {
+      "length": 2010,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/capability-artifact.bin",
+      "sha256": "bb5385ec44c7d7d422a5a7597190cf2350ab3402612ca1f9b6e856b7db592a45"
+    },
+    {
+      "length": 5687,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/capability-envelope.json",
+      "sha256": "9650d64c3b4485432cc05df0fc556bc7c83511d4c9b4771ede08c36aa9a25393"
+    },
+    {
+      "length": 1998,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/capability-artifact.bin",
+      "sha256": "ff24a48e02786876ba3a3a984af0a6d4c0348f1e587ed71bd9973a84e681aa2f"
+    },
+    {
+      "length": 5755,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/capability-envelope.json",
+      "sha256": "abee25e763f4e79d19e5ebeb25f43a1bdcd780add5fefd1b72ea844bd78cb7d7"
+    },
+    {
+      "length": 40031,
+      "path": "derivation.json",
+      "sha256": "227588c259b620de30a2b5174442adf875105eed5b246d130df8424ccf5d7f57"
+    }
+  ],
+  "limitations": [
+    "No B4a SOURCE/QUERY/QUERY_APPLICABILITY/REQUEST_WRITE claimants",
+    "No B4b full candidate/test, selector issuance/admission, C/D/production/qualification authority",
+    "Post-WRITE responses retained as observations; not retroactive effectiveness at target WRITE"
+  ],
+  "predecessors": [
+    {
+      "length": 1987,
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/manifest.json",
+      "sha256": "f2984fd734c6ac81fe3d28ce59494a0ace1c19df046c51246dfaeaa75c762a8d"
+    },
+    {
+      "length": 6193,
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-query-originals-v1/manifest.json",
+      "sha256": "eb8b85d49163fb099f9347fc660e8ca7f2cae171ab8917f7d839aa4daea9a034"
+    },
+    {
+      "length": 2133,
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-ledger-correction-v1/manifest.json",
+      "sha256": "4a9db86b72e83df7cc2d0390794bcd56135e4cd83620e09ff8d125de4434e474"
+    },
+    {
+      "length": 10890,
+      "path": "/Users/schwa/dev/lsp-trace/internal/adr0011genericv5proposal/b4b_held_successor.go",
+      "sha256": "b87e4fefb3a8ea46127eecbaaf317676c153e10edc2ec4899a19ae582b5b2054"
+    },
+    {
+      "length": 11438,
+      "path": "/Users/schwa/dev/lsp-trace/internal/adr0011genericv5proposal/b4b_held_successor_test.go",
+      "sha256": "bd3063abded7b9bd8ff388833bb6c760bac7b83216189a7b38c31c6e20498aaf"
+    },
+    {
+      "length": 1357,
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-generic-v5-raw-id-review/SNAPSHOT.sha256",
+      "sha256": "b3bedbb010d0d46d29fff8f16a6aa2f91182f4bff47f284b38afff7644eaab5d"
+    }
+  ],
+  "status": "PRIVATE_M2A_CAPABILITY_DERIVATION_PENDING_INDEPENDENT_REVIEW"
+}

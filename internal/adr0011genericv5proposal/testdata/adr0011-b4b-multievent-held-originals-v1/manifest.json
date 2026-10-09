@@ -1,0 +1,42 @@
+{
+  "status": "PRIVATE_SYNTHETIC_RAW_ORIGINALS_PENDING_INDEPENDENT_REVIEW",
+  "custody": "authored raw originals; no claimant generated",
+  "scenarios": [
+    {
+      "path": "CORE/manifest.json",
+      "length": 5933,
+      "sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a"
+    },
+    {
+      "path": "STATIC_VALID_CONFLICT/manifest.json",
+      "length": 2904,
+      "sha256": "ec7c7950b5f42d32010ae7525bf1cef61d25e772c525985d6336b7d0db8fbbfe"
+    },
+    {
+      "path": "STATIC_MALFORMED_PRECEDENCE/manifest.json",
+      "length": 2906,
+      "sha256": "d9ac7e704a44bef2a06d0ac2a1ecbd39a39239e8458804f297c9028a95bb52c9"
+    }
+  ],
+  "ledger": {
+    "path": "expected-transitions.json",
+    "length": 4033,
+    "sha256": "06d7a3c10ee48a0c93f5d5ce152d69fd13ebc4af994660a01ae92edd3b4525c4"
+  },
+  "normative_pins": {
+    "frozen_v5_manifest": "sha256:b3bedbb010d0d46d29fff8f16a6aa2f91182f4bff47f284b38afff7644eaab5d",
+    "envelope_v4": "sha256:df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3",
+    "transport_v4": "sha256:f3e25fab98cc4b8b96b76978cf56220ccc81f4ef41455ab0401041ea281d0bc8",
+    "references_v5": "sha256:7c46893fecf0dda7a4942b8f33d92f0c2f49793d003c7eab4e8995aeddf8da36",
+    "definition_v5": "sha256:da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
+    "shared_applicability_v1": "sha256:c73263cb1356abd9f2898e016ec31afbb6cb112924c881c0a1ef6034bb1d5a0d",
+    "capability_exchange_packet": "docs/qualification/adr0011-generic-capability-exchange-v4.packet.proposed.md",
+    "precedence_implementation_only": "sha256:7860465c602b84ba150b17eb481f22af5d18247c3a2c667d77570ad040054e07"
+  },
+  "limitations": [
+    "all policy originals PROPOSED; V5 accepted implementation-only",
+    "predictions are not execution results",
+    "independent raw-byte review and immutable pins still required",
+    "no A4/B4a envelope, /2 artifact, B4b implementation, tests, selector issuance, readiness or public authority"
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "status": "PRIVATE_HELD_SYNTHETIC_PENDING_INDEPENDENT_EXACT_BYTE_REVIEW",
+  "assets": [
+    {
+      "path": "CORE/WRITE4/query.original",
+      "length": 415,
+      "sha256": "62f1b1a5b5f4a8f0db49f747fcdd1e9e1fd1d764a7ca9b4537396ed32366b5aa"
+    },
+    {
+      "path": "CORE/WRITE4/query-applicability.original",
+      "length": 478,
+      "sha256": "a902a31c67a86d4cdb4b42a4988e0b9266382d2d61219b7f1131648de883db5e"
+    },
+    {
+      "path": "CORE/WRITE6/query.original",
+      "length": 415,
+      "sha256": "94e9cf9d6777a1e4c158c025648766768a738480facc1d5283e0996650d71ae8"
+    },
+    {
+      "path": "CORE/WRITE6/query-applicability.original",
+      "length": 478,
+      "sha256": "ef2740ef7a44c72e139b354e4f7838cb4de0d2aa011b6f72a670fdb1710221a3"
+    },
+    {
+      "path": "CORE/WRITE8/query.original",
+      "length": 415,
+      "sha256": "7e4daeb512fcd6289060fd1640ca403c872a243289731b0557db2df14659af4f"
+    },
+    {
+      "path": "CORE/WRITE8/query-applicability.original",
+      "length": 478,
+      "sha256": "2b436c1840309892c7029893caad23ed8aa7d016f5c8b88672587d6698b2c03e"
+    },
+    {
+      "path": "CORE/WRITE10/query.original",
+      "length": 418,
+      "sha256": "49d116551c07493ff3947df8c479587ab63fa3df65de61973832eadd3607aa18"
+    },
+    {
+      "path": "CORE/WRITE10/query-applicability.original",
+      "length": 479,
+      "sha256": "3b5cba813da4455743359791d649f43480b8721fb98f07dda63e916caec735bf"
+    },
+    {
+      "path": "CORE/WRITE12/query.original",
+      "length": 418,
+      "sha256": "b8a86d7c3c0944ecfd09828acd423ade1de7edc00c0e36f71b713452828fda0f"
+    },
+    {
+      "path": "CORE/WRITE12/query-applicability.original",
+      "length": 479,
+      "sha256": "2076c7221d5724ec9c34b9f8499e52d24d8facf2c84608ab17dcd76891134aa3"
+    },
+    {
+      "path": "CORE/WRITE14/query.original",
+      "length": 418,
+      "sha256": "32c4039060f860c65a36f6f87f1c00d129198a6da3b38d72ecc2c744d34347e8"
+    },
+    {
+      "path": "CORE/WRITE14/query-applicability.original",
+      "length": 479,
+      "sha256": "b56c74c0ae2f80c104f30df453eb79da500d7f9afe47896694cd9c2cd17ee09c"
+    },
+    {
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query.original",
+      "length": 453,
+      "sha256": "e7d4c737fdbb24e93338d247eeddae4abf1e3d1099d6417f4925841824b56cf0"
+    },
+    {
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query-applicability.original",
+      "length": 496,
+      "sha256": "647f001578f72e03480ae6a8b6201968019d89f3e3aa8ccf013937e427b174b4"
+    },
+    {
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query.original",
+      "length": 465,
+      "sha256": "bc178b624779b05bed7f427daa6f13658e1a02607802c14ab447792bc1090750"
+    },
+    {
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-applicability.original",
+      "length": 502,
+      "sha256": "ebbe972d6bbeb086fc02951f01883b6d508ffc965efb98df6f88957b13b2d62f"
+    },
+    {
+      "path": "bindings.json",
+      "length": 22127,
+      "sha256": "b6cdde0fe2260d07971de84607fa791d118f851d7e62939d82564848a3177fe8"
+    }
+  ],
+  "predecessors": [
+    {
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/manifest.json",
+      "length": 1987,
+      "sha256": "f2984fd734c6ac81fe3d28ce59494a0ace1c19df046c51246dfaeaa75c762a8d"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-ledger-correction-v1/manifest.json",
+      "length": 2133,
+      "sha256": "4a9db86b72e83df7cc2d0390794bcd56135e4cd83620e09ff8d125de4434e474"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-generic-v5-raw-id-review/SNAPSHOT.sha256",
+      "length": 1357,
+      "sha256": "b3bedbb010d0d46d29fff8f16a6aa2f91182f4bff47f284b38afff7644eaab5d"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/docs/qualification/originals/adr0011-generic-envelope-v4.schema.json",
+      "length": 21409,
+      "sha256": "df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/docs/qualification/originals/generic-lsp-exact-transport-v4.json",
+      "length": 1784,
+      "sha256": "f3e25fab98cc4b8b96b76978cf56220ccc81f4ef41455ab0401041ea281d0bc8"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/docs/qualification/originals/generic-lsp-references-exact-v5.json",
+      "length": 2210,
+      "sha256": "7c46893fecf0dda7a4942b8f33d92f0c2f49793d003c7eab4e8995aeddf8da36"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/docs/qualification/originals/generic-lsp-selector-applicability-v1.json",
+      "length": 2247,
+      "sha256": "c73263cb1356abd9f2898e016ec31afbb6cb112924c881c0a1ef6034bb1d5a0d"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/docs/qualification/originals/generic-lsp-definition-exact-v5.json",
+      "length": 2119,
+      "sha256": "da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-ledger-correction-v1/expected-transitions.json",
+      "length": 3653,
+      "sha256": "b236f342d01d57cb73cd3262e169d85f81d2da33418502749a022bd72c7deeb3"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/manifest.json",
+      "length": 5933,
+      "sha256": "12741a097aecb318c1dfa982bb549ffd174db5c2c804a476130be220983ffc2a"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/STATIC_VALID_CONFLICT/manifest.json",
+      "length": 2904,
+      "sha256": "ec7c7950b5f42d32010ae7525bf1cef61d25e772c525985d6336b7d0db8fbbfe"
+    },
+    {
+      "path": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/STATIC_MALFORMED_PRECEDENCE/manifest.json",
+      "length": 2906,
+      "sha256": "d9ac7e704a44bef2a06d0ac2a1ecbd39a39239e8458804f297c9028a95bb52c9"
+    }
+  ],
+  "limitations": [
+    "private synthetic held inputs only; pending separate independent exact-byte review",
+    "not claimant output or observed execution",
+    "no B4b status, selector issuance/admission, A4 envelope/B4a claim, CAPABILITY_EVENTS, /2 original, transition execution, or C/D/production authority"
+  ]
+}

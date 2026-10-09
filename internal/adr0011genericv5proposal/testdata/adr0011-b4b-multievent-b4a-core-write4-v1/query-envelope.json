@@ -1,0 +1,39 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "m1-private-session",
+    "transaction": "core-write-4"
+  },
+  "original": {
+    "length": 415,
+    "private_ref": "held:CORE/WRITE4/query.original",
+    "sha256": "sha256:62f1b1a5b5f4a8f0db49f747fcdd1e9e1fd1d764a7ca9b4537396ed32366b5aa"
+  },
+  "payload": {
+    "character": 0,
+    "encoding": "utf-16",
+    "line": 0,
+    "method": "textDocument/references",
+    "source": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+    "uri": "file:///w/a.go",
+    "version": "buffer:v1"
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:7c46893fecf0dda7a4942b8f33d92f0c2f49793d003c7eab4e8995aeddf8da36",
+      "role": "POLICY",
+      "selector": "private-context:references-policy-v5"
+    },
+    {
+      "digest": "sha256:df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3",
+      "role": "SCHEMA",
+      "selector": "private-context:envelope-v4"
+    },
+    {
+      "digest": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+      "role": "SOURCE",
+      "selector": "sha256:b85a60fd0667a775a92a92e389882c31f61841a8c52e54a23afb786982296d14"
+    }
+  ],
+  "role": "QUERY"
+}

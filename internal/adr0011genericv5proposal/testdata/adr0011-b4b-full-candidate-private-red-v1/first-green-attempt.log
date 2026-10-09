@@ -1,0 +1,20 @@
+=== RUN   TestB4bFullCandidatePinnedMatrix
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE4
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE8
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE10
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE12
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE14
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26
+--- PASS: TestB4bFullCandidatePinnedMatrix (0.36s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE4 (0.05s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6 (0.04s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE8 (0.04s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE10 (0.04s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE12 (0.04s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE14 (0.04s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20 (0.04s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26 (0.04s)
+PASS
+ok  	lsp-trace/internal/adr0011genericv5proposal	0.714s

@@ -1,0 +1,29 @@
+=== RUN   TestB4bFullCandidatePinnedMatrix
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE4
+    b4b_full_candidate_test.go:121: held identity
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6
+    b4b_full_candidate_test.go:121: held identity
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE8
+    b4b_full_candidate_test.go:121: held identity
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE10
+    b4b_full_candidate_test.go:121: held identity
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE12
+    b4b_full_candidate_test.go:121: held identity
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE14
+    b4b_full_candidate_test.go:121: held identity
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20
+    b4b_full_candidate_test.go:121: held identity
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26
+    b4b_full_candidate_test.go:121: held identity
+--- FAIL: TestB4bFullCandidatePinnedMatrix (0.01s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE4 (0.00s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6 (0.00s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE8 (0.00s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE10 (0.00s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE12 (0.00s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE14 (0.00s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20 (0.00s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26 (0.00s)
+FAIL
+FAIL	lsp-trace/internal/adr0011genericv5proposal	0.342s
+FAIL

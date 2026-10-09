@@ -1,0 +1,24 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "m1-private-session",
+    "transaction": "core-write-14"
+  },
+  "original": {
+    "length": 5,
+    "private_ref": "held:CORE/source.bytes",
+    "sha256": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8"
+  },
+  "payload": {
+    "custody": "OWNER_BUFFER",
+    "source_bytes": {
+      "length": 5,
+      "private_ref": "held:CORE/source.bytes",
+      "sha256": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8"
+    },
+    "uri": "file:///w/a.go",
+    "version": "buffer:v1"
+  },
+  "predecessors": [],
+  "role": "SOURCE"
+}

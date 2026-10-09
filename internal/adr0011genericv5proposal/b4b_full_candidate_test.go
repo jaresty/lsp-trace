@@ -25,7 +25,7 @@ func b4bFullPinnedRead(t *testing.T, path, digest string) []byte {
 }
 
 func TestB4bFullCandidatePinnedMatrix(t *testing.T) {
-	root := filepath.Join("..", "..", ".pi", "evidence")
+	root := "testdata"
 	raw := filepath.Join(root, "adr0011-b4b-multievent-held-originals-v1")
 	held := filepath.Join(root, "adr0011-b4b-multievent-held-query-originals-v1")
 	capRoot := filepath.Join(root, "adr0011-b4b-multievent-capability-derived-v1")

@@ -1,0 +1,39 @@
+{
+  "status": "PRIVATE_SYNTHETIC_HELD_DERIVED_PENDING_INDEPENDENT_STAGE2A_REVIEW",
+  "predecessor_manifests": [
+    {
+      "manifest": "../adr0011-b4b-held-synthetic-originals/manifest.json",
+      "sha256": "9d83ad7c3d50358318347cb5429637cf1e73af574b3d2b6b7040272851465e9f"
+    },
+    {
+      "manifest": "../adr0011-b4b-held-query-synthetic-v1/manifest.json",
+      "sha256": "9c8df20103872f1f8f9653496674b4e07339c383369e960d83537f09135a1424"
+    }
+  ],
+  "assets": [
+    {
+      "filename": "capability-artifact.bin",
+      "length": 1829,
+      "sha256": "d0d36273d838e9546ff8ceb9cef05d3549f3b4385892fa8b28ffd0ecdaaa951c",
+      "role": "held-derived /2 original"
+    },
+    {
+      "filename": "capability-envelope.json",
+      "length": 4335,
+      "sha256": "a946485f4ef447d44b04655846737ff5022596c063082f9e2428f6f24696dd80",
+      "role": "CAPABILITY_EVENTS A4 claimant"
+    },
+    {
+      "filename": "derivation.json",
+      "length": 1895,
+      "sha256": "0c1ebf7f71cff7c80d16c885dcf2fd690774753f1d84a7d1f524ee24d3b33162",
+      "role": "private derivation receipt"
+    }
+  ],
+  "private_fixture_selector": "sha256:f2ec8a0082b9c409ef6c1d4efc12cfc3a5e53b0a2a627b1d29803dfa5f38b21f",
+  "limitations": [
+    "not selector issuance",
+    "not B4a transaction validation",
+    "not B4b readiness or public authority"
+  ]
+}

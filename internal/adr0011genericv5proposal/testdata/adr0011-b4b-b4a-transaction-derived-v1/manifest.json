@@ -1,0 +1,57 @@
+{
+  "status": "PRIVATE_SYNTHETIC_B4A_CORRELATION_PENDING_INDEPENDENT_STAGE2B_REVIEW",
+  "predecessor_manifests": [
+    {
+      "manifest": "../adr0011-b4b-held-synthetic-originals/manifest.json",
+      "sha256": "9d83ad7c3d50358318347cb5429637cf1e73af574b3d2b6b7040272851465e9f"
+    },
+    {
+      "manifest": "../adr0011-b4b-held-query-synthetic-v1/manifest.json",
+      "sha256": "9c8df20103872f1f8f9653496674b4e07339c383369e960d83537f09135a1424"
+    },
+    {
+      "manifest": "../adr0011-b4b-capability-derived-v1/manifest.json",
+      "sha256": "724f4e19203bac69419289d6ec61b1fa211cf4ae617ef33cec3bedd6e734caa1"
+    }
+  ],
+  "assets": [
+    {
+      "filename": "source-artifact.bin",
+      "length": 275,
+      "sha256": "01a2e62768010b43cb6f4d7e108a8496b57e04ebdc41adfa7832f844dcb1a948"
+    },
+    {
+      "filename": "source-envelope.json",
+      "length": 584,
+      "sha256": "6ab4df1e27d454e2f88331f73c6e7ccaa835058878222febe03a2c9f68539d59"
+    },
+    {
+      "filename": "query-envelope.json",
+      "length": 1157,
+      "sha256": "e81f44dac4371d5cb28b51e813a60e314e4fb684e8c00ee95ec8a0a8e6662e2e"
+    },
+    {
+      "filename": "query-applicability-envelope.json",
+      "length": 1455,
+      "sha256": "1dc9112f6c662ef44cf19eca336d7a6f81817738ed993cb7aa6d42583ea0e599"
+    },
+    {
+      "filename": "request-write-envelope.json",
+      "length": 1680,
+      "sha256": "54379d35bef356539590c95b9150db79db1c732753f91139795301d7e4726bbe"
+    },
+    {
+      "filename": "derivation.json",
+      "length": 3140,
+      "sha256": "4d33bc555494f2ef743f71ce944f19f9e99d882f5e15d25b0c4767f5089a9ec5"
+    }
+  ],
+  "checks": {
+    "A4Validate": "PASS separately for four exact envelope bytes",
+    "CheckB4a": "PASS with separately held stage1/stage1B originals and raw frame params/id",
+    "negative_owner_key_substitution": "REJECT B4a completed WRITE payload correspondence"
+  },
+  "limitations": [
+    "Private B4a correlation only; no B4b chronology, UNKNOWN-to-SUPPORTED, C/D, V6, issuance, admission, or public authority"
+  ]
+}

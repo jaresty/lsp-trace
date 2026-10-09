@@ -1,0 +1,96 @@
+{
+  "custody": "FIXTURE_AUTHORED_NOT_CAPTURED",
+  "status": "CANDIDATE_PENDING_INDEPENDENT_RAW_BYTE_REVIEW",
+  "session": "s",
+  "generation": 1,
+  "workspace": "file:///w",
+  "transaction": "tx",
+  "uri": "file:///w/a.go",
+  "method": "textDocument/references",
+  "target": {
+    "ordinal": 5,
+    "role": "WRITE",
+    "ownerKey": "key-1",
+    "wireId": {
+      "type": "number",
+      "value": 3
+    }
+  },
+  "assets": [
+    {
+      "filename": "00-initialize-request.frame",
+      "length": 137,
+      "sha256": "5ee617aa7efa8cb1ad34e6d170be201f02f612681b4b7973fea53d5fefb3493f",
+      "ordinal": 0,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "initialize_request",
+      "id": {
+        "type": "number",
+        "value": 1
+      }
+    },
+    {
+      "filename": "01-initialize-response.frame",
+      "length": 75,
+      "sha256": "7ac854e3d04180081bede182be1f7aae87451541bcbe6c7dbb758643806e0730",
+      "ordinal": 1,
+      "direction": "SERVER_TO_CLIENT",
+      "role": "initialize_response",
+      "id": {
+        "type": "number",
+        "value": 1
+      }
+    },
+    {
+      "filename": "02-initialized.frame",
+      "length": 74,
+      "sha256": "3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62",
+      "ordinal": 2,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "initialized_notification",
+      "id": null
+    },
+    {
+      "filename": "03-register-request.frame",
+      "length": 209,
+      "sha256": "fb902a3fe0804127b305745e079214c23483d11277141d32521869e9f017d2a5",
+      "ordinal": 3,
+      "direction": "SERVER_TO_CLIENT",
+      "role": "registration_request",
+      "id": {
+        "type": "string",
+        "value": "r"
+      }
+    },
+    {
+      "filename": "04-register-response.frame",
+      "length": 62,
+      "sha256": "d9837db167818799d86feb8cba9a998322ae9cc2f97d83bfade94f02e3b47fd9",
+      "ordinal": 4,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "registration_response",
+      "id": {
+        "type": "string",
+        "value": "r"
+      }
+    },
+    {
+      "filename": "05-references-write.frame",
+      "length": 207,
+      "sha256": "acdb0346ecb1889439836d05fc8e6c20dc9d69ebbe0f494a975a21da8f41a12e",
+      "ordinal": 5,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "references_write",
+      "id": {
+        "type": "number",
+        "value": 3
+      }
+    },
+    {
+      "filename": "client-selector.json",
+      "length": 19,
+      "sha256": "844261003650303449410591b51cd4ea076082fe47d6330e9873cb10aec16c57",
+      "role": "independently_retained_client_selector"
+    }
+  ]
+}

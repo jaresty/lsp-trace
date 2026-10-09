@@ -1,0 +1,15 @@
+{
+  "status": "PRE_IMPLEMENTATION_SEMANTIC_RED_PRIVATE",
+  "scope": "additive CheckB4bFullCandidate against eight held synthetic targets",
+  "first_attempt": "invalid-fixture-precondition.log is not a semantic RED; context JSON field tags corrected before this attestation",
+  "compiled": true,
+  "preconditions": "accepted CheckB4a and CAPABILITY_EVENTS A4Validate passed for each of eight held target instances",
+  "result": "WRITE4 UNKNOWN passed; seven explicit chronology outcome assertions failed at b4b_full_candidate_test.go:205 (four SUPPORTED, one UNSUPPORTED, one INVALID_CHRONOLOGY, one MALFORMED)",
+  "pins": {
+    "candidate_stub_go": "sha256:5fe0463c892c144ef56e00dcd380f95cf3defe7f65ccaae3d950f935240b9a95",
+    "matrix_test_go": "sha256:1ed64eb294170ef6b3833544cac9c232e6d0af2922ae7adefea9e2d053349680",
+    "semantic_red_log": "sha256:f47f6396df8657547eecff801668b47673541a8dfaad8ba866f36e3fc49cd8e7",
+    "invalid_fixture_log": "sha256:0146d21266067cc9670995189e6f50893662426f911ff87beec47480063aeddb"
+  },
+  "limitations": "private synthetic test provenance only; not full B4b acceptance or production authority"
+}

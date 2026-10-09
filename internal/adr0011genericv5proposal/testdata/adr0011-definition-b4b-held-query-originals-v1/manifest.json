@@ -1,0 +1,106 @@
+{
+  "assets": [
+    {
+      "length": 455,
+      "path": "CORE/WRITE4/query.original",
+      "sha256": "be97295c14d71e64ffe76c606f55c878a56f502e17d422816683ffe2271c00c5"
+    },
+    {
+      "length": 506,
+      "path": "CORE/WRITE4/query-applicability.original",
+      "sha256": "8348aeb4babda3f3bfcab0414745c024e1f7510c5ce457b598774f092461d64c"
+    },
+    {
+      "length": 455,
+      "path": "CORE/WRITE6/query.original",
+      "sha256": "71763720063d02c5d9c7b4ddd2cb2fc79e877d5e6dc0b21e1c0d28be997a6ef0"
+    },
+    {
+      "length": 506,
+      "path": "CORE/WRITE6/query-applicability.original",
+      "sha256": "68edc2ba6b402b14bc1d0dcc89733a283eb5204d0337443f31df4abc9824607a"
+    },
+    {
+      "length": 455,
+      "path": "CORE/WRITE8/query.original",
+      "sha256": "c08c9338bc8c623462cbd260bbd87ef5488b0e78d1c3f01a5df9340991c5bc50"
+    },
+    {
+      "length": 506,
+      "path": "CORE/WRITE8/query-applicability.original",
+      "sha256": "54388f7330739ef18f8540db801e3788b9abcafa70954251e77bb28dffc86181"
+    },
+    {
+      "length": 458,
+      "path": "CORE/WRITE10/query.original",
+      "sha256": "86a94b89be9f90a66784b3093eb051d853f11dc2500fb75acbdfbe33d55d7530"
+    },
+    {
+      "length": 507,
+      "path": "CORE/WRITE10/query-applicability.original",
+      "sha256": "65c07439de21310ddae54d8a62d8a0dbadcf3d7095bb3dcbcf77a39196aa2725"
+    },
+    {
+      "length": 458,
+      "path": "CORE/WRITE12/query.original",
+      "sha256": "82c2b4036553fccbfc373d8a34945dc4158d84bea12db54094717daee314264b"
+    },
+    {
+      "length": 507,
+      "path": "CORE/WRITE12/query-applicability.original",
+      "sha256": "9f4ebd8c1945b2ce0e885eb08812892aede91bc4663982581d4d860ccb5c1edb"
+    },
+    {
+      "length": 458,
+      "path": "CORE/WRITE14/query.original",
+      "sha256": "af8ef61bba2d8f1efb2d4937bb0171182c71ff92b5b24220ced3e89632bdc280"
+    },
+    {
+      "length": 507,
+      "path": "CORE/WRITE14/query-applicability.original",
+      "sha256": "970cbc98f9b1ab3e38589953431863f24ec5031b9ae02e02b7ca7a3812d7f3c5"
+    },
+    {
+      "length": 492,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query.original",
+      "sha256": "b7577481749be854da4d453ff3d71b8b2644289328b487c527172fc5300b26b9"
+    },
+    {
+      "length": 524,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query-applicability.original",
+      "sha256": "d3e3eabdfb578c483059a359f44eb264505b00053bea9dd1273834d88bc90225"
+    },
+    {
+      "length": 504,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query.original",
+      "sha256": "f9184ef5b9b8cbc258f26bcb583d267b181c044e34bb7d82968b236ee3e0771d"
+    },
+    {
+      "length": 530,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-applicability.original",
+      "sha256": "0defa45ba89e4266d13bca51ca901705b269b39e692745778ae866843a69c046"
+    },
+    {
+      "length": 15446,
+      "path": "bindings.json",
+      "sha256": "b78726c45c4beb2407c2449bca0b84d4eaf7c36fce9494d59d2838a50c98dad5"
+    }
+  ],
+  "limitations": [
+    "held definition QUERY and 17-field QUERY_APPLICABILITY originals only",
+    "not A4/B4a/CAP claimants or replay observations",
+    "authority=0 accepted=false completeness=UNKNOWN NO_PRODUCER_AUTHENTICATION",
+    "no C/D or qualification"
+  ],
+  "predecessors": [
+    {
+      "path": "../adr0011-definition-b4b-held-originals-v1/manifest.json",
+      "sha256": "2fb4c68376f5268b0f1722033565c70595545aa3df08e9f3431ecbd9762f99fe"
+    },
+    {
+      "path": "../adr0011-b4b-full-candidate-private-red-v1/candidate-manifest.json",
+      "sha256": "aee6006bbafdfae8f33a6b011cf34b69ad85411489ac963ef4243fd34cbbd6ec"
+    }
+  ],
+  "status": "PRIVATE_HELD_DEFINITION_QUERY_APP_PENDING_INDEPENDENT_REVIEW"
+}

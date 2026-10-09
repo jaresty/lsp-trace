@@ -11,7 +11,7 @@ import (
 
 // Definition originals are held separately from the accepted references fixture.
 func TestB4bDefinitionPinnedMatrix(t *testing.T) {
-	root := filepath.Join("..", "..", ".pi", "evidence")
+	root := "testdata"
 	raw := filepath.Join(root, "adr0011-definition-b4b-held-originals-v1")
 	held := filepath.Join(root, "adr0011-definition-b4b-held-query-originals-v1")
 	capRoot := filepath.Join(root, "adr0011-definition-b4b-capability-derived-v1")
@@ -23,7 +23,7 @@ func TestB4bDefinitionPinnedMatrix(t *testing.T) {
 		{filepath.Join(claims, "manifest.json"), "a88290ac884b4f0662d3c5ea5a07ea8031ce540fd580a866ab304d8b4bfde00c"},
 		{filepath.Join(root, "adr0011-b4b-full-candidate-private-red-v1", "candidate-manifest.json"), "aee6006bbafdfae8f33a6b011cf34b69ad85411489ac963ef4243fd34cbbd6ec"},
 		{"b4b_full_candidate.go", "25059ec63fa5c2e72a89ae46b513dd8571bf9f54a8d06fb917d405763874a381"},
-		{"b4b_full_candidate_test.go", "1dca1caf536b56b710f077842c1d8b7ae3562ecd3638554de83227399e5b48dd"},
+		{"b4b_full_candidate_test.go", "61a1e0cb6360a597438c875d55f47234cd2a92edfac7118446a2b8418b6623ca"},
 	} {
 		b4bFullPinnedRead(t, pin.path, pin.digest)
 	}

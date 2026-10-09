@@ -1,0 +1,40 @@
+{
+  "status": "PRIVATE_SYNTHETIC_M2B_CORE_WRITE4_PENDING_INDEPENDENT_REVIEW",
+  "custody": "held M1 raw and M1B originals precede these separately derived claimant envelopes",
+  "identity": {
+    "scenario": "CORE",
+    "session": "m1-private-session",
+    "generation": 1,
+    "transaction": "core-write-4",
+    "write_ordinal": 4,
+    "actual_key": "owner-core-4",
+    "wire_id": {"type": "number", "value": 40}
+  },
+  "assets": [
+    {"path": "source-artifact.bin", "length": 275, "sha256": "639b82fd57cc686a646d135421b4f66c4e3317fc1b7400b0777898807007be04"},
+    {"path": "source-envelope.json", "length": 621, "sha256": "053f7d168afc3ff8ad0419a0cdb82000f22b0dbae6360883ca53691818293bb8"},
+    {"path": "query-envelope.json", "length": 1189, "sha256": "dcc6a16cabc94cf8e71b65fd978b05ddb3e632c9641c38cc6dde5257be17abd2"},
+    {"path": "query-applicability-envelope.json", "length": 1686, "sha256": "d56ad0eadc32d8ec3db3ead4e0c2933c8071a6a527ffae56f4fadaa1709261e6"},
+    {"path": "request-write-envelope.json", "length": 1725, "sha256": "a9fdce456252d92c5913ed64d5bccb2e42052453308578b2b782c17b61cf20e8"},
+    {"path": "derivation.json", "length": 1666, "sha256": "dbcc25edee87d8c0cd44c60a031436278c9c2a9889a734e326bb3a4613ec497b"}
+  ],
+  "predecessors": [
+    {"path": "../adr0011-b4b-multievent-held-originals-v1/manifest.json", "sha256": "f2984fd734c6ac81fe3d28ce59494a0ace1c19df046c51246dfaeaa75c762a8d"},
+    {"path": "../adr0011-b4b-multievent-ledger-correction-v1/manifest.json", "sha256": "4a9db86b72e83df7cc2d0390794bcd56135e4cd83620e09ff8d125de4434e474"},
+    {"path": "../adr0011-b4b-multievent-held-query-originals-v1/manifest.json", "sha256": "eb8b85d49163fb099f9347fc660e8ca7f2cae171ab8917f7d839aa4daea9a034"},
+    {"path": "../adr0011-b4b-multievent-capability-derived-v1/manifest.json", "sha256": "4e951a0bc247b40b9c5e81c2015d9778a2c06287c391a332d129a9a53f6f3d1a"}
+  ],
+  "checks": {
+    "accepted_go_A4Validate": "4/4 exact envelopes PASS",
+    "accepted_go_CheckB4a": "positive PASS with separately held original bytes",
+    "negative_held_owner_key": "number:40 rejected as B4a completed WRITE payload correspondence",
+    "negative_held_query_original": "substituted bytes rejected as B4a QUERY original or SOURCE predecessor"
+  },
+  "limitations": [
+    "private synthetic correspondence candidate pending independent exact-byte review",
+    "POLICY and SCHEMA predecessors are private context labels, not issued selectors",
+    "CAPABILITY_EVENTS predecessor is private reviewed M2A artifact and selector, not execution",
+    "WRITE4 corrected UNKNOWN is a prediction, not a B4b result",
+    "no other seven B4a transactions, full B4b, C/D, admission, production custody, or public authority"
+  ]
+}

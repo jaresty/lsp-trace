@@ -1,0 +1,38 @@
+=== RUN   TestB4bFullCandidatePinnedMatrix
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE4
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/missing-held-selector
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/invalid-after-match
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/wrong-known-type
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/invalid-notebook-known-type
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/ordinary-notebook-only
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/path-dependent-positive
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/proven-scheme-mismatch
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/language-only
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/unknown-extension-retained
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE8
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE10
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE12
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE14
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26
+--- PASS: TestB4bFullCandidatePinnedMatrix (0.87s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE4 (0.09s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6 (0.28s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/missing-held-selector (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/invalid-after-match (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/wrong-known-type (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/invalid-notebook-known-type (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/ordinary-notebook-only (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/path-dependent-positive (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/proven-scheme-mismatch (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/language-only (0.02s)
+        --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6/unknown-extension-retained (0.02s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE8 (0.08s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE10 (0.09s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE12 (0.08s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE14 (0.08s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20 (0.08s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26 (0.08s)
+PASS
+ok  	lsp-trace/internal/adr0011genericv5proposal	1.210s

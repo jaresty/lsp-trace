@@ -1,0 +1,81 @@
+{
+  "status": "PREDICTED_NOT_OBSERVED",
+  "oracle_role": "independently authored M1 expectation, not claimant derivation",
+  "precedence_pin": "sha256:7860465c602b84ba150b17eb481f22af5d18247c3a2c667d77570ad040054e07",
+  "active_state_semantics": "before_active and after_active contain only verified effective active registration_id/method pairs at the target write; an acknowledged registration carrying an invalid known selector is recorded separately and does not establish verified active support",
+  "transitions": [
+    {
+      "scenario": "CORE",
+      "write_ordinal": 4,
+      "predicted": "UNKNOWN",
+      "causal_predecessor_ordinals": [0, 1, 2, 3],
+      "before_active": [],
+      "after_active": [],
+      "explanation": "pending registration has not activated"
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 6,
+      "predicted": "SUPPORTED",
+      "causal_predecessor_ordinals": [3, 5],
+      "before_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "after_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "explanation": "matching registration response activates exact pair"
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 8,
+      "predicted": "SUPPORTED",
+      "causal_predecessor_ordinals": [5, 7],
+      "before_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "after_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "explanation": "pending unregister preserves active pair"
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 10,
+      "predicted": "SUPPORTED",
+      "causal_predecessor_ordinals": [7, 9],
+      "before_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "after_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "explanation": "error response changes no active state"
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 12,
+      "predicted": "SUPPORTED",
+      "causal_predecessor_ordinals": [9, 11],
+      "before_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "after_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "explanation": "pending unregister preserves active pair"
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 14,
+      "predicted": "UNSUPPORTED",
+      "causal_predecessor_ordinals": [11, 13],
+      "before_active": [],
+      "after_active": [],
+      "explanation": "matching string-ID acknowledgement removes pair"
+    },
+    {
+      "scenario": "STATIC_VALID_CONFLICT",
+      "write_ordinal": 20,
+      "predicted": "INVALID_CHRONOLOGY",
+      "causal_predecessor_ordinals": [15, 16, 17, 18, 19],
+      "before_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "after_active": [{"registration_id": "reg-1", "method": "textDocument/references"}],
+      "explanation": "valid static and dynamic same-method support conflict"
+    },
+    {
+      "scenario": "STATIC_MALFORMED_PRECEDENCE",
+      "write_ordinal": 26,
+      "predicted": "MALFORMED",
+      "causal_predecessor_ordinals": [21, 22, 23, 24, 25],
+      "before_active": [],
+      "after_active": [],
+      "acknowledged_invalid": [{"registration_id": "reg-1", "method": "textDocument/references", "known_selector_scheme": "1bad"}],
+      "explanation": "known-invalid selector scheme 1bad takes precedence over static/dynamic conflict; matching acknowledgement records the invalid registration but cannot establish verified effective active support"
+    }
+  ]
+}

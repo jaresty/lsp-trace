@@ -1,0 +1,39 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "definition-private-session",
+    "transaction": "definition-static_malformed_precedence-write-26"
+  },
+  "original": {
+    "length": 504,
+    "private_ref": "held:STATIC_MALFORMED_PRECEDENCE/WRITE26/query.original",
+    "sha256": "sha256:f9184ef5b9b8cbc258f26bcb583d267b181c044e34bb7d82968b236ee3e0771d"
+  },
+  "payload": {
+    "character": 5,
+    "encoding": "utf-16",
+    "line": 1,
+    "method": "textDocument/definition",
+    "source": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+    "uri": "file:///w/definition.go",
+    "version": "buffer:v1"
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
+      "role": "POLICY",
+      "selector": "private-context:definition-policy-v5"
+    },
+    {
+      "digest": "sha256:df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3",
+      "role": "SCHEMA",
+      "selector": "private-context:envelope-v4"
+    },
+    {
+      "digest": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+      "role": "SOURCE",
+      "selector": "sha256:6a58c5213243f8e339231d40a4a0fa797c3a97609e1ada98ada622a6a44a4f72"
+    }
+  ],
+  "role": "QUERY"
+}

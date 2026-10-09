@@ -1,0 +1,50 @@
+{
+  "role": "REQUEST_WRITE",
+  "identity": {
+    "session": "s",
+    "generation": 1,
+    "transaction": "tx"
+  },
+  "original": {
+    "length": 207,
+    "sha256": "sha256:acdb0346ecb1889439836d05fc8e6c20dc9d69ebbe0f494a975a21da8f41a12e",
+    "private_ref": "held:05-references-write.frame"
+  },
+  "predecessors": [
+    {
+      "role": "QUERY",
+      "selector": "sha256:454af84d8ca113aae78cb7f0b36f5797d30509462f62405322957b7a6115db43",
+      "digest": "sha256:b91bec39ad766bf2e8dfc7cf38cd93683c79ed82ec696b10b9268a036300845c"
+    },
+    {
+      "role": "QUERY_APPLICABILITY",
+      "selector": "sha256:609f43139372b97f86a94cd0ed2d32c7ab9a52c039f02a8c10fd228b971af72f",
+      "digest": "sha256:60a571041dac82ca4952cfc6863af6e9ea380c16b27c2e69848b18b7c14cd8b8"
+    },
+    {
+      "role": "CAPABILITY_EVENTS",
+      "selector": "sha256:f2ec8a0082b9c409ef6c1d4efc12cfc3a5e53b0a2a627b1d29803dfa5f38b21f",
+      "digest": "sha256:d0d36273d838e9546ff8ceb9cef05d3549f3b4385892fa8b28ffd0ecdaaa951c"
+    },
+    {
+      "role": "POLICY",
+      "selector": "private-context:references-policy-v5",
+      "digest": "sha256:7c46893fecf0dda7a4942b8f33d92f0c2f49793d003c7eab4e8995aeddf8da36"
+    }
+  ],
+  "payload": {
+    "params": {
+      "length": 115,
+      "sha256": "sha256:cc218fae12bc05a595cdee533a29db7ff271a40d5842681946d7123aa22ad152",
+      "private_ref": "held:05-references-write.frame#params-raw"
+    },
+    "frame": {
+      "length": 207,
+      "sha256": "sha256:acdb0346ecb1889439836d05fc8e6c20dc9d69ebbe0f494a975a21da8f41a12e",
+      "private_ref": "held:05-references-write.frame"
+    },
+    "actual_key": "key-1",
+    "completed": true,
+    "completed_frame_ordinal": 5
+  }
+}

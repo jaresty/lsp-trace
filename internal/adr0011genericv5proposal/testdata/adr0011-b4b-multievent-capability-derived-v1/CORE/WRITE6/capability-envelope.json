@@ -1,0 +1,240 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "m1-private-session",
+    "transaction": "core-write-6"
+  },
+  "original": {
+    "length": 3323,
+    "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-capability-derived-v1/CORE/WRITE6/capability-artifact.bin",
+    "sha256": "sha256:6ca36b790277baaa5eba4d6b2bea439183a5b56adbdc18494872a31a783688ba"
+  },
+  "payload": {
+    "events": [
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 209,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/03-registration_request.frame",
+          "sha256": "sha256:fb902a3fe0804127b305745e079214c23483d11277141d32521869e9f017d2a5"
+        },
+        "request_frame_ordinal": 3,
+        "request_id": "r",
+        "request_method": "client/registerCapability",
+        "request_params": {
+          "registrations": [
+            {
+              "id": "reg-1",
+              "method": "textDocument/references",
+              "registerOptions": {
+                "documentSelector": null
+              }
+            }
+          ]
+        },
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_error": null,
+        "response_frame": {
+          "length": 62,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/05-registration_response.frame",
+          "sha256": "sha256:d9837db167818799d86feb8cba9a998322ae9cc2f97d83bfade94f02e3b47fd9"
+        },
+        "response_frame_ordinal": 5,
+        "response_id": "r",
+        "response_result": null,
+        "response_status": "SUCCESS",
+        "target_write_frame_ordinal": 6
+      },
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 168,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/07-unregistration_request.frame",
+          "sha256": "sha256:fdde9c83b78319bfcdd565764196dee2308e7b0e6f01d2f9512325dd9237c80f"
+        },
+        "request_frame_ordinal": 7,
+        "request_id": 2,
+        "request_method": "client/unregisterCapability",
+        "request_params": {
+          "unregisterations": [
+            {
+              "id": "reg-1",
+              "method": "textDocument/references"
+            }
+          ]
+        },
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_error": {
+          "code": -32000,
+          "message": "cannot unregister"
+        },
+        "response_frame": {
+          "length": 100,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/09-unregistration_error.frame",
+          "sha256": "sha256:0054d0284c5f4874ae25b0997dc07ca75e3a55c475325f001aed0d1ecd4b9404"
+        },
+        "response_frame_ordinal": 9,
+        "response_id": 2,
+        "response_result": null,
+        "response_status": "ERROR",
+        "target_write_frame_ordinal": 6
+      },
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 170,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/11-unregistration_request.frame",
+          "sha256": "sha256:c59a01a7b0e6003b99007dee7fbada5d2cda5a19e80040d650acb7c34517499e"
+        },
+        "request_frame_ordinal": 11,
+        "request_id": "2",
+        "request_method": "client/unregisterCapability",
+        "request_params": {
+          "unregisterations": [
+            {
+              "id": "reg-1",
+              "method": "textDocument/references"
+            }
+          ]
+        },
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_error": null,
+        "response_frame": {
+          "length": 62,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/13-unregistration_response.frame",
+          "sha256": "sha256:144bb39911699bb4db562ac3be03f7a9af290bf0108217100580cdb30df02ba9"
+        },
+        "response_frame_ordinal": 13,
+        "response_id": "2",
+        "response_result": null,
+        "response_status": "SUCCESS",
+        "target_write_frame_ordinal": 6
+      }
+    ],
+    "initialize": {
+      "request_direction": "CLIENT_TO_SERVER",
+      "request_frame": {
+        "length": 137,
+        "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/00-initialize_request.frame",
+        "sha256": "sha256:5ee617aa7efa8cb1ad34e6d170be201f02f612681b4b7973fea53d5fefb3493f"
+      },
+      "request_frame_ordinal": 0,
+      "request_id": 1,
+      "request_method": "initialize",
+      "request_params": {
+        "capabilities": {},
+        "processId": null,
+        "rootUri": "file:///w"
+      },
+      "response_direction": "SERVER_TO_CLIENT",
+      "response_error": null,
+      "response_frame": {
+        "length": 75,
+        "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/01-initialize_response.frame",
+        "sha256": "sha256:7ac854e3d04180081bede182be1f7aae87451541bcbe6c7dbb758643806e0730"
+      },
+      "response_frame_ordinal": 1,
+      "response_id": 1,
+      "response_result": {
+        "capabilities": {}
+      },
+      "response_status": "SUCCESS",
+      "target_write_frame_ordinal": 6
+    },
+    "initialized_notification": {
+      "direction": "CLIENT_TO_SERVER",
+      "frame": {
+        "length": 74,
+        "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/02-initialized_notification.frame",
+        "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62"
+      },
+      "frame_ordinal": 2
+    },
+    "observed_frames": [
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 137,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/00-initialize_request.frame",
+          "sha256": "sha256:5ee617aa7efa8cb1ad34e6d170be201f02f612681b4b7973fea53d5fefb3493f"
+        },
+        "frame_ordinal": 0
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 75,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/01-initialize_response.frame",
+          "sha256": "sha256:7ac854e3d04180081bede182be1f7aae87451541bcbe6c7dbb758643806e0730"
+        },
+        "frame_ordinal": 1
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 74,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/02-initialized_notification.frame",
+          "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62"
+        },
+        "frame_ordinal": 2
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 209,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/03-registration_request.frame",
+          "sha256": "sha256:fb902a3fe0804127b305745e079214c23483d11277141d32521869e9f017d2a5"
+        },
+        "frame_ordinal": 3
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 62,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/05-registration_response.frame",
+          "sha256": "sha256:d9837db167818799d86feb8cba9a998322ae9cc2f97d83bfade94f02e3b47fd9"
+        },
+        "frame_ordinal": 5
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 168,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/07-unregistration_request.frame",
+          "sha256": "sha256:fdde9c83b78319bfcdd565764196dee2308e7b0e6f01d2f9512325dd9237c80f"
+        },
+        "frame_ordinal": 7
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 100,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/09-unregistration_error.frame",
+          "sha256": "sha256:0054d0284c5f4874ae25b0997dc07ca75e3a55c475325f001aed0d1ecd4b9404"
+        },
+        "frame_ordinal": 9
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 170,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/11-unregistration_request.frame",
+          "sha256": "sha256:c59a01a7b0e6003b99007dee7fbada5d2cda5a19e80040d650acb7c34517499e"
+        },
+        "frame_ordinal": 11
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 62,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-b4b-multievent-held-originals-v1/CORE/13-unregistration_response.frame",
+          "sha256": "sha256:144bb39911699bb4db562ac3be03f7a9af290bf0108217100580cdb30df02ba9"
+        },
+        "frame_ordinal": 13
+      }
+    ],
+    "target_write_frame_ordinal": 6
+  },
+  "predecessors": [],
+  "role": "CAPABILITY_EVENTS"
+}

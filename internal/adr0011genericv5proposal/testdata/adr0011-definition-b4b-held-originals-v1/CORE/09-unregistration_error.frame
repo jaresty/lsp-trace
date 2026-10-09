@@ -1,0 +1,3 @@
+Content-Length: 90
+
+{"error":{"code":-32000,"message":"synthetic unregister refusal"},"id":20,"jsonrpc":"2.0"}
