@@ -169,10 +169,17 @@ func appendCalls(out *TypedInput, admission CompositeProjectionAdmission, seen m
 	return nil
 }
 
-func DirectedWalkCandidates(in TypedInput) ([]MethodCandidate, error) {
+func validateTypedInputIntegrity(in TypedInput) error {
 	expected := typedInputSeal(in)
 	if isZeroSeal(in.integrity.seal) || subtle.ConstantTimeCompare(in.integrity.seal[:], expected[:]) != 1 {
-		return nil, typedInputIntegrityError{}
+		return typedInputIntegrityError{}
+	}
+	return nil
+}
+
+func DirectedWalkCandidates(in TypedInput) ([]MethodCandidate, error) {
+	if err := validateTypedInputIntegrity(in); err != nil {
+		return nil, err
 	}
 	out := make([]MethodCandidate, len(in.Occurrences))
 	for i, occurrence := range in.Occurrences {
