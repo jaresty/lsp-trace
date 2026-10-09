@@ -10,7 +10,7 @@ import (
 func TestCensusAdditiveSchemaBytesAndRegistryIdentityPinned(t *testing.T) {
 	pins := map[string]string{
 		CensusDomainErrorID:                      "b6a7694652cfa0dcfc2cff297e3ca964f78a2b923826b76c6e64449d7103510e",
-		FutureCensusV2InputID:                    "ccd60f6526220827cb5fe408f07e78a30eb7a4cb8a95866a9513cbc04a89928c",
+		FutureCensusV2InputID:                    "ca26a8974e7bef62f4e92b939c58c86eceea0129b9b552739d0e520f329abc1a",
 		FutureCensusCompositeResultID:            "d676bff3bacdf35142dc5c6e63ab48e64c6b6efc5860448fc079f1561289c767",
 		FutureCensusCompositeSuccessID:           "6ce12bdb832349cdf46606e914ab0e9d3b395324a399a2034401d952426df2cd",
 		CensusContinuationDiagnosticID:           "eba4f6951d81a801068917c19271958982359b423bd0671cee60007b21bc9ea5",

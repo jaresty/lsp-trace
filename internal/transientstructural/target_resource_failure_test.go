@@ -344,7 +344,9 @@ func TestTargetResourceFailureByteBudget(t *testing.T) {
 	_, failure := Execute(ctx, manager, targetResourceRequest(started.Generation, uri, 8, 1))
 	assertPoisonedResourceWireBeforeClassification(t, ctx, manager, started, child)
 	assertTargetFailure(t, failure, TargetActionFailDocument)
-	_, notices, _, _, responseAttempted, responseWritten := child.snapshot()
+	notices, _, _, responseAttempted, responseWritten := waitTargetWireSnapshot(t, child, func(notices, _, _ int, responseAttempted, responseWritten bool) bool {
+		return notices == 0 && responseAttempted && responseWritten
+	})
 	if notices != 0 || !responseAttempted || !responseWritten {
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_BYTE_WIRE_SHAPE: notices=%d responseAttempted=%t responseWritten=%t", notices, responseAttempted, responseWritten)
 	}

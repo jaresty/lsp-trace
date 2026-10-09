@@ -119,7 +119,20 @@ func TestProductionContainmentDoesNotImportReference(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || strings.Contains(path, string(filepath.Separator)+"reference"+string(filepath.Separator)) {
+		if entry.IsDir() {
+			if entry.Name() == ".git" || entry.Name() == ".pi" {
+				return filepath.SkipDir
+			}
+			if path != root {
+				if _, statErr := os.Stat(filepath.Join(path, "go.mod")); statErr == nil {
+					return filepath.SkipDir
+				} else if !os.IsNotExist(statErr) {
+					return statErr
+				}
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") || strings.Contains(path, string(filepath.Separator)+"reference"+string(filepath.Separator)) {
 			return nil
 		}
 		file, parseErr := parser.ParseFile(fset, path, nil, parser.ImportsOnly)

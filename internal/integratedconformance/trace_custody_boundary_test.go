@@ -79,9 +79,17 @@ func authorityCallViolations(root string) ([]string, error) {
 			return err
 		}
 		if entry.IsDir() {
-			// Evidence copies and agent configuration are not production source, at any depth.
+			// Evidence copies, agent configuration, and nested modules are not
+			// production source in the repository's root module.
 			if entry.Name() == ".git" || entry.Name() == ".pi" {
 				return filepath.SkipDir
+			}
+			if path != root {
+				if _, statErr := os.Stat(filepath.Join(path, "go.mod")); statErr == nil {
+					return filepath.SkipDir
+				} else if !os.IsNotExist(statErr) {
+					return statErr
+				}
 			}
 			return nil
 		}
