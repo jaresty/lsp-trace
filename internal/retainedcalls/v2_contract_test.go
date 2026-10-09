@@ -152,47 +152,105 @@ func TestRetainedV2EveryRowDeletion(t *testing.T) {
 	input, _ := fixtureV2(t, acquisition.Slice, "")
 	e := readExportV2(t, input)
 	probes := map[string]int{"bindings": len(e.Tables.Bindings), "captures": len(e.Tables.Captures), "groups": len(e.Tables.Groups), "occurrences": len(e.Tables.Occurrences), "fields": len(e.Tables.NativeFields), "memberships": len(e.Tables.Memberships), "targets": len(e.Tables.Acquisition.Targets), "requests": len(e.Tables.Acquisition.Requests), "observations": len(e.Tables.Acquisition.EdgeObservations), "connections": len(e.Tables.Connections), "endpoints": len(e.Tables.Endpoints)}
-	for name, n := range probes {
-		for i := 0; i < n; i++ {
-			t.Run(name+"/"+stringID(i), func(t *testing.T) {
-				bad := e
-				bad.Tables = cloneTablesV2(t, e.Tables)
-				x := &bad.Tables
-				switch name {
-				case "bindings":
-					x.Bindings = append(x.Bindings[:i], x.Bindings[i+1:]...)
-				case "captures":
-					x.Captures = append(x.Captures[:i], x.Captures[i+1:]...)
-				case "groups":
-					x.Groups = append(x.Groups[:i], x.Groups[i+1:]...)
-				case "occurrences":
-					x.Occurrences = append(x.Occurrences[:i], x.Occurrences[i+1:]...)
-				case "fields":
-					x.NativeFields = append(x.NativeFields[:i], x.NativeFields[i+1:]...)
-				case "memberships":
-					x.Memberships = append(x.Memberships[:i], x.Memberships[i+1:]...)
-				case "targets":
-					x.Acquisition.Targets = append(x.Acquisition.Targets[:i], x.Acquisition.Targets[i+1:]...)
-				case "requests":
-					x.Acquisition.Requests = append(x.Acquisition.Requests[:i], x.Acquisition.Requests[i+1:]...)
-				case "observations":
-					x.Acquisition.EdgeObservations = append(x.Acquisition.EdgeObservations[:i], x.Acquisition.EdgeObservations[i+1:]...)
-				case "connections":
-					x.Connections = append(x.Connections[:i], x.Connections[i+1:]...)
-				case "endpoints":
-					x.Endpoints = append(x.Endpoints[:i], x.Endpoints[i+1:]...)
-				}
-				// All outer public commitments are recomputed, not relied upon as authority.
-				bad.InputDigest = digest(VersionV2+":input", bad.InputBytes)
-				raw, _ := json.Marshal(bad)
-				if _, err := ValidateFor(raw, Family, "v2"); err == nil {
-					t.Fatal("ASSERT_REHASHED_ROW_DELETION", name, i)
-				}
-				if _, err := ReconstructV2(bad.Tables); err == nil {
-					t.Fatal("ASSERT_TABLE_JOIN_DELETION", name, i)
-				}
-			})
+	type deletionCase struct {
+		name string
+		row  int
+	}
+	const expectedDeletionCases = 486
+	expectedProbes := map[string]int{
+		"bindings":     410,
+		"captures":     4,
+		"connections":  4,
+		"endpoints":    4,
+		"fields":       19,
+		"groups":       2,
+		"memberships":  20,
+		"observations": 4,
+		"occurrences":  4,
+		"requests":     11,
+		"targets":      4,
+	}
+	if len(probes) != len(expectedProbes) {
+		t.Fatalf("ASSERT_EVERY_ROW_DELETION_CATEGORIES: got %d want %d", len(probes), len(expectedProbes))
+	}
+	expectedCases := 0
+	for name, expected := range expectedProbes {
+		actual, ok := probes[name]
+		if !ok {
+			t.Fatal("ASSERT_EVERY_ROW_DELETION_CATEGORY_MISSING", name)
 		}
+		if actual != expected {
+			t.Fatalf("ASSERT_EVERY_ROW_DELETION_CATEGORY_COUNT: %s got %d want %d", name, actual, expected)
+		}
+		expectedCases += expected
+	}
+	if expectedCases != expectedDeletionCases {
+		t.Fatalf("ASSERT_EVERY_ROW_DELETION_MANIFEST_TOTAL: got %d want %d", expectedCases, expectedDeletionCases)
+	}
+
+	var cases []deletionCase
+	for name, n := range probes {
+		if _, ok := expectedProbes[name]; !ok {
+			t.Fatal("ASSERT_EVERY_ROW_DELETION_CATEGORY_EXTRA", name)
+		}
+		for i := 0; i < n; i++ {
+			cases = append(cases, deletionCase{name: name, row: i})
+		}
+	}
+	if len(cases) != expectedDeletionCases {
+		t.Fatalf("ASSERT_EVERY_ROW_DELETION_CASE_COUNT: got %d want %d", len(cases), expectedDeletionCases)
+	}
+
+	const maxParallelDeletionCases = 4
+	parallel := make(chan struct{}, maxParallelDeletionCases)
+	originalTables := canonical(e.Tables)
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name+"/"+stringID(tc.row), func(t *testing.T) {
+			t.Parallel()
+			parallel <- struct{}{}
+			defer func() { <-parallel }()
+
+			bad := e
+			bad.Tables = cloneTablesV2(t, e.Tables)
+			x := &bad.Tables
+			switch tc.name {
+			case "bindings":
+				x.Bindings = append(x.Bindings[:tc.row], x.Bindings[tc.row+1:]...)
+			case "captures":
+				x.Captures = append(x.Captures[:tc.row], x.Captures[tc.row+1:]...)
+			case "groups":
+				x.Groups = append(x.Groups[:tc.row], x.Groups[tc.row+1:]...)
+			case "occurrences":
+				x.Occurrences = append(x.Occurrences[:tc.row], x.Occurrences[tc.row+1:]...)
+			case "fields":
+				x.NativeFields = append(x.NativeFields[:tc.row], x.NativeFields[tc.row+1:]...)
+			case "memberships":
+				x.Memberships = append(x.Memberships[:tc.row], x.Memberships[tc.row+1:]...)
+			case "targets":
+				x.Acquisition.Targets = append(x.Acquisition.Targets[:tc.row], x.Acquisition.Targets[tc.row+1:]...)
+			case "requests":
+				x.Acquisition.Requests = append(x.Acquisition.Requests[:tc.row], x.Acquisition.Requests[tc.row+1:]...)
+			case "observations":
+				x.Acquisition.EdgeObservations = append(x.Acquisition.EdgeObservations[:tc.row], x.Acquisition.EdgeObservations[tc.row+1:]...)
+			case "connections":
+				x.Connections = append(x.Connections[:tc.row], x.Connections[tc.row+1:]...)
+			case "endpoints":
+				x.Endpoints = append(x.Endpoints[:tc.row], x.Endpoints[tc.row+1:]...)
+			}
+			if !bytes.Equal(originalTables, canonical(e.Tables)) {
+				t.Fatal("ASSERT_EVERY_ROW_DELETION_INDEPENDENT_CLONE", tc.name, tc.row)
+			}
+			// All outer public commitments are recomputed, not relied upon as authority.
+			bad.InputDigest = digest(VersionV2+":input", bad.InputBytes)
+			raw, _ := json.Marshal(bad)
+			if _, err := ValidateFor(raw, Family, "v2"); err == nil {
+				t.Fatal("ASSERT_REHASHED_ROW_DELETION", tc.name, tc.row)
+			}
+			if _, err := ReconstructV2(bad.Tables); err == nil {
+				t.Fatal("ASSERT_TABLE_JOIN_DELETION", tc.name, tc.row)
+			}
+		})
 	}
 }
 func stringID(i int) string { raw, _ := json.Marshal(i); return string(raw) }
