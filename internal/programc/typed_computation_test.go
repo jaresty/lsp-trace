@@ -1,27 +1,42 @@
 package programc
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 
 	"lsp-trace/internal/programcadmission"
 )
 
-func TestComputeTypedCarrierCallsEqualsHistoricalForTwoSeeds(t *testing.T) {
+func TestComputeTypedCarrierCallsEqualsHistoricalBytesForTwoSeedsWithoutMutation(t *testing.T) {
 	fixture := typedComputeFixture(t, false)
+	sourceBytes := append([]byte(nil), fixture.calls.Bytes...)
 	for _, seed := range []uint64{19, 23} {
 		t.Run(fmt.Sprintf("seed-%d", seed), func(t *testing.T) {
-			want, failure := ComputeComposite(fixture.calls.Admission, seed)
+			before, failure := ComputeComposite(fixture.calls.Admission, seed)
 			if failure != nil {
 				t.Fatal(failure)
 			}
+			beforeBytes := marshalExactOutcomeJSON(t, before)
+
 			got, failure := ComputeTyped(fixture.callsOnly, seed)
 			if failure != nil {
 				t.Fatal(failure)
 			}
-			if !reflect.DeepEqual(got.Outcome(), want) {
-				t.Fatalf("ASSERT_TYPED_COMPUTATION_CALLS_FULL_HISTORICAL_EQUAL seed=%d got=%#v want=%#v", seed, got.Outcome(), want)
+			gotBytes := marshalExactOutcomeJSON(t, got.Outcome())
+			after, failure := ComputeComposite(fixture.calls.Admission, seed)
+			if failure != nil {
+				t.Fatal(failure)
+			}
+			afterBytes := marshalExactOutcomeJSON(t, after)
+			if !bytes.Equal(gotBytes, beforeBytes) || !bytes.Equal(afterBytes, beforeBytes) {
+				t.Fatalf("ASSERT_TYPED_COMPUTATION_CALLS_EXACT_HISTORICAL_BYTES seed=%d got=%s before=%s after=%s", seed, gotBytes, beforeBytes, afterBytes)
+			}
+			if !bytes.Equal(fixture.calls.Bytes, sourceBytes) {
+				t.Fatal("ASSERT_TYPED_COMPUTATION_CALLS_SOURCE_BYTES_UNCHANGED")
 			}
 			if !reflect.DeepEqual(got.Occurrences(), fixture.callsOnly.Occurrences) || !reflect.DeepEqual(got.SelectedKinds(), []programcadmission.RelationKind{programcadmission.TypedCalls}) || len(got.MethodEvidence()) != 0 || len(got.MethodCommitment()) != 0 {
 				t.Fatalf("ASSERT_TYPED_COMPUTATION_CALLS_EXACT_SOURCE gotOccurrences=%#v gotKinds=%#v gotMethods=%#v commitment=%x", got.Occurrences(), got.SelectedKinds(), got.MethodEvidence(), got.MethodCommitment())
@@ -30,41 +45,142 @@ func TestComputeTypedCarrierCallsEqualsHistoricalForTwoSeeds(t *testing.T) {
 	}
 }
 
-func TestComputeTypedCarrierParallelMethodsRetainOneToOneEvidenceAndPairMultiplicity(t *testing.T) {
-	fixture := typedComputeFixture(t, false)
-	computed, failure := ComputeTyped(fixture.referencesOnly, 31)
-	if failure != nil {
-		t.Fatal(failure)
+func marshalExactOutcomeJSON(t *testing.T, outcome Outcome) []byte {
+	t.Helper()
+	type pairWeight struct {
+		Pair   Pair
+		Weight float64
 	}
-	occurrences, methods := computed.Occurrences(), computed.MethodEvidence()
-	if len(occurrences) != len(methods) || len(methods) < 3 {
-		t.Fatalf("ASSERT_TYPED_CARRIER_PARALLEL_ONE_TO_ONE_COUNTS occurrences=%d methods=%d", len(occurrences), len(methods))
+	pairWeights := make([]pairWeight, 0, len(outcome.Projection.PairWeights))
+	for pair, weight := range outcome.Projection.PairWeights {
+		pairWeights = append(pairWeights, pairWeight{Pair: pair, Weight: weight})
 	}
-	byIdentity := make(map[string]programcadmission.MethodOccurrenceEvidence, len(methods))
-	for _, method := range methods {
-		byIdentity[method.Identity] = method
-	}
-	for _, occurrence := range occurrences {
-		method, ok := byIdentity[occurrence.Identity]
-		if !ok || method.Kind != occurrence.Kind || method.From != occurrence.From || method.To != occurrence.To || method.Ordinal != occurrence.Ordinal {
-			t.Fatalf("ASSERT_TYPED_CARRIER_PARALLEL_EXACT_MAPPING occurrence=%+v method=%+v ok=%t", occurrence, method, ok)
+	sort.Slice(pairWeights, func(i, j int) bool {
+		if pairWeights[i].Pair.From != pairWeights[j].Pair.From {
+			return pairWeights[i].Pair.From < pairWeights[j].Pair.From
 		}
+		return pairWeights[i].Pair.To < pairWeights[j].Pair.To
+	})
+	type projectionJSON struct {
+		NodeIdentities  []string
+		NodeIDs         map[string]int64
+		Occurrences     []Occurrence
+		PairWeights     []pairWeight
+		Source          SourceBinding
+		CompositeSource programcadmission.CompositeSourceBinding
 	}
-	for pair, want := range fixture.referencesOnly.PairWeights {
-		if got := computed.PairWeights()[pair]; got != want {
-			t.Fatalf("ASSERT_TYPED_CARRIER_PARALLEL_PAIR_MULTIPLICITY pair=%+v got=%d want=%d", pair, got, want)
-		}
+	type outcomeJSON struct {
+		Outcome, ProfileID, ProfileDigest, Algorithm, LogicalDigest, ClaimCeiling string
+		Resolution                                                                float64
+		Seed                                                                      uint64
+		Communities                                                               []Community
+		Projection                                                                projectionJSON
+		Source                                                                    SourceBinding
+		CompositeSource                                                           programcadmission.CompositeSourceBinding
 	}
-	assertTypedCarrierDefensiveCopies(t, computed)
+	raw, err := json.Marshal(outcomeJSON{
+		Outcome:         outcome.Outcome,
+		ProfileID:       outcome.ProfileID,
+		ProfileDigest:   outcome.ProfileDigest,
+		Algorithm:       outcome.Algorithm,
+		LogicalDigest:   outcome.LogicalDigest,
+		ClaimCeiling:    outcome.ClaimCeiling,
+		Resolution:      outcome.Resolution,
+		Seed:            outcome.Seed,
+		Communities:     outcome.Communities,
+		Projection:      projectionJSON{outcome.Projection.NodeIdentities, outcome.Projection.NodeIDs, outcome.Projection.Occurrences, pairWeights, outcome.Projection.Source, outcome.Projection.CompositeSource},
+		Source:          outcome.Source,
+		CompositeSource: outcome.CompositeSource,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
-func TestRecomputeTypedUsesRetainedSourceAndSeedInsteadOfCachedOutcome(t *testing.T) {
+func TestComputeTypedTamperedMethodsAndMixedFailIntegrityBeforeGroupingPolicy(t *testing.T) {
 	fixture := typedComputeFixture(t, false)
-	computed, failure := ComputeTyped(fixture.mixed, 41)
+	methodsTampered := cloneTypedInputPublic(fixture.referencesOnly)
+	methodsTampered.Occurrences[0].Identity = "tampered-public-occurrence"
+	mixedTampered := cloneTypedInputPublic(fixture.mixed)
+	for pair := range mixedTampered.PairWeights {
+		mixedTampered.PairWeights[pair]++
+		break
+	}
+	for _, tc := range []struct {
+		name  string
+		input programcadmission.TypedInput
+	}{
+		{name: "methods-only-public-occurrence", input: methodsTampered},
+		{name: "mixed-public-pair", input: mixedTampered},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, failure := ComputeTyped(tc.input, 31)
+			if failure == nil || failure.Code != codeTypedInputIntegrity || failure.Message != "TYPED_INPUT_INTEGRITY" || !reflect.DeepEqual(got, TypedComputation{}) {
+				t.Fatalf("ASSERT_TYPED_INPUT_INTEGRITY_PRECEDES_GROUPING_POLICY got=%#v failure=%+v", got, failure)
+			}
+		})
+	}
+}
+
+func TestComputeTypedGroupingPolicyGatePrecedesKernelAndCallsDelegatesOnce(t *testing.T) {
+	fixture := typedComputeFixture(t, false)
+	for _, tc := range []struct {
+		name  string
+		input programcadmission.TypedInput
+	}{
+		{name: "methods-only", input: fixture.referencesOnly},
+		{name: "mixed", input: fixture.mixed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			got, failure := computeTypedWithKernel(tc.input, 29, func(typedProjectionInput, typedSelection, uint64) (Outcome, *Failure) {
+				calls++
+				panic("typed kernel invoked before grouping policy qualification")
+			})
+			if calls != 0 || failure == nil || failure.Code != FailureCode("GROUPING_POLICY_UNQUALIFIED") || failure.Message != "grouping policy unqualified" || !reflect.DeepEqual(got, TypedComputation{}) {
+				t.Fatalf("ASSERT_GROUPING_POLICY_GATE_PRECEDES_TYPED_KERNEL calls=%d got=%#v failure=%+v", calls, got, failure)
+			}
+		})
+	}
+
+	calls := 0
+	got, failure := computeTypedWithKernel(fixture.callsOnly, 29, func(in typedProjectionInput, selection typedSelection, seed uint64) (Outcome, *Failure) {
+		calls++
+		return computeTypedProjection(in, selection, seed)
+	})
+	want, wantFailure := computeTypedProjection(mustPrepareTypedProjection(t, fixture.callsOnly), callsOnly, 29)
+	if calls != 1 || failure != nil || wantFailure != nil || !reflect.DeepEqual(got.Outcome(), want) {
+		t.Fatalf("ASSERT_TYPED_CALLS_DELEGATES_KERNEL_EXACTLY_ONCE calls=%d gotFailure=%+v wantFailure=%+v", calls, failure, wantFailure)
+	}
+}
+
+func TestComputeTypedValidMethodsAndMixedFailGroupingPolicyAtomically(t *testing.T) {
+	fixture := typedComputeFixture(t, false)
+	for _, tc := range []struct {
+		name  string
+		input programcadmission.TypedInput
+	}{
+		{name: "references-only", input: fixture.referencesOnly},
+		{name: "definitions-only", input: fixture.definitionsOnly},
+		{name: "mixed", input: fixture.mixed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, failure := ComputeTyped(tc.input, 31)
+			if failure == nil || failure.Code != FailureCode("GROUPING_POLICY_UNQUALIFIED") || failure.Message != "grouping policy unqualified" || !reflect.DeepEqual(got, TypedComputation{}) {
+				t.Fatalf("ASSERT_TYPED_GROUPING_POLICY_UNQUALIFIED_ATOMIC_ZERO got=%#v failure=%+v", got, failure)
+			}
+		})
+	}
+}
+
+func TestRecomputeTypedUsesRetainedCallsSourceAndSeedInsteadOfCachedOutcome(t *testing.T) {
+	fixture := typedComputeFixture(t, false)
+	computed, failure := ComputeTyped(fixture.callsOnly, 41)
 	if failure != nil {
 		t.Fatal(failure)
 	}
-	want, failure := computeTypedProjection(mustPrepareTypedProjection(t, fixture.mixed), mixed, 41)
+	want, failure := computeTypedProjection(mustPrepareTypedProjection(t, fixture.callsOnly), callsOnly, 41)
 	if failure != nil {
 		t.Fatal(failure)
 	}
@@ -88,7 +204,7 @@ func TestRecomputeTypedUsesRetainedSourceAndSeedInsteadOfCachedOutcome(t *testin
 
 func TestTypedComputationIndependentTamperingHasExactIntegrityFailureAndAtomicZero(t *testing.T) {
 	fixture := typedComputeFixture(t, false)
-	base, failure := ComputeTyped(fixture.mixed, 43)
+	base, failure := ComputeTyped(fixture.callsOnly, 43)
 	if failure != nil {
 		t.Fatal(failure)
 	}
@@ -96,8 +212,6 @@ func TestTypedComputationIndependentTamperingHasExactIntegrityFailureAndAtomicZe
 		name   string
 		mutate func(*TypedComputation)
 	}{
-		{"method commitment", func(in *TypedComputation) { in.methodCommitment[0] ^= 0xff }},
-		{"method evidence", func(in *TypedComputation) { in.methodEvidence[0].EvidenceDigest = "sha256:" + repeatCharacter("f", 64) }},
 		{"seed", func(in *TypedComputation) { in.seed++ }},
 		{"kinds", func(in *TypedComputation) { in.selectedKinds[0] = programcadmission.TypedReferencesSymbol }},
 		{"occurrences", func(in *TypedComputation) { in.occurrences[0].Identity = "tampered-occurrence" }},
@@ -125,9 +239,47 @@ func TestTypedComputationIndependentTamperingHasExactIntegrityFailureAndAtomicZe
 	}
 }
 
+func TestRecomputeTypedValidMethodsAndMixedFailGroupingPolicyAtomically(t *testing.T) {
+	fixture := typedComputeFixture(t, false)
+	for _, tc := range []struct {
+		name  string
+		input programcadmission.TypedInput
+	}{
+		{name: "references-only", input: fixture.referencesOnly},
+		{name: "definitions-only", input: fixture.definitionsOnly},
+		{name: "mixed", input: fixture.mixed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, failure := RecomputeTyped(internallyFormedTypedCarrier(t, tc.input, 47))
+			if failure == nil || failure.Code != FailureCode("GROUPING_POLICY_UNQUALIFIED") || failure.Message != "grouping policy unqualified" || !reflect.DeepEqual(got, TypedComputation{}) {
+				t.Fatalf("ASSERT_TYPED_RECOMPUTE_GROUPING_POLICY_UNQUALIFIED_ATOMIC_ZERO got=%#v failure=%+v", got, failure)
+			}
+		})
+	}
+}
+
+func internallyFormedTypedCarrier(t *testing.T, input programcadmission.TypedInput, seed uint64) TypedComputation {
+	t.Helper()
+	projection, err := programcadmission.PreparePrivateLeidenProjection(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	computed := TypedComputation{
+		source:           cloneTypedInputPublic(input),
+		seed:             seed,
+		occurrences:      projection.Occurrences(),
+		methodEvidence:   projection.MethodEvidence(),
+		selectedKinds:    projection.SelectedKinds(),
+		pairWeights:      projection.PairWeights(),
+		methodCommitment: projection.MethodCommitment(),
+	}
+	computed.seal = typedComputationSeal(computed)
+	return computed
+}
+
 func TestTypedComputationOutcomeAndSourceAccessorsAreDeepDefensiveCopies(t *testing.T) {
 	fixture := typedComputeFixture(t, false)
-	computed, failure := ComputeTyped(fixture.mixed, 47)
+	computed, failure := ComputeTyped(fixture.callsOnly, 47)
 	if failure != nil {
 		t.Fatal(failure)
 	}
@@ -158,13 +310,17 @@ func assertTypedCarrierDefensiveCopies(t *testing.T, in TypedComputation) {
 	occurrences, methods := in.Occurrences(), in.MethodEvidence()
 	kinds, pairs, commitment := in.SelectedKinds(), in.PairWeights(), in.MethodCommitment()
 	occurrences[0].Identity = "mutated-retained-occurrence"
-	methods[0].Identity = "mutated-method-evidence"
+	if len(methods) != 0 {
+		methods[0].Identity = "mutated-method-evidence"
+	}
 	kinds[0] = "MUTATED"
 	for pair := range pairs {
 		pairs[pair]++
 		break
 	}
-	commitment[0] ^= 0xff
+	if len(commitment) != 0 {
+		commitment[0] ^= 0xff
+	}
 
 	if !reflect.DeepEqual(in.Outcome(), wantOutcome) || !reflect.DeepEqual(in.Occurrences(), wantOccurrences) || !reflect.DeepEqual(in.MethodEvidence(), wantMethods) || !reflect.DeepEqual(in.SelectedKinds(), wantKinds) || !reflect.DeepEqual(in.PairWeights(), wantPairs) || !reflect.DeepEqual(in.MethodCommitment(), wantCommitment) {
 		t.Fatal("ASSERT_TYPED_COMPUTATION_ALL_ACCESSORS_DEEP_DEFENSIVE")

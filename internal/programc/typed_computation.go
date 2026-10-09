@@ -25,7 +25,13 @@ type TypedComputation struct {
 	seal             [sha256.Size]byte
 }
 
+const codeGroupingPolicyUnqualified FailureCode = "GROUPING_POLICY_UNQUALIFIED"
+
 func ComputeTyped(in programcadmission.TypedInput, seed uint64) (TypedComputation, *Failure) {
+	return computeTypedWithKernel(in, seed, computeTypedProjection)
+}
+
+func computeTypedWithKernel(in programcadmission.TypedInput, seed uint64, kernel func(typedProjectionInput, typedSelection, uint64) (Outcome, *Failure)) (TypedComputation, *Failure) {
 	projection, err := programcadmission.PreparePrivateLeidenProjection(in)
 	if err != nil {
 		return TypedComputation{}, typedComputationIntegrityFailure()
@@ -34,7 +40,10 @@ func ComputeTyped(in programcadmission.TypedInput, seed uint64) (TypedComputatio
 	if !ok {
 		return TypedComputation{}, typedComputationIntegrityFailure()
 	}
-	outcome, failure := computeTypedProjection(projection, selection, seed)
+	if selection != callsOnly {
+		return TypedComputation{}, groupingPolicyUnqualifiedFailure()
+	}
+	outcome, failure := kernel(projection, selection, seed)
 	if failure != nil {
 		return TypedComputation{}, failure
 	}
@@ -70,6 +79,9 @@ func RecomputeTyped(in TypedComputation) (TypedComputation, *Failure) {
 	selection, ok := inferTypedSelection(in.selectedKinds)
 	if !ok {
 		return TypedComputation{}, typedComputationIntegrityFailure()
+	}
+	if selection != callsOnly {
+		return TypedComputation{}, groupingPolicyUnqualifiedFailure()
 	}
 	outcome, failure := computeTypedProjection(projection, selection, in.seed)
 	if failure != nil {
@@ -196,6 +208,10 @@ func normalizeMethodCommitment(methods []programcadmission.MethodOccurrenceEvide
 
 func typedComputationIntegrityFailure() *Failure {
 	return &Failure{Code: codeTypedInputIntegrity, Message: "TYPED_INPUT_INTEGRITY"}
+}
+
+func groupingPolicyUnqualifiedFailure() *Failure {
+	return &Failure{Code: codeGroupingPolicyUnqualified, Message: "grouping policy unqualified"}
 }
 
 func isZeroTypedComputationSeal(in [sha256.Size]byte) bool {
