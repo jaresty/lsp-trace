@@ -171,11 +171,52 @@ func (a Artifact) Predecessors() []PredecessorRecord {
 func (a AdmittedInput) CanonicalBytes() []byte                { return a.artifact.CanonicalBytes() }
 func (a AdmittedInput) ID() string                            { return a.artifact.ID() }
 func (a AdmittedInput) Digest() string                        { return a.artifact.Digest() }
+func (a AdmittedInput) ByteLength() int                       { return len(a.artifact.canonical) }
 func (a AdmittedInput) Artifact() Artifact                    { return cloneArtifact(a.artifact) }
 func (a AdmittedInput) Contributions() []Contribution         { return a.artifact.Contributions() }
 func (a AdmittedInput) EndpointCustody() []EndpointCustody    { return a.artifact.EndpointCustody() }
 func (a AdmittedInput) CandidateOutcomes() []CandidateOutcome { return a.artifact.CandidateOutcomes() }
 func (a AdmittedInput) Accounting() Accounting                { return a.artifact.Accounting() }
+func (a AdmittedInput) MatchesTypedInput(in programcadmission.TypedInput) bool {
+	projection, err := programcadmission.PreparePrivateLeidenProjection(in)
+	if err != nil {
+		return false
+	}
+	kinds := projection.SelectedKinds()
+	eligible := make(map[string]bool, len(a.artifact.doc.EligibleKinds))
+	for _, kind := range a.artifact.doc.EligibleKinds {
+		eligible[kind] = true
+	}
+	for _, kind := range kinds {
+		if !eligible[string(kind)] {
+			return false
+		}
+	}
+	occurrences := projection.Occurrences()
+	if len(occurrences) != len(a.artifact.doc.CandidateOutcomes) {
+		return false
+	}
+	byIdentity := make(map[string]programcadmission.TypedOccurrence, len(occurrences))
+	for _, occurrence := range occurrences {
+		if occurrence.Identity == "" || byIdentity[occurrence.Identity].Identity != "" {
+			return false
+		}
+		byIdentity[occurrence.Identity] = occurrence
+	}
+	for _, outcome := range a.artifact.doc.CandidateOutcomes {
+		if byIdentity[outcome.OccurrenceIdentity].Identity == "" {
+			return false
+		}
+	}
+	for _, contribution := range a.artifact.doc.Contributions {
+		occurrence, ok := byIdentity[contribution.OccurrenceIdentity]
+		if !ok || occurrence.From != contribution.From || occurrence.To != contribution.To ||
+			string(occurrence.Kind) != contribution.Kind || occurrence.Ordinal != contribution.Ordinal {
+			return false
+		}
+	}
+	return true
+}
 
 func BuildInput(req InputRequest) (Artifact, error) {
 	projection, err := programcadmission.PreparePrivateLeidenProjection(req.TypedInput)

@@ -14,15 +14,16 @@ import (
 // TypedComputation is an internal opaque carrier for a validated typed
 // computation and the exact source state required to reproduce it.
 type TypedComputation struct {
-	cachedOutcome    Outcome
-	source           programcadmission.TypedInput
-	seed             uint64
-	occurrences      []programcadmission.TypedOccurrence
-	methodEvidence   []programcadmission.MethodOccurrenceEvidence
-	selectedKinds    []programcadmission.RelationKind
-	pairWeights      map[programcadmission.TypedPair]int
-	methodCommitment []byte
-	seal             [sha256.Size]byte
+	cachedOutcome     Outcome
+	source            programcadmission.TypedInput
+	seed              uint64
+	occurrences       []programcadmission.TypedOccurrence
+	methodEvidence    []programcadmission.MethodOccurrenceEvidence
+	selectedKinds     []programcadmission.RelationKind
+	pairWeights       map[programcadmission.TypedPair]int
+	methodCommitment  []byte
+	groupingAdmission qualifiedGroupingAdmission
+	seal              [sha256.Size]byte
 }
 
 const codeGroupingPolicyUnqualified FailureCode = "GROUPING_POLICY_UNQUALIFIED"
@@ -167,6 +168,15 @@ func typedComputationSeal(in TypedComputation) [sha256.Size]byte {
 	}
 	writeTypedPairs(h, in.pairWeights)
 	writeTypedBytes(h, in.methodCommitment)
+	writeTypedBytes(h, in.groupingAdmission.policyBytes)
+	writeTypedString(h, in.groupingAdmission.policyID)
+	writeTypedInt(h, in.groupingAdmission.policyByteLength)
+	writeTypedString(h, in.groupingAdmission.policyDigest)
+	writeTypedBytes(h, in.groupingAdmission.inputBytes)
+	writeTypedString(h, in.groupingAdmission.inputID)
+	writeTypedInt(h, in.groupingAdmission.inputByteLength)
+	writeTypedString(h, in.groupingAdmission.inputDigest)
+	writeTypedUint64(h, in.groupingAdmission.epoch)
 	var seal [sha256.Size]byte
 	copy(seal[:], h.Sum(nil))
 	return seal
@@ -181,6 +191,7 @@ func cloneTypedComputation(in TypedComputation) TypedComputation {
 	out.selectedKinds = append([]programcadmission.RelationKind(nil), in.selectedKinds...)
 	out.pairWeights = cloneTypedPairs(in.pairWeights)
 	out.methodCommitment = append([]byte(nil), in.methodCommitment...)
+	out.groupingAdmission = cloneQualifiedGroupingAdmission(in.groupingAdmission)
 	return out
 }
 
