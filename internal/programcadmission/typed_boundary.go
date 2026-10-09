@@ -53,15 +53,19 @@ type TypedInput struct {
 }
 
 type typedInputIntegrity struct {
-	seal            [sha256.Size]byte
-	nodes           []string
-	selectedKinds   []RelationKind
-	methodsEnabled  bool
-	methodClaim     string
-	methodAuthority int
-	methodAccepted  bool
-	methodComplete  string
-	callsAdmission  CompositeProjectionAdmission
+	seal                       [sha256.Size]byte
+	nodes                      []string
+	selectedKinds              []RelationKind
+	methodsEnabled             bool
+	methodClaim                string
+	methodAuthority            int
+	methodAccepted             bool
+	methodComplete             string
+	callsAdmission             CompositeProjectionAdmission
+	methodEvidence             []MethodOccurrenceEvidence
+	methodAdmissionOccurrences []MethodOccurrenceEvidence
+	methodCanonicalBytes       []byte
+	methodCommitmentDigest     [sha256.Size]byte
 }
 
 type typedInputIntegrityError struct{}
@@ -98,8 +102,13 @@ func PrepareTypedInput(req TypedInputRequest) (TypedInput, error) {
 		return TypedInput{}, ErrTypedSelection
 	}
 	needMethods := selected[TypedReferencesSymbol] || selected[TypedResolvesToDefinition]
-	if needMethods && len(req.Methods.occurrences) == 0 {
-		return TypedInput{}, ErrMethodEvidenceUnadmitted
+	if needMethods {
+		if len(req.Methods.occurrences) == 0 {
+			return TypedInput{}, ErrMethodEvidenceUnadmitted
+		}
+		if err := validateMethodProjectionAdmission(req.Methods); err != nil {
+			return TypedInput{}, err
+		}
 	}
 
 	out := TypedInput{Version: TypedInputVersion, Authority: Authority, SourceGraphComplete: SourceGraphComplete, PairWeights: make(map[TypedPair]int)}
@@ -120,8 +129,15 @@ func PrepareTypedInput(req TypedInputRequest) (TypedInput, error) {
 			}
 			seen[occurrence.Identity] = true
 			out.Occurrences = append(out.Occurrences, TypedOccurrence{Identity: occurrence.Identity, From: occurrence.From, To: occurrence.To, Kind: occurrence.Kind, Ordinal: occurrence.Ordinal})
+			out.integrity.methodEvidence = append(out.integrity.methodEvidence, occurrence)
 			out.PairWeights[TypedPair{From: occurrence.From, To: occurrence.To}]++
 		}
+		sort.Slice(out.integrity.methodEvidence, func(i, j int) bool {
+			return out.integrity.methodEvidence[i].Identity < out.integrity.methodEvidence[j].Identity
+		})
+		out.integrity.methodAdmissionOccurrences = req.Methods.Occurrences()
+		out.integrity.methodCanonicalBytes = req.Methods.CanonicalBytes()
+		copy(out.integrity.methodCommitmentDigest[:], req.Methods.CommitmentDigest())
 	}
 	sort.Slice(out.Occurrences, func(i, j int) bool { return out.Occurrences[i].Identity < out.Occurrences[j].Identity })
 	nodes := make(map[string]bool, len(out.integrity.nodes))
@@ -207,7 +223,15 @@ func validateTypedInputStructure(in TypedInput) error {
 	if (selected[TypedReferencesSymbol] || selected[TypedResolvesToDefinition]) != in.integrity.methodsEnabled {
 		return typedInputIntegrityError{}
 	}
-	if in.integrity.methodsEnabled && (in.integrity.methodClaim != MethodEvidenceClaimCeiling || in.integrity.methodAuthority != 0 || in.integrity.methodAccepted || in.integrity.methodComplete != "UNKNOWN") {
+	if in.integrity.methodsEnabled {
+		if in.integrity.methodClaim != MethodEvidenceClaimCeiling || in.integrity.methodAuthority != 0 || in.integrity.methodAccepted || in.integrity.methodComplete != "UNKNOWN" {
+			return typedInputIntegrityError{}
+		}
+		admission := MethodProjectionAdmission{occurrences: append([]MethodOccurrenceEvidence(nil), in.integrity.methodAdmissionOccurrences...), canonicalBytes: append([]byte(nil), in.integrity.methodCanonicalBytes...), commitmentDigest: in.integrity.methodCommitmentDigest}
+		if validateMethodProjectionAdmission(admission) != nil {
+			return typedInputIntegrityError{}
+		}
+	} else if len(in.integrity.methodEvidence) != 0 || len(in.integrity.methodAdmissionOccurrences) != 0 || len(in.integrity.methodCanonicalBytes) != 0 || !isZeroMethodCommitment(in.integrity.methodCommitmentDigest) {
 		return typedInputIntegrityError{}
 	}
 	nodes := make(map[string]bool)
@@ -234,7 +258,7 @@ func validateTypedInputStructure(in TypedInput) error {
 	}
 	seen := make(map[string]bool, len(in.Occurrences))
 	pairs := make(map[TypedPair]int)
-	observedCalls := 0
+	observedCalls, observedMethods := 0, 0
 	for i, occurrence := range in.Occurrences {
 		if occurrence.Identity == "" || occurrence.From == "" || occurrence.To == "" || seen[occurrence.Identity] || !selected[occurrence.Kind] || occurrence.Ordinal < 0 || (i > 0 && in.Occurrences[i-1].Identity >= occurrence.Identity) {
 			return typedInputIntegrityError{}
@@ -247,11 +271,20 @@ func validateTypedInputStructure(in TypedInput) error {
 				return typedInputIntegrityError{}
 			}
 			observedCalls++
+		} else {
+			if observedMethods >= len(in.integrity.methodEvidence) {
+				return typedInputIntegrityError{}
+			}
+			method := in.integrity.methodEvidence[observedMethods]
+			if method.Identity != occurrence.Identity || method.Kind != occurrence.Kind || method.From != occurrence.From || method.To != occurrence.To || method.Ordinal != occurrence.Ordinal {
+				return typedInputIntegrityError{}
+			}
+			observedMethods++
 		}
 		seen[occurrence.Identity], nodes[occurrence.From], nodes[occurrence.To] = true, true, true
 		pairs[TypedPair{From: occurrence.From, To: occurrence.To}]++
 	}
-	if observedCalls != len(retainedCalls) {
+	if observedCalls != len(retainedCalls) || observedMethods != len(in.integrity.methodEvidence) {
 		return typedInputIntegrityError{}
 	}
 	canonicalNodes := make([]string, 0, len(nodes))
@@ -323,6 +356,16 @@ func typedInputSeal(in TypedInput) [sha256.Size]byte {
 	writeSealInt(h, in.integrity.methodAuthority)
 	writeSealBool(h, in.integrity.methodAccepted)
 	writeSealString(h, in.integrity.methodComplete)
+	writeSealBytes(h, in.integrity.methodCanonicalBytes)
+	writeSealBytes(h, in.integrity.methodCommitmentDigest[:])
+	writeSealUint64(h, uint64(len(in.integrity.methodAdmissionOccurrences)))
+	for _, occurrence := range in.integrity.methodAdmissionOccurrences {
+		writeMethodEvidenceSeal(h, occurrence)
+	}
+	writeSealUint64(h, uint64(len(in.integrity.methodEvidence)))
+	for _, occurrence := range in.integrity.methodEvidence {
+		writeMethodEvidenceSeal(h, occurrence)
+	}
 	calls := in.integrity.callsAdmission
 	writeSealBool(h, calls.valid)
 	writeSealStrings(h, calls.nodeIDs)
@@ -374,6 +417,30 @@ func typedInputSeal(in TypedInput) [sha256.Size]byte {
 	var seal [sha256.Size]byte
 	copy(seal[:], h.Sum(nil))
 	return seal
+}
+
+func writeMethodEvidenceSeal(h hash.Hash, occurrence MethodOccurrenceEvidence) {
+	writeSealString(h, occurrence.Identity)
+	writeSealString(h, occurrence.From)
+	writeSealString(h, occurrence.To)
+	writeSealString(h, string(occurrence.Kind))
+	writeSealInt(h, occurrence.Ordinal)
+	writeSealString(h, occurrence.SourceRole)
+	writeSealString(h, occurrence.TargetRole)
+	writeSealString(h, occurrence.Method)
+	writeSealString(h, occurrence.QuerySelector)
+	writeSealString(h, occurrence.QueryDigest)
+	writeSealInt(h, occurrence.QueryLength)
+	writeSealString(h, occurrence.EvidenceSelector)
+	writeSealString(h, occurrence.EvidenceDigest)
+	writeSealInt(h, occurrence.EvidenceLength)
+	writeSealString(h, occurrence.Provider)
+	writeSealString(h, occurrence.ProviderVersion)
+	writeSealString(h, occurrence.SessionID)
+	writeSealUint64(h, occurrence.Generation)
+	writeSealString(h, occurrence.Revision)
+	writeSealString(h, occurrence.Custody)
+	writeSealString(h, occurrence.PositionEncoding)
 }
 
 func writeSealStrings(h hash.Hash, values []string) {

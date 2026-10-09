@@ -50,7 +50,7 @@ func TestComputeTypedDefinitionsAndReferencesFieldExactCurrentModel(t *testing.T
 		input     programcadmission.TypedInput
 		wantNodes int
 	}{
-		{"references", fixture.referencesOnly, 3},
+		{"references", fixture.referencesOnly, 2},
 		{"definitions", fixture.definitionsOnly, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -232,6 +232,7 @@ func snapshotAdmission(in programcadmission.CompositeProjectionAdmission) admiss
 
 type typedComputeFixtures struct {
 	calls                                             programcadmission.Result
+	methods                                           programcadmission.MethodProjectionAdmission
 	callsOnly, referencesOnly, definitionsOnly, mixed programcadmission.TypedInput
 }
 
@@ -254,7 +255,7 @@ func typedComputeFixture(t *testing.T, reverse bool) typedComputeFixtures {
 	envelope := typedMethodEnvelope([]programcadmission.MethodOccurrenceEvidence{
 		typedMethodOccurrence("typed-reference-1", programcadmission.TypedReferencesSymbol, 1, a.ID, b.ID),
 		typedMethodOccurrence("typed-definition-0", programcadmission.TypedResolvesToDefinition, 0, a.ID, b.ID),
-		typedMethodOccurrence("typed-reference-self", programcadmission.TypedReferencesSymbol, 2, isolate.ID, isolate.ID),
+		typedMethodOccurrence("typed-reference-2", programcadmission.TypedReferencesSymbol, 2, a.ID, b.ID),
 		typedMethodOccurrence("typed-reference-0", programcadmission.TypedReferencesSymbol, 0, a.ID, b.ID),
 		typedMethodOccurrence("typed-definition-1", programcadmission.TypedResolvesToDefinition, 1, a.ID, b.ID),
 	})
@@ -278,7 +279,7 @@ func typedComputeFixture(t *testing.T, reverse bool) typedComputeFixtures {
 		}
 		return in
 	}
-	return typedComputeFixtures{calls, prepare(programcadmission.TypedCalls), prepare(programcadmission.TypedReferencesSymbol), prepare(programcadmission.TypedResolvesToDefinition), prepare(programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition)}
+	return typedComputeFixtures{calls, methods, prepare(programcadmission.TypedCalls), prepare(programcadmission.TypedReferencesSymbol), prepare(programcadmission.TypedResolvesToDefinition), prepare(programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition)}
 }
 
 func typedComputeCapture(t *testing.T, suffix string, nodes []graph.Node, edges []graph.Edge) programccompose.Input {
@@ -303,5 +304,6 @@ func typedMethodOccurrence(identity string, kind programcadmission.RelationKind,
 	methods := map[programcadmission.RelationKind]string{programcadmission.TypedReferencesSymbol: "textDocument/references", programcadmission.TypedResolvesToDefinition: "textDocument/definition"}
 	source := map[programcadmission.RelationKind]string{programcadmission.TypedReferencesSymbol: "REFERENCING_OCCURRENCE", programcadmission.TypedResolvesToDefinition: "QUERY_SYMBOL"}
 	target := map[programcadmission.RelationKind]string{programcadmission.TypedReferencesSymbol: "REFERENCED_SYMBOL", programcadmission.TypedResolvesToDefinition: "DEFINITION_TARGET"}
-	return programcadmission.MethodOccurrenceEvidence{Identity: identity, Kind: kind, Ordinal: ordinal, From: from, To: to, SourceRole: source[kind], TargetRole: target[kind], Method: methods[kind], QuerySelector: "queries/" + identity + ".json", QueryDigest: "sha256:" + strings.Repeat("1", 64), QueryLength: 17, EvidenceSelector: "evidence/" + identity + ".json", EvidenceDigest: "sha256:" + strings.Repeat("2", 64), EvidenceLength: 29, Provider: "gopls", ProviderVersion: "v0.17.1", SessionID: "session-1", Generation: 7, Revision: "commit-1", Custody: "CALLER_ASSERTED", PositionEncoding: "utf-16"}
+	evidenceDigest := sha256.Sum256([]byte(identity))
+	return programcadmission.MethodOccurrenceEvidence{Identity: identity, Kind: kind, Ordinal: ordinal, From: from, To: to, SourceRole: source[kind], TargetRole: target[kind], Method: methods[kind], QuerySelector: "queries/" + identity + ".json", QueryDigest: "sha256:" + strings.Repeat("1", 64), QueryLength: 17, EvidenceSelector: "evidence/" + identity + ".json", EvidenceDigest: fmt.Sprintf("sha256:%x", evidenceDigest), EvidenceLength: 29, Provider: "gopls", ProviderVersion: "v0.17.1", SessionID: "session-1", Generation: 7, Revision: "commit-1", Custody: "CALLER_ASSERTED", PositionEncoding: "utf-16"}
 }

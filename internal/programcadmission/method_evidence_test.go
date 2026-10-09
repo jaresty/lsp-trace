@@ -2,6 +2,7 @@ package programcadmission_test
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -199,6 +200,75 @@ func TestUntrustedMethodEvidenceEnvelopeRejectsMalformedBindings(t *testing.T) {
 				t.Fatalf("ASSERT_METHOD_BINDING_REJECTED err=%v", err)
 			}
 		})
+	}
+}
+
+func methodPreflightInputBytes(in programcadmission.UntrustedMethodEvidenceEnvelope) int {
+	total := len(in.Family) + len(in.Version) + len(in.ClaimCeiling) + len(in.Completeness) +
+		len(in.Provider) + len(in.ProviderVersion) + len(in.SessionID) + len(in.Revision) +
+		len(in.Custody) + len(in.PositionEncoding)
+	for _, o := range in.Occurrences {
+		total += len(o.Identity) + len(o.From) + len(o.To) + len(string(o.Kind)) + len(o.SourceRole) + len(o.TargetRole) +
+			len(o.Method) + len(o.QuerySelector) + len(o.QueryDigest) + len(o.EvidenceSelector) +
+			len(o.EvidenceDigest) + len(o.Provider) + len(o.ProviderVersion) + len(o.SessionID) +
+			len(o.Revision) + len(o.Custody) + len(o.PositionEncoding)
+	}
+	return total
+}
+
+func methodEvidenceEnvelopeAtPreflightBytes(t *testing.T, target int) programcadmission.UntrustedMethodEvidenceEnvelope {
+	t.Helper()
+	const occurrenceCount = 4096
+
+	in := validUntrustedMethodEvidenceEnvelope()
+	in.Occurrences = make([]programcadmission.MethodOccurrenceEvidence, occurrenceCount)
+	for i := range in.Occurrences {
+		identity := fmt.Sprintf("reference-%04d", i)
+		in.Occurrences[i] = methodOccurrence(identity, programcadmission.TypedReferencesSymbol, i, "file:///w/use.go#1", "file:///w/decl.go#target")
+		in.Occurrences[i].QuerySelector = "q"
+	}
+	remaining := target - methodPreflightInputBytes(in)
+	for i := range in.Occurrences {
+		add := min(remaining, programcadmission.MaxMethodFieldBytes-len(in.Occurrences[i].QuerySelector))
+		in.Occurrences[i].QuerySelector += strings.Repeat("q", add)
+		remaining -= add
+		if remaining == 0 {
+			break
+		}
+	}
+	if remaining != 0 || methodPreflightInputBytes(in) != target {
+		t.Fatalf("BLOCKED_NOT_RED method preflight fixture target=%d got=%d remaining=%d", target, methodPreflightInputBytes(in), remaining)
+	}
+	return in
+}
+
+func TestMethodEvidenceAggregatePreflightInputByteBoundary(t *testing.T) {
+	for _, delta := range []int{-1, 0} {
+		want := programcadmission.MaxMethodCommitmentInputBytes + delta
+		in := methodEvidenceEnvelopeAtPreflightBytes(t, want)
+		if got := methodPreflightInputBytes(in); got != want {
+			t.Fatalf("BLOCKED_NOT_RED method preflight accounting got=%d want=%d", got, want)
+		}
+		if _, err := programcadmission.AdmitUntrustedMethodEvidenceEnvelope(in); err != nil {
+			t.Fatalf("ASSERT_METHOD_PREFLIGHT_INPUT_BOUNDARY_ADMITTED bytes=%d err=%v", want, err)
+		}
+	}
+
+	in := methodEvidenceEnvelopeAtPreflightBytes(t, programcadmission.MaxMethodCommitmentInputBytes+1)
+	zero, err := programcadmission.AdmitUntrustedMethodEvidenceEnvelope(in)
+	if !errors.Is(err, programcadmission.ErrMethodEvidenceResourceBound) || len(opaqueOccurrences(t, zero)) != 0 {
+		t.Fatalf("ASSERT_METHOD_PREFLIGHT_INPUT_OVER_BOUND_ATOMIC err=%v occurrences=%d", err, len(opaqueOccurrences(t, zero)))
+	}
+}
+
+func TestMethodEvidenceOccurrenceCountBoundPrecedesMalformedOccurrenceTraversal(t *testing.T) {
+	in := validUntrustedMethodEvidenceEnvelope()
+	in.Occurrences = make([]programcadmission.MethodOccurrenceEvidence, programcadmission.MaxMethodOccurrences+1)
+	in.Occurrences[0] = methodOccurrence("malformed-first", programcadmission.TypedCalls, -1, "", "")
+
+	zero, err := programcadmission.AdmitUntrustedMethodEvidenceEnvelope(in)
+	if !errors.Is(err, programcadmission.ErrMethodEvidenceResourceBound) || len(opaqueOccurrences(t, zero)) != 0 {
+		t.Fatalf("ASSERT_METHOD_OCCURRENCE_COUNT_PRECEDES_MALFORMED_TRAVERSAL err=%v occurrences=%d", err, len(opaqueOccurrences(t, zero)))
 	}
 }
 

@@ -5,17 +5,19 @@ const privateTypedClaimCeiling = "PRIVATE_PROGRAM_C_TYPED_RELATION_QUALIFICATION
 // privateLeidenProjection is an opaque, validated internal bridge. Its
 // accessors always return defensive copies.
 type privateLeidenProjection struct {
-	nodes           []string
-	occurrences     []TypedOccurrence
-	pairWeights     map[TypedPair]int
-	selectedKinds   []RelationKind
-	compositeSource CompositeSourceBinding
-	calls           CompositeProjectionAdmission
-	methodClaim     string
-	methodAuthority int
-	methodAccepted  bool
-	methodComplete  string
-	claimCeiling    string
+	nodes            []string
+	occurrences      []TypedOccurrence
+	pairWeights      map[TypedPair]int
+	selectedKinds    []RelationKind
+	compositeSource  CompositeSourceBinding
+	calls            CompositeProjectionAdmission
+	methodClaim      string
+	methodAuthority  int
+	methodAccepted   bool
+	methodComplete   string
+	methodEvidence   []MethodOccurrenceEvidence
+	methodCommitment []byte
+	claimCeiling     string
 }
 
 func PreparePrivateLeidenProjection(in TypedInput) (privateLeidenProjection, error) {
@@ -23,15 +25,17 @@ func PreparePrivateLeidenProjection(in TypedInput) (privateLeidenProjection, err
 		return privateLeidenProjection{}, err
 	}
 	out := privateLeidenProjection{
-		nodes:           append([]string(nil), in.integrity.nodes...),
-		occurrences:     append([]TypedOccurrence(nil), in.Occurrences...),
-		pairWeights:     make(map[TypedPair]int, len(in.PairWeights)),
-		selectedKinds:   append([]RelationKind(nil), in.integrity.selectedKinds...),
-		calls:           cloneCompositeProjectionAdmission(in.integrity.callsAdmission),
-		methodClaim:     in.integrity.methodClaim,
-		methodAuthority: in.integrity.methodAuthority,
-		methodAccepted:  in.integrity.methodAccepted,
-		methodComplete:  in.integrity.methodComplete,
+		nodes:            append([]string(nil), in.integrity.nodes...),
+		occurrences:      append([]TypedOccurrence(nil), in.Occurrences...),
+		pairWeights:      make(map[TypedPair]int, len(in.PairWeights)),
+		selectedKinds:    append([]RelationKind(nil), in.integrity.selectedKinds...),
+		calls:            cloneCompositeProjectionAdmission(in.integrity.callsAdmission),
+		methodClaim:      in.integrity.methodClaim,
+		methodAuthority:  in.integrity.methodAuthority,
+		methodAccepted:   in.integrity.methodAccepted,
+		methodComplete:   in.integrity.methodComplete,
+		methodEvidence:   append([]MethodOccurrenceEvidence(nil), in.integrity.methodEvidence...),
+		methodCommitment: append([]byte(nil), in.integrity.methodCommitmentDigest[:]...),
 	}
 	for pair, weight := range in.PairWeights {
 		out.pairWeights[pair] = weight
@@ -67,10 +71,16 @@ func (p privateLeidenProjection) CompositeSourceBinding() CompositeSourceBinding
 	}
 	return CloneCompositeSourceBinding(p.compositeSource)
 }
-func (p privateLeidenProjection) MethodClaimCeiling() string   { return p.methodClaim }
-func (p privateLeidenProjection) MethodAuthority() int         { return p.methodAuthority }
-func (p privateLeidenProjection) MethodAccepted() bool         { return p.methodAccepted }
-func (p privateLeidenProjection) MethodCompleteness() string   { return p.methodComplete }
+func (p privateLeidenProjection) MethodClaimCeiling() string { return p.methodClaim }
+func (p privateLeidenProjection) MethodAuthority() int       { return p.methodAuthority }
+func (p privateLeidenProjection) MethodAccepted() bool       { return p.methodAccepted }
+func (p privateLeidenProjection) MethodCompleteness() string { return p.methodComplete }
+func (p privateLeidenProjection) MethodEvidence() []MethodOccurrenceEvidence {
+	return append([]MethodOccurrenceEvidence(nil), p.methodEvidence...)
+}
+func (p privateLeidenProjection) MethodCommitment() []byte {
+	return append([]byte(nil), p.methodCommitment...)
+}
 func (p privateLeidenProjection) CombinedClaimCeiling() string { return p.claimCeiling }
 func (p privateLeidenProjection) RetainedCallsAdmission() CompositeProjectionAdmission {
 	return cloneCompositeProjectionAdmission(p.calls)
