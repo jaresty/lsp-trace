@@ -278,6 +278,7 @@ func ownsC15CurrentPath(path string) bool {
 		"sessionruntime/b4_private_lifecycle_packet_test.go", "sessionruntime/diagnostic_history_storage_c15_private.go",
 		"sessionruntime/diagnostic_history_storage_c15_private_test.go", "sessionruntime/adr0011_c17_c15_custody_observer_red_private_test.go",
 		"sessionruntime/adr0011_c17_c15_atomic_batch_observer_red_private_test.go", "sessionruntime/adr0011_c17_c15_observer_contract_private.go",
+		"sessionruntime/adr0011_c18_real_owner_collision_red_private_test.go", "sessionruntime/c18_pair_coordinator_private.go",
 	} {
 		if path == owned {
 			return true

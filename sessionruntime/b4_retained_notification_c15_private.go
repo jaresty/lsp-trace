@@ -14,14 +14,19 @@ import (
 var ErrRetainedNotificationLeaseClosed = errors.New("retained notification lease closed")
 
 type privateB4RetainedNotificationOwner struct {
-	mu              sync.Mutex
-	cond            sync.Cond
-	notifications   []lspwire.Message
-	charge          privateB4ByteLeaseV2
-	active          uint32
-	admissionClosed bool
-	releaseStarted  bool
-	released        bool
+	mu                   sync.Mutex
+	cond                 sync.Cond
+	notifications        []lspwire.Message
+	charge               privateB4ByteLeaseV2
+	c18Capacity          uint64
+	active               uint32
+	admissionClosed      bool
+	releaseStarted       bool
+	released             bool
+	c18Barrier           privateC18OwnerBarrier
+	c18BarrierGeneration uint64
+	c18BarrierToken      *struct{}
+	c18Pair              privateC18PairCoordinator
 }
 
 type RetainedNotificationLease struct {
@@ -69,6 +74,8 @@ func newPrivateB4RetainedNotificationOwner(account *privateB4ByteAccountV2, sour
 		return nil, session.ResourceExhausted
 	}
 	_ = privateC15SiteC15Copy28RetainedNotificationSet
+	transactionID, objectID, sequence := "", "", uint64(0)
+	reachPrivateC18OwnerBarrier(transactionID, objectID, sequence, privateC18RetentionCommit)
 	charge, failure := account.reservePrivateB4C15(capacity, privateC15SiteC15Copy28RetainedNotificationSet, privateB4C15Operation("copy"))
 	if failure != "" {
 		return nil, failure
@@ -83,7 +90,7 @@ func newPrivateB4RetainedNotificationOwner(account *privateB4ByteAccountV2, sour
 			copy(messages[i].Params, source[i].Params)
 		}
 	}
-	o := &privateB4RetainedNotificationOwner{notifications: messages, charge: charge}
+	o := &privateB4RetainedNotificationOwner{notifications: messages, charge: charge, c18Capacity: capacity, c18Pair: privateC18NewPairCoordinator(8)}
 	o.cond.L = &o.mu
 	return o, ""
 }
@@ -96,18 +103,28 @@ func (l RetainedNotificationLease) WithNotifications(fn func([]lspwire.Message) 
 	}
 	o := l.owner
 	o.mu.Lock()
-	if o.admissionClosed || o.released {
-		o.mu.Unlock()
+	live := !o.admissionClosed && !o.released
+	o.mu.Unlock()
+	if !live {
 		return ErrRetainedNotificationLeaseClosed
 	}
 	_ = privateC15SiteC15Alias29NotificationsCallback
-	if failure := o.charge.account.aliasPrivateB4C15(o.charge.lease, privateC15SiteC15Alias29NotificationsCallback); failure != "" {
-		o.mu.Unlock()
+	transactionID, objectID, sequence := o.privateC18Metadata()
+	if err := o.reachPrivateC18OwnerBarrier(transactionID, objectID, sequence, privateC18ReadbackBorrow); err != nil {
 		return ErrRetainedNotificationLeaseClosed
 	}
-	o.active++
-	messages := o.notifications
+	failure := o.charge.account.aliasPrivateB4C15(o.charge.lease, privateC15SiteC15Alias29NotificationsCallback)
+	o.mu.Lock()
+	admitted := failure == "" && !o.admissionClosed && !o.released
+	var messages []lspwire.Message
+	if admitted {
+		o.active++
+		messages = o.notifications
+	}
 	o.mu.Unlock()
+	if !admitted {
+		return ErrRetainedNotificationLeaseClosed
+	}
 	defer func() {
 		o.mu.Lock()
 		o.active--
@@ -140,15 +157,11 @@ func (o *privateB4RetainedNotificationOwner) waitReleased() {
 	o.mu.Unlock()
 }
 
-func (l RetainedNotificationLease) Release() bool {
-	if l.owner == nil {
-		return false
-	}
-	o := l.owner
+func (o *privateB4RetainedNotificationOwner) preparePrivateC18Release() (string, string, uint64, bool) {
 	o.mu.Lock()
+	defer o.mu.Unlock()
 	if o.releaseStarted || o.released {
-		o.mu.Unlock()
-		return false
+		return "", "", 0, false
 	}
 	o.admissionClosed = true
 	o.releaseStarted = true
@@ -156,15 +169,76 @@ func (l RetainedNotificationLease) Release() bool {
 	for o.active != 0 {
 		o.cond.Wait()
 	}
+	transactionID, objectID, sequence := o.privateC18MetadataLocked()
+	return transactionID, objectID, sequence, true
+}
+
+func (o *privateB4RetainedNotificationOwner) cancelPrivateC18Release() {
+	o.mu.Lock()
+	o.releaseStarted = false
+	o.admissionClosed = false
+	o.cond.Broadcast()
+	o.mu.Unlock()
+}
+
+func (o *privateB4RetainedNotificationOwner) finishPrivateC18Release() {
+	o.mu.Lock()
 	for i := range o.notifications {
 		for j := range o.notifications[i].Params {
 			o.notifications[i].Params[j] = 0
 		}
 	}
 	o.notifications = nil
-	o.charge.release()
 	o.released = true
 	o.cond.Broadcast()
 	o.mu.Unlock()
+}
+
+func (o *privateB4RetainedNotificationOwner) restartPrivateC18Custody(generation uint64) bool {
+	return false
+	/* permanently closed owner
+	o.mu.Lock()
+	if !o.released || o.active != 0 || o.charge.account == nil {
+		o.mu.Unlock()
+		return false
+	}
+	account, capacity := o.charge.account, o.c18Capacity
+	o.mu.Unlock()
+
+	account.mu.Lock()
+	if account.c15 != nil {
+		account.c15.generation++
+		account.c15.transactionID += "-restart-" + privateC18Decimal(generation)
+	}
+	account.mu.Unlock()
+	charge, failure := account.reservePrivateB4C15(capacity, privateC15SiteC15Copy28RetainedNotificationSet, privateB4C15Operation("copy"))
+	if failure != "" {
+		return false
+	}
+	o.mu.Lock()
+	o.charge = charge
+	o.admissionClosed = false
+	o.releaseStarted = false
+	o.released = false
+	o.mu.Unlock()
+	return true
+	*/
+}
+
+func (l RetainedNotificationLease) Release() bool {
+	if l.owner == nil {
+		return false
+	}
+	o := l.owner
+	transactionID, objectID, sequence, release := o.preparePrivateC18Release()
+	if !release {
+		return false
+	}
+	if err := o.reachPrivateC18OwnerBarrier(transactionID, objectID, sequence, privateC18Release); err != nil {
+		o.cancelPrivateC18Release()
+		return false
+	}
+	o.charge.release()
+	o.finishPrivateC18Release()
 	return true
 }

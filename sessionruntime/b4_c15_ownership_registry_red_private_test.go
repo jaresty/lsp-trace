@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	privateB4C15MappingSHA256     = "58995c12ef846b597f397666f6bc6867990da04319b846d27d72868e9b3bbdb4"
-	privateB4C15CandidateCount    = 3507
-	privateB4C15CandidateSHA256   = "896f0ba0b962de595590375cb122fdbca42e67ba0c908ba36dd479956c872318"
-	privateB4C15DispositionSHA256 = "6da54493caef29aa7874bc3a3d5c0534aaba646ea127a2011f5ef3426d932f4a"
+	privateB4C15MappingSHA256     = "34a8ffa1bbc26775c42a2329f5ca9652444e6832ba790a3cc8673f4b15c4ffd1"
+	privateB4C15CandidateCount    = 3805
+	privateB4C15CandidateSHA256   = "13d45a61cb9ad2e5dad8d944458a9b7f459c9a2cd0336cb76700fa801599ca6e"
+	privateB4C15DispositionSHA256 = "cde6aa72034acf743c582cec56ff778470f8f258bde0ecdc4398653f3de10e04"
 	privateB4C15OwnerOpsSHA256    = "6834dc9a157ac944e3141cb85783c36251f92d383c838c205b063a1ac37014ff"
 )
 
