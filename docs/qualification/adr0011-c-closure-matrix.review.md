@@ -1,8 +1,8 @@
 # ADR0011 Package P4 revised C-scope closure review
 
-Audited implementation revision: `0d2f19fe38cf7e431a60208d5582d5a7cd6cc9d6`
+Audited implementation revision: `1d12538874fa6cfd80e9fe5a313e70764c9740f3`
 
-Audited tree: `8820747197c23c9e17d1d1e0145f3001f1efcd6c`
+Audited tree: `64fa047c971a17b058bbdc1abaec2891710ed733`
 
 Hermetic prerequisites: `c8dc1ac804cda716d5aef8e5d3ad7a46fed42430` and `42fe29db5cfc07f53617d273985c5a3e8bc9c6b3` (included in audited history)
 
@@ -29,16 +29,16 @@ Future C exit is assessed against `REVISED_C_SCOPE_V2`, not the original C01–C
 - historical inventory: 24 rows;
 - active rows: 23;
 - superseded inventory row: C02 only;
-- currently CLOSED active rows (21): C01, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13, C14, C16, C17, bytes_scanned, messages_processed, objects_materialized, events_emitted, documents_acquired, and logical_buffer_bytes_reserved;
-- currently UNKNOWN active rows (2): C15 and C18.
+- currently CLOSED active rows: all 23;
+- currently UNKNOWN active rows: none.
 
-Current result remains:
+Current result:
 
 ```text
-C_EXIT_BLOCKED
+C_EXIT_GO
 ```
 
-The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. C09 closes with portable integrated evidence that the definition-selected private Manager path accepts exact decoded-remarshal sizes through 1,048,576 bytes and refuses 1,048,577 before accepted observation or downstream definition publication. C10 closes with independent portable evidence that the real private references route selects the 1,572,864-byte profile, continues at the boundary, and refuses +1 before accepted notification or result publication. C11 closes with portable integrated evidence that the private definition path accepts exact original result tokens through 524,288 bytes and refuses 524,289 before token copy, accepted response observation, or downstream result publication. C12 closes with independent portable evidence that the noncustodial private references path returns exact result bytes through 524,288, correlates accepted observation to session and generation, and refuses 524,289 before token copy or publication. The `messages_processed` row closes with a distinct transaction work account: every successfully decoded complete message counts once at semantic begin, later refusal does not refund it, malformed decode counts zero, and checked overflow freezes without mutation. The `bytes_scanned` row closes at implementation commit `e5e9c6f6b4fe9cafb3daf643a947c7b90c99555b` and tree `2bbda7c27868d00dfc4f1a8a39a28dcca80a1579`: every actual raw-scanner traversal is charged, including publication and replay paths; malformed work persists, oversize input charges zero, occurrence identity is enforced, typed overflow propagates through owner, proposal, scanner publication, and replay paths, the account seals terminally, and the ordinary path remains default-off. The production caller denominator is exactly 67 traversals of the 199-byte retained payload, so `67 * 199 = 13333`. Twenty-one of 23 active rows are closed; two remain unknown. The named checker is therefore expected to report exactly two closure failures: one status failure each for C15 and C18. The result remains `C_EXIT_BLOCKED`. C07–C12 subsequently migrated from mutable live-source comparison to matrix-pinned versioned selectors and immutable historical source-authority packets. That migration preserves prior execution evidence and claim ceilings; it is not requalification or recertification.
+The scope amendment removes C02 from the active denominator. C15 now closes on the complete source-derived 44-site ownership registry with atomic observer batches, exact custody and sequence rollback, checked adjacency, terminal settlement, and nil/default-off compatibility. C18 now closes on real adjacent-owner collisions through retention/readback with physical reached observations, external coordinator decisions, cancellation and lifecycle controls, exact custody, and preservation of the earlier-stage winner. The packet therefore contains 23 CLOSED active rows, one superseded historical row (C02), zero UNKNOWN rows, and candidate `C_EXIT_GO`. This packet-level result does not alter the authority ceiling: authority remains 0, accepted remains false, completeness remains `UNKNOWN`, and independent P4 acceptance remains separate.
 
 ## bytes_scanned closure binding
 
@@ -141,6 +141,18 @@ The closure is bound to these immutable revisions and reviewed evidence:
 
 These results close only `logical_buffer_bytes_reserved`. They do not recertify or close C15 or C18, and they do not infer resource-cap closure from work-counter evidence. No repair evidence pin is added because the reviewed canonical successor pin is sufficient.
 
+## C15 closure binding
+
+C15 closes only the private 33,554,432-byte live-owned capacity authority. The complete source-derived census binds 44 accepted sites across owner, alias, copy, transfer, release, and terminal operations. Observer batches are atomic before effects, refusal rolls back sequence and object reservations, custody remains exact through transfer/release and lifecycle, and nil/default-off execution preserves ordinary allocation and result behavior.
+
+The closure is bound to commits `f820b11ffc0105fc54dce33a97eef2a3a3f2a907`, `0a55d8e4809c501c88adde43dd73e8586463eb8b`, and `1d12538874fa6cfd80e9fe5a313e70764c9740f3`; the three pinned test files and five pinned census artifacts recorded in the machine matrix are the exact qualification selection. This does not convert cumulative `logical_buffer_bytes_reserved` work into C15 authority and does not add public API, schema, or enablement.
+
+## C18 closure binding
+
+C18 closes reached-stage precedence through real owner collisions, including object/event before retention and retention before readback. The qualification covers physical arrival versus canonical semantic reach, earlier-first/later-first/simultaneous ordering, cancellation before and after decision, released leases, barrier error and panic, exact retry custody, STOP/RESTART, generation-safe restore, callback lock discipline, and default-off preservation.
+
+The closure retains implementation commit `3af4e1dcf89e533b43840602d976ddc359d2e2e8` and adds `1d12538874fa6cfd80e9fe5a313e70764c9740f3`. The anchored `^TestADR0011C18` package selection executes 43 top-level tests in checker-observed order: 39 collision-suite tests plus four retained runtime-path tests. This verified count supersedes the stale provisional count of 39 for the package-wide anchored selector.
+
 ## Exact amendment binding
 
 The checker accepts `SUPERSEDED_BY_C01` only when all of the following match exactly:
@@ -158,14 +170,11 @@ No other row may use the superseded status. The checker retains the exact ordere
 
 ## Remaining active blockers
 
-| Rows | Blocker | Minimum corrective increment |
-|---|---|---|
-| C15 | The allocation census withholds aggregate acceptance. | Complete ownership, alias, copy, transfer, release, and failure-path accounting. |
-| C18 | Real adjacent collision witnesses are incomplete. | Add production-path collisions through retention/readback. |
+None. All 23 active revised-C rows are CLOSED; C02 remains `SUPERSEDED_BY_C01`.
 
 ## Checker guarantees
 
-The checker validates the exact ordered historical inventory, revised scope identity, accepted amendment bytes, predecessor bytes, audited Git history, tracked packet paths, contained regular files, evidence hashes, concrete named test selection, observed test names/counts, non-wildcard qualification, and cross-cutting fields. It fails closed for every active non-CLOSED row. At this closure state, its expected closure result is exactly two failures—one status failure each for C15 and C18—and `C_EXIT_BLOCKED`. Any additional integrity failure is a separate packet blocker.
+The checker validates the exact ordered historical inventory, revised scope identity, accepted amendment bytes, predecessor bytes, audited Git history, tracked packet paths, contained regular files, evidence hashes, concrete named test selection, observed test names/counts, non-wildcard qualification, and cross-cutting fields. It fails closed for every active non-CLOSED row. At this closure state, its expected result is zero failures and `C_EXIT_GO`. Any integrity failure is a packet blocker.
 
 Mutation controls must cover at least:
 
@@ -181,4 +190,4 @@ Mutation controls must cover at least:
 
 ## Claim ceiling
 
-This packet documents a revised C-only scope. It does not authorize or claim D readiness, public/API/schema changes, occurrence admission, private indexing, path demonstration, push, release, or closure of either remaining active unknown row. All six work accounts remain private and default-off and introduce no public schema. The `logical_buffer_bytes_reserved` closure does not close C15 and does not claim the unavailable production-owner Seal injection.
+This packet records candidate `C_EXIT_GO` only. Authority remains 0, accepted remains false, completeness remains `UNKNOWN`, and independent P4 acceptance is explicitly separate. It does not authorize or claim D readiness, public/API/schema changes, enablement, release, commit, or push.
