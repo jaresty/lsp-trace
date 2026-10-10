@@ -162,3 +162,15 @@ func (l OwnedMethodPairLease) Release() bool {
 	o.mu.Unlock()
 	return true
 }
+
+type callHierarchyObservationOwner struct{}
+
+type callHierarchyObservationLease struct {
+	owner *callHierarchyObservationOwner
+}
+
+func (callHierarchyObservationLease) withObservation(func(callHierarchyObservationView) error) error {
+	return ErrOwnedMethodPairLeaseClosed
+}
+
+func (callHierarchyObservationLease) release() bool { return false }

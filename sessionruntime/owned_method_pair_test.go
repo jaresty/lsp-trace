@@ -30,6 +30,59 @@ func TestOwnedMethodPairBoundedManagedSuccess(t *testing.T) {
 	}
 }
 
+func TestCallHierarchyObservationScaffoldTypeConformance(t *testing.T) {
+	var stringKey callHierarchyJSONRPCRequestKey
+	stringKey.kind = callHierarchyJSONRPCRequestKeyString
+	stringKey.stringValue = "01"
+	var numberKey callHierarchyJSONRPCRequestKey
+	numberKey.kind = callHierarchyJSONRPCRequestKeyNumber
+	if stringKey.kind == numberKey.kind {
+		t.Fatal("string and number request-key kinds collapsed")
+	}
+
+	var requestIdentity callHierarchyRequestIdentity
+	requestIdentity.requestKey = stringKey
+	var transaction callHierarchyTransactionIdentity
+	transaction.request = requestIdentity
+	var predecessor callHierarchyPredecessorCommitment
+	predecessor.transaction = transaction
+	predecessor.requestIdentity = requestIdentity
+	predecessor.requestKey = stringKey
+	predecessor.requestOrdinal = 1
+	var requestFrame callHierarchyOriginalRequestFrameObservation
+	var responseFrame callHierarchyOriginalResponseFrameObservation
+	requestFrame.requestIdentity = requestIdentity
+	responseFrame.requestIdentity = requestIdentity
+
+	var accounting callHierarchyObservationAccounting
+	accounting.bytes = callHierarchyMeasure{available: false}
+	accounting.objects = callHierarchyMeasure{available: true, value: 0}
+	accounting.work = callHierarchyMeasure{available: false}
+	accounting.diagnostics = callHierarchyMeasure{available: true, value: 0}
+	if accounting.validAgainst(callHierarchyObservationLimits{}) {
+		t.Fatal("inert accounting masqueraded as validated")
+	}
+	if callHierarchyObservationTerminalComplete.valid() {
+		t.Fatal("inert terminal validation unexpectedly enabled")
+	}
+
+	if _, ok := (&Manager{}).privateCallHierarchyRequestIdentity(); ok {
+		t.Fatal("inert manager mint seam produced an identity")
+	}
+	if _, ok := newCallHierarchyPredecessorChain([]callHierarchyPredecessorCommitment{predecessor}, callHierarchyObservationLimits{}); ok {
+		t.Fatal("inert predecessor seam constructed a chain")
+	}
+	if _, ok := newCallHierarchyMethodAllowlist([]callHierarchyMethodIdentity{"caller/supplied"}, callHierarchyObservationLimits{}); ok {
+		t.Fatal("inert allowlist seam constructed a value")
+	}
+	if _, ok := newCallHierarchyObservationLimits(1, 1, 1, 1); ok {
+		t.Fatal("inert limit seam validated limits")
+	}
+
+	_ = requestFrame
+	_ = responseFrame
+}
+
 func TestOwnedMethodPairRejectsNonEligibleResults(t *testing.T) {
 	for _, tc := range []struct {
 		name, mode, method    string

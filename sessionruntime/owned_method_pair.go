@@ -190,3 +190,268 @@ func buildOwnedMethodPair(req RoundTripRequest, r RoundTripResult, params, raw j
 	value.Result = append(json.RawMessage(nil), raw...)
 	return &value
 }
+
+// The declarations below are a package-private vocabulary for a future causal
+// Call Hierarchy observation path. This increment does not construct any value.
+type callHierarchyWorkspaceCustody struct {
+	managerNonce [32]byte
+}
+type callHierarchySessionIdentity string
+type callHierarchyGeneration uint64
+type callHierarchyProfileIdentity string
+type callHierarchyBindingIdentity string
+type callHierarchyPredecessorIdentity string
+type callHierarchyMethodIdentity string
+type callHierarchySelectedOrdinal uint64
+
+type callHierarchyJSONRPCRequestKeyKind uint8
+
+const (
+	callHierarchyJSONRPCRequestKeyUnavailable callHierarchyJSONRPCRequestKeyKind = iota
+	callHierarchyJSONRPCRequestKeyString
+	callHierarchyJSONRPCRequestKeyNumber
+)
+
+type callHierarchyJSONRPCRequestKey struct {
+	kind        callHierarchyJSONRPCRequestKeyKind
+	stringValue string
+	numberBytes []byte
+}
+
+type callHierarchyRequestIdentity struct {
+	workspace  callHierarchyWorkspaceCustody
+	session    callHierarchySessionIdentity
+	generation callHierarchyGeneration
+	requestKey callHierarchyJSONRPCRequestKey
+}
+
+type callHierarchyTransactionIdentity struct {
+	request callHierarchyRequestIdentity
+	local   [32]byte
+}
+
+type callHierarchyPredecessorCommitment struct {
+	identity         callHierarchyPredecessorIdentity
+	transaction      callHierarchyTransactionIdentity
+	requestIdentity  callHierarchyRequestIdentity
+	requestKey       callHierarchyJSONRPCRequestKey
+	method           callHierarchyMethodIdentity
+	requestOrdinal   uint64
+	commitmentSHA256 [32]byte
+}
+
+type callHierarchyPredecessorChain struct {
+	commitments []callHierarchyPredecessorCommitment
+}
+
+type callHierarchySelectedItemCommitment struct {
+	ordinal       callHierarchySelectedOrdinal
+	sourceRequest callHierarchyRequestIdentity
+	sourceFrame   callHierarchyTransactionIdentity
+	sourceOffset  uint64
+	sourceLength  uint64
+	exactBytes    []byte
+	exactSHA256   [32]byte
+}
+
+type callHierarchyHandoffCommitment struct {
+	selected         callHierarchySelectedItemCommitment
+	successorRequest callHierarchyRequestIdentity
+	successor        callHierarchyTransactionIdentity
+	successorOffset  uint64
+	successorLength  uint64
+	successorBytes   []byte
+	successorSHA256  [32]byte
+}
+
+type callHierarchyJSONTokenForm uint8
+
+const (
+	callHierarchyJSONTokenFormUnavailable callHierarchyJSONTokenForm = iota
+	callHierarchyJSONTokenFormNull
+	callHierarchyJSONTokenFormEmptyArray
+	callHierarchyJSONTokenFormOther
+)
+
+type callHierarchyOriginalRequestFrameObservation struct {
+	requestIdentity callHierarchyRequestIdentity
+	frameBytes      []byte
+	frameLength     uint64
+	frameSHA256     [32]byte
+	bodyOffset      uint64
+	bodyLength      uint64
+	bodySHA256      [32]byte
+	paramsOffset    uint64
+	paramsLength    uint64
+	paramsSHA256    [32]byte
+	paramsForm      callHierarchyJSONTokenForm
+}
+
+type callHierarchyOriginalResponseFrameObservation struct {
+	requestIdentity callHierarchyRequestIdentity
+	frameBytes      []byte
+	frameLength     uint64
+	frameSHA256     [32]byte
+	bodyOffset      uint64
+	bodyLength      uint64
+	bodySHA256      [32]byte
+	resultOffset    uint64
+	resultLength    uint64
+	resultSHA256    [32]byte
+	resultForm      callHierarchyJSONTokenForm
+}
+
+type callHierarchyMethodAllowlist struct {
+	methods []callHierarchyMethodIdentity
+}
+
+type callHierarchyObservationTerminal uint8
+
+const (
+	callHierarchyObservationTerminalUnavailable callHierarchyObservationTerminal = iota
+	callHierarchyObservationTerminalComplete
+	callHierarchyObservationTerminalSuccessfulEmpty
+	callHierarchyObservationTerminalTransportError
+	callHierarchyObservationTerminalProtocolError
+	callHierarchyObservationTerminalMissingPayload
+	callHierarchyObservationTerminalMalformed
+	callHierarchyObservationTerminalPartialCapture
+	callHierarchyObservationTerminalLimitRefused
+	callHierarchyObservationTerminalCancelled
+)
+
+// valid remains deliberately false until terminal validation is reviewed without
+// changing the regenerated C15 catalog.
+func (callHierarchyObservationTerminal) valid() bool { return false }
+
+type callHierarchyMeasure struct {
+	available bool
+	value     uint64
+}
+
+type callHierarchyObservationLimits struct {
+	maxBytes       uint64
+	maxObjects     uint64
+	maxWork        uint64
+	maxDiagnostics uint64
+}
+
+type callHierarchyObservationAccounting struct {
+	bytes       callHierarchyMeasure
+	objects     callHierarchyMeasure
+	work        callHierarchyMeasure
+	diagnostics callHierarchyMeasure
+}
+
+// validAgainst is an inert future validation seam. A zero scaffold value must
+// not masquerade as validated accounting.
+func (callHierarchyObservationAccounting) validAgainst(callHierarchyObservationLimits) bool {
+	return false
+}
+
+type callHierarchyObservationIdentity struct {
+	request     callHierarchyRequestIdentity
+	profile     callHierarchyProfileIdentity
+	binding     callHierarchyBindingIdentity
+	transaction callHierarchyTransactionIdentity
+	method      callHierarchyMethodIdentity
+}
+
+type callHierarchyObservationRequest struct {
+	identity     callHierarchyObservationIdentity
+	allowlist    callHierarchyMethodAllowlist
+	predecessors callHierarchyPredecessorChain
+	selected     *callHierarchySelectedItemCommitment
+	handoff      *callHierarchyHandoffCommitment
+	limits       callHierarchyObservationLimits
+}
+
+type callHierarchyObservation struct {
+	identity     callHierarchyObservationIdentity
+	predecessors callHierarchyPredecessorChain
+	request      *callHierarchyOriginalRequestFrameObservation
+	response     *callHierarchyOriginalResponseFrameObservation
+	selected     *callHierarchySelectedItemCommitment
+	handoff      *callHierarchyHandoffCommitment
+	terminal     callHierarchyObservationTerminal
+	accounting   callHierarchyObservationAccounting
+}
+
+type callHierarchyObservationView struct {
+	identity     callHierarchyObservationIdentity
+	predecessors []callHierarchyPredecessorCommitment
+	request      *callHierarchyOriginalRequestFrameObservation
+	response     *callHierarchyOriginalResponseFrameObservation
+	selected     *callHierarchySelectedItemCommitment
+	handoff      *callHierarchyHandoffCommitment
+	terminal     callHierarchyObservationTerminal
+	accounting   callHierarchyObservationAccounting
+}
+
+func (callHierarchyPredecessorChain) copyCommitments() []callHierarchyPredecessorCommitment {
+	return nil
+}
+
+func newCallHierarchySelectedItemCommitment(callHierarchySelectedOrdinal, callHierarchyRequestIdentity, callHierarchyTransactionIdentity, uint64, uint64, []byte, callHierarchyObservationLimits) (callHierarchySelectedItemCommitment, bool) {
+	var zero callHierarchySelectedItemCommitment
+	return zero, false
+}
+
+func (callHierarchySelectedItemCommitment) copyBytes() []byte { return nil }
+
+func newCallHierarchyHandoffCommitment(callHierarchySelectedItemCommitment, callHierarchyRequestIdentity, callHierarchyTransactionIdentity, uint64, uint64, []byte, callHierarchyObservationLimits) (callHierarchyHandoffCommitment, bool) {
+	var zero callHierarchyHandoffCommitment
+	return zero, false
+}
+
+func (callHierarchyHandoffCommitment) copySuccessorBytes() []byte { return nil }
+
+// Payload form is eventually derived from the exact payload span; callers do
+// not supply an authoritative enum value.
+func newCallHierarchyOriginalRequestFrameObservation(callHierarchyRequestIdentity, []byte, uint64, uint64, uint64, uint64, callHierarchyObservationLimits) (callHierarchyOriginalRequestFrameObservation, bool) {
+	var zero callHierarchyOriginalRequestFrameObservation
+	return zero, false
+}
+
+func newCallHierarchyOriginalResponseFrameObservation(callHierarchyRequestIdentity, []byte, uint64, uint64, uint64, uint64, callHierarchyObservationLimits) (callHierarchyOriginalResponseFrameObservation, bool) {
+	var zero callHierarchyOriginalResponseFrameObservation
+	return zero, false
+}
+
+func (callHierarchyOriginalRequestFrameObservation) copyFrameBytes() []byte   { return nil }
+func (callHierarchyOriginalRequestFrameObservation) copyParamsBytes() []byte  { return nil }
+func (callHierarchyOriginalResponseFrameObservation) copyFrameBytes() []byte  { return nil }
+func (callHierarchyOriginalResponseFrameObservation) copyResultBytes() []byte { return nil }
+func (callHierarchyMethodAllowlist) copyMethods() []callHierarchyMethodIdentity {
+	return nil
+}
+
+// privateCallHierarchyRequestIdentity is the only mint seam. It intentionally
+// returns no identity until Manager-owned workspace/session/generation and exact
+// JSON-RPC key custody are connected in a separately reviewed behavior phase.
+func (*Manager) privateCallHierarchyRequestIdentity() (callHierarchyRequestIdentity, bool) {
+	var zero callHierarchyRequestIdentity
+	return zero, false
+}
+
+func newCallHierarchyPredecessorChain([]callHierarchyPredecessorCommitment, callHierarchyObservationLimits) (callHierarchyPredecessorChain, bool) {
+	var zero callHierarchyPredecessorChain
+	return zero, false
+}
+
+func newCallHierarchyMethodAllowlist([]callHierarchyMethodIdentity, callHierarchyObservationLimits) (callHierarchyMethodAllowlist, bool) {
+	var zero callHierarchyMethodAllowlist
+	return zero, false
+}
+
+func (callHierarchyMethodAllowlist) permits(callHierarchyMethodIdentity) bool { return false }
+
+func newCallHierarchyObservationLimits(uint64, uint64, uint64, uint64) (callHierarchyObservationLimits, bool) {
+	var zero callHierarchyObservationLimits
+	return zero, false
+}
+
+func newCallHierarchyObservationRequest(callHierarchyObservationIdentity, callHierarchyMethodAllowlist, callHierarchyPredecessorChain, *callHierarchySelectedItemCommitment, *callHierarchyHandoffCommitment, callHierarchyObservationLimits) (callHierarchyObservationRequest, bool) {
+	var zero callHierarchyObservationRequest
+	return zero, false
+}

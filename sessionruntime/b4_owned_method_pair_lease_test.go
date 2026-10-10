@@ -28,6 +28,32 @@ func runOwnedPairDeadline(t *testing.T, fn func()) {
 	}
 }
 
+func TestCallHierarchyObservationScaffoldZeroLeaseAndAttachments(t *testing.T) {
+	lease, ok := (RoundTripResult{}).privateCallHierarchyObservationLease()
+	if ok || lease != (callHierarchyObservationLease{}) {
+		t.Fatal("zero result exposed a scaffold lease")
+	}
+	called := false
+	if err := lease.withObservation(func(callHierarchyObservationView) error {
+		called = true
+		return nil
+	}); !errors.Is(err, ErrOwnedMethodPairLeaseClosed) || called {
+		t.Fatal("zero lease admitted an observation callback")
+	}
+	if lease.release() {
+		t.Fatal("zero lease released an owner")
+	}
+
+	requestField, ok := reflect.TypeOf(RoundTripRequest{}).FieldByName("callHierarchyObservation")
+	if !ok || requestField.Tag.Get("json") != "-" {
+		t.Fatal("request scaffold attachment is not private JSON-ignored state")
+	}
+	resultField, ok := reflect.TypeOf(RoundTripResult{}).FieldByName("callHierarchyObservation")
+	if !ok || resultField.Tag.Get("json") != "-" {
+		t.Fatal("result scaffold attachment is not private JSON-ignored state")
+	}
+}
+
 func TestPrivateB4OwnedMethodPairAtomicBatchCausalFixture(t *testing.T) {
 	runOwnedPairDeadline(t, func() {
 		account := mustPrivateB4ByteAccountV2(t)

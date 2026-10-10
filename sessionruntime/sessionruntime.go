@@ -280,10 +280,11 @@ type RoundTripRequest struct {
 	CaptureDocumentSymbolRequestFrameMaxBytes  int64 `json:"-"`
 	CaptureDocumentSymbolResponseFrameMaxBytes int64 `json:"-"`
 	// Diagnostic join values must be opaque safe identities, never labels or paths.
-	DiagnosticCallerID string
-	DiagnosticTargetID string
-	DiagnosticSequence uint64 // scoped to the acquisition owner, not globally allocated
-	DiagnosticObserver func(manageddiagnostic.Record)
+	DiagnosticCallerID       string
+	DiagnosticTargetID       string
+	DiagnosticSequence       uint64 // scoped to the acquisition owner, not globally allocated
+	DiagnosticObserver       func(manageddiagnostic.Record)
+	callHierarchyObservation *callHierarchyObservationRequest `json:"-"`
 }
 
 // RoundTripResult is the immutable terminal observation of one transaction.
@@ -725,10 +726,16 @@ type RoundTripResult struct {
 	privateB4RetainedNotifications *privateB4RetainedNotificationOwner
 	privateB4ServerError           *privateB4ServerErrorOwner
 	privateB4RetainedResponses     *privateB4RetainedResponseOwner
+	callHierarchyObservation       *callHierarchyObservationOwner `json:"-"`
 	definitionResponseFrame        []byte
 	referencesResponseFrame        []byte
 	documentSymbolRequestFrame     []byte
 	documentSymbolResponseFrame    []byte
+}
+
+func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyObservationLease, bool) {
+	var zero callHierarchyObservationLease
+	return zero, false
 }
 
 // RoundTrip executes one complete protocol transaction while exclusively
