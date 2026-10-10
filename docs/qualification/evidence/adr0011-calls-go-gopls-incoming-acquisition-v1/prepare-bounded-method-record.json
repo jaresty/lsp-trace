@@ -1,0 +1,40 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.bounded-method-record.v1",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "operation_ordinal": 0,
+  "method": "textDocument/prepareCallHierarchy",
+  "target_selection_mode": "DIRECT_POSITION",
+  "request": {
+    "logical_params": {
+      "textDocument": {"uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go"},
+      "position": {"line":749,"character":24}
+    },
+    "original_jsonrpc_frame_available": false,
+    "original_params_bytes_available": false,
+    "request_id_available": false,
+    "wire_byte_length": null,
+    "wire_sha256": null
+  },
+  "result": {
+    "terminal_outcome": "SUCCEEDED_AS_REPORTED_BY_COMPOSED_ACQUISITION",
+    "prepare_succeeded": true,
+    "reported_item_projection": {
+      "name":"IncomingCalls",
+      "kind":12,
+      "detail":"lsp-trace/incomingops • executor.go",
+      "uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go",
+      "range":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}},
+      "selectionRange":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}}
+    },
+    "original_jsonrpc_frame_available": false,
+    "original_result_bytes_available": false,
+    "raw_cardinality_available": false,
+    "raw_order_available": false,
+    "tags_available": false,
+    "data_available": false,
+    "wire_byte_length": null,
+    "wire_sha256": null
+  },
+  "role_status": "MISSING",
+  "reason": "the composed incoming artifact proves prepare success and a target projection but does not retain exact request/result bytes, raw array cardinality/order, tags, or opaque data"
+}
