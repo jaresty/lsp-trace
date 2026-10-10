@@ -42,6 +42,7 @@ This decision is additive to:
 - [ADR0007 normative consolidation decision](2026-10-08-normative-consolidation.md)
 - [ADR0011 versioned definition/reference grouping evidence](../../../adr/0011-versioned-definition-reference-grouping-evidence.md)
 - [ADR0012 context-bounded MCP vNext](../../../adr/0012-context-bounded-mcp-vnext.md)
+- [Provisional census-to-candidate workflow](2026-10-10-census-catalog-candidate-workflow.md)
 - [ADR0009 provenance-bounded semantic discovery](../../../adr/0009-provenance-bounded-semantic-discovery.md)
 
 It does not mutate frozen campaign roots, predecessor manifests, schemas, qualification artifacts, runtime directories, or existing ADR text. Later accepted contracts may cite this design, but this design alone is not an implementation authority.
@@ -356,6 +357,10 @@ No contingency permits hidden retry, broader evidence, alternate ownership, infe
 ### Design provenance (non-normative)
 
 The parallel-request qualification lens and the deferred bounded-mailbox contingency were prompted in part by reviewing [Francis](https://gofrancis.dev/), a Go distributed-actor and durable-workflow project whose documented concepts include turn-based actor invocation, durable state, alarms, and workflow recovery; source is published at [ItalyPaleAle/francis](https://github.com/ItalyPaleAle/francis). This citation records design provenance only. lsp-trace does not depend on, adopt, vendor, qualify, or claim semantic equivalence with Francis, and Francis behavior is not evidence that this bridge satisfies any local custody, concurrency, exact-once, refusal-before-effect, restart, or authority requirement. The normative rules are only those stated and independently qualified in lsp-trace contracts.
+
+## Provisional ordinary CLI entry point
+
+The [provisional census-to-candidate workflow decision](2026-10-10-census-catalog-candidate-workflow.md) selects `lsp-trace census --catalog` as the ordinary LLM-facing spelling to evaluate for the eventual idempotent composition. Program C remains transparent in ordinary use and directly accessible only as an advanced qualification, replay, or diagnostic surface. This spelling does not alter current census/catalog behavior and grants no implementation or exposure authority.
 
 ## Consolidated result identity
 

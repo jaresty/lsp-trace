@@ -28,7 +28,7 @@ lsp_artifact_read
 lsp_session
 ```
 
-A later qualification may admit a few small workflow-oriented tools such as `lsp_inspect`, `lsp_trace`, or `lsp_discover`. Those tools are thin adapters over the same execution kernel and do not own independent semantics.
+A later qualification may admit a few small workflow-oriented tools such as `lsp_inspect`, `lsp_trace`, or a candidate-workflow adapter. Those tools are thin adapters over the same execution kernel and do not own independent semantics. The provisional ordinary CLI entry point for candidate generation is [`lsp-trace census --catalog`](../pilot/adr0007/decisions/2026-10-10-census-catalog-candidate-workflow.md); MCP vNext may expose an equivalent intent-level workflow without copying the CLI grammar or requiring ordinary callers to invoke Program C directly.
 
 This ADR permits a breaking transport redesign. It does not permit rewriting retained artifacts, weakening validation, changing authority, silently widening qualified operations, or enabling public execution.
 
@@ -102,9 +102,9 @@ The compact surface must preserve qualified access to existing capabilities, inc
 - Structural Context and source projection;
 - workspace-symbol location and census;
 - retained inspection, hydration, and verification;
-- Program C grouping, composition, instability, and relation-scoped coupling when separately qualified;
+- Program C grouping, composition, instability, and relation-scoped coupling when separately qualified, either as advanced operations or transparently within a qualified workflow;
 - structural delta and retained artifact readers;
-- future private ADR 0007 workflows when separately authorized.
+- the provisional census-to-candidate workflow when privately qualified and separately authorized, without promoting its candidates to accepted features.
 
 A transport redesign cannot claim feature parity from operation-name counts. Qualification uses behavior, canonical artifact, failure, limit, custody, and authority equivalence.
 
