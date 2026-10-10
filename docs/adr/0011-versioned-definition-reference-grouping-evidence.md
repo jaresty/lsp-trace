@@ -262,6 +262,14 @@ Every enabled definition/reference-only or mixed grouping mode also requires a s
 
 Historical CALLS-only instability artifacts and canonical bytes remain unchanged. The successor contract is additive and must not reinterpret or silently widen the existing v1 contract. Instability measures sensitivity of the bounded structural partition under declared seeds and perturbations; it establishes neither feature identity, semantic confidence, completeness, acceptance, nor universal stability.
 
+### Relation-scoped design coupling
+
+Cross-seed partition instability is distinct from Robert Martin-style coupling instability. The historical CALLS metric and its canonical bytes remain unchanged. Additive successor structural results may report separately typed `CALLS`, `REFERENCES_SYMBOL`, and `RESOLVES_TO_DEFINITION` coupling scopes. Each scope records distinct non-self afferent neighbors (`Ca`), distinct non-self efferent neighbors (`Ce`), and `I = Ce / (Ca + Ce)`, with `I = 0` for a zero denominator, plus exact admitted relation-family, projection, node-universe, omission, and completeness accounting.
+
+Definition/reference occurrences must not be relabeled as calls or silently folded into historical CALLS counts. Any combined-family coupling value requires an immutable, independently qualified composition policy that freezes direction, aggregation level, duplicate and multiplicity handling, weighting, builtin/import/generated/external treatment, denominator rules, and unavailable-evidence behavior. Without that policy, live and retained results expose only the separately typed scopes and an explicit combined result of `UNAVAILABLE` or `INCOMPLETE`.
+
+The same canonical relation-scoped values and identities must be available in live Structural Context results, retained/static artifacts, and additive Structural Delta comparisons. A value describes dependency balance in one bounded admitted graph; it does not by itself establish fragility, defect risk, architecture quality, feature identity, ownership, completeness, or acceptance.
+
 ## Stage 6: CALLS-only consumers and no-CALLS communities
 
 Representative selection and outward-consumer selection remain CALLS-only in the initial version.
@@ -294,6 +302,7 @@ Version separately:
 - grouping policy;
 - Program C result and logical digest;
 - cross-seed instability request, run inventory, and result;
+- relation-scoped design-coupling result and optional qualified combined-family result;
 - snapshot;
 - target/community packet;
 - checkpoint;
@@ -312,6 +321,8 @@ Replay uses only immutable named artifacts. It cannot query a language server, i
 ### CLI and MCP
 
 Future CLI and MCP surfaces, if separately authorized, use additive versioned request/result contracts. They expose explicit input-family and grouping-policy selectors. Omission means `CALLS_ONLY` at every compatibility surface. Every enabled definition/reference-only or mixed live grouping result has CLI/MCP parity for its versioned successor instability artifact; a surface that exposes such grouping without its matching instability result is incomplete and remains disabled.
+
+Live Structural Context, retained/static structural artifacts, and Structural Delta expose identical canonical relation-scoped design-coupling values when the same admitted graph identity and policy apply. Capability discovery distinguishes historical CALLS coupling, separately typed D/R coupling, and any qualified combined-family coupling; absence of D/R acquisition or combined-policy qualification is explicit and never falls back to CALLS-only while labeled combined.
 
 Capability discovery reports support by exact family/version/method/policy tuple. `SUPPORTED` means an implementation contract is present, not that the current server advertises definition/references capability or that a policy is qualified for every corpus.
 
@@ -345,8 +356,11 @@ Go qualification covers:
 - deterministic canonical ordering, identities, partition bytes, and replay;
 - definition-only, references-only, references-plus-definitions, and mixed CALLS-plus-definition/reference instability campaigns with exact seed/run inventory, label-independent matching, unmatched-community accounting, threshold boundaries, and failed/incomplete publication blocking;
 - independent substitution checks for every instability predecessor identity, digest, byte length, policy, parameter, seed, resource limit, and grouping result;
-- CLI/MCP parity for both grouping and versioned successor instability results over the shared kernel when those surfaces are authorized;
-- historical CALLS-only grouping and instability fixtures remaining byte-identical.
+- relation-scoped `Ca`, `Ce`, and coupling-instability results for CALLS, references, and definitions, including self-loop exclusion, parallel-neighbor deduplication, exact direction, empty denominators, omitted/external evidence, and incomplete acquisition;
+- qualified combined-family coupling fixtures that reject missing, stale, mismatched, or substituted composition policies and never relabel D/R as CALLS;
+- byte-identical parity of relation-scoped coupling across live Structural Context, retained/static artifacts, and additive Structural Delta results;
+- CLI/MCP parity for grouping, versioned successor instability, and relation-scoped coupling results over the shared kernel when those surfaces are authorized;
+- historical CALLS-only grouping, cross-seed instability, and coupling fixtures remaining byte-identical.
 
 ### Adversarial high-degree collapse cases
 
@@ -430,6 +444,7 @@ Rejected for the initial version. Representative and outward-consumer semantics 
 6. How should a symbol-level reference source with no occurrence range be weighted relative to exact occurrence evidence?
 7. Which replay environment dimensions are required for byte-identical numerical replay across supported platforms?
 8. Which future ADR, if any, may define reference-aware representatives or outward consumers?
-9. Which additive CLI/MCP names, schema versions, and advertisement profiles should expose the new family and its mandatory successor instability result after qualification and separate implementation authorization?
+9. Which additive CLI/MCP names, schema versions, and advertisement profiles should expose the new family, its mandatory successor instability result, and relation-scoped design coupling after qualification and separate implementation authorization?
+10. At which node/package/module aggregation levels should D/R coupling be reported, and which independently qualified composition policy, if any, may produce a combined-family coupling value?
 
 Authorized implementation and qualification work may proceed while these decisions remain open. Until the relevant contracts and policy decisions are frozen and the matching grouping policy is independently qualified, definition/reference grouping remains disabled and admission fails closed with `GROUPING_POLICY_UNQUALIFIED`. Public CLI/MCP enablement requires its separate qualification and authorization; ADR 0010 attribution still waits for the immutable inventory and anchors.
