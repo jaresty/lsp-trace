@@ -59,6 +59,8 @@ type VerifiedQualification struct {
 	policyID, policyDigest, inputID, inputDigest string
 	policyByteLength, inputByteLength            int
 	validFromEpoch, validThroughEpoch            uint64
+	receiptID, receiptDigest                     string
+	receiptByteLength                            int
 }
 
 func (r GroupingPolicyQualificationReceipt) CanonicalBytes() []byte {
@@ -440,10 +442,12 @@ func verifyQualification(r GroupingPolicyQualificationReceipt, p GroupingPolicy,
 	if strict && !exactTestReceipt(r.doc) {
 		return VerifiedQualification{}, errors.New("test receipt substitution")
 	}
+	receiptCommitment := receiptDigest(r.canonical)
 	return VerifiedQualification{
 		policyID: p.ID(), policyDigest: p.Digest(), policyByteLength: p.ByteLength(),
 		inputID: in.ID(), inputDigest: in.Digest(), inputByteLength: in.ByteLength(),
 		validFromEpoch: r.doc.ValidFromEpoch, validThroughEpoch: r.doc.ValidThroughEpoch,
+		receiptID: receiptCommitment, receiptDigest: receiptCommitment, receiptByteLength: len(r.canonical),
 	}, nil
 }
 func exactTestReceipt(d qualificationDocument) bool {

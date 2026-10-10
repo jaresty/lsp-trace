@@ -177,6 +177,45 @@ func (a AdmittedInput) Contributions() []Contribution         { return a.artifac
 func (a AdmittedInput) EndpointCustody() []EndpointCustody    { return a.artifact.EndpointCustody() }
 func (a AdmittedInput) CandidateOutcomes() []CandidateOutcome { return a.artifact.CandidateOutcomes() }
 func (a AdmittedInput) Accounting() Accounting                { return a.artifact.Accounting() }
+func (a AdmittedInput) PredecessorIdentityForContribution(c Contribution) string {
+	switch c.Kind {
+	case string(programcadmission.TypedCalls):
+		return c.AcquisitionReceiptSelector
+	case string(programcadmission.TypedReferencesSymbol), string(programcadmission.TypedResolvesToDefinition):
+		return c.MethodEvidenceSelector
+	default:
+		return ""
+	}
+}
+func (a AdmittedInput) CustodyIdentityForOccurrence(identity string) string {
+	var rows []EndpointCustody
+	for _, c := range a.artifact.EndpointCustody() {
+		if c.OccurrenceIdentity == identity {
+			rows = append(rows, c)
+		}
+	}
+	if len(rows) == 0 {
+		return ""
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Endpoint != rows[j].Endpoint {
+			return rows[i].Endpoint < rows[j].Endpoint
+		}
+		if rows[i].EndpointRole != rows[j].EndpointRole {
+			return rows[i].EndpointRole < rows[j].EndpointRole
+		}
+		if rows[i].PredecessorSelector != rows[j].PredecessorSelector {
+			return rows[i].PredecessorSelector < rows[j].PredecessorSelector
+		}
+		return rows[i].Custody < rows[j].Custody
+	})
+	h := sha256.New()
+	h.Write([]byte("lsp-trace:reference-grouping-occurrence-custody:v1\x00"))
+	for _, c := range rows {
+		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\n", c.Endpoint, c.OccurrenceIdentity, c.EndpointRole, c.PredecessorSelector, c.Custody)
+	}
+	return fmt.Sprintf("sha256:%x", h.Sum(nil))
+}
 func (a AdmittedInput) MatchesTypedInput(in programcadmission.TypedInput) bool {
 	projection, err := programcadmission.PreparePrivateLeidenProjection(in)
 	if err != nil {
