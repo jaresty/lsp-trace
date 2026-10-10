@@ -1,0 +1,47 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.acquisition-stop.v1",
+  "profile_id": "CALLS_GO_GOPLS_OUTGOING_EXACT_V1",
+  "canonical_identity_domain": "lsp-trace.adr0011.calls.go.gopls.outgoing.exact.v1",
+  "track": "B",
+  "status": "STOP_BEFORE_SEMANTIC_EFFECTS",
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "production_admission": "REFUSED_MISSING_EVIDENCE",
+  "source_ref": "pi-agent-76161000-8f12-49d",
+  "source_commit": "bafd546b98a284df5916b24a5549fc508d93b82b",
+  "source_tree": "77008a16f18c86bab79e3db1de7bdad83bd97b5e",
+  "plan_review_token": "ADR0011_CALLS_OUTGOING_PLAN_GO",
+  "semantic_requests_issued": 0,
+  "initialize_requests_issued": 0,
+  "prepare_call_hierarchy_requests_issued": 0,
+  "outgoing_calls_requests_issued": 0,
+  "manifest_transition": "NONE",
+  "stop_reason": "EXACT_MANAGED_PREPARE_AND_OUTGOING_PAIRED_TRANSACTION_CUSTODY_UNAVAILABLE",
+  "artifact": {
+    "role": "validated_stop_packet",
+    "locator": "docs/qualification/evidence/adr0011-calls-go-gopls-outgoing-acquisition-v1/STOP.md",
+    "byte_length": 6691,
+    "sha256": "sha256:8525c196b4fd330d8576d57c677f688738fa91bb634639e92f991b255e6c6b89",
+    "provenance": "prospective source-visible preflight at exact accepted ref; no semantic execution; no historical payload reconstruction",
+    "exact_profile_binding": "CALLS_GO_GOPLS_OUTGOING_EXACT_V1",
+    "relevance": "records the mandatory observability stop and smallest unimplemented test-only seam proposal",
+    "freshness": "created against source_commit and source_tree above"
+  },
+  "review": {
+    "producer_self_review": false,
+    "independent_review_status": "PENDING_SEPARATE_LATER_REVIEWER",
+    "evidence_go_claimed": false,
+    "profile_go_claimed": false
+  },
+  "forbidden_effects": {
+    "source_or_plan_edits": false,
+    "vector_or_review_edits": false,
+    "production_code_edits": false,
+    "activation": false,
+    "incoming_or_bidirectional_authority": false,
+    "semantic_vector_execution": false,
+    "stage3_to_stage7_go": false,
+    "cli_or_mcp_exposure": false
+  }
+}
