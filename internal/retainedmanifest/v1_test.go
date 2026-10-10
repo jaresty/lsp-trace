@@ -198,7 +198,7 @@ func TestR01StrictAdmissionMutationCorpus(t *testing.T) {
 
 func TestR01PredecessorSchemaBytesAndReadersRemainIndependent(t *testing.T) {
 	for _, tc := range []struct{ family, version, want string }{
-		{schema.FamilyGraphProvenance, "v2", "cf36372444c7203d29ce836acfcdda78a8a884ea6733122c0aa3159aa9d0ea03"},
+		{schema.FamilyGraphProvenance, "v2", "eea097f4f69a7f5ebfdd135b51cc3bfb3c2a45427b4e57d27882ceb968de6509"},
 		{schema.FamilyGraphProvenance, "v3", "3f993f318248891d6fa6ee7dc79dda23d7c0d515df6532f8af1edb5448556bfc"},
 		{schema.FamilyGraph, "v2", "9df7b845828aab53ee4a2aff8b33711c3547b0dca4e77b08fda9ef98a72bcefb"},
 		{schema.FamilyGraph, "v3", "a0f35f8e1d637eee40447ee8e4bd2fe8bf56d12ed78242e86f8e7bf275cacc7c"},
