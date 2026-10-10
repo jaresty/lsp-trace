@@ -5,6 +5,8 @@
 
 Implementation note: this historical proposal used the provisional name `discover`. The current CLI ships the settled `census` command for accountable enumeration and ships `trace` for exact targets. This does not retroactively accept every grammar, MCP, help-layout, or migration decision proposed below; operations 34 (`census`) and 35 (`lsp_trace_v1_structural_context`) are registered; the qualified `context --machine` CLI shares operation 35's transient result projection.
 
+Future breaking public-surface work is governed by [ADR 0012: Context-bounded MCP vNext](0012-context-bounded-mcp-vnext.md). That proposal preserves qualified operation kernels and historical artifact readers while allowing incompatible tool names, envelopes, profiles, and advertisement contracts; it does not retroactively change this ADR.
+
 ## Context
 
 The current CLI exposes acquisition history directly: `slice`, `incoming`, acquisition and output versions, `--production-v5`, `--graph-provenance`, seed manifests, grouping switches, and several overlapping selectors. The full MCP profile similarly exposes every historical and specialist operation. This makes implementation history look like the product model.

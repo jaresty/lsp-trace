@@ -31,7 +31,7 @@ Execution is explicitly **DISABLED** until all required gates are met and a sepa
 4. **Parallel-MCP runtime qualification gate:** retained qualification must demonstrate safe, bounded behavior for realistic concurrent requests from one host against the same and different managed sessions. It must preserve C18 ownership, refusal-before-effect, exact-once terminal accounting, stale-generation rejection, and fresh-owner restart semantics. Parallel arrival or completion order is never semantic order; dependent requests require explicit predecessor identities. This gate qualifies existing behavior and does not pre-authorize a mailbox or scheduler.
 5. **Execution-authority gate:** even after the four technical gates pass, a separate decision must authorize execution/public surface exposure for this bridge.
 
-Until all of those gates pass, this document is prose design only. It does not authorize public CLI, MCP, API, schema registry, code generation, private runtime dispatch, local model execution, hosted model execution, production enablement, release, migration, or mutation of frozen artifacts.
+Until all of those gates pass, this document is prose design only. It does not authorize public CLI, MCP, API, schema registry, code generation, private runtime dispatch, local model execution, hosted model execution, production enablement, release, migration, or mutation of frozen artifacts. If public bridge exposure is later authorized, it targets the compact MCP generation governed by ADR 0012 rather than enlarging the historical default direct-tool surface; ADR 0012 acceptance and qualification remain separate gates.
 
 ## Normative cross-links and boundaries
 
@@ -41,6 +41,7 @@ This decision is additive to:
 - [ADR0007 caller-provided inference amendment](../../../adr/0007-caller-provided-inference-amendment.md)
 - [ADR0007 normative consolidation decision](2026-10-08-normative-consolidation.md)
 - [ADR0011 versioned definition/reference grouping evidence](../../../adr/0011-versioned-definition-reference-grouping-evidence.md)
+- [ADR0012 context-bounded MCP vNext](../../../adr/0012-context-bounded-mcp-vnext.md)
 - [ADR0009 provenance-bounded semantic discovery](../../../adr/0009-provenance-bounded-semantic-discovery.md)
 
 It does not mutate frozen campaign roots, predecessor manifests, schemas, qualification artifacts, runtime directories, or existing ADR text. Later accepted contracts may cite this design, but this design alone is not an implementation authority.

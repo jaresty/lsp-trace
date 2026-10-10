@@ -2,6 +2,8 @@
 
 Status: current advertisement contract for ADR 0004
 
+The current profiles below remain the historical contract. The proposed incompatible `compact-vnext` generation is governed by [ADR 0012](adr/0012-context-bounded-mcp-vnext.md); no vNext profile is active or authorized yet.
+
 This document fixes the MCP registry simplification boundary. The current registry implements profile-filtered advertisement and canonical `lsp_trace_v1_trace` operation 33. It does not add `lsp_trace_v1_discover`, rename historical tools, or renumber operations 1–32.
 
 ## Terms
