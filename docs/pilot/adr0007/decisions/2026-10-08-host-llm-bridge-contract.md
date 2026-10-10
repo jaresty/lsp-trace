@@ -352,6 +352,10 @@ If parallel safety fails, the only eligible fallback candidate is separately qua
 
 No contingency permits hidden retry, broader evidence, alternate ownership, inferred semantic order, reordered operations, fallback policy selection, or conversion of a failed/refused request into success. Every activated mode is explicit in the request, result, stop-gate receipt, and consolidated identity.
 
+### Design provenance (non-normative)
+
+The parallel-request qualification lens and the deferred bounded-mailbox contingency were prompted in part by reviewing [Francis](https://gofrancis.dev/), a Go distributed-actor and durable-workflow project whose documented concepts include turn-based actor invocation, durable state, alarms, and workflow recovery; source is published at [ItalyPaleAle/francis](https://github.com/ItalyPaleAle/francis). This citation records design provenance only. lsp-trace does not depend on, adopt, vendor, qualify, or claim semantic equivalence with Francis, and Francis behavior is not evidence that this bridge satisfies any local custody, concurrency, exact-once, refusal-before-effect, restart, or authority requirement. The normative rules are only those stated and independently qualified in lsp-trace contracts.
+
 ## Consolidated result identity
 
 `consolidatedResultId` is conceptually computed from canonical bytes for:
