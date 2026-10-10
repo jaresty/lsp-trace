@@ -1410,6 +1410,8 @@ func TestStage7ARepositoryDiffScopeAllowList(t *testing.T) {
 	allowed := map[string]bool{
 		"internal/programcrepresentative/source_context.go":          true,
 		"internal/programcrepresentative/source_context_red_test.go": true,
+		"internal/programcrepresentative/stage7b_custody.go":         true,
+		"internal/programcrepresentative/stage7b_causal_red_test.go": true,
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
 		if line == "" {
@@ -1418,10 +1420,8 @@ func TestStage7ARepositoryDiffScopeAllowList(t *testing.T) {
 		if len(line) < 4 {
 			t.Fatalf("ASSERT_STAGE7_DIFF_SCOPE_MALFORMED_STATUS line=%q", line)
 		}
-		path := strings.TrimSpace(line[3:])
-		if arrow := strings.LastIndex(path, " -> "); arrow >= 0 {
-			path = path[arrow+4:]
-		}
+		fields := strings.Fields(line)
+		path := fields[len(fields)-1]
 		if !allowed[path] {
 			t.Fatalf("ASSERT_STAGE7_DIFF_SCOPE_FORBIDS_STAGE7B_STAGE7C_PUBLIC_OR_DOC path=%s status=%s", path, line[:2])
 		}
