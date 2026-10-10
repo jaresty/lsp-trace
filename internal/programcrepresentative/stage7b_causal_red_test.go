@@ -995,6 +995,9 @@ func TestStage7BWorkspaceFreeProductionSurfaceAndNoLaterCoupling(t *testing.T) {
 		"internal/programcrepresentative/source_context_red_test.go": true,
 		"internal/programcrepresentative/stage7b_causal_red_test.go": true,
 		"internal/programcrepresentative/stage7b_custody.go":         true,
+		"internal/programc/stage7c_artifacts_red_test.go":            true,
+		"internal/programc/stage7c_coupling.go":                      true,
+		"internal/programc/stage7c_instability.go":                   true,
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(changed)), "\n") {
 		if line == "" {
