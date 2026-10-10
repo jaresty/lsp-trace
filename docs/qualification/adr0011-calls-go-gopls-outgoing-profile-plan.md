@@ -45,7 +45,9 @@ For queried prepared caller `A`, outgoing response member ordinal `r`, returned 
 - each `fromRanges[s]` is a call-site range in the queried caller item/document, not a range in `to`;
 - retain exact returned `to`, exact range, response/member ordinal, range ordinal, request ordinal, expansion ordinal, selected prepared-caller ordinal, source URI, and encoding;
 - admit one occurrence per range; a non-null empty `fromRanges` contributes zero occurrences and remains a successful member with zero sites;
-- missing or null `fromRanges` is malformed, not empty;
+- a terminally successful, complete top-level `callHierarchy/outgoingCalls` result token of JSON `null` is successful-empty exactly as acquired: retain its null token/bytes and response ordinal, count one begun successful expansion, and produce zero members, ranges, occurrences, rejected rows, and production-visible effects; its canonical CALLS representation equals `[]` while source custody and identity remain distinct;
+- missing top-level payload is evidence-missing; transport/protocol error is failed; malformed top level/member data and partial/truncated response are atomic typed refusals; none is top-level null success;
+- missing or null member `fromRanges` is malformed, not empty;
 - duplicate equal ranges and repeated equal members remain distinct occurrences;
 - parallel caller→callee edges and self-loops remain explicit occurrences;
 - canonical sorting may derive another order but cannot erase or rewrite source ordinals.
@@ -63,7 +65,7 @@ A gopls/toolchain/environment/repository/workspace artifact used by another prof
 Persist typed refusal, with zero qualified occurrences and zero production-visible effects, for:
 
 - prepare request/result missing, null, empty, no match, ambiguous, ordinal out of range, target mismatch, malformed, partial, reordered, substituted, stale, foreign, error, cancellation, timeout, unsupported, or ceiling-blocked;
-- outgoing request/result missing, null/empty when not explicitly qualified, malformed top level/member/range, partial prefix, reordered, substituted, stale, foreign workspace/session/generation, error, cancellation, timeout, unsupported, or ceiling-blocked;
+- outgoing request/result missing, transport/protocol error, malformed top level/member/range, partial/truncated prefix, reordered, substituted, stale, foreign workspace/session/generation, cancellation, timeout, unsupported, or ceiling-blocked; successful complete top-level `null` and `[]` are successful-empty and are excluded from refusal;
 - changed caller item/data, returned callee identity, URI/range/selectionRange/kind/name, `fromRanges`, ordinal, capability, encoding, provider, toolchain, environment, repository, file, or admission envelope;
 - copied, resealed, cross-profile, synthetic, digest-only, self-reviewed, or plan-GO-shaped evidence.
 
@@ -82,7 +84,7 @@ Required closed accounting includes:
 - every admitted occurrence references exactly one retained member/range location;
 - checked overflow, underflow, duplicate ordinal, impossible total, exact-limit mismatch, or plus-one input refuses before every production-visible effect.
 
-No ceiling borrows from another and no truncation is complete success.
+No ceiling borrows from another and no truncation is complete success. Successful top-level `null` consumes the same request/message/byte/time/work accounting actually used, closes the expansion as successful, and contributes zero member/range/occurrence counts; it does not waive any ceiling or raise completeness, authority, admission, or evidence status.
 
 ## Binding future semantic-vector boundary
 

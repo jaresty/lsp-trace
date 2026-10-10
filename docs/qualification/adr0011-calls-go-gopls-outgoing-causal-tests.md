@@ -64,11 +64,11 @@ Permute prepare items, outgoing response members, and range arrays. Require chan
 ### O16 — prepare terminal matrix
 Exercise missing, null, empty, one/many items, no/ambiguous match, invalid ordinal, malformed first/later item, truncated capture, reorder, substitution, stale/foreign input, server error, cancellation, timeout, unsupported, and ceiling refusal. Every nonqualified outcome has zero outgoing dispatch and effects.
 
-### O17 — outgoing empty and null remain distinct
-Exercise `[]`, `null`, and missing payload separately. `[]` is complete-empty. `null` is complete-empty only if independently qualified for exact gopls; otherwise typed refusal. Missing is always evidence-missing. Their bytes and identities never alias.
+### O17 — successful top-level null is successful-empty
+Exercise successful protocol results `[]` and `null`, missing payload, transport/protocol error, malformed top level, and partial/truncated response as separate causal vectors. A terminally successful, complete `callHierarchy/outgoingCalls` response whose present result token is exactly JSON `null` is successful-empty, exactly matching acquisition semantics: count one begun and successful expansion, retain the null result bytes/token and response ordinal, record zero returned members, zero ranges, zero occurrences, zero rejected members/ranges, and zero production-visible effects. `[]` has the same canonical empty CALLS representation and accounting but retains distinct source bytes/token identity; canonical equivalence never aliases custody. Missing payload is evidence-missing; transport/protocol error is failed; malformed and partial/truncated responses are atomic typed refusals. None may normalize to successful-empty.
 
 ### O18 — malformed and partial are atomic refusal
-Exercise malformed top level; malformed first/later member; invalid `to`; invalid URI/range/kind/selectionRange; missing/null/scalar/object ranges; trailing JSON; and truncated capture after a valid prefix. Admit zero qualified occurrences and do not salvage the prefix.
+Exercise malformed top level; malformed first/later member; invalid `to`; invalid URI/range/kind/selectionRange; missing/null/scalar/object ranges; trailing JSON; and truncated capture after a valid prefix. Admit zero qualified occurrences and do not salvage the prefix. A complete successful top-level `null` is the sole null success covered by O17; member-level nulls and incomplete captures remain malformed/refused.
 
 ### O19 — reordered, substituted, stale, and foreign
 Substitute profile/domain/provider, binary/toolchain/env, root/revision/file, capability, session/generation, caller item, request/result, callee, range, ordinal, limit, or admission envelope independently. Expect changed identity or typed refusal with zero effects.

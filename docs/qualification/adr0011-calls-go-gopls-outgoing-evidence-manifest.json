@@ -98,6 +98,30 @@
     "outgoing_request_item_must_equal_selected_caller": true,
     "failure_effect": "ZERO_OUTGOING_DISPATCH_AND_ZERO_PRODUCTION_VISIBLE_EFFECTS"
   },
+  "outgoing_top_level_result_policy": {
+    "successful_empty_array": "SUCCESSFUL_EMPTY",
+    "successful_protocol_null": "SUCCESSFUL_EMPTY",
+    "null_source_identity_distinct_from_empty_array": true,
+    "canonical_calls_representation_for_both": "EMPTY_OCCURRENCE_SET",
+    "successful_null_accounting": {
+      "begun_expansions": 1,
+      "successful_expansions": 1,
+      "returned_members": 0,
+      "returned_ranges": 0,
+      "admitted_occurrences": 0,
+      "rejected_members": 0,
+      "rejected_ranges": 0,
+      "production_visible_effects": 0,
+      "actual_message_byte_time_work_usage_retained": true
+    },
+    "missing_payload": "EVIDENCE_MISSING_REFUSAL",
+    "transport_or_protocol_error": "FAILED_REFUSAL",
+    "malformed_response": "ATOMIC_MALFORMED_REFUSAL",
+    "partial_or_truncated_response": "ATOMIC_INCOMPLETE_REFUSAL_NO_PREFIX_SALVAGE",
+    "ordering": "RETAIN_REQUEST_RESPONSE_AND_SOURCE_ORDINALS",
+    "replay": "PRESERVE_TERMINAL_CLASS_ACCOUNTING_CANONICAL_EMPTY_OUTPUT_AND_DISTINCT_SOURCE_IDENTITY_WITHOUT_REACQUISITION",
+    "evidence_ceiling": "SEMANTIC_CLASSIFICATION_ONLY_NO_AUTHORITY_COMPLETENESS_ADMISSION_REVIEW_OR_GO"
+  },
   "occurrence_policy": {
     "method_orientation": "QUERIED_CALLER_TO_RETURNED_TO_CALLEE",
     "canonical_orientation": "CALLER_TO_CALLEE",

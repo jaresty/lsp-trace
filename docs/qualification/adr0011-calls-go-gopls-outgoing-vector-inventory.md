@@ -10,7 +10,8 @@ These outgoing expectations are authored independently of semantic-vector and mu
 
 | ID | World | Frozen expectation |
 |---|---|---|
-| O-P01 | Exact custody; selected prepared caller `A`; outgoing `[]` | Separate prepare request/result and outgoing request/result; selected caller ordinal retained; complete empty; zero occurrences. |
+| O-P01 | Exact custody; selected prepared caller `A`; successful outgoing `[]` | Separate prepare request/result and outgoing request/result; selected caller and response ordinals retained; one begun successful expansion; complete empty; zero members, ranges, occurrences, rejections, and production-visible effects. |
+| O-P01N | Exact custody; selected prepared caller `A`; successful outgoing top-level JSON `null` | Retain distinct null token/bytes and response ordinal; classify successful-empty; account one begun successful expansion and actual message/byte/time/work use; zero members, ranges, occurrences, rejections, and production-visible effects; canonical empty CALLS equals O-P01 without aliasing source custody. |
 | O-P02 | Caller `A`, returned `to=B`, one caller-side range | Canonical `A -> B`; one occurrence; range is in queried caller document; all ordinals retained. |
 | O-P03 | One member with two distinct ranges | Two occurrences with equal endpoints and distinct range ordinals. |
 | O-P04 | Duplicate equal ranges | Duplicate occurrences survive with distinct range ordinals. |
@@ -20,7 +21,7 @@ These outgoing expectations are authored independently of semantic-vector and mu
 | O-P08 | Optional documentSymbol locates caller then prepare succeeds | documentSymbol remains locator custody; prepare selects caller; outgoing result alone supplies edge occurrences. |
 | O-P09 | `fromRanges: []` | Zero-site member retained; zero occurrences; no inferred site. |
 | O-P10 | Exact independent ceiling | Frozen exact-limit result and closed accounting. |
-| O-P11 | Offline replay | Same canonical output/terminal outcome; no reacquisition. |
+| O-P11 | Offline replay, including distinct `[]` and top-level `null` source records | Same terminal classification, closed accounting, zero-occurrence canonical empty CALLS output, and exact retained source identity; no reacquisition. |
 | O-P12 | Shared immutable gopls/toolchain/repo artifact | Reference accepted only after independent identity, relevance, freshness, and outgoing-binding verification; zero inherited authority. |
 
 ## Negative transaction and selection vectors
@@ -37,11 +38,11 @@ These outgoing expectations are authored independently of semantic-vector and mu
 
 ## Negative outgoing semantic vectors
 
-- O-N10 missing outgoing payload: evidence-missing, never empty success.
-- O-N11 null outgoing payload: distinct from `[]`; succeeds empty only under a future independently qualified exact-gopls rule.
-- O-N12 malformed top level or first/later member: whole transaction refused.
+- O-N10 missing outgoing payload: evidence-missing, never empty success; zero qualified occurrences and production-visible effects.
+- O-N11 transport/protocol error carrying no successful result: failed, never null/empty success; retain terminal error accounting and zero qualified occurrences/effects.
+- O-N12 malformed top level or first/later member: whole transaction refused; it cannot be reclassified as successful top-level `null`.
 - O-N13 missing/null/scalar/object `fromRanges`: malformed, not empty.
-- O-N14 partial valid prefix then malformed/truncated bytes: zero qualified occurrences.
+- O-N14 partial valid prefix then malformed/truncated bytes: atomic refusal, zero qualified occurrences, no prefix salvage, and never successful top-level `null`.
 - O-N15 interpret caller-side `fromRanges` in returned callee document: semantic refusal.
 - O-N16 reverse `A -> B` to `B -> A`: normalization refusal.
 - O-N17 collapse duplicate range/member: multiplicity refusal.
