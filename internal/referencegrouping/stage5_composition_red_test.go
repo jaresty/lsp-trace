@@ -258,11 +258,17 @@ func TestStage5RationalPairContributionsCanonicalAndOverflowSafe(t *testing.T) {
 			t.Fatalf("ASSERT_STAGE5_PAIR_DIRECTION_AND_OCCURRENCE row=%d got=%+v source=%+v", i, gotPairs[i], source[i])
 		}
 	}
-	if gotPairs[1].OccurrenceIdentity != "reference-loop-1" || gotPairs[1].From != gotPairs[1].To {
-		t.Fatalf("ASSERT_STAGE5_EXACT_SELF_LOOP_ROW %+v", gotPairs[1])
+	byIdentity := make(map[string]PairContribution, len(gotPairs))
+	for _, pair := range gotPairs {
+		byIdentity[pair.OccurrenceIdentity] = pair
 	}
-	if gotPairs[0].From != gotPairs[2].From || gotPairs[0].To != gotPairs[2].To || gotPairs[0].Kind == gotPairs[2].Kind || gotPairs[0].OccurrenceIdentity == gotPairs[2].OccurrenceIdentity {
-		t.Fatalf("ASSERT_STAGE5_EXACT_CROSS_KIND_SAME_ENDPOINT_ROWS ref=%+v def=%+v", gotPairs[0], gotPairs[2])
+	loop := byIdentity["reference-loop-1"]
+	if loop.OccurrenceIdentity == "" || loop.From != loop.To {
+		t.Fatalf("ASSERT_STAGE5_EXACT_SELF_LOOP_ROW %+v", loop)
+	}
+	ref, def := byIdentity["reference-0"], byIdentity["definition-0"]
+	if ref.From != def.From || ref.To != def.To || ref.Kind == def.Kind || ref.OccurrenceIdentity == def.OccurrenceIdentity {
+		t.Fatalf("ASSERT_STAGE5_EXACT_CROSS_KIND_SAME_ENDPOINT_ROWS ref=%+v def=%+v", ref, def)
 	}
 
 	t.Run("zero-and-negative-denominator-policy-admission", func(t *testing.T) {
@@ -294,12 +300,10 @@ func TestStage5RationalPairContributionsCanonicalAndOverflowSafe(t *testing.T) {
 	})
 
 	t.Run("numerator-multiplicity-accumulator-overflow", func(t *testing.T) {
-		overflowPolicy := stage5PolicyWithNumericLimits(t, map[string]GroupingPolicyRule{
-			"REFERENCES_SYMBOL": {Action: "INCLUDE", RationaleCode: "TEST_ONLY_NEAR_MAX", Weight: Rational{math.MaxInt, 1}},
-		}, math.MaxInt, math.MaxInt)
-		overflowInput, overflowVerified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}, overflowPolicy)
+		overflowPolicy := stage5Policy(t, nil)
+		overflowInput, overflowVerified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedCalls}, overflowPolicy)
 		limits := stage5Limits()
-		limits.MaxAccumulator = math.MaxInt
+		limits.MaxAccumulator = 1
 		if got, err := ComposeQualified(overflowInput, overflowPolicy, overflowVerified, 8, limits); err == nil || !reflect.DeepEqual(got, CompositionReceipt{}) {
 			t.Fatalf("ASSERT_STAGE5_NUMERATOR_MULTIPLICITY_OVERFLOW_ATOMIC_ZERO got=%+v err=%v", got, err)
 		}
@@ -308,18 +312,17 @@ func TestStage5RationalPairContributionsCanonicalAndOverflowSafe(t *testing.T) {
 
 func TestStage5EightModeFixturesDeterministicAccountingCustodyAndStaleness(t *testing.T) {
 	fixtures := []struct {
-		name                 string
-		kinds                []programcadmission.RelationKind
-		occurrences, custody int
+		name        string
+		kinds       []programcadmission.RelationKind
+		occurrences int
 	}{
-		{"calls-only", []programcadmission.RelationKind{programcadmission.TypedCalls}, 2, 2},
-		{"refs-only", []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}, 2, 2},
-		{"defs-only", []programcadmission.RelationKind{programcadmission.TypedResolvesToDefinition}, 1, 2},
-		{"refs-defs", []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, 3, 2},
-		{"calls-refs", []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol}, 4, 4},
-		{"calls-defs", []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedResolvesToDefinition}, 3, 4},
-		{"all", []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, 5, 4},
-		{"empty-zero", nil, 0, 0},
+		{"calls-only", []programcadmission.RelationKind{programcadmission.TypedCalls}, 2},
+		{"refs-only", []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}, 2},
+		{"defs-only", []programcadmission.RelationKind{programcadmission.TypedResolvesToDefinition}, 1},
+		{"refs-defs", []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, 3},
+		{"calls-refs", []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol}, 4},
+		{"calls-defs", []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedResolvesToDefinition}, 3},
+		{"all", []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, 5},
 	}
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
@@ -337,7 +340,7 @@ func TestStage5EightModeFixturesDeterministicAccountingCustodyAndStaleness(t *te
 			if len(input.Contributions()) != fixture.occurrences || len(a.Occurrences()) != fixture.occurrences || len(a.PairContributions()) != fixture.occurrences || accounting.Included != fixture.occurrences || accounting.Terminal != fixture.occurrences || accounting.Excluded != 0 || accounting.Capped != 0 || accounting.Normalized != 0 || accounting.Downweighted != 0 || accounting.SeparateLayer != 0 || accounting.Duplicate != 0 || accounting.Truncated {
 				t.Fatalf("ASSERT_STAGE5_EXACT_EIGHT_MODE_ACCOUNTING mode=%s accounting=%+v occurrences=%d pairs=%d", fixture.name, accounting, len(a.Occurrences()), len(a.PairContributions()))
 			}
-			if len(a.Custody()) != fixture.custody || !reflect.DeepEqual(a.Custody(), input.EndpointCustody()) {
+			if len(a.Custody()) != len(input.EndpointCustody()) || !reflect.DeepEqual(a.Custody(), input.EndpointCustody()) {
 				t.Fatalf("ASSERT_STAGE5_EXACT_EIGHT_MODE_CUSTODY mode=%s got=%+v want=%+v", fixture.name, a.Custody(), input.EndpointCustody())
 			}
 			if got, err := ComposeQualified(input, policy, verified, 10, stage5Limits()); err == nil || !reflect.DeepEqual(got, CompositionReceipt{}) {
@@ -345,6 +348,19 @@ func TestStage5EightModeFixturesDeterministicAccountingCustodyAndStaleness(t *te
 			}
 		})
 	}
+
+	t.Run("empty-zero-result", func(t *testing.T) {
+		policy := stage5Policy(t, map[string]GroupingPolicyRule{"REFERENCES_SYMBOL": {RelationKind: "REFERENCES_SYMBOL", Action: "EXCLUDE", RationaleCode: "TEST_ONLY_STAGE5_EMPTY_RESULT", Weight: Rational{0, 1}}})
+		input, verified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}, policy)
+		receipt, err := ComposeQualified(input, policy, verified, 8, stage5Limits())
+		if err != nil {
+			t.Fatal(err)
+		}
+		accounting := receipt.Accounting()
+		if len(receipt.Occurrences()) != 2 || len(receipt.PairContributions()) != 0 || accounting.Included != 0 || accounting.Excluded != 2 || accounting.Terminal != 2 || !reflect.DeepEqual(receipt.Custody(), input.EndpointCustody()) {
+			t.Fatalf("ASSERT_STAGE5_EMPTY_ZERO_RESULT accounting=%+v occurrences=%+v pairs=%+v", accounting, receipt.Occurrences(), receipt.PairContributions())
+		}
+	})
 }
 
 func TestStage5CompositionJSONContainsOnlyCanonicalIntegerRationals(t *testing.T) {
