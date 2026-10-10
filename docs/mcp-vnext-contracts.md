@@ -102,6 +102,22 @@ Every profile build records exact serialized bytes for:
 
 The default profile has one aggregate ceiling and per-tool ceilings. Exact limits require retained measurements before acceptance.
 
+## Preimplementation freeze
+
+This draft is intentionally incomplete. Before implementation, one accepted contract revision must freeze:
+
+- exact names, versions, default tools, and shortcut admission;
+- all numeric context, page, inline, diagnostic, deadline, and work limits;
+- schema and artifact continuation/snapshot behavior;
+- inline/reference thresholds;
+- lifecycle action shape;
+- artifact storage, privacy, retention, and tombstone ownership;
+- request identity, cancellation, idempotency, concurrency, retry, and predecessor-binding semantics;
+- compatibility-adapter ownership and migration/rollback boundaries;
+- discoverability corpus and acceptance thresholds.
+
+Until that freeze, examples in this document are conceptual and cannot be registered as schemas or advertised tools.
+
 ## Compatibility
 
 The compact transport may be incompatible with current direct MCP tools. Historical artifacts, canonical readers, selectors, replay, and internal operations remain independently versioned. A compatibility adapter must prove result and failure equivalence; it cannot become a second semantic implementation.

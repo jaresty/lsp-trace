@@ -67,7 +67,9 @@ lsp_trace_v3_incoming
 lsp_trace_v3_slice
 ```
 
-The three current-operation classes are disjoint and cover all 33 current operations. Advanced advertises `default ∪ advanced-only`; hidden legacy advertises nothing. Hidden legacy names remain discoverable through operation description/capabilities metadata and invocable only through canonical execute when their direct tools are hidden.
+At the operation-33 baseline, the three classes were disjoint and covered the 33 then-current operations: six implemented default operations, 21 advanced-only operations, and six hidden-legacy operations; the listed but intentionally absent `discover` operation was not counted. Advanced advertises `default ∪ advanced-only`; hidden legacy advertises nothing. Hidden legacy names remain discoverable through operation description/capabilities metadata and invocable only through canonical execute when their direct tools are hidden.
+
+Later append-only operations do not retroactively change that baseline count. The compatibility ledger below reaches operation 37, and later runtime/profile reports may include operations through 41. Those are distinct accounting epochs. A count is valid only when it names its ledger high-water mark, profile, and whether it counts canonical dispatchable operations or directly advertised tools.
 
 ### Classification rationale
 
@@ -117,28 +119,39 @@ Operation numbers are append-only compatibility identities, not lexical display 
 | 36 | `lsp_trace_v2_structural_context` | default (hidden but callable in compact) |
 | 37 | `lsp_trace_v1_structural_delta` | default (hidden but callable in compact) |
 
-Operations 31–37 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. The compact advertised profile remains exactly ten tools and does not advertise operations 35, 36, and 37.
+Operations 31–37 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. Operations 35, 36, and 37 remain callable through canonical execution but are not directly advertised by the compact compatibility profile represented by this ledger.
+
+### Cardinality accounting
+
+This document previously contained unqualified counts of ten, 12, and 11 compact tools alongside 33-, 37-, and 41-operation statements. They described different prospective, ledger, and runtime snapshots and MUST NOT be read as one timeless cardinality contract.
+
+- **Operation-33 baseline:** 33 canonical dispatchable operations; six implemented default, 21 advanced-only, and six hidden legacy. The absent proposed `discover` operation is excluded.
+- **Operation-37 ledger:** the append-only table in this document contains 37 canonical identities. Direct-advertisement status remains the per-row/profile decision, not the ledger count.
+- **Later runtime compatibility snapshot:** `full` has reported 41 directly advertised operations and `compact` has reported an 11-tool curated surface. Those runtime counts require generated inventory evidence at the exact reviewed revision and are not derived from the operation-33 profile sets.
+- **Proposed `compact-vnext`:** has no accepted cardinality. Its tool set and byte budget are governed by ADR 0012 and require separate qualification.
+
+Any test, review, or migration claim that cites a cardinality MUST retain the source revision, registry high-water mark, profile name, canonical-operation count, directly-advertised-tool count, and serialized advertisement bytes. Generated registry/profile inventory is authoritative for a reviewed revision; prose counts are historical context only.
 
 For every canonical operation:
 
 1. exact canonical resolution remains available;
 2. `lsp_trace_v1_execute` retains one canonical validation branch for that operation (except execute itself, which is not recursively branched);
 3. MCP advertisement uses a bounded dispatcher presentation schema containing the canonical operation-name enum and an opaque arguments object, while dispatch still validates arguments against the selected operation's canonical schema;
-4. the compact profile advertises all 12 compact tools and its serialized tool metadata must remain at or below 40 KiB;
+4. the compact compatibility profile advertises its revision-bound curated set and its serialized tool metadata remains at or below the historical 40 KiB ceiling; `compact-vnext` receives a separate qualified budget;
 5. hidden status changes only direct advertisement, never canonical execute routing;
 6. aliases, canonical schemas, envelopes, limits, availability, and runtime behavior remain unchanged by profile selection.
 
 ## Current state and RED boundary
 
-The process default is `default`; it advertises the six currently implemented default operations, omitting only the intentionally absent `lsp_trace_v1_discover`. `advanced` advertises those six plus the 21 advanced-only current operations. Both sets are lexical and exact. The six hidden-legacy operations are omitted from both listings but remain canonically dispatchable with unchanged contracts.
+At the operation-33 baseline, the process default was `default`; it advertised the six implemented default operations and omitted the intentionally absent `lsp_trace_v1_discover`. `advanced` advertised those six plus the 21 advanced-only operations. The six hidden-legacy operations were omitted from both listings but remained canonically dispatchable with unchanged contracts.
 
-The explicit compatibility profiles remain available: `full` advertises all 41 current operations and `compact` advertises its curated 11-tool surface. They are not the production default and do not change registry membership or dispatch semantics.
+Later explicit compatibility profiles remain separate revision-bound snapshots: one inspected runtime state reported `full` advertising 41 operations and `compact` advertising an 11-tool curated surface. They are not the production default and do not change registry membership or dispatch semantics. Before relying on either count for migration or vNext parity, regenerate and retain the exact registry/profile inventory at the target revision.
 
 The future exact default advertisement test remains opt-in and intentionally RED under `LSP_TRACE_RUN_ADR0004_RED_GUARDS=1` because:
 
 - `lsp_trace_v1_discover` is not implemented or numbered.
 
-All non-opt-in tests are regression guards and MUST remain GREEN. A failure prefixed `REGRESSION` means current 33-operation compatibility or the frozen historical 1–32 ledger changed. A failure prefixed `INTENTIONAL RED` means a future ADR 0004 advertisement requirement remains unmet; it does not authorize weakening a current compatibility guard.
+All non-opt-in tests are regression guards and MUST remain GREEN. A failure prefixed `REGRESSION` means the applicable revision-bound compatibility inventory or the frozen historical 1–32 ledger changed. A failure prefixed `INTENTIONAL RED` means a future ADR 0004 advertisement requirement remains unmet; it does not authorize weakening a current compatibility guard.
 
 ## Implementation gate for the next step
 

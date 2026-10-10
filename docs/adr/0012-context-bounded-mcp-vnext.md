@@ -191,16 +191,22 @@ Rejected. Transport cleanup does not invalidate immutable evidence or replay obl
 
 Rejected. It moves rather than solves the context-budget problem.
 
-## Unresolved decisions
+## Unresolved preimplementation gates
 
-1. Exact default tools and workflow shortcuts.
-2. Exact context budgets and representative client/model matrix.
-3. Artifact storage and retention owner for public vNext.
-4. Inline-versus-reference thresholds.
-5. Schema-page and artifact-page continuation contracts.
-6. Legacy transition duration and removal criteria.
-7. Whether `lsp_session` is one action-discriminated tool or a small lifecycle tool family.
-8. Exact names and versioning convention for public vNext.
+The following are not implementation-time discretion. One accepted contract revision must resolve and freeze them before runtime implementation, schema registration, or private-profile wiring begins:
+
+1. exact default tools and workflow shortcuts;
+2. exact context budgets and representative client/model matrix;
+3. artifact storage, privacy partition, retention, tombstone, and acceptance owner for public vNext;
+4. inline-versus-reference thresholds;
+5. schema-page and artifact-page continuation and stable-snapshot contracts;
+6. legacy transition duration, compatibility-adapter ownership, rollback, and removal criteria;
+7. whether `lsp_session` is one action-discriminated tool or a small lifecycle tool family;
+8. exact public names and versioning convention;
+9. request identity, cancellation, idempotency, concurrency, and predecessor-binding semantics;
+10. discoverability corpus, success criteria, and maximum schema-fetch/operation-selection round trips.
+
+Measurements, inventories, contract drafts, and qualification planning may continue while these gates are unresolved. Their existence grants no implementation or exposure authority.
 
 ## Authorization boundary
 
