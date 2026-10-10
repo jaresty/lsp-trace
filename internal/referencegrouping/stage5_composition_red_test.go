@@ -285,7 +285,7 @@ func TestStage5RationalPairContributionsCanonicalAndOverflowSafe(t *testing.T) {
 		}
 	})
 
-	t.Run("lcm-overflow-from-valid-reduced-denominators", func(t *testing.T) {
+	t.Run("distinct-pairs-do-not-share-lcm-bound", func(t *testing.T) {
 		overflowPolicy := stage5PolicyWithNumericLimits(t, map[string]GroupingPolicyRule{
 			"CALLS":                  {Action: "DOWNWEIGHT", RationaleCode: "TEST_ONLY_D1", Weight: Rational{1, 2147483629}},
 			"REFERENCES_SYMBOL":      {Action: "DOWNWEIGHT", RationaleCode: "TEST_ONLY_D2", Weight: Rational{1, 2147483587}},
@@ -294,18 +294,20 @@ func TestStage5RationalPairContributionsCanonicalAndOverflowSafe(t *testing.T) {
 		overflowInput, overflowVerified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, overflowPolicy)
 		limits := stage5Limits()
 		limits.MaxDenominator = math.MaxInt
-		if got, err := ComposeQualified(overflowInput, overflowPolicy, overflowVerified, 8, limits); err == nil || !reflect.DeepEqual(got, CompositionReceipt{}) {
-			t.Fatalf("ASSERT_STAGE5_LCM_OVERFLOW_FROM_VALID_INPUT_ATOMIC_ZERO got=%+v err=%v", got, err)
+		got, err := ComposeQualified(overflowInput, overflowPolicy, overflowVerified, 8, limits)
+		if err != nil || len(got.PairContributions()) != 5 {
+			t.Fatalf("ASSERT_STAGE5_DISTINCT_PAIRS_HAVE_INDEPENDENT_LCM got=%+v err=%v", got.PairContributions(), err)
 		}
 	})
 
-	t.Run("numerator-multiplicity-accumulator-overflow", func(t *testing.T) {
+	t.Run("distinct-pairs-do-not-share-accumulator-bound", func(t *testing.T) {
 		overflowPolicy := stage5Policy(t, nil)
 		overflowInput, overflowVerified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedCalls}, overflowPolicy)
 		limits := stage5Limits()
 		limits.MaxAccumulator = 1
-		if got, err := ComposeQualified(overflowInput, overflowPolicy, overflowVerified, 8, limits); err == nil || !reflect.DeepEqual(got, CompositionReceipt{}) {
-			t.Fatalf("ASSERT_STAGE5_NUMERATOR_MULTIPLICITY_OVERFLOW_ATOMIC_ZERO got=%+v err=%v", got, err)
+		got, err := ComposeQualified(overflowInput, overflowPolicy, overflowVerified, 8, limits)
+		if err != nil || len(got.PairContributions()) != 2 {
+			t.Fatalf("ASSERT_STAGE5_DISTINCT_PAIRS_HAVE_INDEPENDENT_ACCUMULATORS got=%+v err=%v", got.PairContributions(), err)
 		}
 	})
 }
@@ -373,6 +375,171 @@ func TestStage5CompositionJSONContainsOnlyCanonicalIntegerRationals(t *testing.T
 	if err := rejectStage5DecimalOrExponentNumbers(receipt.CanonicalBytes()); err != nil {
 		t.Fatalf("ASSERT_STAGE5_NO_DECIMAL_OR_EXPONENT_NUMERIC_TOKEN: %v", err)
 	}
+}
+
+func TestStage5CompositionReceiptRejectsCanonicalSemanticMutationsAtomically(t *testing.T) {
+	policy := stage5Policy(t, map[string]GroupingPolicyRule{
+		"REFERENCES_SYMBOL": {Action: "NORMALIZE", RationaleCode: "TEST_ONLY_NORMALIZE", Weight: Rational{1, 1}, Normalization: "BY_KIND_MULTIPLICITY"},
+	})
+	input, verified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}, policy)
+	receipt, err := ComposeQualified(input, policy, verified, 8, stage5Limits())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type mutation struct {
+		name   string
+		mutate func(*compositionDocument)
+	}
+	var mutations []mutation
+	for i := range receipt.doc.Occurrences {
+		i := i
+		mutations = append(mutations,
+			mutation{fmt.Sprintf("occurrence-%d-action", i), func(d *compositionDocument) { d.Occurrences[i].Action = "INCLUDE" }},
+			mutation{fmt.Sprintf("occurrence-%d-disposition", i), func(d *compositionDocument) { d.Occurrences[i].TerminalDisposition = "INCLUDED" }},
+			mutation{fmt.Sprintf("occurrence-%d-rationale", i), func(d *compositionDocument) { d.Occurrences[i].RationaleCode = "TEST_ONLY_WRONG" }},
+			mutation{fmt.Sprintf("occurrence-%d-layer", i), func(d *compositionDocument) { d.Occurrences[i].Layer = "WRONG_LAYER" }},
+			mutation{fmt.Sprintf("occurrence-%d-normalization", i), func(d *compositionDocument) { d.Occurrences[i].NormalizationBasis = "WRONG_NORMALIZATION" }},
+			mutation{fmt.Sprintf("occurrence-%d-cap", i), func(d *compositionDocument) { d.Occurrences[i].CapBefore, d.Occurrences[i].CapAfter = 9, 8 }},
+			mutation{fmt.Sprintf("occurrence-%d-missing-pair", i), func(d *compositionDocument) {
+				d.PairContributions = append(d.PairContributions[:i], d.PairContributions[i+1:]...)
+			}},
+			mutation{fmt.Sprintf("occurrence-%d-extra-pair", i), func(d *compositionDocument) {
+				extra := d.PairContributions[i]
+				extra.OccurrenceIdentity = fmt.Sprintf("extra-%d", i)
+				d.Occurrences = append(d.Occurrences, CompositionOccurrence{OccurrenceIdentity: extra.OccurrenceIdentity, Kind: extra.Kind, From: extra.From, To: extra.To, Action: "EXCLUDE", RationaleCode: "TEST_ONLY_EXTRA", SourcePredecessorIdentity: extra.SourcePredecessorIdentity, SourceCustodyIdentity: extra.SourceCustodyIdentity, TerminalDisposition: "EXCLUDED"})
+				d.Accounting.Excluded++
+				d.Accounting.Terminal++
+				d.PairContributions = append(d.PairContributions, extra)
+			}},
+			mutation{fmt.Sprintf("occurrence-%d-duplicate-pair", i), func(d *compositionDocument) {
+				d.PairContributions = append(d.PairContributions, d.PairContributions[i])
+			}},
+			mutation{fmt.Sprintf("pair-%d-kind", i), func(d *compositionDocument) { d.PairContributions[i].Kind = "CALLS" }},
+			mutation{fmt.Sprintf("pair-%d-from", i), func(d *compositionDocument) { d.PairContributions[i].From += "-wrong" }},
+			mutation{fmt.Sprintf("pair-%d-to", i), func(d *compositionDocument) { d.PairContributions[i].To += "-wrong" }},
+			mutation{fmt.Sprintf("pair-%d-provenance", i), func(d *compositionDocument) { d.PairContributions[i].SourcePredecessorIdentity += "-wrong" }},
+			mutation{fmt.Sprintf("pair-%d-custody", i), func(d *compositionDocument) { d.PairContributions[i].SourceCustodyIdentity += "-wrong" }},
+			mutation{fmt.Sprintf("pair-%d-weight", i), func(d *compositionDocument) { d.PairContributions[i].Weight = Rational{3, 4} }},
+		)
+	}
+	mutations = append(mutations,
+		mutation{"custody-missing", func(d *compositionDocument) { d.Custody = d.Custody[1:] }},
+		mutation{"custody-extra", func(d *compositionDocument) {
+			d.Custody = append(d.Custody, EndpointCustody{Endpoint: "extra", OccurrenceIdentity: "extra", EndpointRole: "FROM", PredecessorSelector: "extra", Custody: "extra"})
+		}},
+		mutation{"custody-substituted", func(d *compositionDocument) { d.Custody[0].Custody += "-wrong" }},
+		mutation{"occurrence-order", func(d *compositionDocument) {
+			d.Occurrences[0], d.Occurrences[len(d.Occurrences)-1] = d.Occurrences[len(d.Occurrences)-1], d.Occurrences[0]
+		}},
+		mutation{"custody-order", func(d *compositionDocument) {
+			d.Custody[0], d.Custody[len(d.Custody)-1] = d.Custody[len(d.Custody)-1], d.Custody[0]
+		}},
+		mutation{"accounting-recomputed-inconsistently", func(d *compositionDocument) { d.Accounting.Normalized--; d.Accounting.Included++ }},
+	)
+
+	for _, tc := range mutations {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := canonicalStage5SemanticMutation(t, receipt, tc.mutate)
+			if got, err := ParseCompositionReceipt(raw, stage5Limits()); err == nil || !reflect.DeepEqual(got, CompositionReceipt{}) {
+				t.Fatalf("ASSERT_STAGE5_SEMANTIC_REPLAY_RECONCILIATION_REJECTS_ATOMICALLY mutation=%s got=%+v err=%v", tc.name, got, err)
+			}
+		})
+	}
+}
+
+func TestStage5LegacySeparateLayerNegativeHalfRetainsSignedLayerOnly(t *testing.T) {
+	policy := stage5Policy(t, map[string]GroupingPolicyRule{
+		"RESOLVES_TO_DEFINITION": {Action: "SEPARATE_LAYER", RationaleCode: "TEST_ONLY_LEGACY_NEGATIVE_HALF", Weight: Rational{-1, 2}, Layer: "DEFINITIONS"},
+	})
+	input, verified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedResolvesToDefinition}, policy)
+	first, err := ComposeQualified(input, policy, verified, 8, stage5Limits())
+	if err != nil {
+		t.Fatalf("ASSERT_STAGE5_LEGACY_NEGATIVE_HALF_COMPOSES: %v", err)
+	}
+	second, err := ComposeQualified(input, policy, verified, 8, stage5Limits())
+	if err != nil || first.ID() != second.ID() || !bytes.Equal(first.CanonicalBytes(), second.CanonicalBytes()) {
+		t.Fatalf("ASSERT_STAGE5_LEGACY_NEGATIVE_HALF_DETERMINISTIC err=%v", err)
+	}
+	layers := first.SeparateLayerContributions()
+	if len(first.PairContributions()) != 0 || len(layers) != 1 || layers[0].Weight != (Rational{-1, 2}) || layers[0].Layer != "DEFINITIONS" {
+		t.Fatalf("ASSERT_STAGE5_LEGACY_NEGATIVE_HALF_SIGNED_LAYER_ONLY base=%+v layers=%+v", first.PairContributions(), layers)
+	}
+}
+
+func TestStage5NormalizationMultiplicationOverflowAndBoundary(t *testing.T) {
+	if got, err := checkedCompositionProduct(math.MaxInt/2+1, 2); err == nil || got != 0 {
+		t.Fatalf("ASSERT_STAGE5_NORMALIZATION_MULTIPLICATION_OVERFLOW got=%d err=%v", got, err)
+	}
+	if got, err := checkedCompositionProduct(math.MaxInt/2, 2); err != nil || got != (math.MaxInt/2)*2 {
+		t.Fatalf("ASSERT_STAGE5_NORMALIZATION_MULTIPLICATION_BOUNDARY got=%d err=%v", got, err)
+	}
+	policy := stage5Policy(t, map[string]GroupingPolicyRule{
+		"REFERENCES_SYMBOL": {RelationKind: "REFERENCES_SYMBOL", Action: "NORMALIZE", RationaleCode: "TEST_ONLY_NORMALIZATION_MULTIPLICATION", Weight: Rational{1, 1}, Normalization: "BY_KIND_MULTIPLICITY"},
+	})
+	input, verified := stage5VerifiedFixture(t, []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}, policy)
+	receipt, err := ComposeQualified(input, policy, verified, 8, stage5Limits())
+	if err != nil || len(receipt.PairContributions()) != 2 {
+		t.Fatalf("ASSERT_STAGE5_NORMALIZATION_COMPOSITION_REACHES_CHECKED_PRODUCT got=%+v err=%v", receipt.PairContributions(), err)
+	}
+	for _, pair := range receipt.PairContributions() {
+		if pair.Weight != (Rational{1, 2}) {
+			t.Fatalf("ASSERT_STAGE5_NORMALIZATION_EXACT_PAIR_DENOMINATOR got=%+v", receipt.PairContributions())
+		}
+	}
+}
+
+func TestStage5AccumulatorIsPerCanonicalDirectedKindPair(t *testing.T) {
+	unrelated := []PairContribution{
+		{OccurrenceIdentity: "a", Kind: "CALLS", From: "a", To: "b", Weight: Rational{1, 1}},
+		{OccurrenceIdentity: "b", Kind: "CALLS", From: "c", To: "d", Weight: Rational{1, 1}},
+	}
+	limits := stage5Limits()
+	limits.MaxAccumulator = 1
+	if err := validatePairArithmetic(unrelated, limits); err != nil {
+		t.Fatalf("ASSERT_STAGE5_UNRELATED_PAIR_ACCUMULATORS_ARE_INDEPENDENT: %v", err)
+	}
+
+	exactReduced := []PairContribution{
+		{OccurrenceIdentity: "a1", Kind: "CALLS", From: "a", To: "b", Weight: Rational{1, 3}},
+		{OccurrenceIdentity: "a2", Kind: "CALLS", From: "a", To: "b", Weight: Rational{1, 6}},
+		{OccurrenceIdentity: "b1", Kind: "REFERENCES_SYMBOL", From: "a", To: "b", Weight: Rational{1, 2}},
+	}
+	if err := validatePairArithmetic(exactReduced, limits); err != nil {
+		t.Fatalf("ASSERT_STAGE5_EXACT_REDUCED_AGGREGATE_PER_PAIR calls=1/2 references=1/2: %v", err)
+	}
+
+	repeated := []PairContribution{
+		{OccurrenceIdentity: "a1", Kind: "CALLS", From: "a", To: "b", Weight: Rational{1, 1}},
+		{OccurrenceIdentity: "a2", Kind: "CALLS", From: "a", To: "b", Weight: Rational{1, 1}},
+	}
+	if err := validatePairArithmetic(repeated, limits); err == nil {
+		t.Fatal("ASSERT_STAGE5_REPEATED_CANONICAL_PAIR_ACCUMULATOR_OVERFLOW_REJECTED")
+	}
+}
+
+func canonicalStage5SemanticMutation(t *testing.T, receipt CompositionReceipt, mutate func(*compositionDocument)) []byte {
+	t.Helper()
+	doc := cloneCompositionDocument(receipt.doc)
+	mutate(&doc)
+	sort.Slice(doc.PairContributions, func(i, j int) bool {
+		return doc.PairContributions[i].CanonicalKey() < doc.PairContributions[j].CanonicalKey()
+	})
+	sort.Slice(doc.SeparateLayerContributions, func(i, j int) bool {
+		return doc.SeparateLayerContributions[i].CanonicalKey() < doc.SeparateLayerContributions[j].CanonicalKey()
+	})
+	digest, err := pairWeightDigest(doc.PairContributions, doc.SeparateLayerContributions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.PairWeightDigest = digest
+	var out bytes.Buffer
+	enc := json.NewEncoder(&out)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(doc); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
 }
 
 func rejectStage5DecimalOrExponentNumbers(raw []byte) error {
