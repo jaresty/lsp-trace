@@ -344,6 +344,14 @@ Operations are classified by their actual effects and dependencies. Independent 
 
 Qualification requires no deadlock, no partial irreversible effects, exact-once terminal response/effect accounting, bounded latency and resource consumption, source-safe attributable diagnostics, typed recoverable refusal where permitted, stale-authority rejection, and historical C18 behavior unchanged. It records refusal rates and contention outcomes for each matrix cell. A bounded mailbox or scheduler remains deferred and may be authorized only by a later decision if retained evidence demonstrates harmful contention, starvation, ambiguous recovery, or unacceptable refusal rates; this contract does not prescribe one.
 
+### Parallel-qualification contingency
+
+Failure never silently activates another concurrency model. If parallel qualification passes both safety and bounded contention criteria, a later execution authority may admit automatic host execution within those exact qualified bounds. If safety passes but contention, starvation, recovery clarity, or refusal-rate criteria fail, automatic parallel execution remains disabled; a bounded per-session scheduler or mailbox may be designed only under a separate decision and must receive its own causal tests, independent review, and runtime qualification before use.
+
+If parallel safety fails, the only eligible fallback candidate is separately qualified host-sequenced mode: at most one in-flight mutating request per managed session; each dependent request waits for and supplies the exact predecessor identity returned by the preceding request; independent immutable reads may overlap only where separately qualified; and `STOP`/`RESTART` retain lifecycle-barrier, stale-generation, permanently closed old-owner, and fresh-owner semantics. Host-sequenced mode is not automatically authorized by parallel failure. If it cannot satisfy the same refusal-before-effect, exact-once terminal accounting, bounded-resource, cancellation, and custody invariants, the bridge remains `DESIGN_ONLY_DISABLED`.
+
+No contingency permits hidden retry, broader evidence, alternate ownership, inferred semantic order, reordered operations, fallback policy selection, or conversion of a failed/refused request into success. Every activated mode is explicit in the request, result, stop-gate receipt, and consolidated identity.
+
 ## Consolidated result identity
 
 `consolidatedResultId` is conceptually computed from canonical bytes for:
