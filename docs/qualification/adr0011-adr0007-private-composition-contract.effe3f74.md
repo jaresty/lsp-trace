@@ -135,7 +135,7 @@ ZERO_RESULT
 REFUSED
 ```
 
-`REFUSED` carries exactly one operation failure code from Section 8, has no member results not already committed by a predecessor checkpoint, and never produces a completion checkpoint. `COMPLETE`, `COMPLETE_WITH_OMISSIONS`, and `ZERO_RESULT` require `missing=0`, balanced accounting, and exactly one closed member outcome per expected member. `ZERO_RESULT` additionally requires zero successful output members. `COMPLETE_WITH_OMISSIONS` may checkpoint, but the next-stage eligibility policy must either admit each named omission or refuse before evaluation; a mandatory omission can never be silently downgraded. Historical ADR 0007 bytes and enums are retained inside exact predecessor carriers; this contract wraps them and does not translate or replace their fields.
+`REFUSED` carries exactly one operation failure code from Section 8 and never produces a completion checkpoint. If refusal occurs before member evaluation, all expected members are `missing`. Once evaluation of a member begins, that member must receive exactly one closed terminal member outcome even if the operation later refuses; unstarted members remain `missing`. These refusal-stage member outcomes and accounting are retained in the immutable refusal result for diagnosis and replay but are not a completion checkpoint and cannot feed a later stage. `COMPLETE`, `COMPLETE_WITH_OMISSIONS`, and `ZERO_RESULT` require `missing=0`, balanced accounting, and exactly one closed member outcome per expected member. `ZERO_RESULT` additionally requires zero successful output members. `COMPLETE_WITH_OMISSIONS` may checkpoint, but the next-stage eligibility policy must either admit each named omission or refuse before evaluation; a mandatory omission can never be silently downgraded. Historical ADR 0007 bytes and enums are retained inside exact predecessor carriers; this contract wraps them and does not translate or replace their fields.
 
 Closed member outcomes are stage-specific:
 
@@ -220,7 +220,9 @@ operation in {COMPLETE, COMPLETE_WITH_OMISSIONS, ZERO_RESULT} ⇒ missing = 0
 operation = COMPLETE ⇒ successful > 0 and failed = 0 and omitted = 0
 operation = COMPLETE_WITH_OMISSIONS ⇒ failed = 0 and omitted > 0
 operation = ZERO_RESULT ⇒ successful = 0 and failed = 0
-operation = REFUSED ⇒ no completion checkpoint and no new stage member results
+operation = REFUSED ⇒ exactly one operation failure, no completion checkpoint,
+                      every started member has one terminal outcome,
+                      every unstarted expected member is missing
 candidate_expected = candidate_included + candidate_omitted + candidate_failed
 ```
 
