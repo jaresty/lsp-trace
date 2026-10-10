@@ -1,0 +1,46 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.capability-boundary.v2",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "queries": [
+    {
+      "tool": "lsp_trace_v1_capabilities",
+      "request_id": "offline-2",
+      "operation": "lsp_trace_v1_incoming",
+      "outcome": "COMPLETE",
+      "advertised": true,
+      "availability": "ENABLED",
+      "dispatchable": true,
+      "input_schema_id": "https://jaresty.github.io/lsp-trace/mcp/schemas/input-incoming.v1.schema.json",
+      "required_arguments": ["session_id", "uri"],
+      "required_argument_sets": [["line","character"],["symbol"]],
+      "limits": {"max_depth":{"minimum":1,"maximum":64},"max_nodes":{"minimum":1,"maximum":10000},"request_timeout_ms":{"minimum":1,"maximum":60000},"timeout_ms":{"minimum":1,"maximum":60000}},
+      "semantic_warning": "Server-reported callers only; text never establishes CALLS; authority/completeness/producer authentication are not established."
+    },
+    {
+      "tool": "lsp_trace_v1_capabilities",
+      "request_id": "offline-3",
+      "operation": "lsp_trace_v2_structural_context",
+      "outcome": "COMPLETE",
+      "advertised": true,
+      "availability": "ENABLED",
+      "dispatchable": true,
+      "input_schema_id": "https://jaresty.github.io/lsp-trace/mcp/schemas/input-structural-context.v6.schema.json",
+      "required_arguments": ["session_id", "generation"],
+      "limits": {"max_bytes":{"default":4194304,"minimum":1,"maximum":16777216},"max_messages":{"default":64,"minimum":1,"maximum":4096},"max_nodes":{"default":100,"minimum":1,"maximum":10000},"request_timeout_ms":{"default":15000,"minimum":1,"maximum":60000},"timeout_ms":{"default":30000,"minimum":1,"maximum":60000},"up_depth":{"default":1,"minimum":0,"maximum":64},"down_depth":{"default":1,"minimum":0,"maximum":64}},
+      "semantic_warning": "No locator facts; server-reported CALLS; authority 0; completeness unknown."
+    }
+  ],
+  "not_exposed_by_either_capability": [
+    "managed gopls executable locator/original bytes/SHA-256/length/reported version",
+    "managed gopls launch argv/working directory/environment",
+    "managed Go executable bytes/digest/version/go env/build flags/tags/module-workspace inventory",
+    "initialize request original bytes",
+    "initialize result original bytes",
+    "client call-hierarchy capability and server callHierarchyProvider from the initialization exchange",
+    "exact prepareCallHierarchy JSON-RPC request/result frames",
+    "exact incomingCalls JSON-RPC request/result frames",
+    "raw response order/null-vs-array/complete opaque data/full prepared-item identity"
+  ],
+  "position_encoding_observation": "utf-16 was exposed only for the non-target parent session; no exact-workspace negotiated encoding exists because no child was derived.",
+  "privacy_policy": "No source projection requested; no source body or semantic relation payload acquired."
+}

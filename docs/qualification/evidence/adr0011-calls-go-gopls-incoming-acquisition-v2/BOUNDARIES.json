@@ -1,0 +1,54 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.acquisition-boundaries.v2",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "repository_path": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+  "head_before": "e403b9c243c853a59a176949a52a712c893a5399",
+  "head_after": "e403b9c243c853a59a176949a52a712c893a5399",
+  "manifest": {
+    "locator": "docs/qualification/adr0011-calls-go-gopls-incoming-evidence-manifest.json",
+    "sha256_before": "334a6a1f3c26b0408023d24f8bd08f74bfbcd0125629ee1cf04fdd425fa6ce87",
+    "sha256_after": "334a6a1f3c26b0408023d24f8bd08f74bfbcd0125629ee1cf04fdd425fa6ce87",
+    "byte_length": 10433,
+    "modified": false,
+    "present_role_count_before": 4,
+    "present_role_count_after": 4
+  },
+  "semantic_dispatch_counts": {
+    "derive_workspace": 0,
+    "prepareCallHierarchy": 0,
+    "incomingCalls": 0,
+    "documentSymbol": 0,
+    "normalization": 0,
+    "occurrences": 0
+  },
+  "authority_boundary": {
+    "authority": 0,
+    "accepted": false,
+    "completeness": "UNKNOWN",
+    "production_admission": "REFUSED_MISSING_EVIDENCE",
+    "go_issued": false,
+    "commit_created": false
+  },
+  "evidence_files_before_boundary": [
+    {
+      "locator": "docs/qualification/evidence/adr0011-calls-go-gopls-incoming-acquisition-v2/README.md",
+      "sha256": "fd33edd80635a866d60ae9695013f623f7dc66dfbf24ad274432483104509dac",
+      "byte_length": 1584
+    },
+    {
+      "locator": "docs/qualification/evidence/adr0011-calls-go-gopls-incoming-acquisition-v2/capability-boundary.json",
+      "sha256": "772d5f195196e85b2e1fa689a1efbc23522bc6e767735800fcf73e755137aa86",
+      "byte_length": 2913
+    },
+    {
+      "locator": "docs/qualification/evidence/adr0011-calls-go-gopls-incoming-acquisition-v2/managed-discovery.json",
+      "sha256": "a916910cd32d26229bfef597458aecccea0cecc31aa7324464198ac295c7641c",
+      "byte_length": 1878
+    },
+    {
+      "locator": "docs/qualification/evidence/adr0011-calls-go-gopls-incoming-acquisition-v2/observability-seam-report.json",
+      "sha256": "daf0ed261f73a1a097847f3ed59399c30be3dac4f27553498eb0beaa7728a40e",
+      "byte_length": 3621
+    }
+  ]
+}

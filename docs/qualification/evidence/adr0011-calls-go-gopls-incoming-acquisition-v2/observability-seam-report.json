@@ -1,0 +1,64 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.observability-seam-report.v2",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "canonical_identity_domain": "lsp-trace.adr0011.calls.go.gopls.incoming.exact.v1",
+  "attempt_kind": "NEW_PROSPECTIVE_ACQUISITION",
+  "disposition": "STOPPED_BEFORE_SEMANTIC_EFFECTS_OBSERVABILITY_SEAM",
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "production_admission": "REFUSED_MISSING_EVIDENCE",
+  "repository": {
+    "path": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+    "head": "e403b9c243c853a59a176949a52a712c893a5399",
+    "pre_attempt_porcelain": "",
+    "target_uri": "file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go",
+    "target_sha256": "040622acaf54ea77fe79f3333b10857cfce0bef09bce81f448bd4ee0a619b884",
+    "target_byte_length": 36296,
+    "language_id": "go"
+  },
+  "manifest_before": {
+    "locator": "docs/qualification/adr0011-calls-go-gopls-incoming-evidence-manifest.json",
+    "sha256": "334a6a1f3c26b0408023d24f8bd08f74bfbcd0125629ee1cf04fdd425fa6ce87",
+    "byte_length": 10433,
+    "present_role_count": 4
+  },
+  "mandatory_pre_execution_custody": {
+    "managed_gopls_binary_version_digest_argv_cwd_env": "NOT_OBSERVABLE",
+    "managed_go_toolchain_and_environment": "NOT_OBSERVABLE",
+    "initialize_request_result_and_call_hierarchy_capability": "NOT_OBSERVABLE",
+    "exact_workspace_session_generation": "ABSENT_NOT_DERIVED",
+    "exact_workspace_position_encoding": "ABSENT_NOT_NEGOTIATED",
+    "finite_operation_limits": "PARTIALLY_OBSERVABLE_AT_COMPOSED_MCP_SCHEMA_ONLY",
+    "privacy": "NO_SOURCE_PROJECTION_OR_SEMANTIC_PAYLOAD_REQUESTED"
+  },
+  "semantic_effect_accounting": {
+    "workspace_derivations": 0,
+    "prepareCallHierarchy_dispatches": 0,
+    "incomingCalls_dispatches": 0,
+    "documentSymbol_dispatches": 0,
+    "semantic_graph_operations": 0,
+    "raw_prepare_results": 0,
+    "selected_prepared_items": 0,
+    "raw_incoming_results": 0,
+    "normalized_relations": 0,
+    "occurrences": 0,
+    "production_visible_effects": 0
+  },
+  "unproduced_by_design": [
+    "prepareCallHierarchy request and raw result",
+    "selection ordinal and canonical prepared-item identity",
+    "incomingCalls request and raw result",
+    "incoming response ordering and all fromRanges",
+    "normalization receipts",
+    "occurrence and terminal accounting beyond zero dispatch"
+  ],
+  "historical_payload_policy": "No historical prepare/incoming payload was inferred, recreated, copied, or promoted.",
+  "manifest_policy": "No required role changes status. The four existing PRESENT roles and their immutable v1 locators remain byte-identical and authoritative only at ceiling 0.",
+  "smallest_test_only_capture_change_proposal": {
+    "implemented": false,
+    "scope": "TEST_ONLY",
+    "proposal": "Add an opt-in test recorder at the managed LSP process boundary that, before initialize dispatch, copies the exact resolved gopls executable bytes into a content-addressed fixture and records digest/length/version, exact argv/cwd/environment allowlist, Go executable/toolchain/go env/module-workspace custody; then records length-delimited exact initialize, prepareCallHierarchy, and incomingCalls request/response frames with monotonic ordinals and cumulative byte/message accounting. The recorder must fail closed before semantic dispatch if any required pre-execution field or sink reservation is unavailable, and must never be enabled in production paths.",
+    "non_governance": "This proposal is not a plan, implementation, test edit, vector edit, review, GO, or authority increase."
+  }
+}
