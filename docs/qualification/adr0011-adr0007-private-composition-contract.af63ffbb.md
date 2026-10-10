@@ -35,13 +35,22 @@ Every request, packet, checkpoint, stage result, failure, and generation is stri
 sha256(domain || 0x00 || schema || 0x00 || canonical_payload_without_identity)
 ```
 
-Every `ExactCarrierV1` contains:
+Every `ExactCarrierV1` has this closed JSON shape:
 
-```text
-role, schema, identity, sha256, byte_length, canonical_bytes
+```json
+{
+  "role": "<closed role enum>",
+  "schema": "<exact schema identity>",
+  "identity": "sha256:<64 lowercase hex>",
+  "sha256": "sha256:<64 lowercase hex>",
+  "byte_length": 1,
+  "canonical_bytes_base64": "<RFC 4648 standard padded base64>"
+}
 ```
 
-Admission recomputes canonical form, schema, identity, digest, and length and performs semantic parsing. A caller-supplied identity is never authority. Same identity with different bytes is `IDENTITY_CONFLICT`. Unknown or duplicate fields, alternate JSON spelling, trailing values, CRLF, missing LF, overflow, invalid enum, unbalanced accounting, or a validly resealed semantic mutation is rejected atomically.
+`canonical_bytes_base64` contains no whitespace and decodes to the exact LF-terminated canonical bytes of the carried object. `byte_length` is the decoded byte length. `sha256` is SHA-256 of exactly those decoded bytes. `identity` is SHA-256 of the byte concatenation `UTF8(domain) || 0x00 || UTF8(schema) || 0x00 || decoded_canonical_bytes`, rendered as lowercase `sha256:<hex>`. The role is not part of carried-object identity; the containing request binds role to identity and rejects the same identity under conflicting roles. The carrier wrapper itself is serialized by this contract's canonical JSON rule but is never recursively included in its carried digest or identity.
+
+Admission base64-decodes once, enforces canonical padded spelling by decode/re-encode equality, then recomputes canonical form, schema, identity, digest, and length and performs semantic parsing. A caller-supplied identity is never authority. Same identity with different bytes is `IDENTITY_CONFLICT`. Unknown or duplicate fields, alternate JSON or base64 spelling, trailing values, CRLF, missing LF, overflow, invalid enum, unbalanced accounting, or a validly resealed semantic mutation is rejected atomically.
 
 All integer arithmetic is checked. Ratios use reduced nonnegative integer rationals with typed zero denominators. Floating point is forbidden in identity-bearing computation.
 
@@ -115,12 +124,40 @@ A community with no eligible CALLS representative terminates representative sele
 
 ## 7. Deterministic stage contract
 
-Each stage request identity binds the generation, stage name/version, exact predecessor result identities, exact stage policy, privacy/resource policies, and ordinal work inventory. Each stage result binds the request plus one terminal outcome for every denominator member.
+Each stage request identity binds the generation, stage name/version, exact predecessor result identities, exact stage policy, privacy/resource policies, and ordinal work inventory. Each stage result separates one whole-operation outcome from exactly one member outcome for every evaluated denominator member.
 
-1. **Describe V1** consumes source-bearing packets and yields one of `COMPLETE`, `ABSTAINED`, `NO_CALLS_REPRESENTATIVE`, `SOURCE_CONTEXT_INCOMPLETE`, `WITHHELD`, `LIMIT_OMITTED`, or typed failure. Generated text bytes, backend/profile identity, prompt/instruction identity, and all cited source identities are retained. No uncited source claim is packet-derived.
-2. **Search V1** consumes the immutable Describe corpus and exact query/policy bytes. Every corpus member is `MATCHED`, `NOT_MATCHED`, `WITHHELD`, `LIMIT_OMITTED`, or failed. Score representation, if any, is an exact policy-defined integer/rational, never floating point.
-3. **Provisional Group V1** consumes only admitted Search results. Groups are deterministic membership sets ordered by canonical member identity. Unmatched members remain explicit. Group labels are presentation only and never identity or feature authority.
-4. **Location V1** consumes group/member and exact retained source-location custody. It selects no new source and produces exact location carriers or explicit unavailable/ambiguous/withheld/limit outcomes.
+Closed whole-operation outcomes for all six stages are:
+
+```text
+COMPLETE
+COMPLETE_WITH_OMISSIONS
+ZERO_RESULT
+REFUSED
+```
+
+`REFUSED` carries exactly one operation failure code from Section 8, has no member results not already committed by a predecessor checkpoint, and never produces a completion checkpoint. `COMPLETE`, `COMPLETE_WITH_OMISSIONS`, and `ZERO_RESULT` require `missing=0`, balanced accounting, and exactly one closed member outcome per expected member. `ZERO_RESULT` additionally requires zero successful output members. `COMPLETE_WITH_OMISSIONS` may checkpoint, but the next-stage eligibility policy must either admit each named omission or refuse before evaluation; a mandatory omission can never be silently downgraded. Historical ADR 0007 bytes and enums are retained inside exact predecessor carriers; this contract wraps them and does not translate or replace their fields.
+
+Closed member outcomes are stage-specific:
+
+```text
+Describe: DESCRIBED | ABSTAINED | NO_CALLS_REPRESENTATIVE |
+          SOURCE_CONTEXT_INCOMPLETE | WITHHELD | LIMIT_OMITTED |
+          PREPARATION_FAILED | BACKEND_FAILED | DUPLICATE_OF
+Search:   MATCHED | NOT_MATCHED | WITHHELD | LIMIT_OMITTED |
+          MEMBER_FAILED | DUPLICATE_OF
+Group:    GROUPED | UNMATCHED | WITHHELD | LIMIT_OMITTED |
+          MEMBER_FAILED | DUPLICATE_OF
+Location: LOCATED | UNAVAILABLE | AMBIGUOUS | WITHHELD |
+          LIMIT_OMITTED | MEMBER_FAILED | DUPLICATE_OF
+SourceTextSearch: MATCHED | NO_MATCH | UNAVAILABLE | AMBIGUOUS |
+                  WITHHELD | LIMIT_OMITTED | MEMBER_FAILED | DUPLICATE_OF
+CandidateGeneration: INCLUDED | OMITTED | MEMBER_FAILED | DUPLICATE_OF
+```
+
+1. **Describe V1** consumes source-bearing packets. Generated text bytes, backend/profile identity, prompt/instruction identity, and all cited source identities are retained. No uncited source claim is packet-derived.
+2. **Search V1** consumes only `DESCRIBED` members of the immutable Describe corpus plus exact query/policy bytes; all other Describe members receive a deterministic downstream omission bound to their predecessor outcome. Score representation, if any, is an exact policy-defined integer/rational, never floating point.
+3. **Provisional Group V1** consumes admitted Search results. Groups are deterministic membership sets ordered by canonical member identity. Unmatched members remain explicit. Group labels are presentation only and never identity or feature authority.
+4. **Location V1** consumes group/member and exact retained source-location custody. It selects no new source and produces exact location carriers or a closed member outcome.
 5. **Source Text Search V1** searches only exact admitted document bytes under an exact pattern/query policy. It retains pattern bytes, match ordinals, exact ranges, document identity/digest/version, limits, and every omission. It cannot repair Location or Stage 7 source context.
 6. **Candidate Generation V1** consumes the five exact stage results. Candidate identity binds generation, deterministic constituent membership, every predecessor identity, source/location/text-search evidence, disclosures, omission/failure accounting, and claim ceiling. Candidate order is canonical identity order. A candidate is a review input, not accepted feature identity.
 
@@ -173,13 +210,17 @@ No result is externally published by this private contract. Here, `CANDIDATE_COM
 
 ## 9. Accounting
 
-Each stage records exact `expected`, `evaluated`, `complete`, every named non-success terminal count, `failed`, `missing`, `omitted`, `terminal`, and checked work/byte/request/output counts. Invariants:
+Each stage records exact `expected`, `evaluated`, one count for every member outcome in that stage's closed enum, `successful`, `failed`, `missing`, `omitted`, `terminal`, and checked work/byte/request/output counts. `successful` is `DESCRIBED`, `MATCHED` (Search), `GROUPED`, `LOCATED`, `MATCHED` (Source Text Search), or `INCLUDED` respectively. `failed` is the sum of that stage's closed failure member outcomes (`PREPARATION_FAILED` and `BACKEND_FAILED`, or `MEMBER_FAILED`). `omitted` is the sum of all remaining non-success, non-failure terminal outcomes, including `DUPLICATE_OF`. Invariants:
 
 ```text
+terminal = successful + failed + omitted
+evaluated = terminal
 expected = terminal + missing
-evaluated = sum(all evaluated terminal outcomes)
-complete_generation ⇒ missing = 0
-each expected member has exactly one terminal outcome or is explicitly missing
+operation in {COMPLETE, COMPLETE_WITH_OMISSIONS, ZERO_RESULT} ⇒ missing = 0
+operation = COMPLETE ⇒ successful > 0 and failed = 0 and omitted = 0
+operation = COMPLETE_WITH_OMISSIONS ⇒ failed = 0 and omitted > 0
+operation = ZERO_RESULT ⇒ successful = 0 and failed = 0
+operation = REFUSED ⇒ no completion checkpoint and no new stage member results
 candidate_expected = candidate_included + candidate_omitted + candidate_failed
 ```
 

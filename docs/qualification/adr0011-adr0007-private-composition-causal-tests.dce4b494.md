@@ -62,9 +62,9 @@ Delete or mutate each qualification receipt, evidence record, trust anchor, revi
 
 For request, packet, each stage result, checkpoint, replay request/result, and generation, mutate every semantic field class and recompute outer digest. Include algorithm, enum, scope, family inventory, availability, omissions, source bytes/ranges, partitions, accounting, outcomes, claims, limits, predecessor links, and candidate membership. Parsing or admission rejects every mutation and returns a zero object/effects.
 
-### C13 — strict canonical parser matrix
+### C13 — strict canonical parser and carrier matrix
 
-Reject duplicate and unknown keys, trailing values, missing/extra LF, CRLF, noncanonical ordering/encoding where required, invalid UTF-8, integer overflow, invalid rational, zero untyped denominator, repeated identities, and oversized nested bytes. At-limit succeeds; limit-plus-one fails before allocation/effect.
+Reject duplicate and unknown keys, trailing values, missing/extra LF, CRLF, noncanonical ordering/encoding where required, invalid UTF-8, integer overflow, invalid rational, zero untyped denominator, repeated identities, and oversized nested bytes. For `ExactCarrierV1`, independently mutate role, schema, identity, digest, decoded length, decoded bytes, base64 alphabet/padding/whitespace, and wrapper ordering; distinguish carried-byte SHA-256 from domain/schema/object identity; prove decode/re-encode equality; and reject recursive wrapper-hashing interpretations. At-limit succeeds; limit-plus-one fails before allocation/effect.
 
 ### C14 — defensive-copy and aliasing isolation
 
@@ -94,9 +94,9 @@ Race same claimed identity with different bytes/policy/receipt/checkpoint, and c
 
 ## E. Accounting, ceilings, compatibility, isolation
 
-### C20 — failure-before-publication matrix
+### C20 — operation/member outcome and failure-before-publication matrix
 
-Inject every typed failure at every stage before and after computation but before checkpoint commit. Assert no later stage, candidate generation, or externally visible publication; atomic state transition to `REFUSED`; exact expected/evaluated/terminal/missing/failed/omitted accounting; and checked overflow behavior.
+For each of the six stages, exercise every closed member outcome and each whole-operation outcome. Prove `terminal=successful+failed+omitted`, `evaluated=terminal`, `expected=terminal+missing`, and the exact `COMPLETE`, `COMPLETE_WITH_OMISSIONS`, `ZERO_RESULT`, and `REFUSED` predicates. Prove historical ADR 0007 outcome fields remain unchanged inside predecessor carriers rather than being translated. Inject every Section 8 operation failure before evaluation, during evaluation, and after computation but before checkpoint commit. Assert `REFUSED` carries exactly one operation failure, no new member results or completion checkpoint, no later stage, candidate generation, or externally visible publication, and checked overflow behavior.
 
 ### C21 — privacy and resource policies
 
