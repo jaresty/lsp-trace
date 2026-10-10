@@ -7,7 +7,7 @@
 - **Completeness:** `UNKNOWN`
 - **Feature identity:** `UNRESOLVED`
 - **Applies to:** host orchestration over the ADR0007 bounded chain `Describe -> Search -> Group -> Location -> Source Text Search`
-- **Depends on / stop gates:** ADR0011 C15 aggregate logical-buffer/resource-accounting acceptance, separate typed occurrence/input admission, Program C qualification, and separate execution authority
+- **Depends on / stop gates:** ADR0011 C15 aggregate logical-buffer/resource-accounting acceptance, separate typed occurrence/input admission, Program C qualification, parallel-MCP runtime qualification, and separate execution authority
 
 ## Decision
 
@@ -28,7 +28,8 @@ Execution is explicitly **DISABLED** until all required gates are met and a sepa
 1. **ADR0011 C15 aggregate accounting gate:** currently `UNKNOWN`; concerns aggregate logical-buffer/resource-accounting acceptance. C15 does **not** by itself provide typed input-family or occurrence admission for this bridge.
 2. **Typed occurrence/input admission gate:** a separate required contract must admit the exact input and inference-result families consumed by the bridge.
 3. **Program C qualification gate:** a separate qualification receipt must admit the exact grouping/profile/policy consumed by the bridge.
-4. **Execution-authority gate:** even after the three technical gates pass, a separate decision must authorize execution/public surface exposure for this bridge.
+4. **Parallel-MCP runtime qualification gate:** retained qualification must demonstrate safe, bounded behavior for realistic concurrent requests from one host against the same and different managed sessions. It must preserve C18 ownership, refusal-before-effect, exact-once terminal accounting, stale-generation rejection, and fresh-owner restart semantics. Parallel arrival or completion order is never semantic order; dependent requests require explicit predecessor identities. This gate qualifies existing behavior and does not pre-authorize a mailbox or scheduler.
+5. **Execution-authority gate:** even after the four technical gates pass, a separate decision must authorize execution/public surface exposure for this bridge.
 
 Until all of those gates pass, this document is prose design only. It does not authorize public CLI, MCP, API, schema registry, code generation, private runtime dispatch, local model execution, hosted model execution, production enablement, release, migration, or mutation of frozen artifacts.
 
@@ -103,7 +104,7 @@ This is a strict conceptual schema for prose design. It is not a registered publ
 | `operationPlan` | yes | Ordered stage requests over Describe, Search, Group, Location, Source Text Search, externally owned handoff, and typed immutable inference-result ingestion. | Non-deterministic or model-selected runtime operations inside lsp-trace. |
 | `handoffPolicy` | yes | Host-owned handoff/cancellation policy and prepared-packet disclosure bounds. | Missing host ownership or attempted lsp-trace inference. |
 | `ingestRequirements` | yes | Typed immutable inference-result family, receipt, custody, and rejection requirements. | Untyped, mutable, host-prose-only, or identity-mismatched inference result. |
-| `admissionRequirements` | yes | Required ADR0011 C15 aggregate accounting status, separate typed input/occurrence admission, typed inference-result admission, Program C status, and execution authority. | Any required gate is unknown, absent, unqualified, or unauthorized. |
+| `admissionRequirements` | yes | Required ADR0011 C15 aggregate accounting status, separate typed input/occurrence admission, typed inference-result admission, Program C status, parallel-MCP runtime qualification, and execution authority. | Any required gate is unknown, absent, unqualified, or unauthorized. |
 | `disclosureRequirements` | yes | Required reused/fresh/omitted/failed/limit/match-reason disclosures. | Any required disclosure omitted. |
 | `cancellationDeadline` | yes | Caller deadline and cancellation precedence. | Missing deadline/cancellation semantics. |
 | `idempotencyKey` | yes | Host-supplied deterministic key for replay/idempotence over exact request bytes. | Missing or reused with different request bytes. |
@@ -182,7 +183,7 @@ This is a strict conceptual schema for prose design. It is not a registered publ
 | `bridgeResultVersion` | Exact conceptual result version. |
 | `requestDigest` | Digest of canonical request bytes. |
 | `terminalStatus` | One of `DISABLED_STOP_GATE`, `COMPLETE`, `DEGRADED_COMPLETE`, `FAILED_CLOSED`, `CANCELLED`, `DEADLINE_EXCEEDED`, `LIMIT_EXCEEDED`, `REPLAY_MATCH`, `REPLAY_MISMATCH`. Current status must be `DISABLED_STOP_GATE`. |
-| `stopGateStatus` | Separate statuses and exact evidence selectors for ADR0011 C15 aggregate accounting, typed occurrence/input admission, typed inference-result admission, Program C qualification, and execution authority. |
+| `stopGateStatus` | Separate statuses and exact evidence selectors for ADR0011 C15 aggregate accounting, typed occurrence/input admission, typed inference-result admission, Program C qualification, parallel-MCP runtime qualification, and execution authority. |
 | `consolidatedResultId` | Digest over request, reused evidence, fresh evidence, policies, operation receipts, disclosures, terminal accounting, and result projection. |
 | `inventoryDecision` | Reuse/reject/supplement decision for every candidate cache/inventory. |
 | `freshnessDecision` | Exact compatibility/freshness outcome for source, workspace, revision, freeze, profile, policy, and privacy partition. |
@@ -238,7 +239,7 @@ securityPrivacy:
 
 | State | Entry condition | Permitted transition | Forbidden transition |
 | --- | --- | --- | --- |
-| `DESIGN_ONLY_DISABLED` | This document exists; all required gates and execution authority are not satisfied. | `STOP_GATES_SATISFIED` only after separate accepted ADR0011 C15 aggregate accounting, typed occurrence/input admission, typed inference-result admission, Program C qualification, and execution-authority receipts. | Any execution, schema registration, public surface, runtime dispatch, or inference handoff. |
+| `DESIGN_ONLY_DISABLED` | This document exists; all required gates and execution authority are not satisfied. | `STOP_GATES_SATISFIED` only after separate accepted ADR0011 C15 aggregate accounting, typed occurrence/input admission, typed inference-result admission, Program C qualification, parallel-MCP runtime qualification, and execution-authority receipts. | Any execution, schema registration, public surface, runtime dispatch, or inference handoff. |
 | `STOP_GATES_SATISFIED` | Exact gate receipts are independently accepted; C15 is not treated as typed input-family admission. | `REQUEST_ADMITTED` if a future authorized implementation admits exact request bytes. | Host-only claim that gates are satisfied without lsp-trace verification. |
 | `REQUEST_ADMITTED` | Conceptual request has exact identity, limits, privacy, workspace, revision, and freeze selectors. | `INVENTORY_ASSESSED`. | Operation execution before inventory/cache assessment. |
 | `INVENTORY_ASSESSED` | Every candidate cache/inventory has compatibility and freshness decision. | `CAPTURE_PLANNED`. | Cache reuse without disclosure. |
@@ -334,6 +335,14 @@ The bridge order is fixed unless a future versioned policy says otherwise:
 ```
 
 Each stage either executes, reuses compatible evidence, is skipped by policy, hands off to the external host, admits a typed immutable inference result, rejects an inference result, or fails with one terminal disposition. A later stage may not infer success or absence from an earlier omitted or failed stage. The external host, not lsp-trace, evaluates and records cancellation before external handoff; lsp-trace records only the host-supplied cancellation/handoff receipt and its own deterministic preparation/ingest terminal state.
+
+## Parallel MCP runtime qualification
+
+Before automatic host-LLM execution may leave `DESIGN_ONLY_DISABLED`, retained qualification must exercise realistic parallel MCP requests. At minimum it covers read/read, read/acquisition, acquisition/acquisition, retention/readback, acquisition/STOP, STOP/restart, duplicate request identities, stale generations, and cancellation at each qualified effect boundary.
+
+Operations are classified by their actual effects and dependencies. Independent immutable reads or computations may proceed concurrently. Shared mutation and lifecycle operations preserve existing owner and barrier semantics. Transport arrival, handler scheduling, and response completion order do not establish semantic order. A dependent request supplies the exact session generation, owner token, artifact/checkpoint identity, selector version, or other predecessor required by its operation; absent or stale predecessors fail with typed outcomes rather than inferred FIFO intent.
+
+Qualification requires no deadlock, no partial irreversible effects, exact-once terminal response/effect accounting, bounded latency and resource consumption, source-safe attributable diagnostics, typed recoverable refusal where permitted, stale-authority rejection, and historical C18 behavior unchanged. It records refusal rates and contention outcomes for each matrix cell. A bounded mailbox or scheduler remains deferred and may be authorized only by a later decision if retained evidence demonstrates harmful contention, starvation, ambiguous recovery, or unacceptable refusal rates; this contract does not prescribe one.
 
 ## Consolidated result identity
 
@@ -431,6 +440,7 @@ The bridge fails closed for:
 - typed occurrence/input admission contract is absent or not qualified;
 - typed immutable inference-result admission contract is absent or not qualified;
 - Program C not qualified;
+- parallel-MCP runtime qualification absent, incomplete, stale, or mismatched;
 - separate execution authority not granted;
 - unknown contract version;
 - unbounded limits;
@@ -456,7 +466,7 @@ Fail-closed results are still useful artifacts if they disclose safe diagnostics
 
 A request with the same canonical bytes and idempotency key must either return the same disabled/no-effect result, the same replay result over retained immutable inputs, or a typed replay failure. Replay may not use ambient checkout state, current filesystem contents, current host memory, current model availability, current cache contents, or network access unless those identities were part of the admitted immutable inputs.
 
-Idempotence covers terminal accounting and publication effects. It does not imply concurrency safety beyond the separately qualified publication/admission contract.
+Idempotence covers terminal accounting and publication effects. It does not imply concurrency safety, semantic ordering, or predecessor satisfaction beyond the separately qualified publication/admission and parallel-MCP runtime contracts.
 
 ## Limits and accounting
 
