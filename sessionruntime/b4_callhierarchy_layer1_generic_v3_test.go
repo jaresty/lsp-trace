@@ -108,10 +108,10 @@ type callHierarchyLayer1GenericV3DriverEvent struct {
 }
 
 type callHierarchyLayer1GenericV3Frame struct {
-	Available   bool   `json:"available"`
-	FrameHex    string `json:"frame_hex"`
-	FrameLength uint64 `json:"frame_length"`
-	FrameSHA256 string `json:"frame_sha256"`
+	Available   bool    `json:"available"`
+	FrameHex    *string `json:"frame_hex"`
+	FrameLength uint64  `json:"frame_length"`
+	FrameSHA256 string  `json:"frame_sha256"`
 }
 
 type callHierarchyLayer1GenericV3Frames struct {
