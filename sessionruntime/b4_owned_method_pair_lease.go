@@ -163,6 +163,73 @@ func (l OwnedMethodPairLease) Release() bool {
 	return true
 }
 
+type callHierarchyMeasuredDelta struct {
+	before callHierarchyMeasure
+	after  callHierarchyMeasure
+}
+
+type callHierarchyTransportTerminalSnapshot struct {
+	value     string
+	available bool
+}
+
+type callHierarchyExternalErrorSnapshot struct {
+	present             bool
+	presentAvailable    bool
+	class               string
+	classAvailable      bool
+	message             string
+	messageAvailable    bool
+	data                []byte
+	dataAvailable       bool
+	code                int64
+	codeAvailable       bool
+	serializedBytes     []byte
+	serializedAvailable bool
+}
+
+type callHierarchyTransportEffectLedger struct {
+	transportMessages callHierarchyMeasuredDelta
+	transportBytes    callHierarchyMeasuredDelta
+	externalBytes     callHierarchyMeasuredDelta
+	reservations      callHierarchyMeasuredDelta
+	leases            callHierarchyMeasuredDelta
+	callbacks         callHierarchyMeasuredDelta
+	diagnostics       callHierarchyMeasuredDelta
+	terminalBefore    callHierarchyTransportTerminalSnapshot
+	terminalAfter     callHierarchyTransportTerminalSnapshot
+}
+
+type callHierarchyExternalResultSnapshot struct {
+	resultBytes       []byte
+	resultAvailable   bool
+	error             callHierarchyExternalErrorSnapshot
+	errorAvailable    bool
+	terminal          callHierarchyTransportTerminalSnapshot
+	transportMessages callHierarchyMeasure
+	transportBytes    callHierarchyMeasure
+	externalBytes     []byte
+	externalAvailable bool
+}
+
+type callHierarchyOpaqueCommitmentMetadata struct {
+	identity  string
+	sha256    [32]byte
+	length    uint64
+	available bool
+}
+
+type callHierarchyLayer1RequestAttachment struct {
+	selected callHierarchyOpaqueCommitmentMetadata
+	handoff  callHierarchyOpaqueCommitmentMetadata
+	ledger   callHierarchyTransportEffectLedger
+}
+
+type callHierarchyLayer1ResultAttachment struct {
+	ledger   callHierarchyTransportEffectLedger
+	snapshot callHierarchyExternalResultSnapshot
+}
+
 type callHierarchyObservationOwner struct {
 	mu              sync.Mutex
 	cond            sync.Cond

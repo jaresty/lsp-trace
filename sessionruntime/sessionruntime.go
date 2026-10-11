@@ -251,7 +251,8 @@ type RoundTripRequest struct {
 	MaxMessages int
 	MaxBytes    int64
 	// Private default-off in-memory D/R query/result observation, not a receipt.
-	CaptureOwnedMethodPair bool `json:"-"`
+	CaptureOwnedMethodPair bool                                 `json:"-"`
+	callHierarchyLayer1    callHierarchyLayer1RequestAttachment `json:"-"`
 	// EnablePrivateC16ObjectAccounting is an experimental, default-off capability
 	// marker valid only for the marked private B4 transaction path. It is not a
 	// protocol, CLI, MCP, schema, or general Manager feature.
@@ -726,7 +727,8 @@ type RoundTripResult struct {
 	privateB4RetainedNotifications *privateB4RetainedNotificationOwner
 	privateB4ServerError           *privateB4ServerErrorOwner
 	privateB4RetainedResponses     *privateB4RetainedResponseOwner
-	callHierarchyObservation       *callHierarchyObservationOwner `json:"-"`
+	callHierarchyObservation       *callHierarchyObservationOwner      `json:"-"`
+	callHierarchyLayer1            callHierarchyLayer1ResultAttachment `json:"-"`
 	definitionResponseFrame        []byte
 	referencesResponseFrame        []byte
 	documentSymbolRequestFrame     []byte
