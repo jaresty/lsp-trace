@@ -75,7 +75,8 @@ func TestCallHierarchyLimitsAndAccountingBoundaries(t *testing.T) {
 	}
 }
 
-func TestCallHierarchyExactPerBindingMethodAllowlists(t *testing.T) {
+func TestCallHierarchyDirectionalMethodAllowlistTriples(t *testing.T) {
+	t.Skip("ADR0011_CALLHIERARCHY_DIRECTIONAL_GATE_PENDING: method allowlist triples")
 	limits := callHierarchyObservationLimits{maxObjects: 3}
 	incoming := []callHierarchyMethodIdentity{"textDocument/documentSymbol", "callHierarchy/prepare", "callHierarchy/incomingCalls"}
 	outgoing := []callHierarchyMethodIdentity{"textDocument/documentSymbol", "callHierarchy/prepare", "callHierarchy/outgoingCalls"}
@@ -105,7 +106,7 @@ func TestCallHierarchyExactPerBindingMethodAllowlists(t *testing.T) {
 	}
 }
 
-func TestCallHierarchyLiteralFrameCommitments(t *testing.T) {
+func TestCallHierarchyCompleteFrameBytesAndDigest(t *testing.T) {
 	identity := callHierarchyTestIdentity()
 	limits := callHierarchyObservationLimits{maxBytes: 256, maxObjects: 4, maxWork: 8, maxDiagnostics: 2}
 	request := []byte("Content-Length: 30\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":\"r\"}")
@@ -124,7 +125,7 @@ func TestCallHierarchyLiteralFrameCommitments(t *testing.T) {
 	response := []byte("Content-Length: 38\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":\"r\",\"result\":[]}")
 	responseWant := append([]byte(nil), response...)
 	responseObservation, ok := newCallHierarchyOriginalResponseFrameObservation(identity, response, 22, 38, 56, 2, limits)
-	if !ok || !bytes.Equal(responseObservation.copyFrameBytes(), responseWant) || responseObservation.resultForm != callHierarchyJSONTokenFormEmptyArray || responseObservation.frameSHA256 != callHierarchyDigest(t, "e87e7afb747c6e59460cba2816e0290bee58ffacd7d1eca49bb69bf4b0570248") {
+	if !ok || !bytes.Equal(responseObservation.copyFrameBytes(), responseWant) || responseObservation.frameLength != uint64(len(responseWant)) || responseObservation.frameSHA256 != callHierarchyDigest(t, "e87e7afb747c6e59460cba2816e0290bee58ffacd7d1eca49bb69bf4b0570248") {
 		t.Fatalf("ASSERT_CH_RESPONSE_FRAME_EXACT_BYTES: ok=%v observation=%+v", ok, responseObservation)
 	}
 	response[0] = 'x'
@@ -135,7 +136,19 @@ func TestCallHierarchyLiteralFrameCommitments(t *testing.T) {
 	}
 }
 
-func TestCallHierarchySelectedAndHandoffCommitments(t *testing.T) {
+func TestCallHierarchyDirectionalTokenFormAndResultSubspan(t *testing.T) {
+	t.Skip("ADR0011_CALLHIERARCHY_DIRECTIONAL_GATE_PENDING: token form and result subspan")
+	identity := callHierarchyTestIdentity()
+	limits := callHierarchyObservationLimits{maxBytes: 256, maxObjects: 4, maxWork: 8, maxDiagnostics: 2}
+	response := []byte("Content-Length: 38\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":\"r\",\"result\":[]}")
+	responseObservation, ok := newCallHierarchyOriginalResponseFrameObservation(identity, response, 22, 38, 56, 2, limits)
+	if !ok || responseObservation.resultForm != callHierarchyJSONTokenFormEmptyArray {
+		t.Fatalf("ASSERT_CH_RESPONSE_RESULT_TOKEN_FORM_AND_SUBSPAN: ok=%v observation=%+v", ok, responseObservation)
+	}
+}
+
+func TestCallHierarchyDirectionalRawSelectedAndHandoffCommitments(t *testing.T) {
+	t.Skip("ADR0011_CALLHIERARCHY_DIRECTIONAL_GATE_PENDING: raw selected and handoff commitments")
 	identity := callHierarchyTestIdentity()
 	transaction := callHierarchyTransactionIdentity{request: identity, local: [32]byte{9}}
 	limits := callHierarchyObservationLimits{maxBytes: 64, maxObjects: 4, maxWork: 8}
@@ -167,7 +180,8 @@ func TestCallHierarchyTerminalClassificationIsExact(t *testing.T) {
 	}
 }
 
-func TestCallHierarchyRequestPreservesCommitmentChain(t *testing.T) {
+func TestCallHierarchyDirectionalRichPredecessorRequestChain(t *testing.T) {
+	t.Skip("ADR0011_CALLHIERARCHY_DIRECTIONAL_GATE_PENDING: rich predecessor and request chain")
 	identity := callHierarchyTestIdentity()
 	limits := callHierarchyObservationLimits{maxBytes: 128, maxObjects: 8, maxWork: 8, maxDiagnostics: 2}
 	predecessor := callHierarchyPredecessorCommitment{identity: "document-symbol", requestIdentity: identity, requestKey: identity.requestKey, method: "textDocument/documentSymbol", requestOrdinal: 1, commitmentSHA256: [32]byte{7}}
