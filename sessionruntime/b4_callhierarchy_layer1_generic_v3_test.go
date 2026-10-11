@@ -189,6 +189,17 @@ type callHierarchyLayer1GenericV3Concurrency struct {
 	Workers   []callHierarchyLayer1GenericV3Envelope `json:"workers"`
 }
 
+type callHierarchyLayer1GenericV3Error struct {
+	Available     bool    `json:"available"`
+	Class         string  `json:"class"`
+	Code          *int64  `json:"code"`
+	DataBase64    *string `json:"data_base64"`
+	DataForm      string  `json:"data_form"`
+	Message       *string `json:"message"`
+	Present       bool    `json:"present"`
+	SerializedHex *string `json:"serialized_hex"`
+}
+
 type callHierarchyLayer1GenericV3Expected struct {
 	Accounting      callHierarchyLayer1CorpusAccounting      `json:"accounting"`
 	Commitments     callHierarchyLayer1CorpusCommitments     `json:"commitments"`
@@ -196,7 +207,7 @@ type callHierarchyLayer1GenericV3Expected struct {
 	Concurrency     *callHierarchyLayer1GenericV3Concurrency `json:"concurrency,omitempty"`
 	Control         *callHierarchyLayer1CorpusControl        `json:"control,omitempty"`
 	Derived         callHierarchyLayer1GenericV3Derived      `json:"derived"`
-	Error           callHierarchyLayer1CorpusError           `json:"error"`
+	Error           callHierarchyLayer1GenericV3Error        `json:"error"`
 	External        callHierarchyLayer1CorpusExternal        `json:"external"`
 	Frames          callHierarchyLayer1GenericV3Frames       `json:"frames"`
 	Identity        callHierarchyLayer1CorpusIdentity        `json:"identity"`
@@ -383,7 +394,7 @@ func callHierarchyLayer1GenericV3ValidateExpectedSchema(t *testing.T) []string {
 	return ordered
 }
 
-func callHierarchyLayer1GenericV3Partition(t *testing.T, paths []string) []string {
+func callHierarchyLayer1GenericV3Partition(t *testing.T, paths []string) ([]string, []string) {
 	t.Helper()
 	b := map[string]bool{
 		"lifecycle.acquired": true, "lifecycle.completed": true, "lifecycle.released": true, "lifecycle.sequence[*]": true,
@@ -400,7 +411,10 @@ func callHierarchyLayer1GenericV3Partition(t *testing.T, paths []string) []strin
 		"control.enabled": true, "control.observation_available": true, "control.paired_world": true,
 		"control.reason": true, "name": true, "external.execution_expected": true,
 	}
-	a := make([]string, 0, 116)
+	if len(b) != 20 || len(c) != 9 {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_ORDINARY_OWNERSHIP B=%d C=%d", len(b), len(c))
+	}
+	ordinaryA := make([]string, 0, 116)
 	seen := map[string]bool{}
 	for _, path := range paths {
 		if seen[path] {
@@ -413,13 +427,25 @@ func callHierarchyLayer1GenericV3Partition(t *testing.T, paths []string) []strin
 		case c[path]:
 			delete(c, path)
 		default:
-			a = append(a, path)
+			ordinaryA = append(ordinaryA, path)
 		}
 	}
-	if len(a) != 116 || len(b) != 0 || len(c) != 0 || len(paths) != 145 {
-		t.Fatalf("ASSERT_CH_GENERIC_V3_PARTITION A=%d B_missing=%d C_missing=%d total=%d", len(a), len(b), len(c), len(paths))
+	if len(ordinaryA) != 116 || len(b) != 0 || len(c) != 0 || len(paths) != 145 {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_PARTITION A=%d B_missing=%d C_missing=%d total=%d", len(ordinaryA), len(b), len(c), len(paths))
 	}
-	return a
+	world24A := make([]string, 0, 81)
+	world24LedgerB := 0
+	for _, path := range ordinaryA {
+		if strings.HasPrefix(path, "round_trip_ledger.dimensions.") {
+			world24LedgerB++
+			continue
+		}
+		world24A = append(world24A, path)
+	}
+	if len(world24A) != 81 || world24LedgerB != 35 || len(world24A)+20+world24LedgerB+9 != 145 {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_WORLD24_OWNERSHIP A=%d ordinary_B=%d ledger_B=%d C=%d total=%d", len(world24A), 20, world24LedgerB, 9, len(world24A)+20+world24LedgerB+9)
+	}
+	return ordinaryA, world24A
 }
 
 func callHierarchyLayer1GenericV3Walk(e callHierarchyLayer1GenericV3Envelope, fn func(callHierarchyLayer1GenericV3Envelope)) {
@@ -983,14 +1009,154 @@ func callHierarchyLayer1GenericV3AssertActual(t *testing.T, record callHierarchy
 		}
 		compared++
 	}
-	if compared+skipped+fieldErrors != 116 || len(expectedPaths) != 116 {
-		t.Errorf("ASSERT_CH_GENERIC_V3_A_ACCOUNTING_%s registry=%d compared=%d skipped=%d errors=%d want=116", e.Name, len(expectedPaths), compared, skipped, fieldErrors)
+	wantCompared := len(expectedPaths)
+	if compared+skipped+fieldErrors != wantCompared {
+		t.Errorf("ASSERT_CH_GENERIC_V3_A_ACCOUNTING_%s registry=%d compared=%d skipped=%d errors=%d want=%d", e.Name, len(expectedPaths), compared, skipped, fieldErrors, wantCompared)
 	}
-	if compared != 116 || fieldErrors != 0 {
-		t.Errorf("ASSERT_CH_GENERIC_V3_A_COMPLETENESS_%s compared=%d errors=%d want_compared=116 want_errors=0", e.Name, compared, fieldErrors)
+	if compared != wantCompared || fieldErrors != 0 {
+		t.Errorf("ASSERT_CH_GENERIC_V3_A_COMPLETENESS_%s compared=%d errors=%d want_compared=%d want_errors=0", e.Name, compared, fieldErrors, wantCompared)
 	}
 	t.Logf("ASSERT_CH_GENERIC_V3_PATH_COUNTS world=%s registry=%d compared=%d skipped=%d errors=%d", e.Name, len(expectedPaths), compared, skipped, fieldErrors)
 	return observation
+}
+
+func callHierarchyLayer1GenericV3AggregateDimension(workers []callHierarchyLayer1CorpusLedgerDimension) (callHierarchyLayer1CorpusLedgerDimension, error) {
+	var before, after uint64
+	for i, worker := range workers {
+		if !worker.Available {
+			return callHierarchyLayer1CorpusLedgerDimension{}, nil
+		}
+		if worker.Before == nil || worker.After == nil || worker.Delta == nil {
+			return callHierarchyLayer1CorpusLedgerDimension{}, fmt.Errorf("worker %d has incomplete available dimension", i)
+		}
+		if *worker.After < *worker.Before {
+			return callHierarchyLayer1CorpusLedgerDimension{}, fmt.Errorf("worker %d has after %d before before %d", i, *worker.After, *worker.Before)
+		}
+		before += *worker.Before
+		after += *worker.After
+	}
+	delta := after - before
+	return callHierarchyLayer1CorpusLedgerDimension{
+		After:     &after,
+		Available: true,
+		Before:    &before,
+		Delta:     &delta,
+		KnownZero: delta == 0,
+	}, nil
+}
+
+func callHierarchyLayer1GenericV3EqualDimension(got, want callHierarchyLayer1CorpusLedgerDimension) bool {
+	return reflect.DeepEqual(got, want)
+}
+
+func callHierarchyLayer1GenericV3AssertWorld24Aggregate(t *testing.T, root callHierarchyLayer1GenericV3Envelope, workers []callHierarchyLayer1GenericV3Envelope, actuals []callHierarchyLayer1GenericV3Actual) {
+	t.Helper()
+	if len(workers) != 16 || len(actuals) != len(workers) {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_WORLD24_ACTUAL_WORKER_LEDGERS workers=%d actuals=%d want=16", len(workers), len(actuals))
+	}
+	observations := make([]callHierarchyLayer1GenericV3Observation, len(actuals))
+	for i := range actuals {
+		observations[i] = callHierarchyLayer1GenericV3Observe(&actuals[i].result)
+	}
+	dimensions := []struct {
+		name string
+		want callHierarchyLayer1CorpusLedgerDimension
+	}{
+		{"callbacks", root.Expected.RoundTripLedger.Dimensions.Callbacks},
+		{"diagnostics", root.Expected.RoundTripLedger.Dimensions.Diagnostics},
+		{"external_bytes", root.Expected.RoundTripLedger.Dimensions.ExternalBytes},
+		{"leases", root.Expected.RoundTripLedger.Dimensions.Leases},
+		{"reservations", root.Expected.RoundTripLedger.Dimensions.Reservations},
+		{"transport_bytes", root.Expected.RoundTripLedger.Dimensions.TransportBytes},
+		{"transport_messages", root.Expected.RoundTripLedger.Dimensions.TransportMessages},
+	}
+	for _, dimension := range dimensions {
+		workerDimensions := make([]callHierarchyLayer1CorpusLedgerDimension, len(observations))
+		for i, observation := range observations {
+			if !observation.available {
+				continue
+			}
+			base := "round_trip_ledger.dimensions." + dimension.name
+			before, beforeOK := callHierarchyLayer1GenericV3Field(observation.view, base+".before")
+			after, afterOK := callHierarchyLayer1GenericV3Field(observation.view, base+".after")
+			delta, deltaOK := callHierarchyLayer1GenericV3Field(observation.view, base+".delta")
+			available, availableOK := callHierarchyLayer1GenericV3Field(observation.view, base+".available")
+			knownZero, knownZeroOK := callHierarchyLayer1GenericV3Field(observation.view, base+".known_zero")
+			beforeValue, beforeValueOK := before.(uint64)
+			afterValue, afterValueOK := after.(uint64)
+			deltaValue, deltaValueOK := delta.(uint64)
+			availableValue, availableValueOK := available.(bool)
+			knownZeroValue, knownZeroValueOK := knownZero.(bool)
+			if !beforeOK || !afterOK || !deltaOK || !availableOK || !knownZeroOK || !beforeValueOK || !afterValueOK || !deltaValueOK || !availableValueOK || !knownZeroValueOK {
+				t.Errorf("ASSERT_CH_GENERIC_V3_WORLD24_WORKER_LEDGER worker=%d dimension=%s observation=%t before=%v/%t after=%v/%t delta=%v/%t available=%v/%t known_zero=%v/%t", i, dimension.name, observation.available, before, beforeOK, after, afterOK, delta, deltaOK, available, availableOK, knownZero, knownZeroOK)
+				continue
+			}
+			workerDimensions[i] = callHierarchyLayer1CorpusLedgerDimension{Before: &beforeValue, After: &afterValue, Delta: &deltaValue, Available: availableValue, KnownZero: knownZeroValue}
+		}
+		got, err := callHierarchyLayer1GenericV3AggregateDimension(workerDimensions)
+		if err != nil {
+			t.Errorf("ASSERT_CH_GENERIC_V3_WORLD24_WORKER_LEDGER dimension=%s: %v", dimension.name, err)
+			continue
+		}
+		want := dimension.want
+		for _, workerDimension := range workerDimensions {
+			if !workerDimension.Available {
+				want = callHierarchyLayer1CorpusLedgerDimension{}
+				break
+			}
+		}
+		if !callHierarchyLayer1GenericV3EqualDimension(got, want) {
+			t.Errorf("ASSERT_CH_GENERIC_V3_WORLD24_AGGREGATE dimension=%s got=%+v want=%+v", dimension.name, got, want)
+		}
+	}
+}
+
+func TestCallHierarchyLayer1GenericV3World24AggregateHelper(t *testing.T) {
+	dimension := func(before, after uint64) callHierarchyLayer1CorpusLedgerDimension {
+		delta := after - before
+		return callHierarchyLayer1CorpusLedgerDimension{Before: &before, After: &after, Delta: &delta, Available: true, KnownZero: delta == 0}
+	}
+
+	t.Run("normal-sum", func(t *testing.T) {
+		got, err := callHierarchyLayer1GenericV3AggregateDimension([]callHierarchyLayer1CorpusLedgerDimension{dimension(2, 5), dimension(7, 11)})
+		want := dimension(9, 16)
+		if err != nil || !callHierarchyLayer1GenericV3EqualDimension(got, want) {
+			t.Fatalf("normal sum got=%+v want=%+v err=%v", got, want, err)
+		}
+	})
+
+	t.Run("unavailable-normalized", func(t *testing.T) {
+		got, err := callHierarchyLayer1GenericV3AggregateDimension([]callHierarchyLayer1CorpusLedgerDimension{dimension(2, 5), {}})
+		want := callHierarchyLayer1CorpusLedgerDimension{}
+		if err != nil || !callHierarchyLayer1GenericV3EqualDimension(got, want) {
+			t.Fatalf("unavailable aggregate got=%+v want=%+v err=%v", got, want, err)
+		}
+	})
+
+	t.Run("after-before-detected", func(t *testing.T) {
+		before, after, delta := uint64(5), uint64(2), uint64(0)
+		invalid := callHierarchyLayer1CorpusLedgerDimension{Before: &before, After: &after, Delta: &delta, Available: true}
+		if _, err := callHierarchyLayer1GenericV3AggregateDimension([]callHierarchyLayer1CorpusLedgerDimension{invalid}); err == nil {
+			t.Fatal("after < before was accepted")
+		}
+	})
+
+	t.Run("known-zero", func(t *testing.T) {
+		got, err := callHierarchyLayer1GenericV3AggregateDimension([]callHierarchyLayer1CorpusLedgerDimension{dimension(4, 4), dimension(9, 9)})
+		want := dimension(13, 13)
+		if err != nil || !callHierarchyLayer1GenericV3EqualDimension(got, want) {
+			t.Fatalf("known zero got=%+v want=%+v err=%v", got, want, err)
+		}
+	})
+
+	t.Run("inequality-detected", func(t *testing.T) {
+		got, err := callHierarchyLayer1GenericV3AggregateDimension([]callHierarchyLayer1CorpusLedgerDimension{dimension(1, 3)})
+		want := dimension(1, 3)
+		want.KnownZero = true
+		if err != nil || callHierarchyLayer1GenericV3EqualDimension(got, want) {
+			t.Fatalf("five-member inequality got=%+v want=%+v err=%v", got, want, err)
+		}
+	})
 }
 
 func TestCallHierarchyLayer1GenericV3ComparatorProjection(t *testing.T) {
@@ -1077,7 +1243,7 @@ func callHierarchyLayer1GenericV3MutationChecks(t *testing.T, record callHierarc
 
 func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 	expectedPaths := callHierarchyLayer1GenericV3ValidateExpectedSchema(t)
-	aPaths := callHierarchyLayer1GenericV3Partition(t, expectedPaths)
+	ordinaryAPaths, world24APaths := callHierarchyLayer1GenericV3Partition(t, expectedPaths)
 	worlds := callHierarchyLayer1GenericV3Load(t)
 	if len(worlds) != 25 {
 		t.Fatalf("ASSERT_CH_GENERIC_V3_ROOTS got=%d want=25", len(worlds))
@@ -1118,7 +1284,11 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 			counters.roots.Add(1)
 			rootActuals[i] = callHierarchyLayer1GenericV3Execute(t, world.envelope)
 			if recordActual(rootActuals[i]) {
-				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, world.envelope, rootActuals[i], aPaths))
+				paths := ordinaryAPaths
+				if i == 23 {
+					paths = world24APaths
+				}
+				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, world.envelope, rootActuals[i], paths))
 			}
 		})
 	}
@@ -1139,9 +1309,10 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 		wg.Wait()
 		for i := range w24 {
 			if recordActual(observed[i]) {
-				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, w24[i], observed[i], aPaths))
+				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, w24[i], observed[i], ordinaryAPaths))
 			}
 		}
+		callHierarchyLayer1GenericV3AssertWorld24Aggregate(t, worlds[23].envelope, w24, observed)
 	})
 
 	w25 := worlds[24].envelope.Expected.Comparison
@@ -1149,7 +1320,7 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 		for _, execution := range w25.Executions {
 			actual := callHierarchyLayer1GenericV3Execute(t, execution)
 			if recordActual(actual) {
-				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, execution, actual, aPaths))
+				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, execution, actual, ordinaryAPaths))
 			}
 			counters.executions.Add(1)
 		}
@@ -1161,8 +1332,8 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 			if !disabledExecuted || !enabledExecuted {
 				continue
 			}
-			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Disabled, disabled, aPaths))
-			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Enabled, enabled, aPaths))
+			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Disabled, disabled, ordinaryAPaths))
+			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Enabled, enabled, ordinaryAPaths))
 			disabledTransport := struct {
 				requestFrame, responseFrame []byte
 				messages, requestMessages   int
