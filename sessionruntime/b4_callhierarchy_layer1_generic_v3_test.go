@@ -499,11 +499,18 @@ func callHierarchyLayer1GenericV3Load(t *testing.T) []callHierarchyLayer1Generic
 }
 
 type callHierarchyLayer1GenericV3Actual struct {
-	result        RoundTripResult
-	request       RoundTripRequest
-	requestFrame  []byte
-	responseFrame []byte
-	external      callHierarchyLayer1GenericV3ExternalActual
+	result           RoundTripResult
+	request          RoundTripRequest
+	requestFrame     []byte
+	responseFrame    []byte
+	external         callHierarchyLayer1GenericV3ExternalActual
+	attempted        bool
+	executed         bool
+	preEffectRefusal string
+}
+
+type callHierarchyLayer1GenericV3PredecessorAttachment interface {
+	privateCallHierarchyLayer1WithPredecessors([]callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment
 }
 
 type callHierarchyLayer1GenericV3ExternalActual struct {
@@ -535,6 +542,7 @@ const (
 
 type callHierarchyLayer1GenericV3Counters struct {
 	roots, workers, executions, pairs atomic.Int64
+	attempted, executed, refused      atomic.Int64
 }
 
 type callHierarchyLayer1GenericV3WriteCapture struct {
@@ -696,15 +704,28 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 		wireParams = json.RawMessage(append([]byte(nil), params...))
 	}
 	paramsSource := params
+	attachment := callHierarchyLayer1RequestAttachment{
+		selected: callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.selected", record.Driver.CommitmentInputs.Selected),
+		handoff:  callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.handoff", record.Driver.CommitmentInputs.Handoff),
+	}
+	predecessors := make([]callHierarchyOpaqueCommitmentMetadata, len(record.Driver.CommitmentInputs.Predecessors))
+	for i, predecessor := range record.Driver.CommitmentInputs.Predecessors {
+		predecessors[i] = callHierarchyLayer1GenericV3Commitment(t, fmt.Sprintf("driver.commitment_inputs.predecessors[%d]", i), predecessor)
+	}
+	setter, ok := any(attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+	if !ok {
+		setter, ok = any(&attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+	}
 	request := RoundTripRequest{
 		SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, Method: record.Driver.Request.Method,
 		Params: wireParams, Deadline: time.Now().Add(time.Duration(record.Driver.Request.DeadlineAfterNS)),
 		MaxMessages: record.Driver.Request.MaxMessages, MaxBytes: record.Driver.Request.MaxBytes,
-		callHierarchyLayer1: callHierarchyLayer1RequestAttachment{
-			selected: callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.selected", record.Driver.CommitmentInputs.Selected),
-			handoff:  callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.handoff", record.Driver.CommitmentInputs.Handoff),
-		},
+		callHierarchyLayer1: attachment,
 	}
+	if !ok {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithPredecessors"}
+	}
+	request.callHierarchyLayer1 = setter.privateCallHierarchyLayer1WithPredecessors(predecessors)
 	result := manager.RoundTrip(ctx, request)
 	if len(paramsSource) > 0 {
 		paramsSource[0] ^= 0xff
@@ -725,7 +746,7 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 	requestFrame := transport.stdin.snapshot()
 	responseFrame := transport.responseSnapshot()
 	external := callHierarchyLayer1GenericV3ExternalFromResult(result, requestFrame, responseFrame)
-	return callHierarchyLayer1GenericV3Actual{result: result, request: request, requestFrame: external.requestFrame, responseFrame: external.responseFrame, external: external}
+	return callHierarchyLayer1GenericV3Actual{result: result, request: request, requestFrame: external.requestFrame, responseFrame: external.responseFrame, external: external, attempted: true, executed: true}
 }
 
 func callHierarchyLayer1GenericV3ExternalFromResult(result RoundTripResult, requestFrame, responseFrame []byte) callHierarchyLayer1GenericV3ExternalActual {
@@ -1063,6 +1084,22 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 	var counters callHierarchyLayer1GenericV3Counters
 	rootActuals := make([]callHierarchyLayer1GenericV3Actual, len(worlds))
 	prerequisiteReason := ""
+	recordActual := func(actual callHierarchyLayer1GenericV3Actual) bool {
+		if actual.attempted {
+			counters.attempted.Add(1)
+		}
+		if actual.executed {
+			counters.executed.Add(1)
+			return true
+		}
+		if actual.preEffectRefusal != "" {
+			counters.refused.Add(1)
+			if prerequisiteReason == "" {
+				prerequisiteReason = actual.preEffectRefusal
+			}
+		}
+		return false
+	}
 	recordPrerequisite := func(observation callHierarchyLayer1GenericV3Observation) {
 		if !observation.available && prerequisiteReason == "" {
 			prerequisiteReason = observation.reason
@@ -1073,7 +1110,9 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 		t.Run(world.entry.Name, func(t *testing.T) {
 			counters.roots.Add(1)
 			rootActuals[i] = callHierarchyLayer1GenericV3Execute(t, world.envelope)
-			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, world.envelope, rootActuals[i], aPaths))
+			if recordActual(rootActuals[i]) {
+				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, world.envelope, rootActuals[i], aPaths))
+			}
 		})
 	}
 
@@ -1092,7 +1131,9 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 		}
 		wg.Wait()
 		for i := range w24 {
-			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, w24[i], observed[i], aPaths))
+			if recordActual(observed[i]) {
+				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, w24[i], observed[i], aPaths))
+			}
 		}
 	})
 
@@ -1100,12 +1141,19 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 	t.Run("world-25-actual-executions-and-pairs", func(t *testing.T) {
 		for _, execution := range w25.Executions {
 			actual := callHierarchyLayer1GenericV3Execute(t, execution)
-			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, execution, actual, aPaths))
+			if recordActual(actual) {
+				recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, execution, actual, aPaths))
+			}
 			counters.executions.Add(1)
 		}
 		for _, pair := range w25.Pairs {
 			disabled := callHierarchyLayer1GenericV3Execute(t, pair.Disabled)
 			enabled := callHierarchyLayer1GenericV3Execute(t, pair.Enabled)
+			disabledExecuted, enabledExecuted := recordActual(disabled), recordActual(enabled)
+			counters.pairs.Add(2)
+			if !disabledExecuted || !enabledExecuted {
+				continue
+			}
 			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Disabled, disabled, aPaths))
 			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Enabled, enabled, aPaths))
 			disabledTransport := struct {
@@ -1128,20 +1176,15 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 			if pair.ExternalEqual {
 				callHierarchyLayer1GenericV3Equal(t, "world-25", "comparison.external_equal.actual", disabled.external, enabled.external)
 			}
-			counters.pairs.Add(2)
 		}
 	})
 	total := counters.roots.Load() + counters.workers.Load() + counters.executions.Load() + counters.pairs.Load()
-	t.Logf("ASSERT_CH_GENERIC_V3_EXECUTION_COUNTERS roots=%d workers=%d executions=%d pair_members=%d total=%d", counters.roots.Load(), counters.workers.Load(), counters.executions.Load(), counters.pairs.Load(), total)
-	if counters.roots.Load() != 25 || counters.workers.Load() != 16 || counters.executions.Load() != 22 || counters.pairs.Load() != 22 || total != 85 {
+	t.Logf("ASSERT_CH_GENERIC_V3_EXECUTION_COUNTERS roots=%d workers=%d executions=%d pair_members=%d total=%d attempted=%d executed=%d pre_effect_refused=%d", counters.roots.Load(), counters.workers.Load(), counters.executions.Load(), counters.pairs.Load(), total, counters.attempted.Load(), counters.executed.Load(), counters.refused.Load())
+	if counters.roots.Load() != 25 || counters.workers.Load() != 16 || counters.executions.Load() != 22 || counters.pairs.Load() != 22 || total != 85 || counters.attempted.Load() != 85 || counters.executed.Load()+counters.refused.Load() != 85 {
 		t.Fatal("ASSERT_CH_GENERIC_V3_EXECUTION_COUNTER_MISMATCH")
 	}
-	_, predecessorField := reflect.TypeOf(callHierarchyLayer1RequestAttachment{}).FieldByName("predecessors")
-	if !predecessorField {
-		prerequisiteReason = "request-attachment-field:predecessors"
-	}
 	if prerequisiteReason != "" {
-		t.Errorf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE after_execution=85 contract=RoundTripRequest.callHierarchyLayer1.predecessors+RoundTripResult.%s/View reason=%s", callHierarchyLayer1GenericV3AcquireMethod, prerequisiteReason)
+		t.Errorf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE attempted=%d executed=%d pre_effect_refused=%d contract=RoundTripRequest.callHierarchyLayer1.privateCallHierarchyLayer1WithPredecessors+RoundTripResult.%s/View reason=%s", counters.attempted.Load(), counters.executed.Load(), counters.refused.Load(), callHierarchyLayer1GenericV3AcquireMethod, prerequisiteReason)
 		return
 	}
 	callHierarchyLayer1GenericV3AssertLifecycle(t, worlds[0].envelope, &rootActuals[0].result)
