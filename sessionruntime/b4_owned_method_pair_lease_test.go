@@ -541,8 +541,6 @@ func callHierarchyLayer1AssertScaffoldShapeForTest(t *testing.T, world string) {
 		{view, "response.frameBytes", reflect.TypeOf([]byte{})},
 		{view, "response.bodyOffset", reflect.TypeOf(uint64(0))},
 		{view, "response.resultOffset", reflect.TypeOf(uint64(0))},
-		{view, "selected.exactBytes", reflect.TypeOf([]byte{})},
-		{view, "handoff.successorBytes", reflect.TypeOf([]byte{})},
 		{result, "snapshot.notificationsBytes", reflect.TypeOf([]byte{})},
 		{result, "snapshot.responsesBytes", reflect.TypeOf([]byte{})},
 		{result, "snapshot.failure", reflect.TypeOf(session.Failure(""))},
@@ -815,7 +813,7 @@ func callHierarchyLayer1AssertCorpusRecordForTest(t *testing.T, expected callHie
 	if request.callHierarchyLayer1.selected != selected || request.callHierarchyLayer1.handoff != handoff {
 		t.Errorf("ASSERT_CH_CORPUS_REQUEST_COMMITMENT_METADATA_%s got=%+v expectedSelected=%+v expectedHandoff=%+v", expected.Name, request.callHierarchyLayer1, selected, handoff)
 	}
-	if view.selected == nil || view.selected.exactSHA256 != selected.sha256 || view.selected.exactSHA256 != sha256.Sum256(view.selected.exactBytes) || view.selected.sourceLength != selected.length || uint64(len(view.selected.exactBytes)) != selected.length || view.handoff == nil || view.handoff.successorSHA256 != handoff.sha256 || view.handoff.successorSHA256 != sha256.Sum256(view.handoff.successorBytes) || view.handoff.successorLength != handoff.length || uint64(len(view.handoff.successorBytes)) != handoff.length || len(view.predecessors) != len(expected.Commitments.Predecessors) {
+	if view.selected == nil || view.selected.exactSHA256 != selected.sha256 || view.selected.sourceLength != selected.length || view.handoff == nil || view.handoff.successorSHA256 != handoff.sha256 || view.handoff.successorLength != handoff.length || len(view.predecessors) != len(expected.Commitments.Predecessors) {
 		t.Errorf("ASSERT_CH_CORPUS_COMMITMENTS_AVAILABILITY_IDENTITY_LENGTH_DIGEST_%s", expected.Name)
 	}
 	for i, predecessor := range expected.Commitments.Predecessors {
