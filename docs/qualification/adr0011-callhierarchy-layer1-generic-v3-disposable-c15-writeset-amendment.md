@@ -3,7 +3,7 @@
 Status: **REVIEW_GATE_PENDING / NO GO**
 
 - Repository: `/Users/schwa/dev/lsp-trace-adr0011-c17`
-- Pinned HEAD: `1419784160f199f9de2f1ee1e784d34e8e0ddd0f`
+- Pinned HEAD: `5fc218c677a0caf4537b0c2f475d8d1f3800755f`
 - Required starting state: clean worktree at the pinned HEAD
 - Authority: minimal amendment of the accepted v2 disposable three-file boundary for qualified v3 RED only
 - Disposable prototype writer authority: **not issued by this document**
@@ -35,13 +35,15 @@ Preserve exactly the accepted eight existing inert-symbol authorizations, unchan
 7. `newCallHierarchyOriginalResponseFrameObservation`
 8. `callHierarchyOriginalResponseFrameObservation.copyFrameBytes`
 
-Together with the ninth authorization—the field-only amendment below—authorize exactly this finite tenth authorization and `owned_method_pair.go` symbol, matching the qualified v3 RED exact signature:
+Together with the eight preserved authorizations, authorize exactly these three finite additions, matching the qualified v3 RED exact representation and setter signature:
 
-10. `(callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithPredecessors([]callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment`
+9. `type callHierarchyOpaqueCommitmentList struct` with the sole field `values []callHierarchyOpaqueCommitmentMetadata`
+10. `callHierarchyLayer1RequestAttachment.predecessors *callHierarchyOpaqueCommitmentList`
+11. `(callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithPredecessors([]callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment`
 
-This narrow setter value-returns the attachment with only its ordered opaque predecessor commitment metadata replaced by a defensive copy of the supplied slice. It preserves order and cardinality exactly, does not alias caller-owned mutable slice backing, carries only the already-defined opaque metadata shape, and carries no raw commitment bytes, preimages, or semantic meaning. It must not activate, alter, or repurpose `newCallHierarchyObservationRequest` or the older `callHierarchyObservation` attachment.
+`callHierarchyOpaqueCommitmentList` is a private immutable holder. Its `values` backing is defensively copied exactly once when the holder is allocated and is never mutated thereafter. The attachment stores only the holder pointer so attachment values remain comparable; pointer identity has no metadata-equality semantics and must never be used to assert metadata equality. The existing setter signature remains unchanged and exact. It value-returns the attachment with only its ordered opaque predecessor commitment metadata replaced: nil or empty input is the canonical unavailable/empty representation and sets `predecessors` to nil; non-empty input allocates one holder and one defensive copy preserving order and cardinality exactly. It does not alias caller-owned mutable slice backing, carries only the already-defined opaque metadata shape, and carries no raw commitment bytes, preimages, or semantic meaning. Observation construction and every observation/view exposure defensively copy values out of the immutable holder; no returned slice aliases holder backing. The setter must not activate, alter, or repurpose `newCallHierarchyObservationRequest` or the older `callHierarchyObservation` attachment.
 
-No other constructor, type, method, accessor, helper, declaration, or existing inert symbol is authorized in `owned_method_pair.go`: the finite amended boundary contains exactly ten authorizations overall—the eight preserved symbols, the ninth field-only amendment, and the exact tenth setter above. If compilation or qualified v3 RED execution requires any other exact symbol in that file, hard-stop before canonical C15 enumeration and report the finite exact symbol:
+No other constructor, type, field, method, accessor, helper, declaration, or existing inert symbol is authorized in `owned_method_pair.go`: the finite amended boundary contains exactly eleven authorizations overall—the eight preserved symbols, the exact holder type, the exact attachment field, and the exact setter above. If compilation or qualified v3 RED execution requires any other exact symbol in that file, hard-stop before canonical C15 enumeration and report the finite exact symbol:
 
 ```text
 BLOCKED — owned_method_pair.go symbol outside finite amended boundary required: <exact symbol>; write-set amendment and independent review required before C15
@@ -51,11 +53,7 @@ No open-ended symbol allowance or workaround is permitted.
 
 ### `sessionruntime/b4_owned_method_pair_lease.go`
 
-In addition to the accepted v2 finite owner/view/lease boundary, authorize exactly one existing type declaration for one field amendment paired only with the narrow setter authorized above:
-
-- `type callHierarchyLayer1RequestAttachment struct`: add only `predecessors []callHierarchyOpaqueCommitmentMetadata`.
-
-The field is an ordered defensive copy of the request attachment's opaque predecessor commitment metadata and may be set only by `(callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithPredecessors`. Order and cardinality are preserved exactly. Each element carries only the already-defined opaque metadata shape: availability, opaque identity, SHA-256 digest, and length. It carries no raw commitment bytes or preimages and establishes no semantic meaning.
+The existing `type callHierarchyLayer1RequestAttachment struct` may receive only the exact comparable field authorization already counted above: `predecessors *callHierarchyOpaqueCommitmentList`. This is not an additional authority beyond authorization 10. The field may be set only by `(callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithPredecessors`. Nil is the sole canonical unavailable/empty representation. Non-nil holders preserve predecessor order and cardinality exactly and own their once-copied, never-mutated values. Each element carries only the already-defined opaque metadata shape: availability, opaque identity, SHA-256 digest, and length. It carries no raw commitment bytes or preimages and establishes no semantic meaning. Direct attachment equality remains valid for zero attachments because both canonical empty fields are nil. Pointer equality must never be used to assert predecessor metadata equality.
 
 The accepted v2 owner/view/lease symbols remain the only implementation and lifecycle seams:
 
@@ -70,7 +68,7 @@ The accepted v2 owner/view/lease symbols remain the only implementation and life
 9. `(*callHierarchyLayer1GenericOwner).requestTerminal`
 10. `(*callHierarchyLayer1GenericOwner).waitReleased`
 
-`newCallHierarchyLayer1GenericOwner` may defensively copy the ordered predecessor metadata from the request attachment into the immutable generic observation/view. Repeated views and callbacks must not alias caller-owned or request-owned mutable slice backing. No additional helper, constructor, accessor, owner, view, lease, lifecycle method, alternate attachment, raw-byte carrier, or semantic type is authorized.
+`newCallHierarchyLayer1GenericOwner` may read the ordered predecessor metadata from the attachment's immutable holder and must defensively copy it into the immutable generic observation. Observation construction and every view or callback that exposes predecessor metadata must defensively copy values out; repeated observations, views, and callbacks must not alias caller-owned, holder-owned, request-owned, or one another's mutable slice backing. Metadata equality is value equality only, never holder-pointer identity. No additional helper, constructor, accessor, owner, view, lease, lifecycle method, alternate attachment, raw-byte carrier, or semantic type is authorized.
 
 ### `sessionruntime/sessionruntime.go`
 
@@ -106,7 +104,7 @@ The mandatory order is unchanged and strict:
 5. dispose of all prototype changes and the disposable worktree without commit; and
 6. only after accepted review and verified disposal may a separate production gate freeze the final finite production file/symbol/candidate write-set and name exactly one production writer.
 
-The disposable prototype is evidence tooling, not production implementation. It must not be committed or reused presumptively. The disposable writer is not the production writer. Any fourth source file, any symbol beyond the exact ten-authorizations count—the eight preserved `owned_method_pair.go` symbols, the ninth paired attachment field-only amendment, and the exact finite tenth `owned_method_pair.go` setter—or beyond the accepted v2 finite owner/view/lease and `sessionruntime.go` boundaries, any mutable test/corpus input, raw-preimage retention, semantic requirement, inaccessible required input, ambiguous disposition, or C15 delta outside the independently reviewed finite set is an immediate hard stop; report the exact missing file or symbol and do not improvise.
+The disposable prototype is evidence tooling, not production implementation. It must not be committed or reused presumptively. The disposable writer is not the production writer. Any fourth source file, any symbol beyond the exact eleven-authorizations count—the eight preserved `owned_method_pair.go` symbols, the exact private immutable holder type, the exact comparable attachment field, and the exact value-returning setter—or beyond the accepted v2 finite owner/view/lease and `sessionruntime.go` boundaries, any mutable test/corpus input, raw-preimage retention, semantic requirement, inaccessible required input, ambiguous disposition, or C15 delta outside the independently reviewed finite set is an immediate hard stop; report the exact missing file or symbol and do not improvise.
 
 Until separate review issues disposable authority and a later independent production gate issues production authority:
 
