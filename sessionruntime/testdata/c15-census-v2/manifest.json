@@ -1,0 +1,21 @@
+{
+  "schema": "lsp-trace/c15-census-successor-v2",
+  "base_head": "374e7c7ba31363ebd19800f8d027cd22a290a464",
+  "generator": "sessionruntime/b4_c15_census_v2_successor_private_test.go:TestPrivateB4C15V2SuccessorCatalog",
+  "canonical_command": "C15_V2_REGENERATE=1 go test ./sessionruntime -run '^TestPrivateB4C15V2SuccessorCatalog$' -count=1",
+  "generator_inputs_sha256": {
+    "active-production-go-source": "4db5f57f186415ac60e908c45c3f49c239d6afdc1bde5298fadc8b3ad01e5931",
+    "c15-census-v1/operation-mapping.json": "34a8ffa1bbc26775c42a2329f5ca9652444e6832ba790a3cc8673f4b15c4ffd1"
+  },
+  "predecessor_verification_sha256": {
+    "c15-census-v1/candidates.tsv": "13d45a61cb9ad2e5dad8d944458a9b7f459c9a2cd0336cb76700fa801599ca6e",
+    "c15-census-v1/classifications.tsv": "cde6aa72034acf743c582cec56ff778470f8f258bde0ecdc4398653f3de10e04"
+  },
+  "base_v1_count": 3805,
+  "final_v2_count": 3847,
+  "added_excluded": 42,
+  "removed": 0,
+  "reclassified": 0,
+  "unchanged_mapping": 44,
+  "manager_propagation_claim": false
+}
