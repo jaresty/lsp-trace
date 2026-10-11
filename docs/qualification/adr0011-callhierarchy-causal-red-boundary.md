@@ -3,7 +3,7 @@
 Status: **BOUNDARY FREEZE / NO GO**
 
 - Repository: `/Users/schwa/dev/lsp-trace-adr0011-c17`
-- Pinned HEAD before this document: `66d11b6a87078d9210c71e3d6ff189c9905aa25a`
+- Pinned HEAD for this correction: `a4cdf704085c2878a29848c568caa8a32e01c7d3`
 - Preserved pre-existing worktree delta: exactly 110 added lines in `sessionruntime/b4_owned_method_pair_lease_test.go`
 - Authority: boundary and future-RED specification only
 - Gate under review: `ADR0011_CALLHIERARCHY_CAUSAL_RED_BOUNDARY_GO`
@@ -13,7 +13,7 @@ Status: **BOUNDARY FREEZE / NO GO**
 
 ADR-0011 call-hierarchy work is frozen into two ownership layers. The shared `sessionruntime` layer may retain and expose only generic transport-custody facts produced by `Manager`. Later directional adapters exclusively own target selection and all call-hierarchy semantic interpretation.
 
-This document authorizes no source or test mutation, no GREEN implementation, no regeneration, no evidence production, no publication, and no commit. The private Manager constructors described below remain an intentionally inert RED boundary: they produce neither ledger nor external snapshot until a later, separately authorized behavior increment.
+This document authorizes no source or test mutation, no GREEN implementation, no regeneration, no evidence production, no publication, and no commit. The partial RED boundary adds no helper constructor or accessor: same-package RED may populate private attachment fields directly, while `Manager.RoundTrip` remains unchanged and ignores those fields until a later, separately authorized behavior increment.
 
 ## Layer 1 — shared `sessionruntime` transport custody
 
@@ -60,13 +60,13 @@ type callHierarchyExternalResultSnapshot struct {
 }
 ```
 
-Supporting private measurement types must encode availability independently from value, so unavailable and known zero cannot alias. `callHierarchyMeasuredDelta` must carry typed before/after measurements or one exact typed delta with availability; it must not infer a delta from unavailable endpoints. `callHierarchyExternalErrorSnapshot` must preserve error presence and concrete class plus the exact externally observable message, data, code, and serialized bytes wherever each is applicable; each component has an independent availability bit so unavailable cannot alias present-empty or present-zero. It is a lossless custody representation, not a normalized semantic error. `externalBytes` means the finite exact externally visible byte surface needed by the equivalence test, not a decoded or canonicalized semantic representation. Constructors and copy/access methods must defensively clone all permitted mutable transport storage, including error data and serialized bytes, on ingress and egress; retained state and repeated views must remain byte/value-identical after caller mutation. These external request/response/result/error bytes are transport custody and do not authorize selected-item/handoff correlation payload or preimage bytes.
+Supporting private measurement types must encode availability independently from value, so unavailable and known zero cannot alias. `callHierarchyMeasuredDelta` must carry typed before/after measurements or one exact typed delta with availability; it must not infer a delta from unavailable endpoints. `callHierarchyExternalErrorSnapshot` must preserve error presence and concrete class plus the exact externally observable message, data, code, and serialized bytes wherever each is applicable; each component has an independent availability bit so unavailable cannot alias present-empty or present-zero. It is a lossless custody representation, not a normalized semantic error. `externalBytes` means the finite exact externally visible byte surface needed by the equivalence test, not a decoded or canonicalized semantic representation. Any later authorized custody behavior must defensively clone all permitted mutable transport storage, including error data and serialized bytes, on ingress and egress; retained state and repeated views must remain byte/value-identical after caller mutation. No helper constructor or accessor is part of this scaffold: same-package RED accesses the private attachment fields directly. These external request/response/result/error bytes are transport custody and do not authorize selected-item/handoff correlation payload or preimage bytes.
 
 The ledger dimensions are exact and exhaustive: transport messages, transport bytes, externally visible bytes, reservations, leases, callbacks, transport diagnostics, and terminal transition. It may not gain correlation commitment fields, selected-item/handoff payload or preimage bytes, target, direction, method-family, occurrence, member, range, group, relation, admission, publication, or downstream counters.
 
 The external snapshot is likewise exact and generic: exact returned result bytes, exact externally observable error presence/class/message/data/code/serialized bytes as applicable, transport terminal, transport message and byte effects, and the finite externally visible bytes sufficient to compare enabled and disabled execution. It must preserve immutable defensive transport custody and present-versus-unavailable distinctions for every optional result and error component. It contains no correlation commitment field and no selected-item/handoff payload or preimage bytes. It must not parse JSON token forms, classify empty call-hierarchy results, inspect returned items, or interpret any protocol field.
 
-Any private Layer-1 owner, lease, view, constructor, callback, or accessor API that carries selected-item/handoff correlation may accept or expose only the Layer-2-supplied typed opaque identity, SHA-256 digest, exact byte length, and availability where needed. That metadata tuple is exhaustive: no raw bytes, byte slice, span, range, token, decoded field, semantic field, serialization, payload handle, preimage handle, or recovery callback is permitted. Layer 1 may compare the typed metadata values only as opaque values; it may not recompute or independently validate the digest.
+Any later private Layer-1 owner, lease, view, callback, or other API that carries selected-item/handoff correlation may accept or expose only the Layer-2-supplied typed opaque identity, SHA-256 digest, exact byte length, and availability where needed. That metadata tuple is exhaustive: no raw bytes, byte slice, span, range, token, decoded field, semantic field, serialization, payload handle, preimage handle, or recovery callback is permitted. Layer 1 may compare the typed metadata values only as opaque values; it may not recompute or independently validate the digest.
 
 ## Layer 2 — later directional adapters
 
@@ -97,7 +97,7 @@ The complete Layer-1 causal RED must execute the same transport operation with t
 - transport byte effects; and
 - the bounded externally visible byte surface.
 
-Every comparison is byte-for-byte and value-for-value over the applicable representation; classification-only, normalized, reconstructed, or semantically equivalent errors are insufficient. Result bytes, error components, terminal state/transition, transport effects, and external bytes must all remain immutable under mutation attempts against constructor inputs or returned views.
+Every comparison is byte-for-byte and value-for-value over the applicable representation; classification-only, normalized, reconstructed, or semantically equivalent errors are insufficient. Result bytes, error components, terminal state/transition, transport effects, and external bytes must all remain immutable under mutation attempts against directly populated private attachment fields or returned views.
 
 It must separately prove that enabling observation introduces only the explicitly measured private observation effects and never a transport refusal, retry, extra protocol message, changed external byte, changed result, changed error, changed terminal, or changed resource outcome. A refusal-shaped attachment is a Layer-2 concern: Layer 1 transports normally and produces no semantic refusal effect.
 
@@ -108,16 +108,16 @@ A successor RED tranche is incomplete unless it causally covers all of the follo
 1. Manager-produced owner identity and exact workspace/session/generation/request/predecessor joins;
 2. exact request/response frame bytes, spans, lengths, and digests;
 3. opaque Layer-2-supplied correlation commitment metadata custody, exhaustively limited to typed opaque identity, SHA-256 digest, exact byte length, and availability where needed, with no payload/preimage bytes, spans, ranges, decoded or semantic fields, serialization, handles, or recovery callbacks;
-4. proof that Layer-1 owner/lease/view/constructor/callback/accessor APIs neither accept nor expose selected-item/handoff payload or preimage bytes and cannot recompute or independently validate the commitment;
+4. proof that Layer-1 owner/lease/view/callback APIs neither accept nor expose selected-item/handoff payload or preimage bytes and cannot recompute or independently validate the commitment, with no helper constructor or accessor introduced by this scaffold;
 5. transport terminal and closed generic resource accounting, including unavailable versus known zero;
-6. immutable defensive copies of permitted transport-custody bytes on constructor ingress, lease/view egress, and repeated callback access;
+6. immutable defensive copies of permitted transport-custody bytes when later authorized behavior consumes the directly populated private attachment fields, on lease/view egress, and during repeated callback access;
 7. callback return-error transparency and callback-panic containment;
 8. terminal admission closure, in-flight callback drain, exact-once release, and concurrent release/terminal races;
 9. enabled/disabled `callHierarchyExternalResultSnapshot` byte-for-byte and value-for-value equivalence across returned bytes, exact externally observable error representation, terminal/transport effects, and all availability distinctions, while proving that the snapshot contains no correlation commitment or selected-item/handoff payload/preimage field;
 10. exact `callHierarchyTransportEffectLedger` before/after or delta accounting, while proving that the ledger contains no correlation commitment or selected-item/handoff payload/preimage field;
 11. zero transport-side refusal, retry, rewrite, normalization, diagnostic, or external-byte effects for every semantically unsuitable attachment class;
 12. an independent Layer-2 adapter RED that retains the raw selected-item/handoff preimage bytes and proves preimage-to-SHA-256-commitment correspondence without exposing those bytes to Layer 1; and
-13. inert constructors: before later behavior authority, Manager emits no owner, ledger, snapshot, lease, callback, reservation, diagnostic, or other observation effect.
+13. inert attachment fields: before later behavior authority, `Manager.RoundTrip` ignores them and emits no owner, ledger, snapshot, lease, callback, reservation, diagnostic, or other observation effect.
 
 The RED must fail only because the narrowly named private scaffold or inert Manager behavior is absent. It must not require or accidentally specify directional semantics.
 
@@ -131,10 +131,11 @@ No passing shared-runtime test can satisfy, imply, or authorize any deferred obl
 
 Subject to a later issued boundary GO and a separate explicit implementation authorization, the maximal shared-runtime scaffold write-set is the following subset of already accepted paths:
 
-1. `sessionruntime/b4_owned_method_pair_lease.go` — private generic owner/lease/view, the two private types, permitted transport-byte immutable-copy helpers, exhaustive opaque commitment metadata fields (typed opaque identity, SHA-256 digest, exact byte length, and availability where needed), and inert constructors only; no selected-item/handoff payload or preimage bytes, spans, semantic fields, serialization, handles, or recovery callbacks;
-2. `sessionruntime/manager.go` — private attachment plumbing limited to that opaque commitment metadata and later Manager-produced generic transport snapshots only; no raw selected-item/handoff payload or preimage custody;
-3. `sessionruntime/b4_owned_method_pair_lease_test.go` — shared causal RED and preservation controls proving the Layer-1 API and state exclusions only; raw-preimage-to-commitment proof remains adapter-owned; and
-4. `sessionruntime/manager_test.go` — only if required for enabled/disabled exact external-equivalence, concurrent Manager lifecycle RED, and proof that ledger/snapshot/API surfaces contain no selected-item/handoff payload or preimage bytes.
+1. `sessionruntime/b4_owned_method_pair_lease.go` — private generic owner/lease/view and the two private types only; no helper constructors or accessors, global storage, parallel implementation, selected-item/handoff payload or preimage bytes, spans, semantic fields, serialization, handles, or recovery callbacks;
+2. `sessionruntime/sessionruntime.go` — private attachment fields on the existing `RoundTripRequest` and `RoundTripResult` declarations, because those declarations cannot be extended from another file; same-package RED writes and reads the fields directly, while `Manager.RoundTrip` continues to ignore them; and
+3. `sessionruntime/b4_owned_method_pair_lease_test.go` — shared causal RED and preservation controls proving the Layer-1 API and state exclusions only; raw-preimage-to-commitment proof remains adapter-owned.
+
+`sessionruntime/manager.go` does not exist and is not in the write-set. `sessionruntime/manager_test.go` is also excluded: existing tests are the frozen preference, and expansion requires a new boundary review. This scaffold creates zero helper constructors or accessors, zero global storage, and zero parallel implementation. It also preserves the C15 v2 candidate surface because private struct field and type declarations add no candidate AST calls or literals.
 
 No public package path, exported identifier, public request/result schema, command, MCP schema, retained graph schema, adapter, provider, qualification artifact, generated catalog, testdata corpus, ADR-0007 path, or unrelated source/test is in the write-set. A later reviewer may narrow this set; expansion requires a new boundary review.
 
@@ -148,7 +149,7 @@ In particular, its current `TestCallHierarchyManagerRoundTripPublishesSemanticOb
 
 This change is valid only if the worktree after authoring contains:
 
-- this one new documentation file;
+- this one modified documentation file;
 - the pre-existing 110-line modification to `sessionruntime/b4_owned_method_pair_lease_test.go`; and
 - no other delta.
 
