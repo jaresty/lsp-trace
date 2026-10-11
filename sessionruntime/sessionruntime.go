@@ -734,8 +734,17 @@ type RoundTripResult struct {
 }
 
 func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyObservationLease, bool) {
-	var zero callHierarchyObservationLease
-	return zero, false
+	if r.callHierarchyObservation == nil {
+		return callHierarchyObservationLease{}, false
+	}
+	owner := r.callHierarchyObservation
+	owner.mu.Lock()
+	live := !owner.admissionClosed && !owner.released
+	owner.mu.Unlock()
+	if !live {
+		return callHierarchyObservationLease{}, false
+	}
+	return callHierarchyObservationLease{owner: owner}, true
 }
 
 // RoundTrip executes one complete protocol transaction while exclusively

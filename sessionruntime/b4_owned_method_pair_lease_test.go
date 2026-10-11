@@ -54,6 +54,124 @@ func TestCallHierarchyObservationScaffoldZeroLeaseAndAttachments(t *testing.T) {
 	}
 }
 
+func callHierarchyObservationOwnerFixture() callHierarchyObservation {
+	return callHierarchyObservation{
+		predecessors: callHierarchyPredecessorChain{commitments: []callHierarchyPredecessorCommitment{{identity: "predecessor"}}},
+		request:      &callHierarchyOriginalRequestFrameObservation{frameBytes: []byte("request")},
+		response:     &callHierarchyOriginalResponseFrameObservation{frameBytes: []byte("response")},
+		selected:     &callHierarchySelectedItemCommitment{exactBytes: []byte("selected")},
+		handoff:      &callHierarchyHandoffCommitment{selected: callHierarchySelectedItemCommitment{exactBytes: []byte("handoff-selected")}, successorBytes: []byte("successor")},
+	}
+}
+
+func TestCallHierarchyObservationOwnerCopiesAndContainsCallbacks(t *testing.T) {
+	source := callHierarchyObservationOwnerFixture()
+	owner := newCallHierarchyObservationOwner(source)
+	result := RoundTripResult{callHierarchyObservation: owner}
+	lease, ok := result.privateCallHierarchyObservationLease()
+	if !ok || lease.owner != owner {
+		t.Fatal("ASSERT_CH_OWNER_TYPED_RESULT_LEASE")
+	}
+	source.request.frameBytes[0] = 'x'
+	callbackFailure := errors.New("callback failure")
+	if err := lease.withObservation(func(view callHierarchyObservationView) error {
+		if string(view.request.frameBytes) != "request" || string(view.response.frameBytes) != "response" || len(view.predecessors) != 1 {
+			return errors.New("wrong copied view")
+		}
+		view.request.frameBytes[0] = 'y'
+		view.predecessors[0].identity = "mutated"
+		return callbackFailure
+	}); !errors.Is(err, callbackFailure) {
+		t.Fatalf("ASSERT_CH_OWNER_CALLBACK_FAILURE_CONTAINED: %v", err)
+	}
+	if err := lease.withObservation(func(view callHierarchyObservationView) error {
+		if string(view.request.frameBytes) != "request" || view.predecessors[0].identity != "predecessor" {
+			return errors.New("callback view aliased owner")
+		}
+		panic("contained")
+	}); err == nil {
+		t.Fatal("ASSERT_CH_OWNER_CALLBACK_PANIC_CONTAINED")
+	}
+	if err := lease.withObservation(func(callHierarchyObservationView) error { return nil }); err != nil {
+		t.Fatalf("ASSERT_CH_OWNER_LIVE_AFTER_CALLBACK_FAILURE: %v", err)
+	}
+	if !lease.release() || lease.release() {
+		t.Fatal("ASSERT_CH_OWNER_EXACT_ONCE_RELEASE")
+	}
+	if _, ok := result.privateCallHierarchyObservationLease(); ok {
+		t.Fatal("ASSERT_CH_OWNER_RELEASED_RESULT_LEASE")
+	}
+}
+
+func TestCallHierarchyObservationOwnerTerminalDrainsCallback(t *testing.T) {
+	owner := newCallHierarchyObservationOwner(callHierarchyObservationOwnerFixture())
+	lease := callHierarchyObservationLease{owner: owner}
+	entered := make(chan struct{})
+	leave := make(chan struct{})
+	callbackDone := make(chan error, 1)
+	go func() {
+		callbackDone <- lease.withObservation(func(callHierarchyObservationView) error {
+			close(entered)
+			<-leave
+			return nil
+		})
+	}()
+	<-entered
+	owner.requestTerminal()
+	if err := lease.withObservation(func(callHierarchyObservationView) error { return nil }); !errors.Is(err, ErrOwnedMethodPairLeaseClosed) {
+		t.Fatalf("ASSERT_CH_OWNER_TERMINAL_ADMISSION: %v", err)
+	}
+	released := make(chan bool, 1)
+	go func() { released <- lease.release() }()
+	select {
+	case <-released:
+		t.Fatal("ASSERT_CH_OWNER_RELEASE_BEFORE_CALLBACK_DRAIN")
+	default:
+	}
+	close(leave)
+	if err := <-callbackDone; err != nil {
+		t.Fatal(err)
+	}
+	if !<-released {
+		t.Fatal("ASSERT_CH_OWNER_TERMINAL_RELEASE")
+	}
+}
+
+func TestCallHierarchyObservationOwnerReleaseRaceOneWinner(t *testing.T) {
+	lease := callHierarchyObservationLease{owner: newCallHierarchyObservationOwner(callHierarchyObservationOwnerFixture())}
+	var winners atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func(copyLease callHierarchyObservationLease) {
+			defer wg.Done()
+			if copyLease.release() {
+				winners.Add(1)
+			}
+		}(lease)
+	}
+	wg.Wait()
+	if winners.Load() != 1 {
+		t.Fatalf("ASSERT_CH_OWNER_RELEASE_WINNERS: %d", winners.Load())
+	}
+}
+
+func TestCallHierarchyObservationAttachmentIgnoredByOrdinaryRoundTrip(t *testing.T) {
+	m, started, _ := roundTripManager(t, "references-empty")
+	result := m.RoundTrip(context.Background(), RoundTripRequest{
+		SessionID: started.SessionID, Generation: started.Generation,
+		Method: "textDocument/references", Params: json.RawMessage(`{"textDocument":{"uri":"file:///fixture/main.go"},"position":{"line":1,"character":0},"context":{"includeDeclaration":false}}`),
+		Deadline: time.Now().Add(time.Second), MaxMessages: 1, MaxBytes: 4096,
+		callHierarchyObservation: &callHierarchyObservationRequest{},
+	})
+	if result.Failure != "" {
+		t.Fatalf("ASSERT_CH_OWNER_ORDINARY_ROUND_TRIP: %v", result.Failure)
+	}
+	if lease, ok := result.privateCallHierarchyObservationLease(); ok || lease != (callHierarchyObservationLease{}) {
+		t.Fatal("ASSERT_CH_OWNER_ORDINARY_ROUND_TRIP_IGNORES_ATTACHMENT")
+	}
+}
+
 func TestPrivateB4OwnedMethodPairAtomicBatchCausalFixture(t *testing.T) {
 	runOwnedPairDeadline(t, func() {
 		account := mustPrivateB4ByteAccountV2(t)

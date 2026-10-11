@@ -163,14 +163,118 @@ func (l OwnedMethodPairLease) Release() bool {
 	return true
 }
 
-type callHierarchyObservationOwner struct{}
+type callHierarchyObservationOwner struct {
+	mu              sync.Mutex
+	cond            sync.Cond
+	observation     callHierarchyObservation
+	active          uint32
+	admissionClosed bool
+	releaseStarted  bool
+	released        bool
+}
 
 type callHierarchyObservationLease struct {
 	owner *callHierarchyObservationOwner
 }
 
-func (callHierarchyObservationLease) withObservation(func(callHierarchyObservationView) error) error {
-	return ErrOwnedMethodPairLeaseClosed
+func newCallHierarchyObservationOwner(source callHierarchyObservation) *callHierarchyObservationOwner {
+	owner := &callHierarchyObservationOwner{observation: copyCallHierarchyObservation(source)}
+	owner.cond.L = &owner.mu
+	return owner
 }
 
-func (callHierarchyObservationLease) release() bool { return false }
+func copyCallHierarchyObservation(source callHierarchyObservation) callHierarchyObservation {
+	owned := source
+	owned.predecessors.commitments = append([]callHierarchyPredecessorCommitment(nil), source.predecessors.commitments...)
+	if source.request != nil {
+		request := *source.request
+		request.frameBytes = append([]byte(nil), source.request.frameBytes...)
+		owned.request = &request
+	}
+	if source.response != nil {
+		response := *source.response
+		response.frameBytes = append([]byte(nil), source.response.frameBytes...)
+		owned.response = &response
+	}
+	if source.selected != nil {
+		selected := *source.selected
+		selected.exactBytes = append([]byte(nil), source.selected.exactBytes...)
+		owned.selected = &selected
+	}
+	if source.handoff != nil {
+		handoff := *source.handoff
+		handoff.selected.exactBytes = append([]byte(nil), source.handoff.selected.exactBytes...)
+		handoff.successorBytes = append([]byte(nil), source.handoff.successorBytes...)
+		owned.handoff = &handoff
+	}
+	return owned
+}
+
+func callHierarchyObservationViewOf(source callHierarchyObservation) callHierarchyObservationView {
+	owned := copyCallHierarchyObservation(source)
+	return callHierarchyObservationView{
+		identity: owned.identity, predecessors: owned.predecessors.commitments,
+		request: owned.request, response: owned.response, selected: owned.selected,
+		handoff: owned.handoff, terminal: owned.terminal, accounting: owned.accounting,
+	}
+}
+
+func (lease callHierarchyObservationLease) withObservation(fn func(callHierarchyObservationView) error) (err error) {
+	if lease.owner == nil || fn == nil {
+		return ErrOwnedMethodPairLeaseClosed
+	}
+	owner := lease.owner
+	owner.mu.Lock()
+	if owner.admissionClosed || owner.released {
+		owner.mu.Unlock()
+		return ErrOwnedMethodPairLeaseClosed
+	}
+	owner.active++
+	view := callHierarchyObservationViewOf(owner.observation)
+	owner.mu.Unlock()
+	defer func() {
+		if recover() != nil {
+			err = errors.New("call hierarchy observation callback panicked")
+		}
+		owner.mu.Lock()
+		owner.active--
+		if owner.active == 0 {
+			owner.cond.Broadcast()
+		}
+		owner.mu.Unlock()
+	}()
+	return fn(view)
+}
+
+func (owner *callHierarchyObservationOwner) requestTerminal() {
+	if owner == nil {
+		return
+	}
+	owner.mu.Lock()
+	owner.admissionClosed = true
+	owner.cond.Broadcast()
+	owner.mu.Unlock()
+}
+
+func (lease callHierarchyObservationLease) release() bool {
+	if lease.owner == nil {
+		return false
+	}
+	owner := lease.owner
+	owner.mu.Lock()
+	if owner.releaseStarted || owner.released {
+		owner.mu.Unlock()
+		return false
+	}
+	owner.admissionClosed = true
+	owner.releaseStarted = true
+	owner.cond.Broadcast()
+	for owner.active != 0 {
+		owner.cond.Wait()
+	}
+	owner.observation = callHierarchyObservation{}
+	owner.released = true
+	owner.cond.Broadcast()
+	owner.mu.Unlock()
+	return true
+}
