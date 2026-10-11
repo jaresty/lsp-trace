@@ -3,7 +3,7 @@
 Status: **REVIEW_GATE_PENDING / NO GO**
 
 - Repository: `/Users/schwa/dev/lsp-trace-adr0011-c17`
-- Pinned HEAD: `5fc218c677a0caf4537b0c2f475d8d1f3800755f`
+- Pinned HEAD: `8311f0ac40816e506147d7a0aa0ec1fcf2ae6638`
 - Required starting state: clean worktree at the pinned HEAD
 - Authority: minimal amendment of the accepted v2 disposable three-file boundary for qualified v3 RED only
 - Disposable prototype writer authority: **not issued by this document**
@@ -61,14 +61,20 @@ The accepted v2 owner/view/lease symbols remain the only implementation and life
 2. `type callHierarchyLayer1GenericView struct`
 3. `type callHierarchyLayer1GenericLease struct`
 4. `newCallHierarchyLayer1GenericOwner`
-5. `(RoundTripResult).privateCallHierarchyLayer1GenericLease`
+5. `(RoundTripResult).privateCallHierarchyLayer1GenericLease() (any, bool)`
 6. `(callHierarchyLayer1GenericLease).View`
 7. `(callHierarchyLayer1GenericLease).Callback`
 8. `(callHierarchyLayer1GenericLease).Release`
 9. `(*callHierarchyLayer1GenericOwner).requestTerminal`
 10. `(*callHierarchyLayer1GenericOwner).waitReleased`
 
-`newCallHierarchyLayer1GenericOwner` may read the ordered predecessor metadata from the attachment's immutable holder and must defensively copy it into the immutable generic observation. Observation construction and every view or callback that exposes predecessor metadata must defensively copy values out; repeated observations, views, and callbacks must not alias caller-owned, holder-owned, request-owned, or one another's mutable slice backing. Metadata equality is value equality only, never holder-pointer identity. No additional helper, constructor, accessor, owner, view, lease, lifecycle method, alternate attachment, raw-byte carrier, or semantic type is authorized.
+`newCallHierarchyLayer1GenericOwner` may read the ordered predecessor metadata from the attachment's immutable holder and must defensively copy it into the immutable generic observation. Observation construction and every view or callback that exposes predecessor metadata must defensively copy values out; repeated observations, views, and callbacks must not alias caller-owned, holder-owned, request-owned, or one another's mutable slice backing. Metadata equality is value equality only, never holder-pointer identity. The acquisition signature is exact: `(RoundTripResult).privateCallHierarchyLayer1GenericLease() (any, bool)`. The qualified v3 RED accesses this private method through a private test interface and may inspect only the returned dynamic lease's exported `View`, `Callback`, and `Release` methods. If this exact interface signature is unavailable, hard-stop before canonical C15 enumeration and report:
+
+```text
+BLOCKED — b4_owned_method_pair_lease.go exact acquisition signature required: (RoundTripResult).privateCallHierarchyLayer1GenericLease() (any, bool); write-set amendment and independent review required before C15
+```
+
+No additional helper, constructor, accessor, owner, view, lease, lifecycle method, alternate attachment, raw-byte carrier, or semantic type is authorized.
 
 ### `sessionruntime/sessionruntime.go`
 

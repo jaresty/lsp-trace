@@ -513,6 +513,10 @@ type callHierarchyLayer1GenericV3PredecessorAttachment interface {
 	privateCallHierarchyLayer1WithPredecessors([]callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment
 }
 
+type callHierarchyLayer1GenericV3LeaseAcquirer interface {
+	privateCallHierarchyLayer1GenericLease() (any, bool)
+}
+
 type callHierarchyLayer1GenericV3ExternalActual struct {
 	requestFrame, responseFrame []byte
 	result                      json.RawMessage
@@ -780,15 +784,18 @@ func callHierarchyLayer1GenericV3Observe(result *RoundTripResult) callHierarchyL
 	if (attachment.Kind() == reflect.Pointer || attachment.Kind() == reflect.Interface) && attachment.IsNil() {
 		return callHierarchyLayer1GenericV3Observation{attachment: attachment, reason: "owner:nil"}
 	}
-	acquire := root.MethodByName(callHierarchyLayer1GenericV3AcquireMethod)
-	if !acquire.IsValid() || acquire.Type().NumIn() != 0 || acquire.Type().NumOut() != 2 || acquire.Type().Out(1).Kind() != reflect.Bool {
-		return callHierarchyLayer1GenericV3Observation{attachment: attachment, owner: attachment, reason: "method:" + callHierarchyLayer1GenericV3AcquireMethod + "() (lease,bool)"}
+	acquirer, ok := any(result).(callHierarchyLayer1GenericV3LeaseAcquirer)
+	if !ok {
+		acquirer, ok = any(*result).(callHierarchyLayer1GenericV3LeaseAcquirer)
 	}
-	out := acquire.Call(nil)
-	if !out[1].Bool() {
+	if !ok {
+		return callHierarchyLayer1GenericV3Observation{attachment: attachment, owner: attachment, reason: "interface:" + callHierarchyLayer1GenericV3AcquireMethod + "() (any,bool)"}
+	}
+	leaseValue, ok := acquirer.privateCallHierarchyLayer1GenericLease()
+	if !ok {
 		return callHierarchyLayer1GenericV3Observation{attachment: attachment, owner: attachment, reason: "acquire:false"}
 	}
-	lease := out[0]
+	lease := reflect.ValueOf(leaseValue)
 	viewMethod := lease.MethodByName(callHierarchyLayer1GenericV3ViewMethod)
 	if !viewMethod.IsValid() || viewMethod.Type().NumIn() != 0 || viewMethod.Type().NumOut() != 2 || viewMethod.Type().Out(1).Kind() != reflect.Bool {
 		return callHierarchyLayer1GenericV3Observation{attachment: attachment, owner: attachment, lease: lease, reason: "method:View() (view,bool)"}
