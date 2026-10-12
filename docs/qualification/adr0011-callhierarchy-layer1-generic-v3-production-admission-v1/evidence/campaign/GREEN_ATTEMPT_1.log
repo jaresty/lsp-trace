@@ -1,0 +1,14 @@
+# lsp-trace/sessionruntime [lsp-trace/sessionruntime.test]
+sessionruntime/b4_owned_method_pair_lease.go:739:74: cannot use a.before.ledger.callbacks (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739:101: cannot use after.ledger.callbacks (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739:152: cannot use a.before.ledger.diagnostics (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739:181: cannot use after.ledger.diagnostics (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739:236: cannot use a.before.ledger.externalBytes (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739: cannot use after.ledger.externalBytes (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739: cannot use a.before.ledger.leases (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739: cannot use after.ledger.leases (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739: cannot use a.before.ledger.reservations (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739: cannot use after.ledger.reservations (variable of struct type callHierarchyMeasuredDelta) as callHierarchyMeasure value in argument to genericDelta
+sessionruntime/b4_owned_method_pair_lease.go:739: too many errors
+FAIL	lsp-trace/sessionruntime [build failed]
+FAIL

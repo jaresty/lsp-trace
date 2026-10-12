@@ -1,0 +1,1 @@
+BASE_READY repo=/tmp/adr0011-layer1-generic-v3-campaign-zuAGjQ head=ce4a1838f8a10bafc13429031e55df7e4dd812c6 detached=yes clean=yes evidence=/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7 empty=yes

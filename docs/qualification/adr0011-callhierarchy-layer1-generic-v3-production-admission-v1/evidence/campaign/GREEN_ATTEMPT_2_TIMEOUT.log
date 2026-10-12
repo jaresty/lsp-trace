@@ -1,0 +1,52 @@
+panic: test timed out after 20s
+	running tests:
+		TestCallHierarchyLayer1GenericV3CorpusCausalRED (20s)
+		TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-23 (20s)
+
+goroutine 198 [running]:
+testing.(*M).startAlarm.func1()
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2802 +0x2cc
+created by time.goFunc
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/time/sleep.go:215 +0x38
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0x20de163f688, {0x102cec86c?, 0x17b55218028b5090?}, 0x10330b988)
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2109 +0x3bc
+testing.runTests.func1(0x20de163f688)
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2585 +0x40
+testing.tRunner(0x20de163f688, 0x20de1383c48)
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2036 +0xc4
+testing.runTests({0x102cc0d2d, 0x9}, {0x102ccd51d, 0x18}, 0x20de1352bb8, {0x1033808e0, 0x209, 0x209}, {0x808080802d4e035f?, 0x102cc4d54?, ...})
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2583 +0x3f0
+testing.(*M).Run(0x20de1492fa0)
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2443 +0x578
+main.main()
+	_testmain.go:1094 +0x80
+
+goroutine 5 [chan receive]:
+testing.(*T).Run(0x20de163f8c8, {0x20de16a6a28?, 0x19?}, 0x20de19e0a00)
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2109 +0x3bc
+lsp-trace/sessionruntime.TestCallHierarchyLayer1GenericV3CorpusCausalRED(0x20de163f8c8)
+	/tmp/adr0011-layer1-generic-v3-campaign-zuAGjQ/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:2080 +0x29c
+testing.tRunner(0x20de163f8c8, 0x10330b988)
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2036 +0xc4
+created by testing.(*T).Run in goroutine 1
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2101 +0x3a8
+
+goroutine 196 [chan receive]:
+lsp-trace/sessionruntime.callHierarchyLayer1GenericV3Execute(_, {{{{0x1, 0x20de137e900, {...}, 0x30, {...}}, {0x20de168a0e0, 0x2, 0x2}, {0x1, ...}}, ...}, ...})
+	/tmp/adr0011-layer1-generic-v3-campaign-zuAGjQ/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:1052 +0x119c
+lsp-trace/sessionruntime.TestCallHierarchyLayer1GenericV3CorpusCausalRED.func3(0x20de2cacb48)
+	/tmp/adr0011-layer1-generic-v3-campaign-zuAGjQ/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:2082 +0xe8
+testing.tRunner(0x20de2cacb48, 0x20de19e0a00)
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2036 +0xc4
+created by testing.(*T).Run in goroutine 5
+	/opt/homebrew/Cellar/go/1.26.5/libexec/src/testing/testing.go:2101 +0x3a8
+
+goroutine 197 [chan receive]:
+lsp-trace/sessionruntime.(*callHierarchyLayer1GenericV3Transport).replay(0x20de19e0b80)
+	/tmp/adr0011-layer1-generic-v3-campaign-zuAGjQ/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:875 +0x5c
+created by lsp-trace/sessionruntime.callHierarchyLayer1GenericV3NewTransport in goroutine 196
+	/tmp/adr0011-layer1-generic-v3-campaign-zuAGjQ/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:869 +0x1e0
+FAIL	lsp-trace/sessionruntime	20.280s
+FAIL

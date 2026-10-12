@@ -1,0 +1,4 @@
+=== RUN   TestADR0011CallHierarchyC15DeltaEnumerate
+--- PASS: TestADR0011CallHierarchyC15DeltaEnumerate (2.83s)
+PASS
+ok  	lsp-trace/sessionruntime	3.123s

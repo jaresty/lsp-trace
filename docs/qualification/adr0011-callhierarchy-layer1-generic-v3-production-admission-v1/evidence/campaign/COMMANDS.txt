@@ -1,0 +1,15 @@
+git rev-parse HEAD
+git symbolic-ref -q HEAD
+git status --porcelain
+
+$ go test ./sessionruntime -run TestCallHierarchyLayer1GenericV3CorpusCausalRED -count=1
+
+$ go test ./sessionruntime -run TestCallHierarchyLayer1GenericV3CorpusCausalRED -count=1
+
+$ go test ./sessionruntime -run TestCallHierarchyLayer1GenericV3CorpusCausalRED -count=1
+
+$ go test ./sessionruntime -run TestCallHierarchyLayer1GenericV3CorpusCausalRED -count=1 -timeout=20s
+
+$ go test ./sessionruntime -run TestCallHierarchyLayer1GenericV3CorpusCausalRED -count=1 -timeout=60s
+
+$ go test ./sessionruntime -run TestCallHierarchyLayer1GenericV3CorpusCausalRED -count=1 -timeout=60s
