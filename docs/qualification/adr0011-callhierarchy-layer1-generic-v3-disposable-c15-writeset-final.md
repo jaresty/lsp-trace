@@ -3,8 +3,8 @@
 Status: **REVIEW_REQUIRED / NO GO**
 
 - Repository: `/Users/schwa/dev/lsp-trace-adr0011-c17`
-- Pinned HEAD: `b283d7ea6cf3d4da71cb0bed75517b9995d1922a`
-- Required starting state: exact clean tracked worktree at the pinned HEAD; the refusal-owner-registry amendment is review input only
+- Pinned HEAD: `9e92fc2a6cdcb44715dc9038c4a87c6227c4295d`
+- Required starting state: exact clean tracked worktree at the pinned HEAD; the qualified identity-chain and refusal-owner-registry revisions are review inputs only
 - Scope: documentation-only refresh of the finite disposable prototype write-set
 - Source, test, corpus, RED, prototype, generated-artifact, execution, commit, activation, semantic, carrier-acceptance, production-writer, and production authority: **not issued**
 - Mutation authorized by this task: this document only
@@ -20,7 +20,7 @@ This document refreshes the disposable C15 boundary from the following accepted 
 5. the accepted causal-lineage replacement-v3 and independent review; and
 6. the qualified refusal-owner-registry amendment, which supersedes the prior session registry and its lifecycle collection rules.
 
-The prior disposable effort stopped before mutation because the session-only registry could not retain enabled pre-admission refusal owners for absent or stale sessions. It produced no canonical C15 result. This integrated write-set is therefore new review input: no prior disposable authorization survives, and a new disposable writer authorization is required only after independent review accepts this exact revision.
+Two prior disposable paths stopped before source mutation and neither produced a canonical C15 result. First, the original final-v3 disposable boundary pinned at `83e43a14f3d0ec4f3f02f14eb8ff9930ded98fde` was blocked before mutation. Second, the refusal-owner-registry revision pinned at `b283d7ea6cf3d4da71cb0bed75517b9995d1922a` superseded the session-only registry because that registry could not retain enabled pre-admission refusal owners for absent or stale sessions, but it also stopped before mutation. This current-HEAD integrated write-set is therefore new review input: no prior disposable authorization or candidate list survives, no canonical C15 exists, and a new disposable writer authorization is required only after independent review accepts this exact revision.
 
 The replacement-v3 occurrence mapping controls: exactly 85 occurrences partition as 22 disabled and 63 enabled. Physical C controls exist on exactly 69 occurrences and partition as 22 false and 47 true. All 16 W24 workers are independently enabled while their C controls remain structurally absent. Earlier `11 false / 74 true` or universal-all-85 C-agreement claims are superseded and must not drive the prototype.
 
@@ -48,6 +48,8 @@ The prototype, if separately reviewed and newly authorized, must satisfy this ex
 
 ```text
 explicit request attachment
+  -> strict test-only driver identity decode
+  -> first RED attachment calls in exact identity -> enabled -> predecessors order
   -> first executable RoundTrip enabled-bit read
   -> one attempt pointer when enabled, nil when disabled
   -> private RoundTripRequest attempt carrier
@@ -65,7 +67,7 @@ explicit request attachment
   -> copied View / copied Callback / Release / lifecycle drain
 ```
 
-There is no package global, context value, side table, reconstructed builder, replacement builder, alternate owner, session registry, or second publication path. `Manager` has exactly the owner slice and exact-generation retired map specified in §6.2 and no other generic-owner field. The only attempt transfer is the qualified private `RoundTripRequest` field followed by the transient private `RoundTripResult` field specified in §6.2; neither field is serialized, exposed, retained after finalization, or usable as identity/equality evidence.
+The strict driver identity decoder remains test-only; no production parser, decoder, validator, normalizer, or identity derivation is admitted. There is no package global, context value, side table, reconstructed builder, replacement builder, alternate owner, session registry, or second publication path. `Manager` has exactly the owner slice and exact-generation retired map specified in §6.2 and no other generic-owner field. The only attempt transfer is the qualified private `RoundTripRequest` field followed by the transient private `RoundTripResult` field specified in §6.2; neither field is serialized, exposed, retained after finalization, or usable as identity/equality evidence.
 
 Disabled means `req.callHierarchyLayer1.enabled == false`: no attempt object, no generic owner, `(nil, false)` acquisition, no view/callback lifecycle, and no change to external result, error, failure, messages, bytes, transport, accounting, timing, or existing attachments.
 
@@ -102,6 +104,8 @@ type callHierarchyOpaqueCommitmentList struct {
 func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithPredecessors(values []callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment
 
 func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithEnabled(enabled bool) callHierarchyLayer1RequestAttachment
+
+func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithIdentity(profile callHierarchyProfileIdentity, binding callHierarchyBindingIdentity, workspace callHierarchyWorkspaceCustody) callHierarchyLayer1RequestAttachment
 ```
 
 Permitted semantics:
@@ -109,6 +113,7 @@ Permitted semantics:
 - `callHierarchyOpaqueCommitmentList.values` is defensively copied exactly once at holder allocation, preserves order/cardinality, and is never mutated thereafter.
 - `privateCallHierarchyLayer1WithPredecessors` value-returns a copy changing only `predecessors`; nil/empty canonicalizes to a nil holder; nonempty input allocates one holder and one defensive copy.
 - `privateCallHierarchyLayer1WithEnabled` value-returns a copy changing only `enabled`; zero remains disabled; every other attachment field is preserved exactly.
+- `privateCallHierarchyLayer1WithIdentity` is the exact value-returning private RED signature. It replaces only `profile`, `binding`, and `workspace`, preserving `selected`, `handoff`, `ledger`, `predecessors` (including exact pointer value), `enabled`, and every other field byte-for-byte. It performs no allocation and does not inspect or derive from method, expected values, world/fixture/occurrence names, commitments, params, results, or controls.
 
 Forbidden semantics:
 
@@ -142,6 +147,9 @@ The only proposed field additions are:
 ```go
 predecessors *callHierarchyOpaqueCommitmentList
 enabled      bool
+profile      callHierarchyProfileIdentity
+binding      callHierarchyBindingIdentity
+workspace    callHierarchyWorkspaceCustody
 ```
 
 The resulting proposed field set is exactly:
@@ -153,10 +161,13 @@ type callHierarchyLayer1RequestAttachment struct {
 	ledger       callHierarchyTransportEffectLedger
 	predecessors *callHierarchyOpaqueCommitmentList
 	enabled      bool
+	profile      callHierarchyProfileIdentity
+	binding      callHierarchyBindingIdentity
+	workspace    callHierarchyWorkspaceCustody
 }
 ```
 
-`predecessors` may be assigned only by `privateCallHierarchyLayer1WithPredecessors`; `enabled` may be assigned only by `privateCallHierarchyLayer1WithEnabled`. Nil predecessor holder is the sole empty/unavailable representation. The pointer preserves attachment comparability but has no equality semantics for metadata. `enabled` affects only private owner-publication eligibility.
+`profile`, `binding`, and `workspace` are the exact three current-HEAD C15 field additions introduced by the qualified identity chain. They use the existing private comparable types; `callHierarchyWorkspaceCustody.managerNonce` is the exact `[32]byte` workspace value. No new identity type, holder, pointer, map, allocation, or parser is proposed. `predecessors` may be assigned only by `privateCallHierarchyLayer1WithPredecessors`; `enabled` may be assigned only by `privateCallHierarchyLayer1WithEnabled`; the three identity fields may be assigned only by `privateCallHierarchyLayer1WithIdentity`. Nil predecessor holder is the sole empty/unavailable representation. The pointer preserves attachment comparability but has no equality semantics for metadata. `enabled` affects only private owner-publication eligibility.
 
 ### 5.2 Exact proposed normalization types and every field
 
@@ -378,7 +389,7 @@ func (owner *callHierarchyLayer1GenericOwner) waitReleased()
 
 Permitted mutation and semantics are exact:
 
-- constructor: copy only request identity and explicit attachment inputs; never inspect expected/world/occurrence/commitment content/failure text;
+- constructor: after the RED has invoked attachment setters in exact `identity -> enabled -> predecessors` order, copy `req.callHierarchyLayer1.profile`, `.binding`, and `.workspace` verbatim into the attempt's existing `profile`, `binding`, and `requestIdentity.workspace` custody and from there verbatim into A116 `observation.identity`; preserve all other request identity and attachment inputs exactly; never derive profile, binding, or workspace from method, expected values, world/fixture/occurrence names, commitment content, params, results, controls, or failure text;
 - refusal recorder: record only the finite enum and already-selected typed current failure; perform no allocation/effect named in §7;
 - refusal finalizer: the Manager method owns `m.mu`; nil attempt returns the result unchanged without locking or allocation; enabled attempt records the exact typed refusal, freezes exactly one observation, constructs exactly one owner, and calls the locked publication helper in the same critical section while preserving public result/failure;
 - admission: mutate the same pointer immediately after `pending.Begin`, recording the allocated key and before snapshot only;
@@ -458,7 +469,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result RoundTripResult, failure session.Failure, poison bool) RoundTripResult
 ```
 
-At the first executable line, `RoundTrip` unconditionally overwrites all caller-supplied custody with `req.callHierarchyLayer1GenericAttempt = newCallHierarchyLayer1GenericAttemptLineage(req)`. The constructor remains default-off: enabled allocates exactly one attempt; disabled returns nil; it never reads the incoming carrier field. Existing by-value request flow carries that same pointer through `roundTrip`, `roundTripWithPrivate`, and `roundTripWithPrivateTransaction` without any signature change. No stage rebuilds, clears, replaces, compares, indexes, registers, or derives another attempt.
+Before `RoundTrip`, the first executable RED attachment invocation sequence is exactly `privateCallHierarchyLayer1WithIdentity(profile, binding, workspace)`, then `privateCallHierarchyLayer1WithEnabled(enabled)`, then `privateCallHierarchyLayer1WithPredecessors(predecessors)`. The strict driver decode and validation that supplies those three identity values remains test-only; production receives only the already typed private values and contains no parser.
+
+At the first executable line, `RoundTrip` unconditionally overwrites all caller-supplied custody with `req.callHierarchyLayer1GenericAttempt = newCallHierarchyLayer1GenericAttemptLineage(req)`. The constructor remains default-off: enabled allocates exactly one attempt; disabled returns nil; it never reads the incoming carrier field. When enabled, its body copies the attachment's typed `profile`, `binding`, and `[32]byte`-backed `workspace` values verbatim into attempt custody, preserving every other field and predecessor pointer. A116 observation construction copies that same typed identity verbatim from the attempt. Neither stage consults method or any expected/world/fixture/occurrence/control value and neither reconstructs identity from session state. Existing by-value request flow carries that same pointer through `roundTrip`, `roundTripWithPrivate`, and `roundTripWithPrivateTransaction` without any signature change. No stage rebuilds, clears, replaces, compares, indexes, registers, or derives another attempt.
 
 Immediately after `key := r.pending.Begin(req.Generation)` and before request registration, identity capture, protocol ownership, worker allocation, or `m.mu.Unlock()`, `roundTripWithPrivateTransaction` reads `attempt := req.callHierarchyLayer1GenericAttempt`, admits that pointer, and copies it exactly once into the transaction's one `RoundTripResult` initialization as `callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt`. All later admitted capture and terminal mutations consume only that transient result field, and every existing `finishRoundTrip` call carries the result unchanged.
 
@@ -585,18 +598,18 @@ Every ordinary A path maps to exactly the following field or finite projection. 
 | `frames.response.frame_hex` | `nil` unless available, else lowercase hex of `frames.response.frameBytes` |
 | `frames.response.frame_length` | `frames.response.frameLength` |
 | `frames.response.frame_sha256` | lowercase hex of `frames.response.frameSHA256` |
-| `identity.binding.available` | `identity.binding != ""` |
+| `identity.binding.available` | `identity.binding != ""`; `identity.binding` is the verbatim `callHierarchyLayer1RequestAttachment.binding` value copied through attempt custody |
 | `identity.binding.value` | string projection of `identity.binding` |
 | `identity.generation.available` | `identity.request.generation != 0` |
 | `identity.generation.value` | `uint64(identity.request.generation)` |
 | `identity.method.available` | `identity.method != ""` |
 | `identity.method.value` | string projection of `identity.method` |
-| `identity.profile.available` | `identity.profile != ""` |
+| `identity.profile.available` | `identity.profile != ""`; `identity.profile` is the verbatim `callHierarchyLayer1RequestAttachment.profile` value copied through attempt custody |
 | `identity.profile.value` | string projection of `identity.profile` |
 | `identity.request_identity.generation` | `uint64(identity.request.generation)` |
 | `identity.request_identity.request_key` | finite string/number projection of `identity.request.requestKey` preserving its existing kind |
 | `identity.request_identity.session` | string projection of `identity.request.session` |
-| `identity.request_identity.workspace_nonce_hex` | lowercase hex of `identity.request.workspace.managerNonce` |
+| `identity.request_identity.workspace_nonce_hex` | lowercase hex of the exact `[32]byte` `callHierarchyLayer1RequestAttachment.workspace.managerNonce` copied verbatim through `attempt.requestIdentity.workspace`; production performs no text decode |
 | `identity.transaction.available` | `identity.transaction.request.generation != 0` |
 | `identity.transaction.local_hex` | lowercase hex of `identity.transaction.local` |
 | `refusal.reason` | nullable string projection of `refusalReason`; `refusalType` selects no text |
@@ -652,13 +665,16 @@ Ordinary non-closed, non-retired `RoundTrip` ownership remains open until either
 
 ## 11. Exact closed C15 expected candidate set — unclassified
 
-Canonical C15 MUST enumerate exactly the declarations and allocation sites below from the disposable patch. This is not a lower bound. Every classification remains `UNKNOWN`. Any extra or missing candidate is an immediate hard stop; no implementation, generator, or reviewer may silently normalize the delta.
+Canonical C15 MUST enumerate exactly the declarations and allocation sites below from the disposable patch. This is not a lower bound and contains no conditional, optional, implementation-selected, or open candidate. The reconciled closed totals are exactly **10 field candidates, 23 type candidates, 17 existing declarations expected to change, 21 new function/method candidates, and 16 allocation/copy-site rows**. Every classification remains `UNKNOWN`. Any extra or missing candidate is an immediate hard stop; no implementation, generator, or reviewer may silently normalize the delta.
 
 ### Field candidates
 
 ```text
 callHierarchyLayer1RequestAttachment.predecessors *callHierarchyOpaqueCommitmentList
 callHierarchyLayer1RequestAttachment.enabled bool
+callHierarchyLayer1RequestAttachment.profile callHierarchyProfileIdentity
+callHierarchyLayer1RequestAttachment.binding callHierarchyBindingIdentity
+callHierarchyLayer1RequestAttachment.workspace callHierarchyWorkspaceCustody
 RoundTripRequest.callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
 RoundTripResult.callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
 RoundTripResult.callHierarchyLayer1Generic *callHierarchyLayer1GenericOwner
@@ -694,7 +710,7 @@ callHierarchyLayer1GenericView
 callHierarchyLayer1GenericLease
 ```
 
-Every field declared in §4.2, §5.1, §5.2, and §6.2 is part of its containing type candidate; there are no anonymous or dynamically discovered field candidates. The exact carrier delta is the two named attempt fields above. The generation key is a type candidate, not a field candidate or anonymous map-key spelling. `(*Manager).roundTrip` and `(*Manager).roundTripWithPrivate` have no carrier-caused declaration or body edit. No changed helper signature, explicit attempt parameter, `(*Manager).AdmitSeedBinding` call-site edit, `(*Manager).RoundTripPrivateB4` call-site edit, immutable direct-test call-site edit, or equivalent bridge declaration is a C15 candidate. Copying the request and performing the one transaction-result field initialization copy only the pointer value and introduce no allocation.
+Every field declared in §4.2, §5.1, §5.2, and §6.2 is part of its containing type candidate; there are no anonymous or dynamically discovered field candidates. Relative to the preceding refusal-owner-registry proposal, the exact current-HEAD C15 additions are only the three identity field candidates `profile`, `binding`, and `workspace`, one new setter method candidate `privateCallHierarchyLayer1WithIdentity`, and the changed body of the already-proposed `newCallHierarchyLayer1GenericAttemptLineage` constructor. The constructor name/signature is unchanged. The exact carrier delta remains the two named attempt fields above. The generation key is a type candidate, not a field candidate or anonymous map-key spelling. `(*Manager).roundTrip` and `(*Manager).roundTripWithPrivate` have no carrier-caused declaration or body edit. No changed helper signature, explicit attempt parameter, `(*Manager).AdmitSeedBinding` call-site edit, `(*Manager).RoundTripPrivateB4` call-site edit, immutable direct-test call-site edit, or equivalent bridge declaration is a C15 candidate. Copying the request and performing the one transaction-result field initialization copy only the pointer value and introduce no allocation.
 
 ### Existing declarations expected to change
 
@@ -723,6 +739,7 @@ callHierarchyLayer1RequestAttachment
 ```text
 (callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithPredecessors
 (callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithEnabled
+(callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithIdentity
 newCallHierarchyLayer1GenericAttemptLineage
 (*callHierarchyLayer1GenericAttemptLineage).recordRefusal
 (*Manager).finishCallHierarchyLayer1GenericRefusal
@@ -747,7 +764,7 @@ newCallHierarchyLayer1GenericOwner
 
 ```text
 privateCallHierarchyLayer1WithPredecessors: one &callHierarchyOpaqueCommitmentList{} allocation and one append([]callHierarchyOpaqueCommitmentMetadata(nil), values...) backing allocation only when len(values)>0
-newCallHierarchyLayer1GenericAttemptLineage: one &callHierarchyLayer1GenericAttemptLineage{} allocation only when req.callHierarchyLayer1.enabled
+newCallHierarchyLayer1GenericAttemptLineage: one &callHierarchyLayer1GenericAttemptLineage{} allocation only when req.callHierarchyLayer1.enabled; changed body copies the three typed attachment identity values verbatim into the existing attempt fields and introduces no second allocation or new type
 captureRequestFrame: one append([]byte(nil), frame...) backing allocation when frame is available/nonempty
 captureResponseFrame: one append([]byte(nil), raw...) backing allocation when raw is available/nonempty
 captureResult: one append(json.RawMessage(nil), result...) backing allocation when result is available, including a non-nil zero-length slice for available-empty
@@ -764,7 +781,7 @@ runLifecycle RESTART Manager detach: no additional owner-slice copy; retirement-
 Manager.Shutdown registry detach: direct whole-slice transfer, nil assignment, and retired-set clear; no owner-slice copy allocation required
 ```
 
-No allocation site exists in `releaseLocked`, `requestTerminal`, `waitReleased`, or `Release`. The exact retired-generation map is the sole admitted map addition; no session registry, registry-entry type, wrapper, second index, owner back-pointer, goroutine, or channel is admitted. `releaseLocked` has only the exact observation-clear and release-bit effects specified in §5.3; `Release` and `requestTerminal` have only admission close, callback drain, and invocation of that helper, while `waitReleased` only observes/waits. No builder, holder, owner, view, lease, registry-entry, map, goroutine, channel, callback wrapper, or error allocation beyond the exact list above is permitted.
+The identity-chain additions introduce no allocation site and no new type: the setter and constructor-body additions are comparable value copies only. No allocation site exists in `releaseLocked`, `requestTerminal`, `waitReleased`, or `Release`. The exact retired-generation map is the sole admitted map addition; no session registry, registry-entry type, wrapper, second index, owner back-pointer, goroutine, or channel is admitted. `releaseLocked` has only the exact observation-clear and release-bit effects specified in §5.3; `Release` and `requestTerminal` have only admission close, callback drain, and invocation of that helper, while `waitReleased` only observes/waits. No builder, holder, owner, view, lease, registry-entry, map, goroutine, channel, callback wrapper, or error allocation beyond the exact list above is permitted.
 
 This is the exact expected C15 candidate set, not a C15 result. Canonical enumeration may attach generated identifiers, source locations, AST hashes, and `UNKNOWN` classifications to these exact candidates only. One extra or missing field, type, declaration, function, method, allocation/copy site, or candidate is:
 
@@ -798,7 +815,7 @@ This document is also immutable during the experiment. The prototype may write o
 
 The sequence is strict and non-circular:
 
-1. **New review and authorization:** independently review this integrated Manager-owner-slice and exact-generation-retired-map revision; the prior pre-mutation disposable blocker produced no canonical C15 and grants no authority.
+1. **Independent GO and fresh user authorization:** independently review this current-HEAD integrated identity-chain, Manager-owner-slice, and exact-generation-retired-map revision. Both prior disposable paths were blocked before mutation, produced no canonical C15, and grant no authority. Proceed only after an independent reviewer records GO for this exact closed write-set and the user then supplies fresh explicit disposable authorization; neither condition may be inherited, inferred, or combined with the other.
 2. **One new disposable writer:** only after that review, a new authorization names exactly one disposable writer with exclusive custody of only the three files and exact symbols above in a newly created disposable worktree at the pinned HEAD.
 3. **Qualified v3 GREEN:** that writer implements only enough of the finite boundary to make the immutable qualified current v3 RED compile and pass; no test/corpus/RED edit is permitted.
 4. **New canonical C15 enumeration:** with the exact disposable patch still present, run the canonical enumerator and preserve the exact patch, implemented symbol set, baseline/generated candidate sets, locations, AST hashes, pre/post classifications, and complete `ADDED`, `REMOVED`, and `CHANGED` delta.
@@ -806,7 +823,7 @@ The sequence is strict and non-circular:
 6. **Dispose:** remove all prototype changes and delete the disposable worktree without commit; independently verify disposal.
 7. **Later production gate:** only after accepted review and verified disposal may a separate gate freeze the final production file/symbol/candidate write-set and name exactly one production writer.
 
-The disposable writer is not the production writer. The disposable patch has no presumptive reuse authority. The prior blocked disposable path and any noncanonical candidate list cannot be reused; this changed registry/lock/lifecycle set requires the new reviewed authorization and new canonical C15 run.
+The disposable writer is not the production writer. The disposable patch has no presumptive reuse authority. Neither of the two prior blocked disposable paths nor any noncanonical candidate list can be reused; this changed identity/registry/lock/lifecycle set requires independent GO, fresh user authorization, and a new canonical C15 run.
 
 ## 15. Hard stops
 
@@ -817,6 +834,8 @@ Stop immediately and report the exact blocker if any of the following is require
 - any helper signature change or explicit attempt-pointer parameter on `roundTrip`, `roundTripWithPrivate`, `roundTripWithPrivateTransaction`, or `finishRoundTrip`;
 - any edit to `(*Manager).AdmitSeedBinding`, `(*Manager).RoundTripPrivateB4`, their call sites, immutable direct helper-call tests, or the fourth production file `sessionruntime/b4_definition_private.go`;
 - any `AdmitSeedBinding`, `RoundTripPrivateB4`, equivalent bridge interface, hidden/alternate attempt carrier, or second builder;
+- failure of the RED's first executable attachment invocation order to remain exactly `identity -> enabled -> predecessors`, or any production parser/decoder for driver identity;
+- failure of `privateCallHierarchyLayer1WithIdentity` to replace exactly profile, binding, and workspace while preserving every other attachment field and predecessor pointer, or any method/expected/world-derived identity;
 - failure to unconditionally overwrite the private request carrier at the first executable `RoundTrip` line, preserve exact pointer identity through ordinary by-value request transfer, initialize the transient result carrier exactly once after admission, or clear it in every `finishRoundTrip` return;
 - any of the exact twelve pre-admission returns without exactly one call to the Manager refusal finalizer, or any additional pre-key return;
 - any owner append while `m.closed` or its exact generation key is retired, or return before the required outside-lock terminalize/join completes;
@@ -833,7 +852,7 @@ Do not improvise, broaden an allowance, create a helper in another file, or weak
 
 ## 16. Disposition
 
-The exact three-file physical boundary remains the only candidate boundary. The finite proposed source-symbol and expected C15 candidate sets above are review inputs only. No disposable writer is named, no execution is authorized, no candidate is classified, and no production custody is issued. The prior disposable path was blocked before mutation and produced no canonical C15; independent review of this integrated revision and a new explicit disposable authorization are required before any experiment.
+The exact three-file physical boundary remains the only candidate boundary. The finite proposed source-symbol and expected C15 candidate sets above are closed review inputs only. No disposable writer is named, no execution is authorized, no candidate is classified, and no production custody is issued. Both prior disposable paths were blocked before mutation and produced no canonical C15. Independent GO for this exact current-HEAD revision and fresh explicit user authorization are separately required before any experiment; neither is present or implied here.
 
 ```text
 ADR0011_CALLHIERARCHY_LAYER1_GENERIC_V3_DISPOSABLE_C15_WRITESET_FINAL — REVIEW_REQUIRED
