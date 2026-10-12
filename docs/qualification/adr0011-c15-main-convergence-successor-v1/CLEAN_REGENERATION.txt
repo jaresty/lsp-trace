@@ -1,0 +1,13 @@
+CLEAN_REGENERATION_RECEIPT_V2
+enumerator_sha256=548223ee3b10584615472e3eab6d81a506e0267b253e3d777f40fe29eb5fe273
+command=env -i PATH=/Users/schwa/.pi/agent/bin:/Users/schwa/.bun/bin:/Users/tkma6d4/.codeium/windsurf/bin:/Users/schwa/.tfenv/bin:/opt/homebrew/bin:/Users/schwa/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Apple/usr/bin:/Users/schwa/.bun/bin:/Users/tkma6d4/.codeium/windsurf/bin:/Users/schwa/.tfenv/bin:/Users/schwa/.local/bin:/Applications/Ghostty.app/Contents/MacOS:/Users/schwa/go/bin:/Users/schwa/go/bin HOME=/Users/schwa GOCACHE=/Users/schwa/Library/Caches/go-build ADR0011_C15_SUCCESSOR_OUTPUT=<RUN> go test ./sessionruntime -run ^TestADR0011C15MainConvergenceSuccessorEnumerate$ -count=1 -v
+run1_exit=0
+run2_exit=0
+run1_rows=4155
+run2_rows=4155
+duplicates=0
+mapping_rows=44
+locations=4155
+run_outputs_byte_identical=true
+canonical_package_bytes_equal=true
+temporary_enumerator_removed=true
