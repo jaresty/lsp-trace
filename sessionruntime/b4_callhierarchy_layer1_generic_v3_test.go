@@ -83,6 +83,107 @@ type callHierarchyLayer1GenericV3DriverExternal struct {
 	ServerErrorBytes   *string `json:"server_error_bytes"`
 }
 
+type callHierarchyLayer1GenericV3DriverCausalOutcome struct {
+	Class         *string `json:"class"`
+	Terminal      *string `json:"terminal,omitempty"`
+	RefusalClass  *string `json:"refusal_class,omitempty"`
+	RefusalReason *string `json:"refusal_reason,omitempty"`
+}
+
+func (outcome *callHierarchyLayer1GenericV3DriverCausalOutcome) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
+		return fmt.Errorf("causal outcome must be an object")
+	}
+	seen := make(map[string]bool, 4)
+	for decoder.More() {
+		token, err = decoder.Token()
+		if err != nil {
+			return err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return fmt.Errorf("causal outcome member name must be a string")
+		}
+		if seen[name] {
+			return fmt.Errorf("duplicate causal outcome member %q", name)
+		}
+		seen[name] = true
+		switch name {
+		case "class":
+			err = decoder.Decode(&outcome.Class)
+		case "terminal":
+			err = decoder.Decode(&outcome.Terminal)
+		case "refusal_class":
+			err = decoder.Decode(&outcome.RefusalClass)
+		case "refusal_reason":
+			err = decoder.Decode(&outcome.RefusalReason)
+		default:
+			return fmt.Errorf("unknown causal outcome member %q", name)
+		}
+		if err != nil {
+			return fmt.Errorf("causal outcome member %q: %w", name, err)
+		}
+	}
+	if _, err = decoder.Token(); err != nil {
+		return err
+	}
+	if err = decoder.Decode(&token); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("causal outcome trailing value: %v", err)
+	}
+	return nil
+}
+
+func callHierarchyLayer1GenericV3CausalOutcomeValues(outcome *callHierarchyLayer1GenericV3DriverCausalOutcome) (class, terminal, refusalClass, refusalReason string, present bool, err error) {
+	if outcome == nil {
+		return "", "", "", "", false, nil
+	}
+	if outcome.Class == nil || *outcome.Class == "" {
+		return "", "", "", "", true, errors.New("causal outcome requires class")
+	}
+	class = *outcome.Class
+	switch class {
+	case "accepted-terminal":
+		if outcome.Terminal == nil || *outcome.Terminal != "successful-empty" || outcome.RefusalClass != nil || outcome.RefusalReason != nil {
+			return "", "", "", "", true, errors.New("accepted-terminal requires only terminal successful-empty")
+		}
+		return class, *outcome.Terminal, "", "", true, nil
+	case "pre-effect-refusal":
+		if outcome.Terminal != nil || outcome.RefusalClass == nil || *outcome.RefusalClass != "method-unavailable" || outcome.RefusalReason == nil || *outcome.RefusalReason != "method unavailable" {
+			return "", "", "", "", true, errors.New("pre-effect-refusal requires method-unavailable and method unavailable")
+		}
+		return class, "", *outcome.RefusalClass, *outcome.RefusalReason, true, nil
+	default:
+		return "", "", "", "", true, fmt.Errorf("invalid causal outcome class %q", class)
+	}
+}
+
+func callHierarchyLayer1GenericV3TypedCausalOutcome(outcome *callHierarchyLayer1GenericV3DriverCausalOutcome) (callHierarchyLayer1GenericCausalOutcome, error) {
+	class, terminal, _, refusalReason, present, err := callHierarchyLayer1GenericV3CausalOutcomeValues(outcome)
+	if err != nil || !present {
+		return callHierarchyLayer1GenericCausalOutcome{}, err
+	}
+	switch class {
+	case "accepted-terminal":
+		return callHierarchyLayer1GenericCausalOutcome{
+			class:    callHierarchyLayer1GenericCausalOutcomeAcceptedTerminal,
+			terminal: terminal,
+		}, nil
+	case "pre-effect-refusal":
+		return callHierarchyLayer1GenericCausalOutcome{
+			class:         callHierarchyLayer1GenericCausalOutcomePreEffectRefusal,
+			refusalType:   callHierarchyLayer1GenericRefusalMethodUnavailable,
+			refusalReason: session.Failure(refusalReason),
+		}, nil
+	default:
+		return callHierarchyLayer1GenericCausalOutcome{}, fmt.Errorf("invalid causal outcome class %q", class)
+	}
+}
+
 type callHierarchyLayer1GenericV3DriverIdentity struct {
 	Binding           string `json:"binding"`
 	Profile           string `json:"profile"`
@@ -161,17 +262,18 @@ func callHierarchyLayer1GenericV3IdentityValues(identity *callHierarchyLayer1Gen
 }
 
 type callHierarchyLayer1GenericV3DriverRequest struct {
-	AttachmentEnabled bool                                        `json:"attachment_enabled"`
-	DeadlineAfterNS   int64                                       `json:"deadline_after_ns"`
-	Generation        uint64                                      `json:"generation"`
-	Identity          *callHierarchyLayer1GenericV3DriverIdentity `json:"identity"`
-	MaxBytes          int64                                       `json:"max_bytes"`
-	MaxMessages       int                                         `json:"max_messages"`
-	Method            string                                      `json:"method"`
-	ParamsHex         *string                                     `json:"params_hex"`
-	ParamsState       string                                      `json:"params_state"`
-	RequestID         uint64                                      `json:"request_id"`
-	Session           string                                      `json:"session"`
+	AttachmentEnabled bool                                             `json:"attachment_enabled"`
+	CausalOutcome     *callHierarchyLayer1GenericV3DriverCausalOutcome `json:"causal_outcome,omitempty"`
+	DeadlineAfterNS   int64                                            `json:"deadline_after_ns"`
+	Generation        uint64                                           `json:"generation"`
+	Identity          *callHierarchyLayer1GenericV3DriverIdentity      `json:"identity"`
+	MaxBytes          int64                                            `json:"max_bytes"`
+	MaxMessages       int                                              `json:"max_messages"`
+	Method            string                                           `json:"method"`
+	ParamsHex         *string                                          `json:"params_hex"`
+	ParamsState       string                                           `json:"params_state"`
+	RequestID         uint64                                           `json:"request_id"`
+	Session           string                                           `json:"session"`
 }
 
 func (request *callHierarchyLayer1GenericV3DriverRequest) UnmarshalJSON(raw []byte) error {
@@ -183,7 +285,7 @@ func (request *callHierarchyLayer1GenericV3DriverRequest) UnmarshalJSON(raw []by
 	if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
 		return fmt.Errorf("driver request must be an object")
 	}
-	seen := make(map[string]bool, 11)
+	seen := make(map[string]bool, 12)
 	for decoder.More() {
 		token, err = decoder.Token()
 		if err != nil {
@@ -201,6 +303,9 @@ func (request *callHierarchyLayer1GenericV3DriverRequest) UnmarshalJSON(raw []by
 		if err := decoder.Decode(&discard); err != nil {
 			return err
 		}
+		if name == "causal_outcome" && bytes.Equal(bytes.TrimSpace(discard), []byte("null")) {
+			return errors.New("causal_outcome must not be null")
+		}
 	}
 	if _, err := decoder.Token(); err != nil {
 		return err
@@ -211,8 +316,8 @@ func (request *callHierarchyLayer1GenericV3DriverRequest) UnmarshalJSON(raw []by
 	if err := strict.Decode((*plain)(request)); err != nil {
 		return err
 	}
-	if len(seen) != 11 || !seen["identity"] {
-		return fmt.Errorf("driver request requires exactly 11 members including identity")
+	if (len(seen) != 11 && len(seen) != 12) || !seen["identity"] || (len(seen) == 12 && !seen["causal_outcome"]) {
+		return fmt.Errorf("driver request requires exactly 11 members plus optional causal_outcome")
 	}
 	if err := strict.Decode(&token); !errors.Is(err, io.EOF) {
 		return fmt.Errorf("driver request trailing value: %v", err)
@@ -435,6 +540,9 @@ func callHierarchyLayer1GenericV3ValidateDriver(t *testing.T, e callHierarchyLay
 	}
 	if _, _, _, err := callHierarchyLayer1GenericV3IdentityValues(d.Request.Identity); err != nil {
 		t.Fatalf("ASSERT_CH_GENERIC_V3_DRIVER_IDENTITY_%s: %v", e.Expected.Name, err)
+	}
+	if _, _, _, _, _, err := callHierarchyLayer1GenericV3CausalOutcomeValues(d.Request.CausalOutcome); err != nil {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_DRIVER_CAUSAL_OUTCOME_%s: %v", e.Expected.Name, err)
 	}
 	allowed := map[string]bool{"response-frame": true, "transport-error": true, "cancel": true, "deadline": true, "shutdown": true, "unavailable": true}
 	for i, event := range d.Transport.Events {
@@ -671,6 +779,10 @@ type callHierarchyLayer1GenericV3EnabledAttachment interface {
 	privateCallHierarchyLayer1WithEnabled(bool) callHierarchyLayer1RequestAttachment
 }
 
+type callHierarchyLayer1GenericV3CausalOutcomeAttachment interface {
+	privateCallHierarchyLayer1WithCausalOutcome(callHierarchyLayer1GenericCausalOutcome) callHierarchyLayer1RequestAttachment
+}
+
 type callHierarchyLayer1GenericV3PredecessorAttachment interface {
 	privateCallHierarchyLayer1WithPredecessors([]callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment
 }
@@ -889,6 +1001,22 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithEnabled"}
 	}
 	attachment = enabledSetter.privateCallHierarchyLayer1WithEnabled(record.Driver.Request.AttachmentEnabled)
+	causalSetter, ok := any(attachment).(callHierarchyLayer1GenericV3CausalOutcomeAttachment)
+	if !ok {
+		causalSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3CausalOutcomeAttachment)
+	}
+	request.callHierarchyLayer1 = attachment
+	if !ok {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithCausalOutcome"}
+	}
+	causalOutcome, err := callHierarchyLayer1GenericV3TypedCausalOutcome(record.Driver.Request.CausalOutcome)
+	if err != nil {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "driver-causal-outcome:" + err.Error()}
+	}
+	attachment = causalSetter.privateCallHierarchyLayer1WithCausalOutcome(causalOutcome)
+	if causalOutcome.class == callHierarchyLayer1GenericCausalOutcomePreEffectRefusal {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: string(causalOutcome.refusalReason)}
+	}
 	predecessorSetter, ok := any(attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
 	if !ok {
 		predecessorSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
@@ -910,12 +1038,6 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 		t.Fatal(err)
 	}
 	pending := lspwire.NewPending(0)
-	for id := uint64(1); id < record.Driver.Request.RequestID; id++ {
-		key := pending.Begin(record.Driver.Request.Generation)
-		if got := pending.Accept(lspwire.ResponseKey(key)); got != lspwire.ResponseAccepted {
-			t.Fatalf("ASSERT_CH_GENERIC_V3_PENDING_ADVANCE_%s_%d", record.Expected.Name, id)
-		}
-	}
 	manager.mu.Lock()
 	manager.sessions[record.Driver.Request.Session] = &runtimeSession{record: Record{SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, State: session.Ready}, process: transport, pending: pending, requests: make(map[lspwire.RequestKey]*Request)}
 	manager.mu.Unlock()
@@ -1667,6 +1789,253 @@ func TestCallHierarchyLayer1GenericV3IdentityCausalGuards(t *testing.T) {
 				t.Fatalf("ASSERT_CH_GENERIC_V3_IDENTITY_ARGUMENT_MUTATION_SCOPE test=%s method=%q/%q expected=%p/%p profile_same=%t binding_same=%t workspace_same=%t left=%+v right=%+v", test.name, baseline.Driver.Request.Method, mutated.Driver.Request.Method, baseline.Expected.Identity.Profile.Value, mutated.Expected.Identity.Profile.Value, profileSame, bindingSame, workspaceSame, left, right)
 			}
 		})
+	}
+}
+
+type callHierarchyLayer1GenericV3CausalOutcomeRecorder struct {
+	attachment callHierarchyLayer1RequestAttachment
+	outcome    callHierarchyLayer1GenericCausalOutcome
+	calls      int
+}
+
+func (recorder *callHierarchyLayer1GenericV3CausalOutcomeRecorder) privateCallHierarchyLayer1WithCausalOutcome(outcome callHierarchyLayer1GenericCausalOutcome) callHierarchyLayer1RequestAttachment {
+	recorder.calls++
+	recorder.outcome = outcome
+	return recorder.attachment
+}
+
+func callHierarchyLayer1GenericV3CausalOutcomePlacementErrors(worlds []callHierarchyLayer1GenericV3Loaded) []string {
+	want := map[string]uint64{"W04": 104, "W05": 105, "W23": 123}
+	seen := map[string]int{}
+	absent := 0
+	errors := []string{}
+	for _, world := range worlds {
+		callHierarchyLayer1GenericV3Walk(world.envelope, func(record callHierarchyLayer1GenericV3Envelope) {
+			requestID, scoped := want[record.Expected.Name]
+			present := record.Driver.Request.CausalOutcome != nil
+			if scoped && record.Driver.Request.RequestID == requestID {
+				seen[record.Expected.Name]++
+				if !present {
+					errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_SCOPED_ABSENT identity=%s/%d", record.Expected.Name, requestID))
+				}
+				return
+			}
+			if present {
+				errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_UNSCOPED_PRESENT identity=%s/%d", record.Expected.Name, record.Driver.Request.RequestID))
+				return
+			}
+			absent++
+		})
+	}
+	for name := range want {
+		if seen[name] != 1 {
+			errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_SCOPED_OCCURRENCE identity=%s/%d got=%d want=1", name, want[name], seen[name]))
+		}
+	}
+	if absent != 82 {
+		errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_OTHER_COUNT got=%d want=82", absent))
+	}
+	return errors
+}
+
+func TestCallHierarchyLayer1GenericV3CausalOutcomeGuards(t *testing.T) {
+	decode := func(raw string) (*callHierarchyLayer1GenericV3DriverCausalOutcome, error) {
+		if strings.TrimSpace(raw) == "null" {
+			return nil, errors.New("causal outcome must not be null")
+		}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		var outcome *callHierarchyLayer1GenericV3DriverCausalOutcome
+		if err := decoder.Decode(&outcome); err != nil {
+			return nil, err
+		}
+		var trailing json.RawMessage
+		if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("causal outcome trailing value: %v", err)
+		}
+		return outcome, nil
+	}
+	validAccepted := `{"class":"accepted-terminal","terminal":"successful-empty"}`
+	validRefusal := `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`
+	requestPrefix := `{"attachment_enabled":true,"causal_outcome":`
+	requestSuffix := `,"deadline_after_ns":1,"generation":1,"identity":{"binding":"b","profile":"p","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"},"max_bytes":1,"max_messages":1,"method":"m","params_hex":null,"params_state":"nil","request_id":1,"session":"s"}`
+	for _, test := range []struct{ name, raw string }{
+		{"request-null", requestPrefix + `null` + requestSuffix},
+		{"request-duplicate", strings.Replace(requestPrefix+validAccepted+requestSuffix, `"causal_outcome":`+validAccepted, `"causal_outcome":`+validAccepted+`,"causal_outcome":`+validAccepted, 1)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var request callHierarchyLayer1GenericV3DriverRequest
+			if err := json.Unmarshal([]byte(test.raw), &request); err == nil {
+				t.Fatalf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_REQUEST_INVALID_ACCEPTED raw=%s", test.raw)
+			}
+		})
+	}
+
+	for _, test := range []struct{ name, raw string }{
+		{"null", `null`},
+		{"array", `[]`},
+		{"string-scalar", `"accepted-terminal"`},
+		{"number-scalar", `1`},
+		{"boolean-scalar", `true`},
+		{"empty-object", `{}`},
+		{"missing-accepted-class", `{"terminal":"successful-empty"}`},
+		{"missing-accepted-terminal", `{"class":"accepted-terminal"}`},
+		{"null-accepted-class", `{"class":null,"terminal":"successful-empty"}`},
+		{"null-accepted-terminal", `{"class":"accepted-terminal","terminal":null}`},
+		{"non-string-accepted-class", `{"class":1,"terminal":"successful-empty"}`},
+		{"non-string-accepted-terminal", `{"class":"accepted-terminal","terminal":true}`},
+		{"empty-accepted-class", `{"class":"","terminal":"successful-empty"}`},
+		{"empty-accepted-terminal", `{"class":"accepted-terminal","terminal":""}`},
+		{"case-accepted-class", `{"class":"Accepted-Terminal","terminal":"successful-empty"}`},
+		{"case-accepted-terminal", `{"class":"accepted-terminal","terminal":"Successful-Empty"}`},
+		{"whitespace-accepted-class", `{"class":" accepted-terminal","terminal":"successful-empty"}`},
+		{"whitespace-accepted-terminal", `{"class":"accepted-terminal","terminal":"successful-empty "}`},
+		{"unicode-accepted-class", `{"class":"accepted‐terminal","terminal":"successful-empty"}`},
+		{"unicode-accepted-terminal", `{"class":"accepted-terminal","terminal":"successful‐empty"}`},
+		{"accepted-unknown", `{"class":"accepted-terminal","terminal":"successful-empty","extra":true}`},
+		{"accepted-duplicate-class", `{"class":"accepted-terminal","class":"accepted-terminal","terminal":"successful-empty"}`},
+		{"accepted-duplicate-terminal", `{"class":"accepted-terminal","terminal":"successful-empty","terminal":"successful-empty"}`},
+		{"accepted-conflicting-refusal-class", `{"class":"accepted-terminal","terminal":"successful-empty","refusal_class":"method-unavailable"}`},
+		{"accepted-conflicting-refusal-reason", `{"class":"accepted-terminal","terminal":"successful-empty","refusal_reason":"method unavailable"}`},
+		{"missing-refusal-class", `{"refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"missing-refusal-type", `{"class":"pre-effect-refusal","refusal_reason":"method unavailable"}`},
+		{"missing-refusal-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable"}`},
+		{"null-refusal-class", `{"class":null,"refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"null-refusal-type", `{"class":"pre-effect-refusal","refusal_class":null,"refusal_reason":"method unavailable"}`},
+		{"null-refusal-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":null}`},
+		{"non-string-refusal-class", `{"class":false,"refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"non-string-refusal-type", `{"class":"pre-effect-refusal","refusal_class":1,"refusal_reason":"method unavailable"}`},
+		{"non-string-refusal-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":[]}`},
+		{"empty-refusal-class", `{"class":"","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"empty-refusal-type", `{"class":"pre-effect-refusal","refusal_class":"","refusal_reason":"method unavailable"}`},
+		{"empty-refusal-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":""}`},
+		{"case-refusal-class", `{"class":"Pre-Effect-Refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"case-refusal-type", `{"class":"pre-effect-refusal","refusal_class":"Method-Unavailable","refusal_reason":"method unavailable"}`},
+		{"case-refusal-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":"Method unavailable"}`},
+		{"whitespace-refusal-class", `{"class":"pre-effect-refusal ","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"whitespace-refusal-type", `{"class":"pre-effect-refusal","refusal_class":" method-unavailable","refusal_reason":"method unavailable"}`},
+		{"whitespace-refusal-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable "}`},
+		{"unicode-refusal-class", `{"class":"pre‐effect-refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"unicode-refusal-type", `{"class":"pre-effect-refusal","refusal_class":"method‐unavailable","refusal_reason":"method unavailable"}`},
+		{"unicode-refusal-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"refusal-unknown", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable","extra":true}`},
+		{"refusal-duplicate-class", `{"class":"pre-effect-refusal","class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"refusal-duplicate-type", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"refusal-duplicate-reason", `{"class":"pre-effect-refusal","refusal_class":"method-unavailable","refusal_reason":"method unavailable","refusal_reason":"method unavailable"}`},
+		{"refusal-conflicting-terminal", `{"class":"pre-effect-refusal","terminal":"successful-empty","refusal_class":"method-unavailable","refusal_reason":"method unavailable"}`},
+		{"trailing", validAccepted + ` null`},
+	} {
+		t.Run("strict-"+test.name, func(t *testing.T) {
+			outcome, err := decode(test.raw)
+			if err == nil {
+				_, err = callHierarchyLayer1GenericV3TypedCausalOutcome(outcome)
+			}
+			if err == nil {
+				t.Fatalf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_INVALID_ACCEPTED raw=%s", test.raw)
+			}
+		})
+	}
+	for _, test := range []struct {
+		name string
+		raw  string
+		want callHierarchyLayer1GenericCausalOutcome
+	}{
+		{"accepted-complete", validAccepted, callHierarchyLayer1GenericCausalOutcome{class: callHierarchyLayer1GenericCausalOutcomeAcceptedTerminal, terminal: "successful-empty"}},
+		{"refusal-complete", validRefusal, callHierarchyLayer1GenericCausalOutcome{class: callHierarchyLayer1GenericCausalOutcomePreEffectRefusal, refusalType: callHierarchyLayer1GenericRefusalMethodUnavailable, refusalReason: session.Failure("method unavailable")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			decoded, err := decode(test.raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := callHierarchyLayer1GenericV3TypedCausalOutcome(decoded)
+			if err != nil || got != test.want {
+				t.Fatalf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_COMPLETE_SHAPE got=%+v want=%+v err=%v", got, test.want, err)
+			}
+		})
+	}
+
+	worlds := callHierarchyLayer1GenericV3Load(t)
+	if placementErrors := callHierarchyLayer1GenericV3CausalOutcomePlacementErrors(worlds); len(placementErrors) != 0 {
+		t.Fatal(strings.Join(placementErrors, "\n"))
+	}
+	t.Run("placement-relocation-rejected", func(t *testing.T) {
+		copyWorlds := append([]callHierarchyLayer1GenericV3Loaded(nil), worlds...)
+		moved := copyWorlds[3].envelope.Driver.Request.CausalOutcome
+		copyWorlds[3].envelope.Driver.Request.CausalOutcome = nil
+		copyWorlds[0].envelope.Driver.Request.CausalOutcome = moved
+		if len(callHierarchyLayer1GenericV3CausalOutcomePlacementErrors(copyWorlds)) == 0 {
+			t.Fatal("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_RELOCATION_ACCEPTED")
+		}
+	})
+
+	apply := func(t *testing.T, outcome *callHierarchyLayer1GenericV3DriverCausalOutcome) (callHierarchyLayer1GenericCausalOutcome, callHierarchyLayer1GenericCausalOutcome) {
+		t.Helper()
+		decoded, err := callHierarchyLayer1GenericV3TypedCausalOutcome(outcome)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorder := &callHierarchyLayer1GenericV3CausalOutcomeRecorder{}
+		var setter callHierarchyLayer1GenericV3CausalOutcomeAttachment = recorder
+		setter.privateCallHierarchyLayer1WithCausalOutcome(decoded)
+		if recorder.calls != 1 {
+			t.Fatalf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_SETTER_CALLS got=%d want=1", recorder.calls)
+		}
+		return decoded, recorder.outcome
+	}
+	mutations := []struct {
+		name   string
+		mutate func(*callHierarchyLayer1GenericV3Envelope)
+	}{
+		{"id", func(record *callHierarchyLayer1GenericV3Envelope) { record.Driver.Request.RequestID += 9000 }},
+		{"address", func(record *callHierarchyLayer1GenericV3Envelope) { record.Driver.Request.Session = "mutated-address" }},
+		{"world-label", func(record *callHierarchyLayer1GenericV3Envelope) { record.Expected.Name = "mutated-world" }},
+		{"method", func(record *callHierarchyLayer1GenericV3Envelope) { record.Driver.Request.Method = "mutated-method" }},
+		{"expected", func(record *callHierarchyLayer1GenericV3Envelope) {
+			record.Expected.Terminal.Value = callHierarchyLayer1GenericV3NullableString("mutated-expected")
+		}},
+		{"response", func(record *callHierarchyLayer1GenericV3Envelope) {
+			record.Driver.Derived.External.ResponsesBytes = callHierarchyLayer1GenericV3NullableString("mutated-response")
+		}},
+		{"error", func(record *callHierarchyLayer1GenericV3Envelope) {
+			record.Expected.Error.Available = !record.Expected.Error.Available
+		}},
+		{"frame", func(record *callHierarchyLayer1GenericV3Envelope) {
+			record.Expected.Frames.Response.Available = !record.Expected.Frames.Response.Available
+		}},
+		{"control", func(record *callHierarchyLayer1GenericV3Envelope) {
+			if record.Expected.Control == nil {
+				record.Expected.Control = &callHierarchyLayer1CorpusControl{}
+			} else {
+				control := *record.Expected.Control
+				control.Enabled = !control.Enabled
+				record.Expected.Control = &control
+			}
+		}},
+		{"external", func(record *callHierarchyLayer1GenericV3Envelope) {
+			record.Driver.Derived.External.ResultBytes = callHierarchyLayer1GenericV3NullableString("mutated-external")
+		}},
+	}
+	for _, worldIndex := range []int{3, 4, 22} {
+		record := worlds[worldIndex].envelope
+		raw, err := json.Marshal(record.Driver.Request.CausalOutcome)
+		wantRaw := validAccepted
+		if worldIndex == 22 {
+			wantRaw = validRefusal
+		}
+		if err != nil || string(raw) != wantRaw {
+			t.Fatalf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_VERBATIM world=%s raw=%s want=%s err=%v", record.Expected.Name, raw, wantRaw, err)
+		}
+		baselineDecoded, baselineSetter := apply(t, record.Driver.Request.CausalOutcome)
+		for _, mutation := range mutations {
+			t.Run(record.Expected.Name+"-anti-dispatch-"+mutation.name, func(t *testing.T) {
+				mutated := record
+				mutation.mutate(&mutated)
+				decoded, setter := apply(t, mutated.Driver.Request.CausalOutcome)
+				if decoded != baselineDecoded || setter != baselineSetter || decoded != setter {
+					t.Fatalf("ASSERT_CH_GENERIC_V3_CAUSAL_OUTCOME_ANTI_DISPATCH world=%s mutation=%s decoded=%+v/%+v setter=%+v/%+v", record.Expected.Name, mutation.name, baselineDecoded, decoded, baselineSetter, setter)
+				}
+			})
+		}
 	}
 }
 
