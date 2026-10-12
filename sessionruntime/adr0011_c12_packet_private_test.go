@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
 	"testing"
 
 	"lsp-trace/internal/strictjson"
@@ -110,61 +107,4 @@ func TestC12PortableReferencesResultTokenPacket(t *testing.T) {
 		ClaimCeiling:   []string{"NO_BROADER_MATRIX_CLOSURE", "NO_C09_C10_C11_AUTHORITY_OR_RECERTIFICATION", "NO_C16_C18_RECERTIFICATION", "NO_LIVE_SERVER_OR_RUNTIME_PROOF", "NO_MANAGED_SESSION_IDENTITY", "NO_PRODUCTION_AUTHORITY"},
 		ActiveVerifier: "sessionruntime/adr0011_c12_packet_private_test.go",
 	})
-	return
-	const dir = "testdata/adr0011-c12-p2-v1"
-	info, err := os.Lstat(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			t.Fatal("ASSERT_C12_PORTABLE_PACKET_MISSING")
-		}
-		t.Fatal(err)
-	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		t.Fatal("ASSERT_C12_PACKET_ROOT")
-	}
-
-	raw, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var manifest c12PacketManifest
-	if err := c12Canonical(raw, &manifest); err != nil {
-		t.Fatalf("ASSERT_C12_PACKET_CANONICAL: %v", err)
-	}
-
-	wantCeiling := []string{"NO_BROADER_MATRIX_CLOSURE", "NO_C09_C10_C11_AUTHORITY_OR_RECERTIFICATION", "NO_C16_C18_RECERTIFICATION", "NO_LIVE_SERVER_OR_RUNTIME_PROOF", "NO_MANAGED_SESSION_IDENTITY", "NO_PRODUCTION_AUTHORITY"}
-	wantCommand := []string{"go", "test", "./sessionruntime", "-run", "^(TestC12PrivateReferencesExactOriginalResultTokenBoundary|TestC12PortableReferencesResultTokenPacket)$", "-count=1"}
-	wantNames := []string{"TestC12PrivateReferencesExactOriginalResultTokenBoundary", "TestC12PortableReferencesResultTokenPacket"}
-	wantPassed := []string{"TestC12PrivateReferencesExactOriginalResultTokenBoundary", "TestC12PrivateReferencesExactOriginalResultTokenBoundary/size-524287", "TestC12PrivateReferencesExactOriginalResultTokenBoundary/size-524288", "TestC12PrivateReferencesExactOriginalResultTokenBoundary/size-524289", "TestC12PortableReferencesResultTokenPacket"}
-	wantFailed := []string{}
-	wantAssertions := []string{"ASSERT_C12_RESULT_TOKEN_EXACT_SIZE", "ASSERT_C12_RESULT_TOKEN_ACCEPT", "ASSERT_C12_ACCEPTED_EXACT_RAW_RESULT", "ASSERT_C12_ACCEPTED_SELECTED_RESPONSE", "ASSERT_C12_ACCEPTED_ONE_SUCCESSFUL_RESPONSE_OBSERVATION", "ASSERT_C12_ACCEPTED_NO_PRIVATE_LEASES", "ASSERT_C12_ACCEPTED_EXACT_CLEANUP", "ASSERT_C12_RESULT_TOKEN_PLUS_ONE", "ASSERT_C12_PLUS_ONE_NO_DOWNSTREAM_PUBLICATION", "ASSERT_C12_PLUS_ONE_NO_PRIVATE_LEASES", "ASSERT_C12_PLUS_ONE_NO_SUCCESSFUL_RESPONSE_OBSERVATION", "ASSERT_C12_PLUS_ONE_SYNCHRONOUS_CLEANUP", "ASSERT_C12_PORTABLE_PACKET_MISSING", "ASSERT_C12_PACKET_ROOT", "ASSERT_C12_PACKET_CANONICAL", "ASSERT_C12_PACKET_BINDING", "ASSERT_C12_PACKET_SOURCE_DENOMINATOR", "ASSERT_C12_PACKET_SOURCE_IDENTITY", "ASSERT_C12_PACKET_FILE", "ASSERT_C12_PACKET_FILE_SET"}
-	if manifest.SchemaVersion != "lsp-trace.private.adr0011-c12-references-result-token-packet.v1" || manifest.Authority != "C12_HERMETIC_PRIVATE_REFERENCES_RESULT_TOKEN_EVIDENCE" || manifest.Revision.Role != "PRE_C12_EVIDENCE_BASELINE" || manifest.Revision.Commit != "92c252a05b275e16b482ad08b414ef46f8e7001d" || manifest.Revision.Tree != "7a8960d558176801f408203a350609b42132fd76" || !reflect.DeepEqual(manifest.ClaimCeiling, wantCeiling) || !reflect.DeepEqual(manifest.Command, wantCommand) || !reflect.DeepEqual(manifest.SelectedNames, wantNames) || manifest.SelectedCount != 2 || !manifest.ExpectedResult.ExitSuccess || manifest.ExpectedResult.PassedCount != 5 || manifest.ExpectedResult.FailedCount != 0 || !reflect.DeepEqual(manifest.ExpectedResult.PassedNames, wantPassed) || !reflect.DeepEqual(manifest.ExpectedResult.FailedNames, wantFailed) || !reflect.DeepEqual(manifest.ExpectedResult.Assertions, wantAssertions) {
-		t.Fatal("ASSERT_C12_PACKET_BINDING")
-	}
-	if len(manifest.Sources) != len(c12PacketSources) {
-		t.Fatal("ASSERT_C12_PACKET_SOURCE_DENOMINATOR")
-	}
-
-	root, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i, source := range manifest.Sources {
-		if source.Path != c12PacketSources[i] || filepath.IsAbs(source.Path) || filepath.Clean(source.Path) != source.Path || strings.Contains(source.Path, "\\") || strings.HasPrefix(source.Path, "../") || source.Path == "sessionruntime/testdata/adr0011-c12-p2-v1/manifest.json" || source.Path == "sessionruntime/testdata/adr0011-c12-p2-v1/README.md" {
-			t.Fatal("ASSERT_C12_PACKET_SOURCE_DENOMINATOR")
-		}
-		length, digest, identityErr := c12Identity(filepath.Join(root, filepath.FromSlash(source.Path)))
-		if identityErr != nil || length != source.ByteLength || digest != source.SHA256 {
-			t.Fatalf("ASSERT_C12_PACKET_SOURCE_IDENTITY path=%s", source.Path)
-		}
-	}
-	for _, name := range []string{"manifest.json", "README.md"} {
-		if _, _, err := c12Identity(filepath.Join(dir, name)); err != nil {
-			t.Fatalf("ASSERT_C12_PACKET_FILE path=%s", name)
-		}
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) != 2 {
-		t.Fatal("ASSERT_C12_PACKET_FILE_SET")
-	}
 }

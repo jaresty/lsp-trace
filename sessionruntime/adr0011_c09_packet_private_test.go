@@ -7,9 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
-	"reflect"
-	"strings"
 	"testing"
 
 	"lsp-trace/internal/strictjson"
@@ -103,58 +100,4 @@ func TestC09PortableDefinitionPacket(t *testing.T) {
 		ClaimCeiling:   []string{"NO_BROADER_MATRIX_CLOSURE", "NO_C10_AUTHORITY_OR_CLOSURE", "NO_C11_C12_RECERTIFICATION", "NO_C16_C18_RECERTIFICATION", "NO_LIVE_SERVER_OR_RUNTIME_PROOF", "NO_MANAGED_SESSION_IDENTITY", "NO_PRODUCTION_AUTHORITY"},
 		ActiveVerifier: "sessionruntime/adr0011_c09_packet_private_test.go",
 	})
-	return
-	const dir = "testdata/adr0011-c09-p2-v1"
-	info, err := os.Lstat(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			t.Fatal("ASSERT_C09_PORTABLE_PACKET_MISSING")
-		}
-		t.Fatal(err)
-	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		t.Fatal("ASSERT_C09_PACKET_ROOT")
-	}
-	raw, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var manifest c09PacketManifest
-	if err := c09Canonical(raw, &manifest); err != nil {
-		t.Fatalf("ASSERT_C09_PACKET_CANONICAL: %v", err)
-	}
-	wantCeiling := []string{"NO_BROADER_MATRIX_CLOSURE", "NO_C10_AUTHORITY_OR_CLOSURE", "NO_C11_C12_RECERTIFICATION", "NO_C16_C18_RECERTIFICATION", "NO_LIVE_SERVER_OR_RUNTIME_PROOF", "NO_MANAGED_SESSION_IDENTITY", "NO_PRODUCTION_AUTHORITY"}
-	wantCommand := []string{"go", "test", "./sessionruntime", "-run", "^(TestC09PrivateDefinitionDecodedRemarshalBoundary|TestC09PortableDefinitionPacket)$", "-count=1"}
-	wantNames := []string{"TestC09PrivateDefinitionDecodedRemarshalBoundary", "TestC09PortableDefinitionPacket"}
-	wantPassed := []string{"TestC09PrivateDefinitionDecodedRemarshalBoundary", "TestC09PrivateDefinitionDecodedRemarshalBoundary/size-1048575", "TestC09PrivateDefinitionDecodedRemarshalBoundary/size-1048576", "TestC09PrivateDefinitionDecodedRemarshalBoundary/size-1048577", "TestC09PortableDefinitionPacket"}
-	wantFailed := []string{}
-	wantAssertions := []string{"ASSERT_C09_DECODED_REMARSHAL_EXACT_SIZE", "ASSERT_C09_DECODED_REMARSHAL_ACCEPT", "ASSERT_C09_DECODED_REMARSHAL_PLUS_ONE", "ASSERT_C09_ACCEPTED_EXACT_CLEANUP", "ASSERT_C09_PLUS_ONE_NO_ACCEPTED_OBSERVATION", "ASSERT_C09_PLUS_ONE_NO_DOWNSTREAM_PUBLICATION", "ASSERT_C09_PLUS_ONE_SYNCHRONOUS_CLEANUP", "ASSERT_C09_PACKET_SOURCE_IDENTITY", "ASSERT_C09_PORTABLE_PACKET_MISSING"}
-	if manifest.SchemaVersion != "lsp-trace.private.adr0011-c09-definition-packet.v1" || manifest.Authority != "C09_HERMETIC_PRIVATE_DEFINITION_INGRESS_EVIDENCE" || manifest.Revision.Role != "PRE_C09_EVIDENCE_BASELINE" || manifest.Revision.Commit != "2074d1f3165d076ef50a68c08a7f9281880474d7" || manifest.Revision.Tree != "119eda1d6c9a4e6c366fc06e8a18ad2131230a0c" || !reflect.DeepEqual(manifest.ClaimCeiling, wantCeiling) || !reflect.DeepEqual(manifest.Command, wantCommand) || !reflect.DeepEqual(manifest.SelectedNames, wantNames) || manifest.SelectedCount != 2 || !manifest.ExpectedResult.ExitSuccess || manifest.ExpectedResult.PassedCount != 5 || manifest.ExpectedResult.FailedCount != 0 || !reflect.DeepEqual(manifest.ExpectedResult.PassedNames, wantPassed) || !reflect.DeepEqual(manifest.ExpectedResult.FailedNames, wantFailed) || !reflect.DeepEqual(manifest.ExpectedResult.Assertions, wantAssertions) {
-		t.Fatal("ASSERT_C09_PACKET_BINDING")
-	}
-	if len(manifest.Sources) != len(c09PacketSources) {
-		t.Fatal("ASSERT_C09_PACKET_SOURCE_DENOMINATOR")
-	}
-	root, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i, source := range manifest.Sources {
-		if source.Path != c09PacketSources[i] || filepath.IsAbs(source.Path) || filepath.Clean(source.Path) != source.Path || strings.Contains(source.Path, "\\") || strings.HasPrefix(source.Path, "../") || source.Path == "sessionruntime/testdata/adr0011-c09-p2-v1/manifest.json" {
-			t.Fatal("ASSERT_C09_PACKET_SOURCE_DENOMINATOR")
-		}
-		length, digest, identityErr := c09Identity(filepath.Join(root, filepath.FromSlash(source.Path)))
-		if identityErr != nil || length != source.ByteLength || digest != source.SHA256 {
-			t.Fatalf("ASSERT_C09_PACKET_SOURCE_IDENTITY path=%s", source.Path)
-		}
-	}
-	for _, name := range []string{"manifest.json", "README.md"} {
-		if _, _, err := c09Identity(filepath.Join(dir, name)); err != nil {
-			t.Fatalf("ASSERT_C09_PACKET_FILE path=%s", name)
-		}
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) != 2 {
-		t.Fatal("ASSERT_C09_PACKET_FILE_SET")
-	}
 }
