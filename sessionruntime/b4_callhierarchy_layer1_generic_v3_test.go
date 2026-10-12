@@ -84,15 +84,16 @@ type callHierarchyLayer1GenericV3DriverExternal struct {
 }
 
 type callHierarchyLayer1GenericV3DriverRequest struct {
-	DeadlineAfterNS int64   `json:"deadline_after_ns"`
-	Generation      uint64  `json:"generation"`
-	MaxBytes        int64   `json:"max_bytes"`
-	MaxMessages     int     `json:"max_messages"`
-	Method          string  `json:"method"`
-	ParamsHex       *string `json:"params_hex"`
-	ParamsState     string  `json:"params_state"`
-	RequestID       uint64  `json:"request_id"`
-	Session         string  `json:"session"`
+	AttachmentEnabled bool    `json:"attachment_enabled"`
+	DeadlineAfterNS   int64   `json:"deadline_after_ns"`
+	Generation        uint64  `json:"generation"`
+	MaxBytes          int64   `json:"max_bytes"`
+	MaxMessages       int     `json:"max_messages"`
+	Method            string  `json:"method"`
+	ParamsHex         *string `json:"params_hex"`
+	ParamsState       string  `json:"params_state"`
+	RequestID         uint64  `json:"request_id"`
+	Session           string  `json:"session"`
 }
 
 type callHierarchyLayer1GenericV3DriverTransport struct {
@@ -535,6 +536,10 @@ type callHierarchyLayer1GenericV3Actual struct {
 	preEffectRefusal string
 }
 
+type callHierarchyLayer1GenericV3EnabledAttachment interface {
+	privateCallHierarchyLayer1WithEnabled(bool) callHierarchyLayer1RequestAttachment
+}
+
 type callHierarchyLayer1GenericV3PredecessorAttachment interface {
 	privateCallHierarchyLayer1WithPredecessors([]callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment
 }
@@ -742,9 +747,9 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 	for i, predecessor := range record.Driver.CommitmentInputs.Predecessors {
 		predecessors[i] = callHierarchyLayer1GenericV3Commitment(t, fmt.Sprintf("driver.commitment_inputs.predecessors[%d]", i), predecessor)
 	}
-	setter, ok := any(attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+	enabledSetter, ok := any(attachment).(callHierarchyLayer1GenericV3EnabledAttachment)
 	if !ok {
-		setter, ok = any(&attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+		enabledSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3EnabledAttachment)
 	}
 	request := RoundTripRequest{
 		SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, Method: record.Driver.Request.Method,
@@ -753,9 +758,18 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 		callHierarchyLayer1: attachment,
 	}
 	if !ok {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithEnabled"}
+	}
+	attachment = enabledSetter.privateCallHierarchyLayer1WithEnabled(record.Driver.Request.AttachmentEnabled)
+	predecessorSetter, ok := any(attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+	if !ok {
+		predecessorSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+	}
+	request.callHierarchyLayer1 = attachment
+	if !ok {
 		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithPredecessors"}
 	}
-	request.callHierarchyLayer1 = setter.privateCallHierarchyLayer1WithPredecessors(predecessors)
+	request.callHierarchyLayer1 = predecessorSetter.privateCallHierarchyLayer1WithPredecessors(predecessors)
 	result := manager.RoundTrip(ctx, request)
 	if len(paramsSource) > 0 {
 		paramsSource[0] ^= 0xff
@@ -1241,10 +1255,115 @@ func callHierarchyLayer1GenericV3MutationChecks(t *testing.T, record callHierarc
 	}
 }
 
+func callHierarchyLayer1GenericV3AttachmentMappingErrors(worlds []callHierarchyLayer1GenericV3Loaded) []string {
+	if len(worlds) != 25 || worlds[23].envelope.Expected.Concurrency == nil || worlds[24].envelope.Expected.Comparison == nil {
+		return []string{"ASSERT_CH_GENERIC_V3_ATTACHMENT_MAPPING_SHAPE"}
+	}
+	errors := []string{}
+	physicalControls, workers, enabled, disabled := 0, 0, 0, 0
+	check := func(category string, record callHierarchyLayer1GenericV3Envelope, wantEnabled bool, wantControl bool) {
+		if record.Driver.Request.AttachmentEnabled != wantEnabled {
+			errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_ATTACHMENT_MAPPING category=%s got=%t want=%t", category, record.Driver.Request.AttachmentEnabled, wantEnabled))
+		}
+		if record.Driver.Request.AttachmentEnabled {
+			enabled++
+		} else {
+			disabled++
+		}
+		if wantControl {
+			physicalControls++
+			if record.Expected.Control == nil ||
+				record.Expected.Control.Enabled != record.Driver.Request.AttachmentEnabled ||
+				record.Expected.Control.AttachmentAvailable != record.Driver.Request.AttachmentEnabled ||
+				record.Expected.Control.ObservationAvailable != record.Driver.Request.AttachmentEnabled {
+				errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_ATTACHMENT_CONTROL category=%s present=%t", category, record.Expected.Control != nil))
+			}
+		} else {
+			workers++
+			if record.Expected.Control != nil {
+				errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_ATTACHMENT_WORKER_CONTROL_BORROW category=%s", category))
+			}
+		}
+	}
+	for i := range worlds {
+		check("root", worlds[i].envelope, true, true)
+	}
+	for i := range worlds[23].envelope.Expected.Concurrency.Workers {
+		check("world-24-worker", worlds[23].envelope.Expected.Concurrency.Workers[i], true, false)
+	}
+	comparison := worlds[24].envelope.Expected.Comparison
+	for i := range comparison.Executions {
+		check("standalone", comparison.Executions[i], i%2 == 0, true)
+	}
+	for i := range comparison.Pairs {
+		check("pair-disabled", comparison.Pairs[i].Disabled, false, true)
+		check("pair-enabled", comparison.Pairs[i].Enabled, true, true)
+	}
+	if physicalControls != 69 || workers != 16 || disabled != 22 || enabled != 63 {
+		errors = append(errors, fmt.Sprintf("ASSERT_CH_GENERIC_V3_ATTACHMENT_MAPPING_COUNTS controls=%d workers=%d disabled=%d enabled=%d", physicalControls, workers, disabled, enabled))
+	}
+	return errors
+}
+
+func callHierarchyLayer1GenericV3ValidateAttachmentMapping(t *testing.T, worlds []callHierarchyLayer1GenericV3Loaded) {
+	t.Helper()
+	for _, mappingError := range callHierarchyLayer1GenericV3AttachmentMappingErrors(worlds) {
+		t.Error(mappingError)
+	}
+}
+
+func TestCallHierarchyLayer1GenericV3AttachmentMappingControls(t *testing.T) {
+	worlds := callHierarchyLayer1GenericV3Load(t)
+	callHierarchyLayer1GenericV3ValidateAttachmentMapping(t, worlds)
+
+	t.Run("missing-physical-control", func(t *testing.T) {
+		copyWorlds := append([]callHierarchyLayer1GenericV3Loaded(nil), worlds...)
+		copyWorlds[0].envelope.Expected.Control = nil
+		if len(callHierarchyLayer1GenericV3AttachmentMappingErrors(copyWorlds)) == 0 {
+			t.Fatal("ASSERT_CH_GENERIC_V3_ATTACHMENT_MISSING_CONTROL_ACCEPTED")
+		}
+	})
+	for _, mismatch := range []struct {
+		name   string
+		mutate func(*callHierarchyLayer1CorpusControl)
+	}{
+		{"enabled-mismatch", func(control *callHierarchyLayer1CorpusControl) { control.Enabled = !control.Enabled }},
+		{"attachment-available-mismatch", func(control *callHierarchyLayer1CorpusControl) {
+			control.AttachmentAvailable = !control.AttachmentAvailable
+		}},
+		{"observation-available-mismatch", func(control *callHierarchyLayer1CorpusControl) {
+			control.ObservationAvailable = !control.ObservationAvailable
+		}},
+	} {
+		t.Run(mismatch.name, func(t *testing.T) {
+			copyWorlds := append([]callHierarchyLayer1GenericV3Loaded(nil), worlds...)
+			control := *copyWorlds[0].envelope.Expected.Control
+			mismatch.mutate(&control)
+			copyWorlds[0].envelope.Expected.Control = &control
+			if len(callHierarchyLayer1GenericV3AttachmentMappingErrors(copyWorlds)) == 0 {
+				t.Fatalf("ASSERT_CH_GENERIC_V3_ATTACHMENT_%s_ACCEPTED", mismatch.name)
+			}
+		})
+	}
+	t.Run("worker-control-borrow", func(t *testing.T) {
+		copyWorlds := append([]callHierarchyLayer1GenericV3Loaded(nil), worlds...)
+		workers := append([]callHierarchyLayer1GenericV3Envelope(nil), copyWorlds[23].envelope.Expected.Concurrency.Workers...)
+		control := *copyWorlds[0].envelope.Expected.Control
+		workers[0].Expected.Control = &control
+		concurrency := *copyWorlds[23].envelope.Expected.Concurrency
+		concurrency.Workers = workers
+		copyWorlds[23].envelope.Expected.Concurrency = &concurrency
+		if len(callHierarchyLayer1GenericV3AttachmentMappingErrors(copyWorlds)) == 0 {
+			t.Fatal("ASSERT_CH_GENERIC_V3_ATTACHMENT_WORKER_CONTROL_ACCEPTED")
+		}
+	})
+}
+
 func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 	expectedPaths := callHierarchyLayer1GenericV3ValidateExpectedSchema(t)
 	ordinaryAPaths, world24APaths := callHierarchyLayer1GenericV3Partition(t, expectedPaths)
 	worlds := callHierarchyLayer1GenericV3Load(t)
+	callHierarchyLayer1GenericV3ValidateAttachmentMapping(t, worlds)
 	if len(worlds) != 25 {
 		t.Fatalf("ASSERT_CH_GENERIC_V3_ROOTS got=%d want=25", len(worlds))
 	}
@@ -1362,7 +1481,10 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 		t.Fatal("ASSERT_CH_GENERIC_V3_EXECUTION_COUNTER_MISMATCH")
 	}
 	if prerequisiteReason != "" {
-		t.Errorf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE attempted=%d executed=%d pre_effect_refused=%d contract=RoundTripRequest.callHierarchyLayer1.privateCallHierarchyLayer1WithPredecessors+RoundTripResult.%s/View reason=%s", counters.attempted.Load(), counters.executed.Load(), counters.refused.Load(), callHierarchyLayer1GenericV3AcquireMethod, prerequisiteReason)
+		if prerequisiteReason != "request-attachment-method:privateCallHierarchyLayer1WithEnabled" || counters.attempted.Load() != 85 || counters.executed.Load() != 0 || counters.refused.Load() != 85 {
+			t.Fatalf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE_CROSS_RULE attempted=%d executed=%d pre_effect_refused=%d reason=%s", counters.attempted.Load(), counters.executed.Load(), counters.refused.Load(), prerequisiteReason)
+		}
+		t.Errorf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE attempted=85 executed=0 pre_effect_refused=85 contract=RoundTripRequest.callHierarchyLayer1.privateCallHierarchyLayer1WithEnabled reason=%s", prerequisiteReason)
 		return
 	}
 	callHierarchyLayer1GenericV3AssertLifecycle(t, worlds[0].envelope, &rootActuals[0].result)
