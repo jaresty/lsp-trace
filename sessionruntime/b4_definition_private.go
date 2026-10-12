@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"lsp-trace/internal/adr0011c18"
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
@@ -118,9 +119,10 @@ type privateB4ReservationC17 struct {
 }
 
 type privateB4Transaction struct {
-	legacy *privateB4Reservation
-	c16    *privateB4ReservationC16
-	c17    *privateB4ReservationC17
+	legacy      *privateB4Reservation
+	c16         *privateB4ReservationC16
+	c17         *privateB4ReservationC17
+	workAccount *adr0011work.Account
 }
 
 type privateB4Reservation struct {
@@ -153,6 +155,7 @@ type privateB4Reservation struct {
 	retainedNotifications *privateB4RetainedNotificationOwner
 	serverError           *privateB4ServerErrorOwner
 	retainedResponses     *privateB4RetainedResponseOwner
+	workAccount           *adr0011work.Account
 }
 
 func (r *privateB4Reservation) reservePrivateB4ExplicitBytes(capacities []uint64) session.Failure {
@@ -172,11 +175,32 @@ func (r *privateB4Reservation) reservePrivateB4ExplicitBytes(capacities []uint64
 	return ""
 }
 
-func (r *privateB4Reservation) reservePrivateB4RequestFrame(capacity uint64) session.Failure {
-	var leases [3]privateB4ByteLeaseV2
-	if _, failure := r.explicitBytes.reserveMany([]uint64{capacity, capacity, capacity}, leases[:]); failure != "" {
+func (r *privateB4Reservation) reservePrivateB4C15ExplicitBytes(capacities []uint64, creations []privateB4C15Creation) session.Failure {
+	if r == nil || r.explicitBytes == nil || len(capacities) != len(creations) {
+		return session.ResourceExhausted
+	}
+	remaining := r.explicitLeases[r.explicitLeaseCount:]
+	count, failure := r.explicitBytes.reserveManyPrivateB4C15(capacities, creations, remaining)
+	if failure != "" {
 		return failure
 	}
+	r.explicitLeaseCount += count
+	return ""
+}
+
+func (r *privateB4Reservation) reservePrivateB4RequestFrame(capacity uint64) session.Failure {
+	var leases [3]privateB4ByteLeaseV2
+	creations := [...]privateB4C15Creation{
+		{siteID: privateC15SiteC15Owner09RequestFrameCaptureCharge, operation: privateB4C15Operation("reserve")},
+		{siteID: privateC15SiteC15Owner10RequestFrameRetainedCharge, operation: privateB4C15Operation("reserve")},
+		{siteID: privateC15SiteC15Owner11CallerRequestFrame, operation: privateB4C15Operation("reserve")},
+	}
+	_ = privateC15SiteC15Owner09RequestFrameCaptureCharge
+	if _, failure := r.explicitBytes.reserveManyPrivateB4C15([]uint64{capacity, capacity, capacity}, creations[:], leases[:]); failure != "" {
+		return failure
+	}
+	_ = privateC15SiteC15Owner10RequestFrameRetainedCharge
+	_ = privateC15SiteC15Owner11CallerRequestFrame
 	r.requestFrameCapture, r.requestFrameRetained, r.requestFrameCaller = leases[0], leases[1], leases[2]
 	return ""
 }
@@ -236,13 +260,54 @@ func (r *privateB4Reservation) releasePrivateB4SourceStorage() {
 
 type privateB4ResponseCapture struct{ reservation *privateB4Reservation }
 
-type privateB4SuccessorAllocationOwner struct{ account *privateB4ByteAccountV2 }
+type privateB4SuccessorAllocationOwner struct {
+	account     *privateB4ByteAccountV2
+	workAccount *adr0011work.Account
+	identity    string
+}
 type privateB4SuccessorAllocationLease struct{ lease privateB4ByteLeaseV2 }
 
+func aliasPrivateB4SuccessorAllocation(lease lspwire.SuccessorAllocationLease, siteID string) session.Failure {
+	owned, ok := lease.(*privateB4SuccessorAllocationLease)
+	if !ok || owned == nil || owned.lease.account == nil {
+		return session.ResourceExhausted
+	}
+	return owned.lease.account.aliasPrivateB4C15(owned.lease.lease, siteID)
+}
+
 func (o privateB4SuccessorAllocationOwner) ReserveSuccessorAllocation(role lspwire.SuccessorAllocationRole, capacity uint64) (lspwire.SuccessorAllocationLease, error) {
-	lease, failure := o.account.reserve(capacity)
-	if failure != "" {
-		return nil, fmt.Errorf("%s: role=%d capacity=%d", failure, role, capacity)
+	siteID := role.C15SiteID()
+	if role == lspwire.SuccessorAllocationResultToken {
+		siteID = privateC15SiteC15Owner22ResultTokenReplacement
+	}
+	if siteID == "" {
+		return nil, fmt.Errorf("successor allocation refused: unknown role=%d", role)
+	}
+	operation := privateB4C15Operation("reserve")
+	if role == lspwire.SuccessorAllocationOriginalFrame || role == lspwire.SuccessorAllocationDecodedMessage {
+		operation = privateB4C15Operation("copy")
+	}
+	reserve := func() (privateB4ByteLeaseV2, error) {
+		lease, failure := o.account.reservePrivateB4C15(capacity, siteID, operation)
+		if failure != "" {
+			return privateB4ByteLeaseV2{}, fmt.Errorf("%s: role=%d capacity=%d", failure, role, capacity)
+		}
+		return lease, nil
+	}
+	if o.workAccount == nil {
+		lease, err := reserve()
+		if err != nil {
+			return nil, err
+		}
+		return &privateB4SuccessorAllocationLease{lease: lease}, nil
+	}
+	var lease privateB4ByteLeaseV2
+	if err := o.workAccount.WithLogicalBufferReservation(o.identity, capacity, func() error {
+		var err error
+		lease, err = reserve()
+		return err
+	}); err != nil {
+		return nil, fmt.Errorf("successor allocation refused: role=%d capacity=%d: %w", role, capacity, err)
 	}
 	return &privateB4SuccessorAllocationLease{lease: lease}, nil
 }
@@ -289,6 +354,7 @@ func (c privateB4ResponseCapture) ObserveOriginalResult(result []byte) {
 }
 
 func (c privateB4ResponseCapture) ObserveOriginalResultOwned(result []byte, lease lspwire.SuccessorAllocationLease) {
+	_ = privateC15SiteC15Owner22ResultTokenReplacement
 	if previous := c.reservation.resultOwner; previous != nil {
 		c.reservation.capture.Result = nil
 		previous.releaseManager()
@@ -315,7 +381,9 @@ func privateB4SuccessorOptions(reservation *privateB4Reservation) lspwire.Succes
 		},
 	}
 	if reservation.explicitBytes != nil && !reservation.nonCustodial {
-		options.AllocationOwner = privateB4SuccessorAllocationOwner{account: reservation.explicitBytes}
+		options.AllocationOwner = privateB4SuccessorAllocationOwner{
+			account: reservation.explicitBytes, workAccount: reservation.workAccount, identity: reservation.selection.Transaction,
+		}
 	}
 	return options
 }
@@ -326,6 +394,7 @@ type privateB4Slot struct {
 	reservation *privateB4Reservation
 	c16         *privateB4ReservationC16
 	c17         *privateB4ReservationC17
+	workAccount *adr0011work.Account
 }
 
 const (
@@ -335,11 +404,12 @@ const (
 )
 
 type privateB4SourceLease struct {
-	manager *Manager
-	session *runtimeSession
-	source  B4DefinitionTargetSource
-	state   atomic.Uint32
-	ingress privateB4SourceIngressLease
+	manager        *Manager
+	session        *runtimeSession
+	source         B4DefinitionTargetSource
+	state          atomic.Uint32
+	ingress        privateB4SourceIngressLease
+	contentIngress privateB4SourceIngressLease
 }
 
 // PreparePrivateB4DefinitionSource issues a capability only from the exact
@@ -374,12 +444,22 @@ func (m *Manager) PreparePrivateB4DefinitionSource(ref B4DefinitionSourceReferen
 			return B4DefinitionSourceLease{}, PrivateB4Unavailable
 		}
 	}
+	beforeCumulative := m.privateB4SourceIngress.cumulative
+	_ = privateC15SiteC15Owner05PerSourceIngressState
 	ingress, failure := m.privateB4SourceIngress.reserve(privateB4SourceIngressStateBytes, nil)
 	if failure != "" {
 		return B4DefinitionSourceLease{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Copy03PreparedSourceContent
+	contentIngress, failure := m.privateB4SourceIngress.reserve(uint64(len(document.supply.Content)), nil)
+	if failure != "" {
+		ingress.release()
+		m.privateB4SourceIngress.cumulative = beforeCumulative
+		return B4DefinitionSourceLease{}, PrivateB4Unavailable
+	}
 	var identity [32]byte
 	if _, err := io.ReadFull(rand.Reader, identity[:]); err != nil || identity == ([32]byte{}) {
+		contentIngress.release()
 		ingress.release()
 		return B4DefinitionSourceLease{}, PrivateB4Unavailable
 	}
@@ -387,8 +467,9 @@ func (m *Manager) PreparePrivateB4DefinitionSource(ref B4DefinitionSourceReferen
 	state := &privateB4SourceLease{manager: m, session: r, source: B4DefinitionTargetSource{
 		URI: ref.URI, AcquisitionID: "sha256:" + fmtDigest(identity), SHA256: privateB4Hash(content),
 		SessionID: ref.SessionID, Generation: ref.Generation, DocumentVersion: ref.DocumentVersion, Bytes: content,
-	}, ingress: ingress}
+	}, ingress: ingress, contentIngress: contentIngress}
 	state.ingress.entry().state = state
+	state.contentIngress.entry().state = state
 	return B4DefinitionSourceLease{state: state}, PrivateB4Selected
 }
 
@@ -399,10 +480,12 @@ func (m *Manager) ReleasePrivateB4DefinitionSource(lease B4DefinitionSourceLease
 		return PrivateB4Unavailable
 	}
 	entry := lease.state.ingress.entry()
-	if entry == nil || entry.state != lease.state {
+	contentEntry := lease.state.contentIngress.entry()
+	if entry == nil || entry.state != lease.state || contentEntry == nil || contentEntry.state != lease.state {
 		lease.state.state.Store(privateB4SourceHeld)
 		return PrivateB4Unavailable
 	}
+	lease.state.contentIngress.release()
 	lease.state.ingress.release()
 	lease.state.source.Bytes = nil
 	return PrivateB4Selected
@@ -424,15 +507,24 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		req.CaptureMethodRequestFrameMaxBytes <= 0 || req.CaptureMethodRequestFrameMaxBytes > maxMethodFrameCorrespondenceBytes {
 		return RoundTripResult{Failure: session.ToolNotImplemented}, B4DefinitionLease{}
 	}
-	account, accountFailure := newPrivateB4ByteAccountV2()
+	workAccount, hasWorkAccount := adr0011work.AccountFromContext(parent)
+	if hasWorkAccount && workAccount.Snapshot().Identity != owner.Transaction {
+		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
+	}
+	c15, contextFailure := m.privateB4C15ContextFor(req.SessionID, req.Generation, owner.Transaction)
+	if contextFailure != "" {
+		return RoundTripResult{Failure: contextFailure}, B4DefinitionLease{}
+	}
+	account, accountFailure := newPrivateB4ByteAccountV2(c15)
 	if accountFailure != "" {
 		return RoundTripResult{Failure: accountFailure}, B4DefinitionLease{}
 	}
 	reservation := &privateB4Reservation{
 		selection:     B4DefinitionSelectionKey{Transaction: owner.Transaction, CompletedOwnerKey: owner.CompletedOwnerKey},
 		explicitBytes: account,
+		workAccount:   workAccount,
 	}
-	transaction := &privateB4Transaction{legacy: reservation}
+	transaction := &privateB4Transaction{legacy: reservation, workAccount: workAccount}
 	if req.EnablePrivateC16ObjectAccounting {
 		profile, failure := newPrivateB4AccountC16WithBytes(account)
 		if failure != "" {
@@ -466,6 +558,9 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 			} else {
 				account.requestTerminalRelease()
 			}
+			if workAccount != nil {
+				workAccount.Seal()
+			}
 		}
 	}()
 	if m.b4ParamsHook != nil {
@@ -482,10 +577,15 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 	// allocation. Source bytes are resolved only from exact live Manager-held
 	// prepared document records while Manager.mu is held by admission.
 	handleSize := uint64(unsafe.Sizeof(B4DefinitionSourceLease{}))
-	if uint64(len(owner.TargetSources)) > math.MaxUint64/handleSize ||
-		reservation.reservePrivateB4ExplicitBytes([]uint64{uint64(len(owner.TargetSources)) * handleSize, uint64(len(req.Params))}) != "" {
+	persistentCapacities := []uint64{uint64(len(owner.TargetSources)) * handleSize, uint64(len(req.Params))}
+	persistentCreations := []privateB4C15Creation{
+		{siteID: privateC15SiteC15Copy06SourceLeaseHandleSlice, operation: privateB4C15Operation("copy")},
+		{siteID: privateC15SiteC15Copy37PersistentCaptureParams, operation: privateB4C15Operation("copy")},
+	}
+	if uint64(len(owner.TargetSources)) > math.MaxUint64/handleSize || reservation.reservePrivateB4C15ExplicitBytes(persistentCapacities, persistentCreations) != "" {
 		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
 	}
+	_ = privateC15SiteC15Copy06SourceLeaseHandleSlice
 	reservation.sourceLeases = make([]B4DefinitionSourceLease, len(owner.TargetSources))
 	copy(reservation.sourceLeases, owner.TargetSources)
 	if failure := reservation.reservePrivateB4RequestFrame(uint64(req.CaptureMethodRequestFrameMaxBytes)); failure != "" {
@@ -560,6 +660,7 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		m.releasePrivateB4Locked(reservation)
 		return result, B4DefinitionLease{}
 	}
+	_ = privateC15SiteC15Copy37PersistentCaptureParams
 	capture := PrivateB4DefinitionCapture{
 		SessionID: req.SessionID, Key: result.Key, Transaction: owner.Transaction,
 		CompletedOwnerKey: owner.CompletedOwnerKey, Method: req.Method,
@@ -727,6 +828,7 @@ func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservati
 	owned := make([]B4DefinitionTargetSource, len(admitted))
 	for i, source := range admitted {
 		owned[i] = source.source
+		_ = privateC15SiteC15Copy07TransactionSourceBytes
 		owned[i].Bytes = append([]byte(nil), source.source.Bytes...)
 	}
 	reservation.maxCharge = charge
@@ -747,15 +849,40 @@ func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservati
 				_ = admission.rollback()
 			}
 		}()
-		if err := admission.seal(); err != nil {
+	}
+
+	var transferFailure session.Failure
+	transfer := func() error {
+		if profile != nil {
+			if err := admission.seal(); err != nil {
+				return err
+			}
+		}
+		descriptor, failure := m.privateB4SourceIngress.transferStates(seenLease, reservation.explicitBytes)
+		if failure != "" {
+			transferFailure = failure
+			return errPrivateB4EventAdmission
+		}
+		reservation.sourceDescriptor = descriptor
+		return nil
+	}
+	if profile != nil && reservation.workAccount != nil {
+		n := uint64(len(admitted))
+		if n > (math.MaxUint64-2)/2 {
 			return session.ResourceExhausted
 		}
+		if err := reservation.workAccount.WithEventsEmitted(reservation.selection.Transaction, 2+2*n, transfer); err != nil {
+			if transferFailure != "" {
+				return transferFailure
+			}
+			return session.ResourceExhausted
+		}
+	} else if err := transfer(); err != nil {
+		if transferFailure != "" {
+			return transferFailure
+		}
+		return session.ResourceExhausted
 	}
-	descriptor, failure := m.privateB4SourceIngress.transferStates(seenLease, reservation.explicitBytes)
-	if failure != "" {
-		return failure
-	}
-	reservation.sourceDescriptor = descriptor
 	for source := range seenLease {
 		source.state.Store(privateB4SourceTransferred)
 	}
@@ -774,7 +901,7 @@ func (m *Manager) installPrivateB4Locked(_ RoundTripRequest, _ *runtimeSession, 
 
 func (m *Manager) installPrivateB4TransactionLocked(_ RoundTripRequest, _ *runtimeSession, transaction *privateB4Transaction) {
 	reservation := transaction.legacy
-	m.privateB4Leases[reservation.slot] = privateB4Slot{occupied: true, token: reservation.token, reservation: reservation, c16: transaction.c16, c17: transaction.c17}
+	m.privateB4Leases[reservation.slot] = privateB4Slot{occupied: true, token: reservation.token, reservation: reservation, c16: transaction.c16, c17: transaction.c17, workAccount: transaction.workAccount}
 	m.privateB4Bytes += reservation.maxCharge
 }
 
@@ -834,6 +961,9 @@ func (m *Manager) releasePrivateB4Locked(reservation *privateB4Reservation) {
 		}
 		reservation.releasePrivateB4ExplicitBytes()
 		reservation.explicitBytes.requestTerminalRelease()
+		if reservation.workAccount != nil {
+			reservation.workAccount.Seal()
+		}
 		*slot = privateB4Slot{}
 		m.privateB4Bytes -= reservation.maxCharge
 	}
@@ -908,6 +1038,7 @@ func (m *Manager) retirePrivateB4StoppedLocked(id string, generation uint64, sto
 	if stopped == nil || stopped.record.Generation != generation {
 		return join
 	}
+	m.retirePrivateB4C15ContextLocked(id, generation)
 	stopped.readinessHistory.retireLocked()
 	for i := range m.privateB4Leases {
 		reservation := m.privateB4Leases[i].reservation
@@ -956,22 +1087,36 @@ func (m *Manager) privateB4CaptureLocked(lease B4DefinitionLease, selection B4De
 		return nil, PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	capture := reservation.capture
-	var capacities [3 + privateB4MaxSourceDocuments]uint64
+	var capacities [4 + privateB4MaxSourceDocuments]uint64
 	capacities[0] = uint64(len(capture.RequestFrame))
 	capacities[1] = uint64(len(capture.RequestParams))
 	capacities[2] = uint64(len(capture.ResponseFrame))
+	capacities[3] = uint64(len(capture.TargetSources)) * privateB4C15TargetSourceDescriptorBytes
 	for i := range capture.TargetSources {
-		capacities[3+i] = uint64(len(capture.TargetSources[i].Bytes))
+		capacities[4+i] = uint64(len(capture.TargetSources[i].Bytes))
 	}
-	if failure := reservation.reservePrivateB4ExplicitBytes(capacities[:3+len(capture.TargetSources)]); failure != "" {
+	var creations [4 + privateB4MaxSourceDocuments]privateB4C15Creation
+	creations[0] = privateB4C15Creation{siteID: privateC15SiteC15Copy39FinalCaptureRequestFrame, operation: privateB4C15Operation("copy")}
+	creations[1] = privateB4C15Creation{siteID: privateC15SiteC15Copy40FinalCaptureRequestParams, operation: privateB4C15Operation("copy")}
+	creations[2] = privateB4C15Creation{siteID: privateC15SiteC15Copy41FinalCaptureResponseFrame, operation: privateB4C15Operation("copy")}
+	creations[3] = privateB4C15Creation{siteID: privateC15SiteC15Copy42aFinalCaptureTargetSlice, operation: privateB4C15Operation("copy")}
+	for i := range capture.TargetSources {
+		creations[4+i] = privateB4C15Creation{siteID: privateC15SiteC15Copy42bFinalCaptureSourceBytes, operation: privateB4C15Operation("copy")}
+	}
+	if failure := reservation.reservePrivateB4C15ExplicitBytes(capacities[:4+len(capture.TargetSources)], creations[:4+len(capture.TargetSources)]); failure != "" {
 		return nil, PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Copy39FinalCaptureRequestFrame
 	capture.RequestFrame = append([]byte(nil), capture.RequestFrame...)
+	_ = privateC15SiteC15Copy40FinalCaptureRequestParams
 	capture.RequestParams = append([]byte(nil), capture.RequestParams...)
+	_ = privateC15SiteC15Copy41FinalCaptureResponseFrame
 	capture.ResponseFrame = append([]byte(nil), capture.ResponseFrame...)
 	capture.Result = nil
+	_ = privateC15SiteC15Copy42aFinalCaptureTargetSlice
 	capture.TargetSources = append([]B4DefinitionTargetSource(nil), capture.TargetSources...)
 	for i := range capture.TargetSources {
+		_ = privateC15SiteC15Copy42bFinalCaptureSourceBytes
 		capture.TargetSources[i].Bytes = append([]byte(nil), capture.TargetSources[i].Bytes...)
 	}
 	return reservation, capture, PrivateB4Selected
@@ -983,17 +1128,26 @@ type PrivateB4DefinitionBorrow struct {
 	Capture PrivateB4DefinitionCapture
 	Result  []byte
 
-	c16 *privateB4ReservationC16
-	c17 *privateB4EventAccountC17
+	c16          *privateB4ReservationC16
+	c17          *privateB4EventAccountC17
+	workAccount  *adr0011work.Account
+	workIdentity string
 }
 
 // WithObjectAdmission admits one parser-owned C16 materialization. Copies of
 // an enabled borrow share the same versioned profile.
 func (b PrivateB4DefinitionBorrow) WithObjectAdmission(materialize func() error) error {
+	admit := materialize
+	if b.c16 != nil && b.c16.profile != nil {
+		admit = func() error { return b.c16.profile.WithObjectAdmission(materialize) }
+	}
+	if b.workAccount != nil {
+		return b.workAccount.WithObjectMaterialization(b.workIdentity, admit)
+	}
 	if b.c16 == nil || b.c16.profile == nil {
 		return ErrPrivateB4C16NotEnabled
 	}
-	return b.c16.profile.WithObjectAdmission(materialize)
+	return admit()
 }
 
 // WithTargetAppendAdmission atomically admits one original target ordinal's
@@ -1002,7 +1156,12 @@ func (b PrivateB4DefinitionBorrow) WithTargetAppendAdmission(originalOrdinal uin
 	if b.c17 == nil {
 		return ErrPrivateB4C17NotEnabled
 	}
-	return b.c17.withTargetAppendAdmission(originalOrdinal, appendCanonical)
+	return b.c17.withTargetAppendAdmission(originalOrdinal, func() error {
+		if b.workAccount != nil {
+			return b.workAccount.WithEventsEmitted(b.workIdentity, 2, appendCanonical)
+		}
+		return appendCanonical()
+	})
 }
 
 // PreparePrivateB4DefinitionBorrowed presents the manager-owned lexical result
@@ -1014,8 +1173,14 @@ func (m *Manager) PreparePrivateB4DefinitionBorrowed(lease B4DefinitionLease, se
 	if status != PrivateB4Selected || reservation.resultOwner == nil || prepare == nil {
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Alias43BorrowedLexicalResult
+	if aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias43BorrowedLexicalResult) != "" {
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
+	}
 	result, ok := reservation.resultOwner.managerBytes()
-	if !ok || !prepare(PrivateB4DefinitionBorrow{Capture: capture, Result: result}) {
+	_ = privateC15SiteC15Alias44BorrowedCaptureValues
+	if !ok || aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias44BorrowedCaptureValues) != "" ||
+		!prepare(PrivateB4DefinitionBorrow{Capture: capture, Result: result, workAccount: reservation.workAccount, workIdentity: reservation.selection.Transaction}) {
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	return capture, PrivateB4Selected
@@ -1031,8 +1196,14 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowed(lease B4DefinitionLease, sel
 		m.mu.Unlock()
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Alias43BorrowedLexicalResult
+	if aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias43BorrowedLexicalResult) != "" {
+		m.mu.Unlock()
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
+	}
 	result, ok := reservation.resultOwner.managerBytes()
-	if !ok {
+	_ = privateC15SiteC15Alias44BorrowedCaptureValues
+	if !ok || aliasPrivateB4SuccessorAllocation(reservation.resultOwner.charge, privateC15SiteC15Alias44BorrowedCaptureValues) != "" {
 		m.mu.Unlock()
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
@@ -1042,7 +1213,7 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowed(lease B4DefinitionLease, sel
 	if slot.c17 != nil {
 		c17 = slot.c17.profile
 	}
-	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17}
+	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17, workAccount: slot.workAccount, workIdentity: reservation.selection.Transaction}
 	if c16 == nil {
 		defer m.mu.Unlock()
 		if !prepare(borrow) {
@@ -1125,7 +1296,7 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowedC17(lease B4DefinitionLease, 
 		m.mu.Unlock()
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, err
 	}
-	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17}
+	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17, workAccount: slot.workAccount, workIdentity: reservation.selection.Transaction}
 	m.mu.Unlock()
 
 	prepared := false

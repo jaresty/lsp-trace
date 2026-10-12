@@ -1,0 +1,63 @@
+{
+  "schema": "lsp-trace.adr0011-stage7-consolidated-audit.v1",
+  "audit_id": "ADR0011-STAGE7-CONSOLIDATED-2026-10-10",
+  "repository": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+  "head": "abeb85617e1433a16948a66578222de226552145",
+  "head_tree": "900f95b9d9028fbfb4815da7d249f84ac6130fb9",
+  "authorization_receipt": "20261010144719-5679",
+  "analysis_receipt": "20261010153130-5881",
+  "authorized_commits": [
+    {"commit":"ee51948fb958d99e4bcd1344116521eea37cf023","tree":"c90c3e9d171a73ba022b5da3adc1e66f6f6f407a","role":"design-coupling requirement"},
+    {"commit":"9176364b6a91adadae618ee973b96a747ce8f55c","tree":"c70f44d37da9d4ce00ada145d66e61664d641092","role":"Stage 7A source context"},
+    {"commit":"d414f56b4b3bb7c86de2832fdefc401200c5559a","tree":"657c4a9700bcd57a6d9846ff32997af74a14cb65","role":"Stage 7B packet and replay custody"},
+    {"commit":"abeb85617e1433a16948a66578222de226552145","tree":"900f95b9d9028fbfb4815da7d249f84ac6130fb9","role":"Stage 7C coupling and instability"}
+  ],
+  "changed_paths": [
+    "docs/adr/0011-versioned-definition-reference-grouping-evidence.md",
+    "internal/programc/stage7c_artifacts_red_test.go",
+    "internal/programc/stage7c_coupling.go",
+    "internal/programc/stage7c_instability.go",
+    "internal/programcrepresentative/source_context.go",
+    "internal/programcrepresentative/source_context_red_test.go",
+    "internal/programcrepresentative/stage7b_causal_red_test.go",
+    "internal/programcrepresentative/stage7b_custody.go"
+  ],
+  "gates": [
+    {"id":1,"name":"exact predecessor and source-context binding","status":"PASS","evidence":["Stage7A independent query/reference and target roles","distinct evidence/item/selection/display/context ranges","exact document/session/generation/version/revision/digest/byte custody","deterministic interning without occurrence deduplication","exhaustive predecessor substitution and resealed-mutation rejection"],"retained_fields":["identity","digest","byteLength","representativeIdentity","representativeDigest","representativeLength","policyIdentity","policyDigest","roles","points","spans","bindings","documents","candidates","accounting","limits"]},
+    {"id":2,"name":"packet checkpoint and replay reconstruction","status":"PASS","evidence":["private additive v2 snapshot","community target packet","checkpoint","replay request","replay result","workspace-free byte-identical replay or typed atomic failure","requested identity and replay-limit custody"],"retained_fields":["schema","identity","digest","byteLength","canonicalBytes","exact predecessor objects","outputs","accounting"]},
+    {"id":3,"name":"representative eligibility and disclosures","status":"PASS","evidence":["CALLS-only representative eligibility","historical prepared-root and reached-node selection","D/R visibility with selection neutrality","NO_CALLS_REPRESENTATIVE termination","community and target disclosures"]},
+    {"id":4,"name":"relation-scoped coupling and historical CALLS reproduction","status":"PASS","evidence":["CALLS","REFERENCES_SYMBOL","RESOLVES_TO_DEFINITION","qualification-gated COMBINED","actual typed-occurrence graph","exact Ca Ce and reduced rational instability","historical Robert Martin coupling reproduction"],"retained_fields":["scope","graph identity schema digest length bytes","projection identity schema digest length bytes","per-family evidence custody","nodes","Ca","Ce","exact rational","claims"]},
+    {"id":5,"name":"cross-seed instability using actual successor results","status":"PASS","evidence":["explicit retained successor partition bytes","label-independent matching","all seed pairs","exact rational threshold comparison using 128-bit products","result node inventory validation","publication outcome"],"retained_fields":["declaredSeeds","runs","result identity digest length bytes","pairs","parameters","threshold","runAccounting","pairAccounting"]},
+    {"id":6,"name":"D/R-only mixed empty and unavailable-policy behavior","status":"PASS","evidence":["eight actual relation-mode combinations plus empty input","typed zero denominator","COMBINED_QUALIFICATION_UNAVAILABLE when qualification composition or readiness is absent stale or forged","D/R mixed and empty publication blocked unless independently qualified"]},
+    {"id":7,"name":"exact accounting and publication blocking","status":"PASS","evidence":["Stage 7A balanced source-context accounting","Stage 7B independent replay accounting oracle","Stage 7C expected complete failed incomplete missing terminal run accounting","expected complete blocked pair accounting","atomic zero-effect failures","all publication blockers"]},
+    {"id":8,"name":"canonical parsing and resealed-forgery rejection","status":"PASS","evidence":["strict LF JSON","duplicate unknown trailing CRLF and noncanonical rejection","semantic recomputation after parse","nested predecessor and carrier reseal rejection","scope family inventory claim ceiling accounting partition and publication validation"]},
+    {"id":9,"name":"historical byte and reader compatibility","status":"PASS","evidence":["historical target-packet canonical fixture","existing v1 parsers and readers","historical CALLS representative coupling Ca Ce and instability","historical instability schema and policy digest","byte-identical reproduction"]},
+    {"id":10,"name":"claim ceilings","status":"PASS","claims":{"authority":0,"accepted":false,"completeness":"UNKNOWN","featureIdentity":"UNRESOLVED"}},
+    {"id":11,"name":"race and downstream compatibility","status":"PASS","evidence":["Stage7C race 73 passed","Program C plus representative race 1053 passed","eight-package downstream 2434 passed","target-packet historical fixture 1 passed","eight-package go vet passed","git diff --check passed"]},
+    {"id":12,"name":"absence of public exposure and ADR 0007 composition","status":"PASS","evidence":["empty authorized-range diff under cmd internal/mcp internal/cli and ADR 0007","no CLI MCP schema live-public capability migration execution release or deployment","no ADR 0007 composition performed"]}
+  ],
+  "canonical_contracts": {
+    "source_context_outcomes":["SELECTED","UNAVAILABLE","AMBIGUOUS","WITHHELD","LIMIT_OMITTED"],
+    "coupling_scopes":["CALLS","REFERENCES_SYMBOL","RESOLVES_TO_DEFINITION","COMBINED"],
+    "combined_unavailable":"COMBINED_QUALIFICATION_UNAVAILABLE",
+    "successor_run_states":["COMPLETE","FAILED","INCOMPLETE","MISSING"],
+    "successor_readiness":["READY","PUBLICATION_BLOCKED"],
+    "numeric_policy":"EXACT_REDUCED_NONNEGATIVE_INTEGER_RATIONAL_V1",
+    "canonical_encoding":"deterministic LF-terminated JSON with exact digest and byte length"
+  },
+  "verification": [
+    {"command":"go test -race ./internal/programc -run Stage7C -count=1","result":"PASS","tests":73},
+    {"command":"go test -race ./internal/programc ./internal/programcrepresentative -count=1","result":"PASS","tests":1053},
+    {"command":"go test ./internal/programc ./internal/programcadmission ./internal/referencegrouping ./internal/programcrepresentative ./internal/graphkernel ./internal/targetpacket ./internal/censuscontinuation ./internal/retainedreplay -count=1","result":"PASS","tests":2434},
+    {"command":"go test ./internal/targetpacket -run ^TestASSERT_P8_CANONICAL_VALIDATION$ -count=1","result":"PASS","tests":1},
+    {"command":"go vet ./internal/programc ./internal/programcrepresentative ./internal/programcadmission ./internal/referencegrouping ./internal/graphkernel ./internal/targetpacket ./internal/censuscontinuation ./internal/retainedreplay","result":"PASS"},
+    {"command":"git diff --check c2f4b427..abeb8561","result":"PASS"},
+    {"command":"git diff --name-only ee51948f^..abeb8561 -- cmd internal/mcp internal/cli docs/adr/0007-optional-local-semantic-feature-index.md","result":"PASS_EMPTY"}
+  ],
+  "verification_note":"One combined eight-package race command exceeded a 900-second harness bound without reporting a test failure. Per the tiered Go verification protocol, concurrency was verified on the changed Program C and representative packages and all eight packages were verified normally and by go vet.",
+  "historical_compatibility":"Existing v1 bytes, parsers, readers, CALLS selection, coupling, Ca/Ce, instability, packets, checkpoints, and replay remain authoritative and unchanged.",
+  "publication_boundary":"Production D/R and mixed-family publication remains default-off without independently verified Stage 4 qualification and Stage 5 composition/readiness evidence. Missing failed incomplete unstable stale or unqualified evidence blocks publication.",
+  "non_goals":["public execution","CLI exposure","MCP exposure","live Structural Context wiring","ADR 0007 composition","migration","push","release","deployment","semantic acceptance"],
+  "backlink_decision":"The optional non-semantic backlink to provisional workflow decision commit 4f5743ff was not applied in this audit artifact commit to keep the audited range isolated.",
+  "candidate_terminal_result":"STAGE7_CONSOLIDATED_AUDIT_GO"
+}

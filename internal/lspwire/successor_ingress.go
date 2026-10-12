@@ -42,7 +42,27 @@ type SuccessorAllocationOwner interface {
 	ReserveSuccessorAllocation(role SuccessorAllocationRole, capacity uint64) (SuccessorAllocationLease, error)
 }
 type SuccessorAllocationLease interface{ Release() }
+
 type SuccessorAllocationRole uint8
+
+func (r SuccessorAllocationRole) C15SiteID() string {
+	switch r {
+	case SuccessorAllocationPrefetch:
+		return privateC15SiteC15Owner14SuccessorPrefetch
+	case SuccessorAllocationHeader:
+		return privateC15SiteC15Owner15SuccessorHeader
+	case SuccessorAllocationConsumeScratch:
+		return privateC15SiteC15Owner16SuccessorConsumeScratch
+	case SuccessorAllocationBody:
+		return privateC15SiteC15Owner17SuccessorBody
+	case SuccessorAllocationOriginalFrame:
+		return privateC15SiteC15Copy18OriginalResponseFrame
+	case SuccessorAllocationDecodedMessage:
+		return privateC15SiteC15Copy23DecodedMessageClone
+	default:
+		return ""
+	}
+}
 
 const (
 	SuccessorAllocationPrefetch SuccessorAllocationRole = iota + 1
@@ -318,6 +338,7 @@ func NewSuccessorIngressReader(rd io.Reader, o SuccessorIngressOptions) (*Succes
 	}
 	r := &SuccessorIngressReader{transport: rd, options: o, storage: newIngressStorageLedger(^uint64(0)), nextStorageID: 1}
 	if o.AllocationOwner != nil {
+		_ = privateC15SiteC15Owner14SuccessorPrefetch
 		lease, err := o.AllocationOwner.ReserveSuccessorAllocation(SuccessorAllocationPrefetch, 4096)
 		if err != nil || lease == nil {
 			return nil, errIngressReserve
@@ -509,6 +530,7 @@ func (r *SuccessorIngressReader) consumeCopy(dst *[]byte, n int) error {
 	}
 	var scratchAllocation SuccessorAllocationLease
 	if n > 0 && r.options.AllocationOwner != nil {
+		_ = privateC15SiteC15Owner16SuccessorConsumeScratch
 		lease, err := r.options.AllocationOwner.ReserveSuccessorAllocation(SuccessorAllocationConsumeScratch, uint64(n))
 		if err != nil || lease == nil {
 			return r.terminate(ingressReached{Reserve: errIngressReserve}).Outcome
@@ -540,6 +562,7 @@ func (r *SuccessorIngressReader) ReadFrame() (Message, error) {
 	headerCapacity := int(r.options.Limits.HeaderBytes) + 1
 	var headerAllocation SuccessorAllocationLease
 	if r.options.AllocationOwner != nil {
+		_ = privateC15SiteC15Owner15SuccessorHeader
 		lease, err := r.options.AllocationOwner.ReserveSuccessorAllocation(SuccessorAllocationHeader, uint64(headerCapacity))
 		if err != nil || lease == nil {
 			return Message{}, r.terminate(ingressReached{Reserve: errIngressReserve}).Outcome
@@ -608,6 +631,7 @@ func (r *SuccessorIngressReader) ReadFrame() (Message, error) {
 	}
 	var bodyAllocation SuccessorAllocationLease
 	if length > 0 && r.options.AllocationOwner != nil {
+		_ = privateC15SiteC15Owner17SuccessorBody
 		lease, err := r.options.AllocationOwner.ReserveSuccessorAllocation(SuccessorAllocationBody, uint64(length))
 		if err != nil || lease == nil {
 			return Message{}, r.terminate(ingressReached{Reserve: errIngressReserve}).Outcome
@@ -672,6 +696,7 @@ func (r *SuccessorIngressReader) ReadFrame() (Message, error) {
 		}
 		return Message{}, r.terminate(ingressReached{Reserve: errIngressReserve}).Outcome
 	}
+	_ = privateC15SiteC15Copy18OriginalResponseFrame
 	frame := make([]byte, 0, frameCapacity)
 	frame = append(frame, header...)
 	frame = append(frame, body...)
@@ -724,6 +749,7 @@ func (r *SuccessorIngressReader) ReadFrame() (Message, error) {
 			if reserveErr != nil || lease == nil {
 				return Message{}, r.terminate(ingressReached{Reserve: errIngressReserve}).Outcome
 			}
+			_ = privateC15SiteC15Copy21ExactResultToken
 			capture.ObserveOriginalResultOwned(append([]byte(nil), body[start:end]...), lease)
 		} else if capture, ok := r.options.Capture.(successorResultCapturePolicy); ok {
 			capture.ObserveOriginalResult(append([]byte(nil), body[start:end]...))
@@ -755,6 +781,7 @@ func CloneSuccessorMessageOwned(m Message, owner SuccessorAllocationOwner) (Mess
 	if owner == nil {
 		return Message{}, nil, ErrSuccessorAllocationRefused
 	}
+	_ = privateC15SiteC15Copy23DecodedMessageClone
 	capacity := SuccessorMessageRetainedCapacity(m)
 	lease, err := owner.ReserveSuccessorAllocation(SuccessorAllocationDecodedMessage, capacity)
 	if err != nil || lease == nil {

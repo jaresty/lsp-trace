@@ -1,0 +1,14 @@
+--- FAIL: TestCallHierarchyLayer1GenericV3CorpusCausalRED (0.08s)
+    --- FAIL: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-07 (0.00s)
+        b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_messages.after got=0 expected=1
+        b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_messages.delta got=0 expected=1
+        b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_messages.known_zero got=true expected=false
+        b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=transport.messages.known_zero got=true expected=false
+        b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=transport.messages.value got=0 expected=1
+        b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_A_COMPLETENESS_world-07 compared=111 errors=5 want_compared=116 want_errors=0
+        b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-07 registry=116 compared=111 skipped=0 errors=5
+    b4_callhierarchy_layer1_generic_v3_test.go:2306: ASSERT_CH_GENERIC_V3_EXECUTION_COUNTERS roots=25 workers=16 executions=22 pair_members=22 total=85 attempted=85 executed=84 pre_effect_refused=1
+    b4_callhierarchy_layer1_generic_v3_test.go:2312: ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE_CROSS_RULE attempted=85 executed=84 pre_effect_refused=1 reason=owner:nil
+FAIL
+FAIL	lsp-trace/sessionruntime	0.426s
+FAIL

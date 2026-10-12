@@ -1,6 +1,7 @@
 package sessionruntime
 
 import (
+	"errors"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -528,11 +529,11 @@ func privateB4CapabilityHex4Value(src []byte) uint16 {
 	return value
 }
 
-func writePrivateB4CapabilityResponseC17(profile *privateB4EventAccountC17, method string, params []byte, responder func() (session.Failure, bool)) (session.Failure, bool) {
+func writePrivateB4CapabilityResponseC17(transaction *privateB4Transaction, method string, params []byte, responder func() (session.Failure, bool)) (session.Failure, bool) {
 	if responder == nil {
 		return session.SessionPoisoned, true
 	}
-	if profile == nil {
+	if transaction == nil || transaction.c17 == nil || transaction.c17.profile == nil {
 		return responder()
 	}
 	batch, valid := parsePrivateB4CapabilityBatchC17(method, params)
@@ -542,5 +543,31 @@ func writePrivateB4CapabilityResponseC17(profile *privateB4EventAccountC17, meth
 	if batch.Count > uint64(^uint(0)>>1) {
 		return session.ResourceExhausted, false
 	}
-	return profile.withCapabilityBatchAdmission(int(batch.Count), responder)
+
+	profile := transaction.c17.profile
+	if transaction.workAccount == nil {
+		return profile.withCapabilityBatchAdmission(int(batch.Count), responder)
+	}
+	if transaction.legacy == nil {
+		return session.ResourceExhausted, false
+	}
+
+	var failure session.Failure
+	var poison bool
+	err := transaction.workAccount.WithEventsEmitted(transaction.legacy.selection.Transaction, batch.Count, func() error {
+		failure, poison = profile.withCapabilityBatchAdmission(int(batch.Count), responder)
+		if failure != "" || poison {
+			return errPrivateB4CapabilityResponseC17
+		}
+		return nil
+	})
+	if err != nil {
+		if failure != "" || poison {
+			return failure, poison
+		}
+		return session.ResourceExhausted, false
+	}
+	return failure, poison
 }
+
+var errPrivateB4CapabilityResponseC17 = errors.New("private B4 capability response failed")

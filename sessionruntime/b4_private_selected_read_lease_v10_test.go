@@ -277,6 +277,13 @@ func b4LeaseScriptWithResponse(f b4ID1Fixture, t *testing.T, c string, notificat
 			child.observed <- fmt.Errorf("fixture WRITE read: %w", err)
 			return
 		}
+		if msg.Method == "textDocument/didOpen" && len(msg.ID) == 0 {
+			msg, _, actual, retained, err = reader.ReadWithFrameIfWithin(4096)
+			if err != nil {
+				child.observed <- fmt.Errorf("fixture WRITE after didOpen read: %w", err)
+				return
+			}
+		}
 		if !retained || !bytes.Equal(actual, want) || msg.Method != "textDocument/definition" || !bytes.Equal(msg.ID, []byte("1")) {
 			child.observed <- fmt.Errorf("fixture WRITE not exact")
 			return

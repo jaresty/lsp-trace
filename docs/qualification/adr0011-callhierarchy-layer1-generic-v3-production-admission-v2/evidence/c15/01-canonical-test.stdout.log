@@ -1,0 +1,6 @@
+=== RUN   TestADR0011CallHierarchyC15DeltaEnumerate
+    adr0011_callhierarchy_c15_delta_enumerator_private_test.go:66: lstat /private/tmp/adr0011-v3-corpus-placement-evidence-l58atP/c15/output: no such file or directory
+--- FAIL: TestADR0011CallHierarchyC15DeltaEnumerate (0.00s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.353s
+FAIL

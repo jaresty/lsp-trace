@@ -8,6 +8,13 @@ import (
 	"lsp-trace/internal/session"
 )
 
+func c17CapabilityTransaction(profile *privateB4EventAccountC17) *privateB4Transaction {
+	if profile == nil {
+		return nil
+	}
+	return &privateB4Transaction{c17: &privateB4ReservationC17{profile: profile}}
+}
+
 func TestPrivateB4C17CapabilityOwnerResponderSemantics(t *testing.T) {
 	profile, failure := newPrivateB4EventAccountC17()
 	if failure != "" {
@@ -27,7 +34,7 @@ func TestPrivateB4C17CapabilityOwnerResponderSemantics(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			before := profile.eventSnapshot().Admitted
 			called := 0
-			got, poison := writePrivateB4CapabilityResponseC17(profile, tc.method, []byte(tc.params), func() (session.Failure, bool) {
+			got, poison := writePrivateB4CapabilityResponseC17(c17CapabilityTransaction(profile), tc.method, []byte(tc.params), func() (session.Failure, bool) {
 				called++
 				return "", false
 			})
@@ -47,7 +54,7 @@ func TestPrivateB4C17CapabilityOwnerPreservesFailurePoisonAndRollback(t *testing
 		t.Fatal(failure)
 	}
 	wantFailure := session.SessionPoisoned
-	got, poison := writePrivateB4CapabilityResponseC17(profile, "client/registerCapability", capabilityParams("registrations", 3), func() (session.Failure, bool) {
+	got, poison := writePrivateB4CapabilityResponseC17(c17CapabilityTransaction(profile), "client/registerCapability", capabilityParams("registrations", 3), func() (session.Failure, bool) {
 		return wantFailure, true
 	})
 	if got != wantFailure || !poison {
@@ -69,7 +76,7 @@ func TestPrivateB4C17CapabilityDuplicateValidationPrecedesCapacity(t *testing.T)
 	before := profile.eventSnapshot()
 	called := false
 	duplicate := []byte(`{"registrations":[{"id":"same","method":"m"},{"id":"same","method":"m"}]}`)
-	got, poison := writePrivateB4CapabilityResponseC17(profile, "client/registerCapability", duplicate, func() (session.Failure, bool) {
+	got, poison := writePrivateB4CapabilityResponseC17(c17CapabilityTransaction(profile), "client/registerCapability", duplicate, func() (session.Failure, bool) {
 		called = true
 		return "", false
 	})
@@ -91,7 +98,7 @@ func TestPrivateB4C17CapabilityOwnerCapacitySuppressesTransport(t *testing.T) {
 		t.Fatalf("ASSERT_C17_CAPABILITY_OWNER_FILL failure=%q poison=%t", got, poison)
 	}
 	called := false
-	got, poison := writePrivateB4CapabilityResponseC17(profile, "client/unregisterCapability", []byte(`{"unregisterations":[{"id":"next","method":"m"}]}`), func() (session.Failure, bool) {
+	got, poison := writePrivateB4CapabilityResponseC17(c17CapabilityTransaction(profile), "client/unregisterCapability", []byte(`{"unregisterations":[{"id":"next","method":"m"}]}`), func() (session.Failure, bool) {
 		called = true
 		return "", false
 	})
@@ -118,7 +125,7 @@ func TestPrivateB4C17CapabilityDefaultOffAndMalformedPreserveResponderBytes(t *t
 			if tc.name != "default off" {
 				profile, _ = newPrivateB4EventAccountC17()
 			}
-			failure, poison := writePrivateB4CapabilityResponseC17(profile, tc.method, []byte(tc.params), responder)
+			failure, poison := writePrivateB4CapabilityResponseC17(c17CapabilityTransaction(profile), tc.method, []byte(tc.params), responder)
 			if failure != "" || poison || !bytes.Equal(got.Bytes(), want) {
 				t.Fatalf("ASSERT_C17_CAPABILITY_RESPONDER_PRESERVED failure=%q poison=%t got=%q", failure, poison, got.Bytes())
 			}
@@ -137,7 +144,7 @@ func TestPrivateB4C17CapabilityOwnerPanicRollback(t *testing.T) {
 				t.Fatal("ASSERT_C17_CAPABILITY_OWNER_PANIC_PROPAGATED")
 			}
 		}()
-		_, _ = writePrivateB4CapabilityResponseC17(profile, "client/registerCapability", capabilityParams("registrations", 3), func() (session.Failure, bool) {
+		_, _ = writePrivateB4CapabilityResponseC17(c17CapabilityTransaction(profile), "client/registerCapability", capabilityParams("registrations", 3), func() (session.Failure, bool) {
 			panic(errors.New("transport panic"))
 		})
 	}()

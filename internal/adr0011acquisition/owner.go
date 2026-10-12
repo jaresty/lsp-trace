@@ -18,6 +18,7 @@ import (
 	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/adr0011methodresult"
 	"lsp-trace/internal/adr0011querytarget"
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/publication"
 	"lsp-trace/sessionruntime"
 )
@@ -115,6 +116,23 @@ func (o *Owner) acquirePrivateFinal(ctx context.Context, q Query) (*PrivateFinal
 
 // acquireManaged owns exactly one documentSymbol/references managed pair.
 func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (managed *managedResult, err error) {
+	account, hasAccount := adr0011work.AccountFromContext(ctx)
+	if hasAccount {
+		defer account.Seal()
+		snapshot := account.Snapshot()
+		if snapshot.Identity != q.OccurrenceID {
+			return nil, errors.Join(ErrAcquisition, adr0011work.ErrIdentityMismatch)
+		}
+		if snapshot.Terminal {
+			if snapshot.Failure != nil {
+				return nil, errors.Join(ErrAcquisition, snapshot.Failure)
+			}
+			return nil, errors.Join(ErrAcquisition, adr0011work.ErrTerminal)
+		}
+		if snapshot.Failure != nil {
+			return nil, errors.Join(ErrAcquisition, snapshot.Failure)
+		}
+	}
 	adr0011c18.Notify(ctx, adr0011c18.PointAcquisitionEntered)
 	runtimeParent := ctx
 	transaction := q.OccurrenceID
@@ -330,8 +348,8 @@ func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (manag
 	}
 	// Private observation only: without accepted response-read/raw refs and an
 	// independently pinned implementation digest this cannot form a receipt.
-	if _, scanErr := observeRawScanner(o.root, raw, nil); scanErr != nil {
-		return nil, ErrAcquisition
+	if _, scanErr := observeRawScanner(o.root, raw, nil, ctx); scanErr != nil {
+		return nil, errors.Join(ErrAcquisition, scanErr)
 	}
 	preparedRef, identityRef, sourceErr := publishPreparedSource(o.root, source, q.URI, prepared.Version, workspace, reviewedSuccessorSchemaDigest, nil)
 	if sourceErr != nil || preparedRef.stage != "VERIFIED" || identityRef.stage != "VERIFIED" || !replayPreparedSource(o.root, preparedRef, identityRef, source, q.URI, prepared.Version, workspace, reviewedSuccessorSchemaDigest, publication.ReadVerifiedBoundFile) {
@@ -389,18 +407,24 @@ func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (manag
 	if o.afterRawRecordTestHook != nil {
 		o.afterRawRecordTestHook()
 	}
-	scannerRecord, scannerErr := publishScannerRecord(o.root, responseRecord, rawRecord, raw, responseInputs, nil, nil)
-	if scannerErr != nil || scannerRecord.stage != "VERIFIED" || !replayScannerRecord(o.root, scannerRecord, responseRecord, rawRecord, raw, responseInputs, publication.ReadVerifiedBoundFile, nil) {
+	scannerRecord, scannerErr := publishScannerRecord(o.root, responseRecord, rawRecord, raw, responseInputs, nil, nil, ctx)
+	if scannerErr != nil {
+		return nil, errors.Join(ErrAcquisition, scannerErr)
+	}
+	if scannerRecord.stage != "VERIFIED" {
 		return nil, ErrAcquisition
+	}
+	if replayErr := replayScannerRecord(o.root, scannerRecord, responseRecord, rawRecord, raw, responseInputs, publication.ReadVerifiedBoundFile, nil, ctx); replayErr != nil {
+		return nil, errors.Join(ErrAcquisition, replayErr)
 	}
 	if o.afterScannerRecordTestHook != nil {
 		o.afterScannerRecordTestHook()
 	}
 	responseExpected, responseOK := responseReadExpected(o.root, responseInputs, publication.ReadVerifiedBoundFile)
 	retainedRaw, rawErr := publication.ReadVerifiedBoundFile(o.root, raw.selector, rawResultPayloadLimit)
-	scannerObserved, scannerObserveErr := observeRawScanner(o.root, raw, publication.ReadVerifiedBoundFile)
+	scannerObserved, scannerObserveErr := observeRawScanner(o.root, raw, publication.ReadVerifiedBoundFile, ctx)
 	if !responseOK || rawErr != nil || scannerObserveErr != nil || scannerObserved.form == "MALFORMED" {
-		return nil, ErrAcquisition
+		return nil, errors.Join(ErrAcquisition, scannerObserveErr)
 	}
 	transitionIdentity := adr0011methodresult.PrivateTransitionIdentity{Transaction: responseExpected.TransactionID, RequestKey: responseExpected.RequestKey,
 		Invocation: responseExpected.InvocationID, ResponseRead: responseRecord.selector, RawSelector: rawRecord.selector, RawDigest: raw.digest}
@@ -444,16 +468,19 @@ func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (manag
 		if pinErr != nil || !validPrivateDigest(implementationDigest) {
 			return nil, ErrAcquisition
 		}
-		x := proposalContextInputs{TargetInputs: targetInputs, ResponseInputs: responseInputs, MethodInputs: methodInputs,
+		x := proposalContextInputs{Context: ctx, TargetInputs: targetInputs, ResponseInputs: responseInputs, MethodInputs: methodInputs,
 			Method: methodState, Target: newTarget, ResponseRead: responseRecord, RawResult: rawRecord, Scanner: scannerRecord, Events: eventsState,
 			Policies: policies, Payload: retainedRaw, Journal: journal, ScannerObservation: scannerObserved, Evaluation: evaluation,
 			Git: revisionExpected, SourceBytes: source, SchemaDigest: reviewedSuccessorSchemaDigest,
 			ImplementationDigest: implementationDigest, OccurrenceID: q.OccurrenceID}
 		if _, err := canonicalProposalContext(o.root, x, publication.ReadVerifiedBoundFile); err != nil {
-			return nil, ErrAcquisition
+			return nil, errors.Join(ErrAcquisition, err)
 		}
 		proposal, err := publishProposalRecord(o.root, x, publication.ReadVerifiedBoundFile, nil)
-		if err != nil || !replayProposalRecord(o.root, proposal, x, publication.ReadVerifiedBoundFile) {
+		if err != nil {
+			return nil, errors.Join(ErrAcquisition, err)
+		}
+		if !replayProposalRecord(o.root, proposal, x, publication.ReadVerifiedBoundFile) {
 			return nil, ErrAcquisition
 		}
 		candidate, err := publishCandidateRecord(o.root, proposal, x, publication.ReadVerifiedBoundFile, nil)

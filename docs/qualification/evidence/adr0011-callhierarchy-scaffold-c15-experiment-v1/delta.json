@@ -1,0 +1,790 @@
+{
+  "artifacts": {
+    "candidates": {
+      "added": [
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.call.copycallhierarchyobservation.1",
+            "8b9580fb0bd5f81c660757c82b6c18f85c7d499b7ccadab91eb32c4f7f300c75"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.call.copycallhierarchyobservation.1",
+          "line": 1438,
+          "line_sha256": "aae79b88fff6cc471640a2e45c5c0d00923179fc7aa4850198a7cd203d527a7e",
+          "line_text": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.call.copycallhierarchyobservation.1\t8b9580fb0bd5f81c660757c82b6c18f85c7d499b7ccadab91eb32c4f7f300c75"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.composite-literal.composite.literal.1",
+            "8d7aaf969538316a51cf2297801ec85071038b20a803474f0c6e94b0092d0dad"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.composite-literal.composite.literal.1",
+          "line": 1439,
+          "line_sha256": "df1f34a403b922ceb245fc0447931d3190fdbdd4518c5af8fb98906f2f5f5054",
+          "line_text": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.composite-literal.composite.literal.1\t8d7aaf969538316a51cf2297801ec85071038b20a803474f0c6e94b0092d0dad"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.1",
+            "4266fb89744c40bb7755de0a93ad87ae7b9a1e91f44e1e6a3eca12499e0250a0"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.1",
+          "line": 1440,
+          "line_sha256": "d2f1b75496c1b21531653872e22e7fda2836e26e958c39016aceead78a4d7c8d",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.1\t4266fb89744c40bb7755de0a93ad87ae7b9a1e91f44e1e6a3eca12499e0250a0"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.1",
+            "89e772bd2eb28092aca82b1ffea750c7daaac37b014e74b123baba1bad067a23"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.1",
+          "line": 1441,
+          "line_sha256": "dc7d3ba0fb90b7c6f3099e62e667054fa2626db350977ca235865bd8fba12cc5",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.1\t89e772bd2eb28092aca82b1ffea750c7daaac37b014e74b123baba1bad067a23"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.2",
+            "b069df49596857d68852139ec69905e688a3f47dc48c1128e6da08e6deef9842"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.2",
+          "line": 1442,
+          "line_sha256": "29f8886a09d48921b5485ab49ccca89d4df367cd7d31e5ae9d1db61952fcf8cd",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.2\tb069df49596857d68852139ec69905e688a3f47dc48c1128e6da08e6deef9842"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.2",
+            "730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.2",
+          "line": 1443,
+          "line_sha256": "0cf74ddc9c0d0fcc36794113e8fb9c4e96c5452a5bb50c155d9e13aa9c759e02",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.2\t730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.3",
+            "f93f04129218cc6ca3aa37a0cf99ed194009d2ed003efd2f4106cb9b751b2714"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.3",
+          "line": 1444,
+          "line_sha256": "f83c87877d7adb1d43405dbd90a545a4204feacf644089e8724ea2f74e7cae68",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.3\tf93f04129218cc6ca3aa37a0cf99ed194009d2ed003efd2f4106cb9b751b2714"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.3",
+            "730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.3",
+          "line": 1445,
+          "line_sha256": "d6306ad3ffe1a886f0d5d1db496de8e41606130d0be3c37fb0beae8565360373",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.3\t730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.4",
+            "b04ad4f4a8174c46ca471f266c1bfa3922b33e07c171bce9f40e94aacd9060f3"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.4",
+          "line": 1446,
+          "line_sha256": "ba29eaed120b05b1d05ccae89089a8c873c90e9e3ec6bfcec752658ddae7643b",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.4\tb04ad4f4a8174c46ca471f266c1bfa3922b33e07c171bce9f40e94aacd9060f3"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.4",
+            "730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.4",
+          "line": 1447,
+          "line_sha256": "5b182616f6c1e3bb05b9195a31263f6b0c9c1d22e6a5ec74ec48d0acee9fd414",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.4\t730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.5",
+            "bff09ca35d977e4f8940121910cd20e6f5f148dd76caa02910f9c8f901ef494f"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.5",
+          "line": 1448,
+          "line_sha256": "ca918cf66df111cef616b188eed7c2be4f60a8973cc7253e3a7c8dabafc60c46",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.5\tbff09ca35d977e4f8940121910cd20e6f5f148dd76caa02910f9c8f901ef494f"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.5",
+            "730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.5",
+          "line": 1449,
+          "line_sha256": "23e0f1ab743d0a73b54302dbfc965c8d8e535e56cbb1fd0a80060e7ec7f577ba",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.5\t730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.6",
+            "ba61bdf5ff601b549aa53387a5eb2c952fc0b6a0c4b601d64dc6301e5ef72db6"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.6",
+          "line": 1450,
+          "line_sha256": "b304df5c48c12b31abaef2b1ffd87dcb90461b53fc6e3f99094c370dc1644ceb",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.6\tba61bdf5ff601b549aa53387a5eb2c952fc0b6a0c4b601d64dc6301e5ef72db6"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.6",
+            "730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.6",
+          "line": 1451,
+          "line_sha256": "da40cecf22d85f3631b039524186625537b1814fb7b05b4b952b4972a66579ed",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.6\t730e7f1ba6e41afb6ba1e179c56548f17d09c25142d58e5abb850c83276f56a8"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.copycallhierarchyobservation.1",
+            "8b9580fb0bd5f81c660757c82b6c18f85c7d499b7ccadab91eb32c4f7f300c75"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.copycallhierarchyobservation.1",
+          "line": 1452,
+          "line_sha256": "2a61b3a6c0dc55262353d160565e23c7207147aa1d5f787228c62c413214bfb8",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.copycallhierarchyobservation.1\t8b9580fb0bd5f81c660757c82b6c18f85c7d499b7ccadab91eb32c4f7f300c75"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.composite-literal.composite.literal.1",
+            "0b73e5cee105604bfe22d108b145865a7e63e79dd93dc211efcd54b68b50b259"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.composite-literal.composite.literal.1",
+          "line": 1453,
+          "line_sha256": "052c28f13a5d46039d574b329d362dfa912284b6394139e11d07fbf181f2d75b",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.composite-literal.composite.literal.1\t0b73e5cee105604bfe22d108b145865a7e63e79dd93dc211efcd54b68b50b259"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.builtin-append.append.1",
+            "114f924e2ae672334b93714c9c2e7fdfd587cc3a7c7411f3adb59ea309361dcd"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.builtin-append.append.1",
+          "line": 1454,
+          "line_sha256": "0847f9c0fc27e86d9aad214f85f79e404eb3b84d5af37969a2d930811ed7ab18",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.builtin-append.append.1\t114f924e2ae672334b93714c9c2e7fdfd587cc3a7c7411f3adb59ea309361dcd"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.expression.1",
+            "89e772bd2eb28092aca82b1ffea750c7daaac37b014e74b123baba1bad067a23"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.expression.1",
+          "line": 1455,
+          "line_sha256": "9264846ae35ce2300b7b7b882995b2777134be4491811eb8826f2d225df99515",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.expression.1\t89e772bd2eb28092aca82b1ffea750c7daaac37b014e74b123baba1bad067a23"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.1",
+            "f65d11b23bb405fce1a2ecc0ebb550b2f390b266c2c65011564b82675e6c3967"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.1",
+          "line": 1456,
+          "line_sha256": "63a01a0f1d1ac5c0a5ec7d6982c9402f386ec72d0bc35fa6fa80d67cdc2c0c0b",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.1\tf65d11b23bb405fce1a2ecc0ebb550b2f390b266c2c65011564b82675e6c3967"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.1",
+            "f7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.1",
+          "line": 1457,
+          "line_sha256": "66c01f43d7a6c8270f2182881f1088810bb638b2af424387bc985ecf3bb5df15",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.1\tf7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.callhierarchyobservationviewof.1",
+            "6d33ce61efad521945ba0adf1b5fb02d36fcac5c271e6ad9e2db5262ad5b6706"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.callhierarchyobservationviewof.1",
+          "line": 1458,
+          "line_sha256": "9c41dd0badfafb01e51c8e285e8dadd4758c2cb48ae94694f4250a74058645c1",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.callhierarchyobservationviewof.1\t6d33ce61efad521945ba0adf1b5fb02d36fcac5c271e6ad9e2db5262ad5b6706"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.2",
+            "f7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.2",
+          "line": 1459,
+          "line_sha256": "e40b8baa95f435e4ae9c692d2a8a883249edc511584dde179372392498650fe1",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.2\tf7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.expression.1",
+            "c49bb83888e8a7bb9d68ddc97f1eae2fd7092df34e66830cd430a708e1233426"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.expression.1",
+          "line": 1460,
+          "line_sha256": "2c37f8b7ae1e0c193399221fd67366d3b0b6f215c51d3e98a18f48ec09eb9a96",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.expression.1\tc49bb83888e8a7bb9d68ddc97f1eae2fd7092df34e66830cd430a708e1233426"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.2",
+            "f65d11b23bb405fce1a2ecc0ebb550b2f390b266c2c65011564b82675e6c3967"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.2",
+          "line": 1461,
+          "line_sha256": "af0311d1cd27ebd522b15a4bf04f7246f166c691f597cb53221963366a633690",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.2\tf65d11b23bb405fce1a2ecc0ebb550b2f390b266c2c65011564b82675e6c3967"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.cond.broadcast.1",
+            "b77e69353522ff3778c59cb67f3f66053fe893161fc84e16d889dd6544056238"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.cond.broadcast.1",
+          "line": 1462,
+          "line_sha256": "c4f001fdc7d9ec19d4c744d3923a91552d6715aa701f0dfb21e8d141ca66b250",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.cond.broadcast.1\tb77e69353522ff3778c59cb67f3f66053fe893161fc84e16d889dd6544056238"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.3",
+            "f7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.3",
+          "line": 1463,
+          "line_sha256": "b7a08e96b2fe0771dcdfbd5846c81e1fe14892bc7127a44098b9377aa2b9c626",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.3\tf7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.fn.1",
+            "0e80bbb3b881432f6f146390beef61b15351032e8a2d670487152744d7603a48"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.fn.1",
+          "line": 1464,
+          "line_sha256": "84f1b5a319c89a1fd16526950aff82d8973c785aa5d38aed831d8f120b0d6dd3",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.fn.1\t0e80bbb3b881432f6f146390beef61b15351032e8a2d670487152744d7603a48"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.mu.lock.1",
+            "f65d11b23bb405fce1a2ecc0ebb550b2f390b266c2c65011564b82675e6c3967"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.lock.1",
+          "line": 1465,
+          "line_sha256": "e8cf6ba254355f2bbaa17e0a9ad294d3899da1009cf8baa4680271b84d2ed5ee",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.lock.1\tf65d11b23bb405fce1a2ecc0ebb550b2f390b266c2c65011564b82675e6c3967"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.1",
+            "f7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.1",
+          "line": 1466,
+          "line_sha256": "8a9137a2ff3dd20bc43950c139b9de545ea0a67946175cb6d69f1c4a4f87613e",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.1\tf7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.cond.wait.1",
+            "86fd0a00a48047d23943f1db40deeb43718612dedd672bac1b3513725da2ff4d"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.wait.1",
+          "line": 1467,
+          "line_sha256": "f51e99f969c433bdeac0bb987771c21017b41b26824db72dcee0617e50a07703",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.wait.1\t86fd0a00a48047d23943f1db40deeb43718612dedd672bac1b3513725da2ff4d"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.composite-literal.composite.literal.2",
+            "559018e611631f49e5d7ae829b3ed8162c003ba037e509302f254addf2421080"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.composite-literal.composite.literal.2",
+          "line": 1468,
+          "line_sha256": "9d06b7f4db1a80e7dc3a1411597440967f79376d00f5ff70aad59910bdae1a09",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.composite-literal.composite.literal.2\t559018e611631f49e5d7ae829b3ed8162c003ba037e509302f254addf2421080"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.cond.broadcast.1",
+            "b77e69353522ff3778c59cb67f3f66053fe893161fc84e16d889dd6544056238"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.broadcast.1",
+          "line": 1469,
+          "line_sha256": "d57cd0615789efe1a13d26223115d7ad315536e701e8e3e5b92360bb1dbcb087",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.broadcast.1\tb77e69353522ff3778c59cb67f3f66053fe893161fc84e16d889dd6544056238"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.2",
+            "f7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.2",
+          "line": 1470,
+          "line_sha256": "f36fcdd4b6a2eaff5784c877ef53745db515ad0e0070ebf3dbc37f341e18bbba",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.2\tf7b957f20a8ddc27ffaaed94d0b83f915dec760398b6c57d498d2f52cfdfad1c"
+        }
+      ],
+      "after_count": 3838,
+      "after_sha256": "d602e69e37eb64adf80b58bd29096ae405ec0eb5dbea36ab7d601b0ecf6e0818",
+      "all_retained_old_rows_byte_identical": true,
+      "before_count": 3805,
+      "before_sha256": "13d45a61cb9ad2e5dad8d944458a9b7f459c9a2cd0336cb76700fa801599ca6e",
+      "changed_or_reclassified": [],
+      "delta": 33,
+      "old_rows_unchanged_count": 3805,
+      "removed": []
+    },
+    "classifications": {
+      "added": [
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.call.copycallhierarchyobservation.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call copyCallHierarchyObservation has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.call.copycallhierarchyobservation.1",
+          "line": 1438,
+          "line_sha256": "b81b73441070a1e773b258b7f90e646aa15cf2055d222bd3c8a5a379d1540805",
+          "line_text": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.call.copycallhierarchyobservation.1\texcluded\t\tephemeral-runtime\tcall copyCallHierarchyObservation has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.composite-literal.composite.literal.1",
+            "excluded",
+            "",
+            "external-library",
+            "composite.literal is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.composite-literal.composite.literal.1",
+          "line": 1439,
+          "line_sha256": "b6364bbaaa70b8a211faf243baca553d9782c3bc480c17ac4dcc7631e31fb0b5",
+          "line_text": "alloc.b4.owned.method.pair.lease.newcallhierarchyobservationowner.composite-literal.composite.literal.1\texcluded\t\texternal-library\tcomposite.literal is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "builtin-append append has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.1",
+          "line": 1440,
+          "line_sha256": "da260ce040e297ca74dd5b98cd5af37fa4d90f3fe69fddf778364744a92ae77d",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.1\texcluded\t\tephemeral-runtime\tbuiltin-append append has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.1",
+          "line": 1441,
+          "line_sha256": "188089c68aee159b1e5f523fe8799e5f805c407b00edb79e926e93eafeabd46d",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.1\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.2",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "builtin-append append has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.2",
+          "line": 1442,
+          "line_sha256": "d30cdab18df37c6f4abe308f49615b4418f7caf3bab1f79dac73e55e5928b164",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.2\texcluded\t\tephemeral-runtime\tbuiltin-append append has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.2",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.2",
+          "line": 1443,
+          "line_sha256": "94b011422dedecadfae05a87ca3972ac4cae6dadf1fcde6319d020139e3fd47c",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.2\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.3",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "builtin-append append has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.3",
+          "line": 1444,
+          "line_sha256": "6da2c932f416e57dec6d0f5e6e6013db221fa02aec40e2325c024e657bb68d64",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.3\texcluded\t\tephemeral-runtime\tbuiltin-append append has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.3",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.3",
+          "line": 1445,
+          "line_sha256": "ae7a34d08ba213546424a4e2c9f720e80d5ccd375d17af68ad731080d86e5b87",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.3\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.4",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "builtin-append append has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.4",
+          "line": 1446,
+          "line_sha256": "5ed2817d978c6e5ef2856b8fefc5197d38f4dbbae10e99f9c496e885e2853c4f",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.4\texcluded\t\tephemeral-runtime\tbuiltin-append append has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.4",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.4",
+          "line": 1447,
+          "line_sha256": "e4b120fd5c29fe5586707355375dd3fe64d6273a5cd176c6f7b4ff7e4092951e",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.4\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.5",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "builtin-append append has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.5",
+          "line": 1448,
+          "line_sha256": "1518696cce91bb0b4bd48937b118586ad08d0afe4dbd609432648bb23b023989",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.5\texcluded\t\tephemeral-runtime\tbuiltin-append append has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.5",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.5",
+          "line": 1449,
+          "line_sha256": "8985c14ed9bd55cd2350a6a00f1becee316fe1795a78eff56853ab0b71527519",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.5\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.6",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "builtin-append append has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.6",
+          "line": 1450,
+          "line_sha256": "4db2e2c12d964e815bbd170fa0efbae6481171575f6583565d47136fa298cf39",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.builtin-append.append.6\texcluded\t\tephemeral-runtime\tbuiltin-append append has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.6",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.6",
+          "line": 1451,
+          "line_sha256": "66c4a521f7770265189003233a7fb9b537865ea815f76fb21756d523b4676057",
+          "line_text": "alloc.b4.owned.method.pair.lease.copycallhierarchyobservation.call.expression.6\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.copycallhierarchyobservation.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call copyCallHierarchyObservation has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.copycallhierarchyobservation.1",
+          "line": 1452,
+          "line_sha256": "a1fe2bfa2774d3880a7421304c80eee46d2498276fc1fd2955b43838f8da30a9",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.copycallhierarchyobservation.1\texcluded\t\tephemeral-runtime\tcall copyCallHierarchyObservation has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.composite-literal.composite.literal.1",
+            "excluded",
+            "",
+            "external-library",
+            "composite.literal is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.composite-literal.composite.literal.1",
+          "line": 1453,
+          "line_sha256": "5a48fb4d80f4dfa167cdd9693a4ccd4da844cd5e6e0200de140bd3be97a22973",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.composite-literal.composite.literal.1\texcluded\t\texternal-library\tcomposite.literal is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.builtin-append.append.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "builtin-append append has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.builtin-append.append.1",
+          "line": 1454,
+          "line_sha256": "ce9aab58c4f2ae6b4321073828285abf8d8473a76e83f5ebabca2d6cc0ad28f3",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.builtin-append.append.1\texcluded\t\tephemeral-runtime\tbuiltin-append append has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.expression.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.expression.1",
+          "line": 1455,
+          "line_sha256": "c39ab1b295f3cf4b47ce047292019a3be4d7be5d9b37c853ba4367379be2c242",
+          "line_text": "alloc.b4.owned.method.pair.lease.callhierarchyobservationviewof.call.expression.1\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.1",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Lock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.1",
+          "line": 1456,
+          "line_sha256": "8ede3330448abc32acee401952be900343de637662f726f3dcb8be737e929c17",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.1\texcluded\t\texternal-library\towner.mu.Lock is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.1",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.1",
+          "line": 1457,
+          "line_sha256": "e9beb5e89091c91b6dd385f29969a637414e6362206dc2792e17d24028cfe35b",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.1\texcluded\t\texternal-library\towner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.callhierarchyobservationviewof.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call callHierarchyObservationViewOf has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.callhierarchyobservationviewof.1",
+          "line": 1458,
+          "line_sha256": "2a4c1c9c8ec6cb5561069c8c7bf1c9a09cab0e9d58e41c10f0090e320aea0c9c",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.callhierarchyobservationviewof.1\texcluded\t\tephemeral-runtime\tcall callHierarchyObservationViewOf has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.2",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.2",
+          "line": 1459,
+          "line_sha256": "280fb0c2d2a874d08c99f0d67fdc24b0cf3e13ebaad59ceec8a5ed19b95195d3",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.2\texcluded\t\texternal-library\towner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.expression.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call expression has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.expression.1",
+          "line": 1460,
+          "line_sha256": "50a3da1d02c7c8f5e6abbcf0137c0ebb0ad1fedd239b1f5b8cfb3ab453cb81da",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.expression.1\texcluded\t\tephemeral-runtime\tcall expression has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.2",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Lock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.2",
+          "line": 1461,
+          "line_sha256": "2d67dcae289579de92691acf7136a0b93fc0f89a210fdbaf7fc3165330f11c14",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.lock.2\texcluded\t\texternal-library\towner.mu.Lock is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.cond.broadcast.1",
+            "excluded",
+            "",
+            "external-library",
+            "owner.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.cond.broadcast.1",
+          "line": 1462,
+          "line_sha256": "e035a8337fe9ea131cb2c239444adb4f7a1da9bb3845e3e9df70100fad9f5d32",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.cond.broadcast.1\texcluded\t\texternal-library\towner.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.3",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.3",
+          "line": 1463,
+          "line_sha256": "f9be141d0746c478d79998d0faf442910e546ed3240af21f08fec1e11a736af3",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.owner.mu.unlock.3\texcluded\t\texternal-library\towner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.withobservation.call.fn.1",
+            "excluded",
+            "",
+            "ephemeral-runtime",
+            "call fn has no privateB4ByteAccountV2 owner operation at this site"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.withobservation.call.fn.1",
+          "line": 1464,
+          "line_sha256": "bec6fa0844fe0fb2b098b4da09b5cb83b29eb0fff0c581dc3cf1143f83c22c48",
+          "line_text": "alloc.b4.owned.method.pair.lease.withobservation.call.fn.1\texcluded\t\tephemeral-runtime\tcall fn has no privateB4ByteAccountV2 owner operation at this site"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.mu.lock.1",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Lock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.lock.1",
+          "line": 1465,
+          "line_sha256": "974e76085d79d35a3615ef483c81c82efcf4567862519ba0b2b76762d9ba4ff1",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.lock.1\texcluded\t\texternal-library\towner.mu.Lock is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.1",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.1",
+          "line": 1466,
+          "line_sha256": "e328ab2087e7e4ba73a7ca7d7e179dd6a874ee8d73f77de44a3b5cf06b95e219",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.1\texcluded\t\texternal-library\towner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.cond.wait.1",
+            "excluded",
+            "",
+            "external-library",
+            "owner.cond.Wait is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.wait.1",
+          "line": 1467,
+          "line_sha256": "a059236f6a947d132ccddd2322b4b8724f0e09e0160d2dfaac0eac413ff0bbcc",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.wait.1\texcluded\t\texternal-library\towner.cond.Wait is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.composite-literal.composite.literal.2",
+            "excluded",
+            "",
+            "external-library",
+            "composite.literal is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.composite-literal.composite.literal.2",
+          "line": 1468,
+          "line_sha256": "1b4f95cf8d68f19f21b1e7051f1c8a60ccfa90d16324f5e5fc5ab31d320582b6",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.composite-literal.composite.literal.2\texcluded\t\texternal-library\tcomposite.literal is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.cond.broadcast.1",
+            "excluded",
+            "",
+            "external-library",
+            "owner.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.broadcast.1",
+          "line": 1469,
+          "line_sha256": "895a74fbf5ca870bad29319b293b219bedceea36d381cc450bb901571adb96d5",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.cond.broadcast.1\texcluded\t\texternal-library\towner.cond.Broadcast is library behavior outside privateB4ByteAccountV2 custody"
+        },
+        {
+          "fields": [
+            "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.2",
+            "excluded",
+            "",
+            "external-library",
+            "owner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+          ],
+          "id": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.2",
+          "line": 1470,
+          "line_sha256": "5a93d396320a6f01b273a1205280bee055f75ae4c63a81f4bbc05f01fd09abdf",
+          "line_text": "alloc.b4.owned.method.pair.lease.release.call.owner.mu.unlock.2\texcluded\t\texternal-library\towner.mu.Unlock is library behavior outside privateB4ByteAccountV2 custody"
+        }
+      ],
+      "after_count": 3838,
+      "after_sha256": "ea61d01ef5f1010a0b6bf1c8956f2c889bdb20ee19122986e147c68231c99365",
+      "all_retained_old_rows_byte_identical": true,
+      "before_count": 3805,
+      "before_sha256": "cde6aa72034acf743c582cec56ff778470f8f258bde0ecdc4398653f3de10e04",
+      "changed_or_reclassified": [],
+      "delta": 33,
+      "old_rows_unchanged_count": 3805,
+      "removed": []
+    }
+  },
+  "schema": "lsp-trace.c15-disposable-lifecycle-delta.v1"
+}

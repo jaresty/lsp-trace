@@ -110,7 +110,8 @@ func TestPrivateB4BorrowedCommitExcludesResultCopyAndRetries(t *testing.T) {
 		if len(b.Capture.Result) != 0 || !bytes.Equal(b.Result, f.expectedResult) {
 			t.Fatal("borrowed result mismatch or copied capture result")
 		}
-		firstCharge = uint64(len(b.Capture.RequestFrame) + len(b.Capture.RequestParams) + len(b.Capture.ResponseFrame))
+		firstCharge = uint64(len(b.Capture.RequestFrame)+len(b.Capture.RequestParams)+len(b.Capture.ResponseFrame)) +
+			uint64(len(b.Capture.TargetSources))*privateB4C15TargetSourceDescriptorBytes
 		for i := range b.Capture.TargetSources {
 			firstCharge += uint64(len(b.Capture.TargetSources[i].Bytes))
 		}
@@ -118,7 +119,7 @@ func TestPrivateB4BorrowedCommitExcludesResultCopyAndRetries(t *testing.T) {
 	}, func(PrivateB4DefinitionBorrow) { t.Fatal("rejected prepare published") }); status != PrivateB4Unavailable {
 		t.Fatalf("rejected status=%s", status)
 	}
-	if got := reservation.explicitBytes.snapshot(); got.Live != before.Live+firstCharge || got.Cumulative != before.Cumulative+firstCharge || reservation.explicitLeaseCount != beforeEntries+4 {
+	if got := reservation.explicitBytes.snapshot(); got.Live != before.Live+firstCharge || got.Cumulative != before.Cumulative+firstCharge || reservation.explicitLeaseCount != beforeEntries+5 {
 		t.Fatalf("borrowed prepare charge=%+v before=%+v entries=%d/%d metadata=%d removed-result=%d", got, before, reservation.explicitLeaseCount, beforeEntries, firstCharge, resultBytes)
 	}
 	published := 0

@@ -1,0 +1,6 @@
+# lsp-trace/sessionruntime [lsp-trace/sessionruntime.test]
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:1155:156: v.identity.request.requestKeyUint64 undefined (type callHierarchyRequestIdentity has no field or method requestKeyUint64)
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:1191:34: cannot use &nh (value of type *string) as string value in assignment
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:1192:30: cannot use &rh (value of type *string) as string value in assignment
+FAIL	lsp-trace/sessionruntime [build failed]
+FAIL

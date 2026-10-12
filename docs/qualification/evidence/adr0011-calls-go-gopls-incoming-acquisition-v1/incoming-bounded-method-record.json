@@ -1,0 +1,60 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.bounded-method-record.v1",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "operation_ordinal": 1,
+  "method": "callHierarchy/incomingCalls",
+  "request": {
+    "request_ordinal": 0,
+    "expansion_ordinal": 0,
+    "logical_item_projection": {
+      "name":"IncomingCalls",
+      "kind":12,
+      "uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go",
+      "range":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}},
+      "selectionRange":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}}
+    },
+    "original_jsonrpc_frame_available": false,
+    "original_params_bytes_available": false,
+    "request_id_available": false,
+    "wire_byte_length": null,
+    "wire_sha256": null
+  },
+  "result": {
+    "terminal_outcome": "SUCCESS_AS_REPORTED_BY_COMPOSED_ACQUISITION",
+    "incoming_request_successes": 1,
+    "returned_member_count_projection": 2,
+    "null_vs_array_form_available": false,
+    "raw_member_order_available": false,
+    "original_jsonrpc_frame_available": false,
+    "original_result_bytes_available": false,
+    "wire_byte_length": null,
+    "wire_sha256": null,
+    "returned_occurrence_projections": [
+      {
+        "projected_ordinal": 0,
+        "from": {
+          "name":"query",
+          "kind":12,
+          "uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/internal/acquisition/coordinator.go",
+          "range":{"start":{"line":715,"character":17},"end":{"line":715,"character":22}},
+          "selectionRange":{"start":{"line":715,"character":17},"end":{"line":715,"character":22}}
+        },
+        "fromRanges":[{"start":{"line":741,"character":29},"end":{"line":741,"character":42}}]
+      },
+      {
+        "projected_ordinal": 1,
+        "from": {
+          "name":"Incoming",
+          "kind":12,
+          "uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/internal/traverse/traverse.go",
+          "range":{"start":{"line":71,"character":5},"end":{"line":71,"character":13}},
+          "selectionRange":{"start":{"line":71,"character":5},"end":{"line":71,"character":13}}
+        },
+        "fromRanges":[{"start":{"line":191,"character":32},"end":{"line":191,"character":45}}]
+      }
+    ],
+    "projection_order_warning": "projected ordinals reflect composed node/edge presentation only and are not claimed as raw response ordinals"
+  },
+  "role_status": "MISSING",
+  "reason": "the composed artifact preserves projected callers and call sites but not exact incoming request/result bytes, null/array form, raw response order, complete opaque data, or request identity"
+}

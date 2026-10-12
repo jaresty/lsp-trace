@@ -7,19 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"lsp-trace/internal/lspwire"
-	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/publication"
-	"lsp-trace/internal/runtimeprofile"
-	"lsp-trace/sessionruntime"
 )
 
 func TestADR0011AcquisitionPeer(t *testing.T) {
@@ -105,91 +99,17 @@ func TestADR0011OwnerPrivateFinalAtLimitFrame(t *testing.T) {
 }
 
 func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
-	workspace, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	file := filepath.Join(workspace, "query.go")
-	if err := os.WriteFile(file, []byte("package fixture\nfunc Query() {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	git := func(args ...string) string {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = workspace
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("fixture git %v: %v %s", args, err, out)
-		}
-		return string(out)
-	}
-	git("init", "-q")
-	git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "add", "query.go")
-	git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture")
-	commit := git("rev-parse", "HEAD")
-	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(file)}).String()
-	supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 2, MaxChildren: 1, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 16}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer manager.Shutdown(context.Background())
-	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: workspace, Profile: "gopls", EnvironmentReference: "local"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated), LanguageID: "go", Process: managedprocess.Spec{Path: executable, Args: []string{"-test.run=^TestADR0011AcquisitionPeer$"}, Env: append(os.Environ(), "ADR0011_ACQUISITION_PEER=1")}})
-	if started.Failure != "" {
-		t.Fatalf("fixture start: %+v", started)
-	}
-	pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(10*time.Second))
-	ready, found := manager.WaitReadiness(context.Background(), pending.ID)
-	if !found || ready.State != sessionruntime.ReadinessReady || ready.Failure != "" {
-		t.Fatalf("fixture readiness: %+v found=%v", ready, found)
-	}
-	dir := filepath.Join(t.TempDir(), "root")
-	if err := os.Mkdir(dir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	root, err := publication.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	canonical, err := filepath.EvalSymlinks(workspace)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if observed, probeErr := observeHostGit(context.Background(), canonical, strings.TrimSpace(commit)); probeErr != nil {
-		t.Fatalf("ASSERT_ADR0011_HOST_GIT_CLEAN_PROBE: err=%v observation=%+v", probeErr, observed)
-	}
-	prepared := manager.PrepareDocument(context.Background(), sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: uri, LanguageID: "go", CaptureSupply: true, PreparedNoFollow: true})
-	if prepared.Failure != "" || prepared.Supply == nil {
-		t.Fatalf("preinvoke prepare: %+v", prepared)
-	}
-	selected, err := selectGitExecutable("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	facts := preinvokeFacts{SessionID: started.SessionID, Generation: started.Generation, Workspace: canonical, URI: uri, Line: 1, Character: 6, Version: prepared.Version, Source: append([]byte(nil), prepared.Supply.Content...), SourceDigest: privateDigest(prepared.Supply.Content), SourceLength: len(prepared.Supply.Content), GitRoot: canonical, GitCommit: strings.TrimSpace(commit), Executable: selected}
-	repeated := manager.PrepareDocument(context.Background(), sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: uri, LanguageID: "go", CaptureSupply: true, PreparedNoFollow: true})
-	if repeated.Failure != "" || repeated.Version != prepared.Version || repeated.Supply == nil || privateDigest(repeated.Supply.Content) != facts.SourceDigest {
-		t.Fatalf("ASSERT_ADR0011_PREPARE_REPEAT_STABLE: first=%d second=%d failure=%s", prepared.Version, repeated.Version, repeated.Failure)
-	}
-	selector, digest, occurrenceID, err := publishPreinvokeOccurrence(root, facts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := newTestOwner(manager, root)
-	owner.preinvokeSelector, owner.preinvokeDigest = selector, digest
-	owner.captureFrames = true
+	fixture := newOwnerAcquisitionFixture(t)
+	workspace := fixture.Workspace
+	git := fixture.Git
+	manager := fixture.Manager
+	root := fixture.Root
+	facts := fixture.Facts
+	selector := fixture.Selector
+	digest := fixture.Digest
+	occurrenceID := fixture.OccurrenceID
+	owner := fixture.Owner
+	validQuery := fixture.Query
 	keyGuardReached := false
 	ownerReadReached := false
 	rawPayloadReached := false
@@ -245,19 +165,18 @@ func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
 	owner.afterRevisionVerifiedTestHook = func() { revisionReached = true }
 	missing := newTestOwner(manager, root)
 	missing.beforeMethodRequestTestHook = func() { methodCalls++ }
-	validQuery := Query{SessionID: started.SessionID, Generation: started.Generation, URI: uri, Line: 1, Character: 6, OccurrenceID: occurrenceID, Revision: strings.TrimSpace(commit)}
 	if got, e := missing.Acquire(context.Background(), validQuery); got != nil || e != ErrAcquisition || methodCalls != 0 {
 		t.Fatalf("ASSERT_ADR0011_PREINVOKE_MISSING_NO_CALL: receipt=%+v err=%v calls=%d", got, e, methodCalls)
 	}
 	for _, bad := range []Query{
-		{SessionID: started.SessionID, Generation: started.Generation, URI: uri, Line: 1, Character: 6, OccurrenceID: "sha256:" + strings.Repeat("1", 64), Revision: strings.TrimSpace(commit)},
-		{SessionID: started.SessionID, Generation: started.Generation, URI: uri, Line: 1, Character: 7, OccurrenceID: occurrenceID, Revision: strings.TrimSpace(commit)},
+		{SessionID: validQuery.SessionID, Generation: validQuery.Generation, URI: validQuery.URI, Line: validQuery.Line, Character: validQuery.Character, OccurrenceID: "sha256:" + strings.Repeat("1", 64), Revision: validQuery.Revision},
+		{SessionID: validQuery.SessionID, Generation: validQuery.Generation, URI: validQuery.URI, Line: validQuery.Line, Character: validQuery.Character + 1, OccurrenceID: occurrenceID, Revision: validQuery.Revision},
 	} {
 		if got, e := owner.Acquire(context.Background(), bad); got != nil || e != ErrAcquisition || methodCalls != 0 {
 			t.Fatalf("ASSERT_ADR0011_PREINVOKE_NO_CALL: receipt=%+v err=%v", got, e)
 		}
 	}
-	if stale, staleErr := owner.Acquire(context.Background(), Query{SessionID: started.SessionID, Generation: started.Generation + 1, URI: uri, Line: 1, Character: 6, OccurrenceID: occurrenceID, Revision: strings.TrimSpace(commit)}); stale != nil || staleErr != ErrAcquisition || keyGuardReached || ownerReadReached || rawPayloadReached || targetResultReached || targetRecordReached {
+	if stale, staleErr := owner.Acquire(context.Background(), Query{SessionID: validQuery.SessionID, Generation: validQuery.Generation + 1, URI: validQuery.URI, Line: validQuery.Line, Character: validQuery.Character, OccurrenceID: occurrenceID, Revision: validQuery.Revision}); stale != nil || staleErr != ErrAcquisition || keyGuardReached || ownerReadReached || rawPayloadReached || targetResultReached || targetRecordReached {
 		t.Fatalf("ASSERT_ADR0011_SOURCE_GENERATION_SUBSTITUTION: receipt=%+v err=%v", stale, staleErr)
 	}
 	// The private path uses the same managed fixture, but its independent pin is
@@ -404,13 +323,13 @@ func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
 			t.Fatal(err)
 		}
 		defer os.Remove(dirty)
-		issued, err := newTestOwner(manager, newRoot()).Acquire(context.Background(), Query{SessionID: started.SessionID, Generation: started.Generation, URI: uri, Line: 1, Character: 6, OccurrenceID: "dirty", Revision: strings.TrimSpace(commit)})
+		issued, err := newTestOwner(manager, newRoot()).Acquire(context.Background(), Query{SessionID: validQuery.SessionID, Generation: validQuery.Generation, URI: validQuery.URI, Line: validQuery.Line, Character: validQuery.Character, OccurrenceID: "dirty", Revision: validQuery.Revision})
 		if err == nil || issued != nil {
 			t.Fatalf("ASSERT_ADR0011_HOST_GIT_DIRTY_PRE_ZERO: receipt=%+v err=%v", issued, err)
 		}
 	})
 	t.Run("revision-before", func(t *testing.T) {
-		issued, err := newTestOwner(manager, newRoot()).Acquire(context.Background(), Query{SessionID: started.SessionID, Generation: started.Generation, URI: uri, Line: 1, Character: 6, OccurrenceID: "revision", Revision: strings.Repeat("f", 40)})
+		issued, err := newTestOwner(manager, newRoot()).Acquire(context.Background(), Query{SessionID: validQuery.SessionID, Generation: validQuery.Generation, URI: validQuery.URI, Line: validQuery.Line, Character: validQuery.Character, OccurrenceID: "revision", Revision: strings.Repeat("f", 40)})
 		if err == nil || issued != nil {
 			t.Fatalf("ASSERT_ADR0011_HOST_GIT_REVISION_PRE_ZERO: receipt=%+v err=%v", issued, err)
 		}
@@ -431,7 +350,7 @@ func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
 			}
 		}
 		defer os.Remove(dirty)
-		issued, err := owner.Acquire(context.Background(), Query{SessionID: started.SessionID, Generation: started.Generation, URI: uri, Line: 1, Character: 6, OccurrenceID: id, Revision: strings.TrimSpace(commit)})
+		issued, err := owner.Acquire(context.Background(), Query{SessionID: validQuery.SessionID, Generation: validQuery.Generation, URI: validQuery.URI, Line: validQuery.Line, Character: validQuery.Character, OccurrenceID: id, Revision: validQuery.Revision})
 		if err == nil || issued != nil {
 			t.Fatalf("ASSERT_ADR0011_HOST_GIT_DIRTY_POST_ZERO: receipt=%+v err=%v", issued, err)
 		}
@@ -448,7 +367,7 @@ func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
 		owner.afterCaptureTestHook = func() {
 			git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-qm", "late")
 		}
-		issued, err := owner.Acquire(context.Background(), Query{SessionID: started.SessionID, Generation: started.Generation, URI: uri, Line: 1, Character: 6, OccurrenceID: id, Revision: strings.TrimSpace(commit)})
+		issued, err := owner.Acquire(context.Background(), Query{SessionID: validQuery.SessionID, Generation: validQuery.Generation, URI: validQuery.URI, Line: validQuery.Line, Character: validQuery.Character, OccurrenceID: id, Revision: validQuery.Revision})
 		if err == nil || issued != nil {
 			t.Fatalf("ASSERT_ADR0011_HOST_GIT_COMMIT_POST_ZERO: receipt=%+v err=%v", issued, err)
 		}

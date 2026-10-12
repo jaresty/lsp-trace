@@ -1,0 +1,728 @@
+{
+  "schema": "lsp-trace/adr0011-c15-semantic-adjudication-v1",
+  "scope": "ALL33 exact unresolved allocation-bearing rows",
+  "inputs": {
+    "base_repo": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+    "base_head": "ce4a1838f8a10bafc13429031e55df7e4dd812c6",
+    "accepted_patch": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/PATCH.diff",
+    "accepted_patch_sha256": "e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0",
+    "enumeration_evidence": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy",
+    "hashes": {
+      "ADDED.tsv": "f7c8e6259ba1cc396d77c871ee54669b93c68f501458da973b4b2a6565646dbc",
+      "CHANGED.tsv": "8ef2257684ee18cccc271ea82a4c32a43d06b5041afb652024329fe1c3f69198",
+      "candidates.tsv": "4e1ec4a7cf20bf0d3a74b7b4e7206a05c7f14efd9a8dc91961eaa30c7bf080e4",
+      "classifications.tsv": "6b7d05e6ed36bbb38cbd9100e50e3473e858f0b295d96894eb4c6a47a7110ffd",
+      "metadata.json": "e1e25cdeb870dbe36a4694ecfddb3e2b5fd80d5d20903e307396af177beaf344"
+    }
+  },
+  "selection_rule": "All 31 ADDED builtin-append/builtin-make candidates plus the two ADDED finishAccepted json.Marshal allocation sites; exact IDs are the authoritative unresolved list for this adjudication.",
+  "counts": {
+    "total": 33,
+    "NECESSARY": 28,
+    "REUSE": 4,
+    "UNRESOLVED": 1
+  },
+  "all33_unique_equality": {
+    "expected_count": 33,
+    "actual_count": 33,
+    "unique_id_count": 33,
+    "equals_unresolved_list": true
+  },
+  "c15_delta_go": null,
+  "disposition": "C15_DELTA_BLOCKED_UNRESOLVED_1",
+  "rows": [
+    {
+      "id": "alloc.b4.owned.method.pair.lease.admit.builtin-make.make.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "549:12-549:27",
+        "ast_kind": "builtin-make",
+        "ast_hash": "93e3af7d1f4df6e8ed36c89ef8c6aebcd94cd54ae1235a8ff373208cd1bebad1"
+      },
+      "allocation_expression": "make([]byte, 8)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "576:53-576:92",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e4f0159479758e4db5adb4d41fa92a902df13e5f353d2e0bcfa8da1ac1352330"
+      },
+      "allocation_expression": "append(json.RawMessage(nil), result...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.2",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "579:12-579:61",
+        "ast_kind": "builtin-append",
+        "ast_hash": "5b5e5a627193866f7c655c46d3e70304fa5e27712f0c91bb001976399e18b7e0"
+      },
+      "allocation_expression": "append(json.RawMessage(nil), serverError.Data...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "584:31-584:114",
+        "ast_kind": "builtin-append",
+        "ast_hash": "8aa5d1a70547d4d1578faa2ceb288571174c4d91a8ff565c55812067d3aec273"
+      },
+      "allocation_expression": "append([]callHierarchyOpaqueCommitmentMetadata(nil), o.commitments.predecessors...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.2",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "585:17-585:53",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e70379f24edfe2dfbddb10f4f4c45f851a29bd5a962c091432b127a1724474f3"
+      },
+      "allocation_expression": "append([]byte(nil), o.error.data...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.3",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "586:28-586:75",
+        "ast_kind": "builtin-append",
+        "ast_hash": "7c8b0e5f2ff0a68f1671ed0012cefca88dd079c53b15fd738a3c000c2d6b60bc"
+      },
+      "allocation_expression": "append([]byte(nil), o.error.serializedBytes...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.4",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "587:34-587:87",
+        "ast_kind": "builtin-append",
+        "ast_hash": "2c4505de6c3d383701298218f748455d084206123c0b0b2eda2e3846f439b34e"
+      },
+      "allocation_expression": "append([]byte(nil), o.external.notificationsBytes...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.5",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "588:30-588:79",
+        "ast_kind": "builtin-append",
+        "ast_hash": "11e85c11b34e99af694384bc376c03d6c92b4f4496022346a63d45e49e1b7228"
+      },
+      "allocation_expression": "append([]byte(nil), o.external.responsesBytes...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.6",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "589:32-589:83",
+        "ast_kind": "builtin-append",
+        "ast_hash": "d101a08908237fcbaa48801f021c8aaf0f771ca16fe83fe24a91a87225e7871d"
+      },
+      "allocation_expression": "append([]byte(nil), o.frames.request.frameBytes...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.7",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "590:33-590:85",
+        "ast_kind": "builtin-append",
+        "ast_hash": "55c456880d42f6016845580daef68472a5375d8de858e34e6daaf7dcbffaf69f"
+      },
+      "allocation_expression": "append([]byte(nil), o.frames.response.frameBytes...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.8",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "591:19-591:66",
+        "ast_kind": "builtin-append",
+        "ast_hash": "a244dd6a6afea9b921ef43897296abe5de77dd0dc20695ecbdad0fbf8e768c75"
+      },
+      "allocation_expression": "append(json.RawMessage(nil), o.result.bytes...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "857:15-857:34",
+        "ast_kind": "builtin-append",
+        "ast_hash": "da6c79e56f5882c3a5962b086224b95225502f68a72af3baaa152a3dd184d373"
+      },
+      "allocation_expression": "append(detached, o)",
+      "reservation_accounting_provenance": "Uses the fresh detached slice reserved at this function with capacity len(manager owners); appends cannot exceed that bound.",
+      "initial_owner": "detachCallHierarchyLayer1GenericOwnersLocked local detached slice.",
+      "transfer_custody": "Carries detached owner pointers out of the manager lock to lifecycle terminalization.",
+      "release_retirement": "Each detached owner receives requestTerminal then waitReleased on stop/restart.",
+      "refusal_terminal_behavior": "Not on request refusal; lifecycle-only partitioning.",
+      "concurrency_exact_once": "Manager mutex serializes partition; owner mutex serializes terminalization.",
+      "defensive_copy_need": "No payload copy; pointer list isolates lifecycle work after unlock.",
+      "backing": "Reuses the fresh detached-slice backing allocated by the paired make site.",
+      "classification": "REUSE",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Exact evidence proves reuse of an existing backing or a pre-existing allocation expression; no new C15 allocation class is introduced."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.2",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "859:15-859:34",
+        "ast_kind": "builtin-append",
+        "ast_hash": "d9b16894f27398fc270820361bba2c42c6d1b35d14d2ed530344f7008acb980a"
+      },
+      "allocation_expression": "append(retained, o)",
+      "reservation_accounting_provenance": "retained is m.callHierarchyLayer1GenericOwners[:0], so append reuses the manager slice backing within its existing capacity.",
+      "initial_owner": "Manager retained-owner table.",
+      "transfer_custody": "Retains nonmatching owner pointers in manager custody.",
+      "release_retirement": "Later stop/restart/shutdown detaches and terminalizes retained owners.",
+      "refusal_terminal_behavior": "Not on request refusal; lifecycle-only partitioning.",
+      "concurrency_exact_once": "Manager mutex encloses compaction and publication.",
+      "defensive_copy_need": "No payload copy; in-place pointer compaction.",
+      "backing": "Reuses existing manager owner-slice backing.",
+      "classification": "REUSE",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Exact evidence proves reuse of an existing backing or a pre-existing allocation expression; no new C15 allocation class is introduced."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-make.make.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "852:14-852:98",
+        "ast_kind": "builtin-make",
+        "ast_hash": "9bec583d09a7958e4cbe8cb5a835fcdde4607130356312c62e2e382d4490c6c0"
+      },
+      "allocation_expression": "make([]*callHierarchyLayer1GenericOwner, 0, len(m.callHierarchyLayer1GenericOwners))",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Lifecycle detach local.",
+      "transfer_custody": "Receives matching manager-held owner pointers before unlock.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required to separate detached worklist from in-place retained compaction.",
+      "backing": "New pointer-slice backing with capacity equal to current manager owner count.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "759:54-759:91",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e553b6969f1ad694842cb2fcdab6de9618dd41859cf2f6cb786a20b85b27f5ec"
+      },
+      "allocation_expression": "append(json.RawMessage(nil), body...) [accepted-terminal result]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.2",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "773:55-773:92",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e553b6969f1ad694842cb2fcdab6de9618dd41859cf2f6cb786a20b85b27f5ec"
+      },
+      "allocation_expression": "append(json.RawMessage(nil), body...) [successful-nonempty result]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.3",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "782:118-782:146",
+        "ast_kind": "builtin-append",
+        "ast_hash": "62b2f95ff20cb11660049a9645a7a31b7022324bd19d128f03bea91f4bacf609"
+      },
+      "allocation_expression": "append([]byte(nil), body...) [external responses]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.4",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "788:112-788:142",
+        "ast_kind": "builtin-append",
+        "ast_hash": "45004ae9e9fcd911c3eb5d0e6190f0871932cb7626b561f98d836fed041eda46"
+      },
+      "allocation_expression": "append([]byte(nil), e.Data...) [protocol error data]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "789:16-793:39",
+        "ast_kind": "call",
+        "ast_hash": "091674c004b49dfb632e304b7a0a18c8c69d85967880044979b252288de955c6"
+      },
+      "allocation_expression": "json.Marshal(protocol RPC error projection)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.2",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "802:16-806:42",
+        "ast_kind": "call",
+        "ast_hash": "005bcba3245100e312afe9288e5baa1e008a84ac136b28f1c6d12348cb561617"
+      },
+      "allocation_expression": "json.Marshal(fixed malformed-response error projection)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.genericframe.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "559:7-559:34",
+        "ast_kind": "builtin-append",
+        "ast_hash": "76117c73d3671cc00146f0f188bb50d958500b2df87ea09aa978c5116cfead72"
+      },
+      "allocation_expression": "append([]byte(nil), raw...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "535:38-535:116",
+        "ast_kind": "builtin-append",
+        "ast_hash": "9deaf0dbc751fdf0302b52ecf3b0944cb398197af051a7c10197d50f38b04c38"
+      },
+      "allocation_expression": "append([]callHierarchyOpaqueCommitmentMetadata(nil), a.predecessors.values...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.b4.owned.method.pair.lease.publishcallhierarchylayer1genericownerlocked.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "848:39-848:88",
+        "ast_kind": "builtin-append",
+        "ast_hash": "3d56ac62d23567e84550e61da9f9ed98418a1d034d52e8ebdab7071d4c85968f"
+      },
+      "allocation_expression": "append(m.callHierarchyLayer1GenericOwners, owner)",
+      "reservation_accounting_provenance": "Publication is under m.mu, but neither patch nor enumeration proves spare capacity or forced growth at this append.",
+      "initial_owner": "Manager callHierarchyLayer1GenericOwners table if admitted.",
+      "transfer_custody": "Result owner is transferred to manager custody unless manager is closed or generation retired; otherwise returned for immediate terminalization.",
+      "release_retirement": "Manager detaches on completed stop/restart/shutdown; rejected publication is terminalized immediately.",
+      "refusal_terminal_behavior": "Closed/retired publication does not retain owner and returns it for synchronous terminalization.",
+      "concurrency_exact_once": "m.mu serializes publication/detach; owner terminal path drains active callbacks exactly once.",
+      "defensive_copy_need": "Payload was already copied into owner; this site only stores an owner pointer.",
+      "backing": "Could reuse existing slice capacity or allocate a new backing array; evidence does not decide.",
+      "classification": "UNRESOLVED",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Allocation occurrence is capacity-dependent and the immutable evidence contains no capacity invariant proving reuse or growth; convenience cannot be inferred."
+    },
+    {
+      "id": "alloc.owned.method.pair.copycommitments.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "395:9-395:80",
+        "ast_kind": "builtin-append",
+        "ast_hash": "ac2f65cb87a172cfbcb3521f5ad092bd6db9d3a84cadae147a21119a232deedb"
+      },
+      "allocation_expression": "append([]callHierarchyPredecessorCommitment(nil), chain.commitments...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.owned.method.pair.copyframebytes.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "431:9-431:45",
+        "ast_kind": "builtin-append",
+        "ast_hash": "4a2889cd2a5f2adec0a7c4f6d20b066abba76326b39e9b3613a5d09f5deb8f17"
+      },
+      "allocation_expression": "append([]byte(nil), o.frameBytes...) [request frame]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.owned.method.pair.copyframebytes.builtin-append.append.2",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "437:9-437:45",
+        "ast_kind": "builtin-append",
+        "ast_hash": "4a2889cd2a5f2adec0a7c4f6d20b066abba76326b39e9b3613a5d09f5deb8f17"
+      },
+      "allocation_expression": "append([]byte(nil), o.frameBytes...) [response frame]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.owned.method.pair.copyparamsbytes.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "434:9-434:91",
+        "ast_kind": "builtin-append",
+        "ast_hash": "b12ed674de1226b727225838febb9ca4ae51ae848c11c18def1eed3ba6bb1741"
+      },
+      "allocation_expression": "append([]byte(nil), o.frameBytes[o.paramsOffset:o.paramsOffset+o.paramsLength]...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.owned.method.pair.copyresultbytes.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "440:9-440:91",
+        "ast_kind": "builtin-append",
+        "ast_hash": "add1a810585a039a3dc85723c0774e1a5b76db0899375e3176a8c26dc3d3f2d1"
+      },
+      "allocation_expression": "append([]byte(nil), o.frameBytes[o.resultOffset:o.resultOffset+o.resultLength]...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "418:11-418:40",
+        "ast_kind": "builtin-append",
+        "ast_hash": "b1ab03459d0ab43e1623b408e8e9e9e3cfd3bbdda6af8e0837678de361a9f866"
+      },
+      "allocation_expression": "append([]byte(nil), frame...) [original request]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "426:11-426:40",
+        "ast_kind": "builtin-append",
+        "ast_hash": "b1ab03459d0ab43e1623b408e8e9e9e3cfd3bbdda6af8e0837678de361a9f866"
+      },
+      "allocation_expression": "append([]byte(nil), frame...) [original response]",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.owned.method.pair.privatecallhierarchylayer1withpredecessors.builtin-append.append.1",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "487:72-487:135",
+        "ast_kind": "builtin-append",
+        "ast_hash": "8b6cd8f336f3bf2015380fbf7408c338be0739d9113022262ad880ad97872466"
+      },
+      "allocation_expression": "append([]callHierarchyOpaqueCommitmentMetadata(nil), values...)",
+      "reservation_accounting_provenance": "New retained or returned value created from patch input at this exact site; nil-based append/make/marshal gives independent storage when nonempty.",
+      "initial_owner": "Initially the constructing attempt/observation/returned-copy local; when embedded in an owner, manager-held callHierarchyLayer1GenericOwner custody.",
+      "transfer_custody": "Attempt data is copied into observation, then defensively copied into owner; View/Callback return additional defensive copies where applicable.",
+      "release_retirement": "Attempt temporaries become unreachable after finish; owner backing is cleared by releaseLocked after admission closes and active callbacks drain; manager detaches on stop/restart/shutdown.",
+      "refusal_terminal_behavior": "Pre-effect refusals still construct/publish an observation owner; closed/retired manager state returns it for immediate requestTerminal/waitReleased.",
+      "concurrency_exact_once": "Owner mutex gates admission and active callbacks; releaseStarted/released makes terminal release exactly-once; callback drain precedes clearing.",
+      "defensive_copy_need": "Required where bytes/slices cross caller, transport, attempt, owner, or view boundaries; prevents post-call mutation and alias retention.",
+      "backing": "New independent backing for nonempty nil-based append/make/marshal result; zero-length append may remain nil and is a known zero.",
+      "classification": "NECESSARY",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Introduces independent storage required by the accepted write-set ownership/defensive-copy semantics and therefore requires explicit C15 treatment."
+    },
+    {
+      "id": "alloc.sessionruntime.runlifecycle.builtin-make.make.3",
+      "source": {
+        "path": "sessionruntime/sessionruntime.go",
+        "span": "2961:129-2961:166",
+        "ast_kind": "builtin-make",
+        "ast_hash": "0ea68843a9a50cc154711a531af54cc7e981a0207c34876ac7d461c556bd2f0a"
+      },
+      "allocation_expression": "make(map[lspwire.RequestKey]*Request) [pre-existing successor startup site, ordinal shifted]",
+      "reservation_accounting_provenance": "Exact AST hash matches a pre-patch runLifecycle allocation that was renumbered by inserted syntax; no new allocation semantics.",
+      "initial_owner": "Existing successor runtime-session startup state.",
+      "transfer_custody": "Unchanged pre-existing startup custody.",
+      "release_retirement": "Unchanged pre-existing runtime-session lifecycle.",
+      "refusal_terminal_behavior": "Unchanged pre-existing startup failure behavior.",
+      "concurrency_exact_once": "Unchanged pre-existing manager lifecycle synchronization.",
+      "defensive_copy_need": "No new defensive copy; classification is site reuse by exact AST identity.",
+      "backing": "Existing allocation expression, renumbered; not a newly introduced backing class.",
+      "classification": "REUSE",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Exact evidence proves reuse of an existing backing or a pre-existing allocation expression; no new C15 allocation class is introduced."
+    },
+    {
+      "id": "alloc.sessionruntime.runlifecycle.builtin-make.make.4",
+      "source": {
+        "path": "sessionruntime/sessionruntime.go",
+        "span": "2961:168-2961:197",
+        "ast_kind": "builtin-make",
+        "ast_hash": "fc84b204c50e9cebd8d9f1bf471f2d6e6f9df91a08473b5accc57d44b377393f"
+      },
+      "allocation_expression": "make(chan struct{}, 1) [pre-existing successor startup site, ordinal shifted]",
+      "reservation_accounting_provenance": "Exact AST hash matches a pre-patch runLifecycle allocation that was renumbered by inserted syntax; no new allocation semantics.",
+      "initial_owner": "Existing successor runtime-session startup state.",
+      "transfer_custody": "Unchanged pre-existing startup custody.",
+      "release_retirement": "Unchanged pre-existing runtime-session lifecycle.",
+      "refusal_terminal_behavior": "Unchanged pre-existing startup failure behavior.",
+      "concurrency_exact_once": "Unchanged pre-existing manager lifecycle synchronization.",
+      "defensive_copy_need": "No new defensive copy; classification is site reuse by exact AST identity.",
+      "backing": "Existing allocation expression, renumbered; not a newly introduced backing class.",
+      "classification": "REUSE",
+      "evidence_ceiling": "Static baseline+accepted-patch+enumeration evidence only; establishes source/lifecycle structure, not runtime allocation frequency, allocator behavior, production execution, or unobserved capacity state.",
+      "rationale": "Exact evidence proves reuse of an existing backing or a pre-existing allocation expression; no new C15 allocation class is introduced."
+    }
+  ]
+}

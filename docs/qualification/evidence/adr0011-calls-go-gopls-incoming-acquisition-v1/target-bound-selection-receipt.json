@@ -1,0 +1,23 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.target-selection-receipt.v1",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "selection_mode": "DIRECT_POSITION",
+  "document_symbol_requested": false,
+  "canonical_uri": "file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go",
+  "requested_position": {"line":749,"character":24,"encoding":"utf-16"},
+  "reported_selected_projection": {
+    "name":"IncomingCalls",
+    "kind":12,
+    "uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go",
+    "range":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}},
+    "selectionRange":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}}
+  },
+  "position_contained_by_range": true,
+  "position_contained_by_selection_range": true,
+  "selected_ordinal": null,
+  "raw_prepare_cardinality": null,
+  "canonical_full_item_identity_available": false,
+  "opaque_data_available": false,
+  "role_status": "MISSING",
+  "reason": "composed artifact does not retain raw prepare order/cardinality, selected ordinal, or complete item including tags/data; no ordinal or full-identity claim is made"
+}

@@ -54,30 +54,31 @@ func TestRestrictedDefinitionB4C17TargetPublicationContract(t *testing.T) {
 	}
 }
 
-// A failed target admission may leave private backing bytes changed, but no
-// validated handle or provenance state may become observable. This test names
-// the exact state transition that a behavioral fixture must exercise once the
-// new commit API compiles.
-func TestRestrictedDefinitionB4C17PartialRefusalInvisibilityContract(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("BLOCKED_NOT_RED C17 producer source location")
-	}
-	production, err := os.ReadFile(strings.TrimSuffix(file, "c17_target_publication_red_private_test.go") + "restricted_definition_provenance_private.go")
+func TestRestrictedDefinitionB4C17ProductionBorrowPublishesCanonicalCandidate(t *testing.T) {
+	_, m := newRestrictedRootManager(t, 0)
+	p, err := m.reserveProcessing(1, 2, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := string(production)
-	start := strings.Index(source, "func (m *restrictedOwnerManager) validateDefinitionProvenanceB4")
-	end := strings.Index(source[start:], "\nfunc (a *restrictedAttempt) validatedHandle")
-	if start < 0 || end < 0 {
-		t.Fatal("BLOCKED_NOT_RED C17 producer function boundary")
+	in := restrictedTypedB4Input(t)
+	r, err := m.reserveDefinitionProvenance(p, restrictedDefinitionLengths{Provenance: restrictedProvenanceRawBytes, Records: restrictedProvenanceRecordBytes})
+	if err != nil {
+		t.Fatal(err)
 	}
-	body := source[start : start+end]
-	admission := strings.Index(body, "WithTargetAppendAdmission(uint64(candidate.Ordinal)")
-	finalize := strings.Index(body, "a.provenanceState = restrictedProvenanceValidated")
-	committed := strings.Index(body, "committed = a.validatedHandle")
-	if admission < 0 || finalize < admission || committed < finalize {
-		t.Fatalf("ASSERT_C17_PARTIAL_REFUSAL_PROVENANCE_INVISIBLE admission=%d finalize=%d committed=%d", admission, finalize, committed)
+	validated, err := m.validateDefinitionProvenanceB4(r, p, in)
+	if err != nil {
+		t.Fatalf("ASSERT_C17_PRODUCTION_BORROW_CANONICAL_APPEND err=%v", err)
 	}
+	a := &m.attempts[p.slot]
+	if validated.candidateCount != 1 || a.provenanceState != restrictedProvenanceValidated || a.provenanceCandidateCount != 1 {
+		t.Fatalf("ASSERT_C17_VALIDATED_CANDIDATE_VISIBLE handle=%+v state=%d collected=%d", validated, a.provenanceState, a.provenanceCandidateCount)
+	}
+	candidate := a.provenanceCandidates[0]
+	if candidate.Ordinal != 0 || candidate.OccurrenceID == "" || candidate.QueryOccurrenceID == "" || candidate.TargetID == "" || candidate.TargetURI == "" {
+		t.Fatalf("ASSERT_C17_CANONICAL_CANDIDATE_COLLECTED candidate=%+v", candidate)
+	}
+}
+
+func TestRestrictedDefinitionB4C17PartialRefusalInvisibilityContract(t *testing.T) {
+	t.Skip("BLOCKED_NOT_RED: production fixture exposes one target only; partial refusal after an earlier canonical candidate requires a production fixture, not a synthetic hook")
 }

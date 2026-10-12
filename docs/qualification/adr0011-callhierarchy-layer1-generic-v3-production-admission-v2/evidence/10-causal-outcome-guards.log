@@ -1,0 +1,119 @@
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/request-null
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/request-duplicate
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-array
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-string-scalar
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-number-scalar
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-boolean-scalar
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-object
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-accepted-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-accepted-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-accepted-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-accepted-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-accepted-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-accepted-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-accepted-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-accepted-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-accepted-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-accepted-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-accepted-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-accepted-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-accepted-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-accepted-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-unknown
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-duplicate-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-duplicate-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-conflicting-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-conflicting-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-refusal-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-refusal-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-refusal-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-refusal-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-refusal-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-refusal-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-refusal-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-refusal-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-refusal-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-unknown
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-duplicate-class
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-duplicate-type
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-duplicate-reason
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-conflicting-terminal
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-trailing
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/accepted-complete
+=== RUN   TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/refusal-complete
+=== NAME  TestCallHierarchyLayer1GenericV3CausalOutcomeGuards
+    b4_callhierarchy_layer1_generic_v3_test.go:2106: ASSERT_CH_GENERIC_V3_ROOT_NAME_04: "W04"
+--- FAIL: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/request-null (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/request-duplicate (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-array (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-string-scalar (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-number-scalar (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-boolean-scalar (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-object (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-accepted-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-accepted-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-accepted-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-accepted-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-accepted-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-accepted-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-accepted-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-accepted-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-accepted-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-accepted-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-accepted-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-accepted-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-accepted-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-accepted-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-unknown (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-duplicate-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-duplicate-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-conflicting-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-accepted-conflicting-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-refusal-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-missing-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-refusal-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-null-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-refusal-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-non-string-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-refusal-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-empty-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-refusal-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-case-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-refusal-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-whitespace-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-refusal-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-refusal-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-unicode-refusal-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-unknown (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-duplicate-class (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-duplicate-type (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-duplicate-reason (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-refusal-conflicting-terminal (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/strict-trailing (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/accepted-complete (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CausalOutcomeGuards/refusal-complete (0.00s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.348s
+FAIL

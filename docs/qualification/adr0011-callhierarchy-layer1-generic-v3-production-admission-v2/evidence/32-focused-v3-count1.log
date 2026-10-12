@@ -1,0 +1,122 @@
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-01
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-01 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-02
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-02 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-03
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-03 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-04
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-04 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-05
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-05 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-06
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-06 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-07
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-07 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-08
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-08 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-09
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-09 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-10
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-10 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-11
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-11 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-12
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-12 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-13
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-13 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-14
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-14 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-15
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-15 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-16
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-16 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-17
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-17 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-18
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-18 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-19
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-19 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-20
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-20 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-21
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-21 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-22
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-22 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-23
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-24
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-24 registry=81 compared=81 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-25
+    b4_callhierarchy_layer1_generic_v3_test.go:2239: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-25 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-24-actual-workers-and-aggregate
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-201 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-202 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-203 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-204 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-205 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-206 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-207 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-208 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-209 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-210 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-211 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-212 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-213 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-214 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-215 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2260: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=worker-216 registry=116 compared=116 skipped=0 errors=0
+=== RUN   TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-25-actual-executions-and-pairs
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-301 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-303 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-305 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-307 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-309 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-311 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-313 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-315 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-317 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-319 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2271: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-321 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-301 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-303 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-305 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-307 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-309 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-311 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-313 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-315 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-317 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-319 registry=116 compared=116 skipped=0 errors=0
+    b4_callhierarchy_layer1_generic_v3_test.go:2284: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=execution-321 registry=116 compared=116 skipped=0 errors=0
+=== NAME  TestCallHierarchyLayer1GenericV3CorpusCausalRED
+    b4_callhierarchy_layer1_generic_v3_test.go:2306: ASSERT_CH_GENERIC_V3_EXECUTION_COUNTERS roots=25 workers=16 executions=22 pair_members=22 total=85 attempted=85 executed=84 pre_effect_refused=1
+--- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED (0.10s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-01 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-02 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-03 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-04 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-05 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-06 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-07 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-08 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-09 (0.03s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-10 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-11 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-12 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-13 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-14 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-15 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-16 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-17 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-18 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-19 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-20 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-21 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-22 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-23 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-24 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-25 (0.00s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-24-actual-workers-and-aggregate (0.01s)
+    --- PASS: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-25-actual-executions-and-pairs (0.02s)
+PASS
+ok  	lsp-trace/sessionruntime	0.340s

@@ -1,0 +1,44 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.acquisition-custody.v1",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "canonical_identity_domain": "lsp-trace.adr0011.calls.go.gopls.incoming.exact.v1",
+  "authority": 0,
+  "accepted": false,
+  "production_admission": "REFUSED_MISSING_EVIDENCE",
+  "repository": {
+    "workspace_path": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+    "workspace_uri": "file:///Users/schwa/dev/lsp-trace-adr0011-c17",
+    "commit": "082e3f6dfb5aac82fdeef804153f73d07de408e2",
+    "dirty_state_command": "git status --porcelain=v1",
+    "dirty_entry_count": 0,
+    "custody": "SELF_MEASURED"
+  },
+  "document": {
+    "path": "/Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go",
+    "uri": "file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go",
+    "language_id": "go",
+    "sha256": "040622acaf54ea77fe79f3333b10857cfce0bef09bce81f448bd4ee0a619b884",
+    "byte_length": 36296,
+    "git_blob_oid_sha1": "15facd039ba84152b0c2b77577e3bec81d0fbc8f"
+  },
+  "session": {
+    "session_id": "sk1:33544354924d71648883b07b3cf158f8ce7564dc8ebcc66b87db42b9d3c961ef",
+    "generation": 1,
+    "state": "READY",
+    "started": "2026-10-10T13:16:22.616017-07:00",
+    "language_id": "go",
+    "server_profile": "gopls",
+    "position_encoding": "utf-16",
+    "workspace_root": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+    "status_request_id": "offline-6"
+  },
+  "managed_server_host": {
+    "binary_version": "lsp-trace-mcp wip-adr0007",
+    "source_revision": "3ac56b455813831fa8fb691942cf66acead35cb0",
+    "dirty": false,
+    "custody": "SELF_MEASURED",
+    "executable_sha256": "sha256:f22613951a64f9101e924133a75f7783ec43d15856d9a4dc12e8301784549e81",
+    "instance_id": "si1:18f2a80da606b671c23a245edee68133"
+  },
+  "important_distinction": "managed_server_host identifies lsp-trace-mcp, not the managed gopls executable"
+}

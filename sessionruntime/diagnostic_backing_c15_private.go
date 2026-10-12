@@ -18,7 +18,8 @@ type privateB4EventBackingLease struct {
 }
 
 func (o privateB4EventBackingOwner) ReserveEventBacking(bytes uint64) (manageddiagnostic.EventBackingLease, error) {
-	lease, failure := o.account.reserve(bytes)
+	_ = privateC15SiteC15Owner25DiagnosticEventBacking
+	lease, failure := o.account.reservePrivateB4C15(bytes, privateC15SiteC15Owner25DiagnosticEventBacking, privateB4C15Operation("reserve"))
 	if failure != "" {
 		return nil, errors.New(string(failure))
 	}
@@ -83,6 +84,7 @@ func newManagerDiagnosticOwner() (*managerDiagnosticOwner, session.Failure) {
 	if !managerDiagnosticRepresentationSupported() || !privateDiagnosticHistoryRepresentationSupported() || fixed > managerDiagnosticMaxOwnedBytes {
 		return nil, session.ResourceExhausted
 	}
+	_ = privateC15SiteC15Owner27FixedDiagnosticHistory
 	o := &managerDiagnosticOwner{live: fixed, cumulative: fixed}
 	return o, ""
 }

@@ -1,0 +1,6 @@
+=== RUN   TestADR0011CallHierarchyC15DeltaEnumerate
+    adr0011_callhierarchy_c15_delta_enumerator_private_test.go:72: HEAD=57b088e56f4ac5b0e5162a03a2f7d695f34085b1
+--- FAIL: TestADR0011CallHierarchyC15DeltaEnumerate (0.04s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.279s
+FAIL

@@ -28,13 +28,15 @@ func canonicalProposalRecord(root *publication.Root, x proposalContextInputs, re
 	}
 	context, err := canonicalProposalContext(root, x, read)
 	if err != nil {
-		return nil, errProposalRecord
+		return nil, errors.Join(errProposalRecord, err)
 	}
 	r := x.ResponseInputs
 	response, ok := responseReadExpected(root, r, read)
-	if !ok || !replayRawResult(root, x.RawResult, x.ResponseRead, r.Payload, r, read) ||
-		!replayScannerRecord(root, x.Scanner, x.ResponseRead, x.RawResult, r.Payload, r, read, nil) {
+	if !ok || !replayRawResult(root, x.RawResult, x.ResponseRead, r.Payload, r, read) {
 		return nil, errProposalRecord
+	}
+	if err := replayScannerRecord(root, x.Scanner, x.ResponseRead, x.RawResult, r.Payload, r, read, nil, x.Context); err != nil {
+		return nil, errors.Join(errProposalRecord, err)
 	}
 	raw, ok := rawResultExpected(root, x.ResponseRead, r.Payload, r, read)
 	if !ok || raw.PayloadByteLength < 1 || raw.PayloadByteLength > rawResultPayloadLimit {
@@ -95,7 +97,7 @@ func publishProposalRecord(root *publication.Root, x proposalContextInputs, read
 	absent := privateBodyPublication{stage: "ABSENT"}
 	b, err := canonicalProposalRecord(root, x, read)
 	if err != nil {
-		return absent, errProposalRecord
+		return absent, errors.Join(errProposalRecord, err)
 	}
 	digest := proposalRecordDigest(b)
 	selector := proposalRecordSelector(digest)

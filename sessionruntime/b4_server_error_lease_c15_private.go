@@ -69,7 +69,8 @@ func newPrivateB4ServerErrorOwner(account *privateB4ByteAccountV2, source *lspwi
 	if !ok {
 		return nil, session.ResourceExhausted
 	}
-	charge, failure := account.reserve(capacity)
+	_ = privateC15SiteC15Copy32ServerErrorMessageData
+	charge, failure := account.reservePrivateB4C15(capacity, privateC15SiteC15Copy32ServerErrorMessageData, privateB4C15Operation("copy"))
 	if failure != "" {
 		return nil, failure
 	}
@@ -92,6 +93,11 @@ func (l ServerErrorLease) WithServerError(fn func(ServerErrorView) error) error 
 	o := l.owner
 	o.mu.Lock()
 	if o.admissionClosed || o.released {
+		o.mu.Unlock()
+		return ErrServerErrorLeaseClosed
+	}
+	_ = privateC15SiteC15Alias33ServerErrorCallback
+	if failure := o.charge.account.aliasPrivateB4C15(o.charge.lease, privateC15SiteC15Alias33ServerErrorCallback); failure != "" {
 		o.mu.Unlock()
 		return ErrServerErrorLeaseClosed
 	}

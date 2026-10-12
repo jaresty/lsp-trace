@@ -2,6 +2,7 @@ package adr0011acquisition
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -17,7 +18,7 @@ import (
 )
 
 const scannerRecordRole = "REFERENCES_SCANNER_OBSERVATION_V1"
-const scannerSourcePin = "sha256:2eaad298bc11a317c5ac0a7ff38f536f4dd616304264f3f62a24cf8ca9941730"
+const scannerSourcePin = "sha256:f8d62768798154c372e35fc2d3d43752fbd928aa7a247ec665868df2998adc4e"
 const scannerSourceLimit = 1 << 20
 
 var errScannerRecord = errors.New("private references scanner observation not verified")
@@ -81,65 +82,71 @@ func scannerRecordSelector(d string) string {
 }
 
 // Reconstruct only from independently verified predecessors and retained bytes.
-func scannerRecordExpected(root *publication.Root, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error)) (scannerRecord, bool) {
+func scannerRecordExpected(root *publication.Root, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error), contexts ...context.Context) (scannerRecord, error) {
 	var zero scannerRecord
 	pin, ok := selectedScannerPin(source)
 	if !ok || root == nil || responseRead.stage != "VERIFIED" || rawResult.stage != "VERIFIED" || payload.stage != "VERIFIED" || payload != x.Payload {
-		return zero, false
+		return zero, errScannerRecord
 	}
 	if read == nil {
 		read = publication.ReadVerifiedBoundFile
 	}
 	if !replayRawResult(root, rawResult, responseRead, payload, x, read) {
-		return zero, false
+		return zero, errScannerRecord
 	}
-	observed, err := observeRawScanner(root, payload, read)
-	if err != nil || (observed.form != "NULL" && observed.form != "ARRAY") || observed.workUnits < 1 || observed.workUnits > rawResultPayloadLimit {
-		return zero, false
+	observed, err := observeRawScanner(root, payload, read, contexts...)
+	if err != nil {
+		return zero, errors.Join(errScannerRecord, err)
 	}
-	return scannerRecord{scannerRecordRole, targetRecordRefFields{responseRead.selector, responseRead.digest, responseReadRole}, targetRecordRefFields{rawResult.selector, rawResult.digest, rawResultRole}, pin, observed.form, observed.knownE, observed.workUnits}, true
+	if (observed.form != "NULL" && observed.form != "ARRAY") || observed.workUnits < 1 || observed.workUnits > rawResultPayloadLimit {
+		return zero, errScannerRecord
+	}
+	return scannerRecord{scannerRecordRole, targetRecordRefFields{responseRead.selector, responseRead.digest, responseReadRole}, targetRecordRefFields{rawResult.selector, rawResult.digest, rawResultRole}, pin, observed.form, observed.knownE, observed.workUnits}, nil
 }
 
-func replayScannerRecord(root *publication.Root, state, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error)) bool {
-	return replayScannerRecordInternal(root, state, responseRead, rawResult, payload, x, read, source, false)
+func replayScannerRecord(root *publication.Root, state, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error), contexts ...context.Context) error {
+	return replayScannerRecordInternal(root, state, responseRead, rawResult, payload, x, read, source, false, contexts...)
 }
-func replayScannerRecordInternal(root *publication.Root, state, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error), promoting bool) bool {
+func replayScannerRecordInternal(root *publication.Root, state, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error), promoting bool, contexts ...context.Context) error {
 	if state.stage != "VERIFIED" && !(promoting && state.stage == "COMMITTED_UNVERIFIED") {
-		return false
+		return errScannerRecord
 	}
 	if read == nil {
 		read = publication.ReadVerifiedBoundFile
 	}
 	b, err := read(root, state.selector, sourceRecordLimit)
 	if err != nil || state.byteCount != len(b) || state.digest != scannerRecordDigest(b) || state.selector != scannerRecordSelector(state.digest) || strictjson.RejectDuplicates(b) != nil {
-		return false
+		return errScannerRecord
 	}
 	var record scannerRecord
 	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&record) != nil {
-		return false
+		return errScannerRecord
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF {
-		return false
+		return errScannerRecord
 	}
-	expected, ok := scannerRecordExpected(root, responseRead, rawResult, payload, x, read, source)
-	if !ok {
-		return false
+	expected, err := scannerRecordExpected(root, responseRead, rawResult, payload, x, read, source, contexts...)
+	if err != nil {
+		return err
 	}
 	canonical, err := canonicalScannerRecord(expected)
-	return err == nil && bytes.Equal(b, canonical)
+	if err != nil || !bytes.Equal(b, canonical) {
+		return errScannerRecord
+	}
+	return nil
 }
 
-func publishScannerRecord(root *publication.Root, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error)) (privateBodyPublication, error) {
+func publishScannerRecord(root *publication.Root, responseRead, rawResult, payload privateBodyPublication, x responseReadInputs, read func(*publication.Root, string, int64) ([]byte, error), source func() ([]byte, error), contexts ...context.Context) (privateBodyPublication, error) {
 	absent := privateBodyPublication{stage: "ABSENT"}
 	if read == nil {
 		read = publication.ReadVerifiedBoundFile
 	}
-	record, ok := scannerRecordExpected(root, responseRead, rawResult, payload, x, read, source)
-	if !ok {
-		return absent, errScannerRecord
+	record, err := scannerRecordExpected(root, responseRead, rawResult, payload, x, read, source, contexts...)
+	if err != nil {
+		return absent, err
 	}
 	b, err := canonicalScannerRecord(record)
 	if err != nil {
@@ -177,8 +184,11 @@ func publishScannerRecord(root *publication.Root, responseRead, rawResult, paylo
 		return privateBodyPublication{selector: selector, digest: digest, byteCount: len(b), stage: "COMMITTED_UNVERIFIED"}, errScannerRecord
 	}
 	state := privateBodyPublication{selector: selector, digest: digest, byteCount: len(b), stage: "COMMITTED_UNVERIFIED"}
-	if !verifiedTargetPublication(receipt, selector, privateDigest(b), len(b)) || !replayScannerRecordInternal(root, state, responseRead, rawResult, payload, x, read, source, true) {
+	if !verifiedTargetPublication(receipt, selector, privateDigest(b), len(b)) {
 		return state, errScannerRecord
+	}
+	if err := replayScannerRecordInternal(root, state, responseRead, rawResult, payload, x, read, source, true, contexts...); err != nil {
+		return state, err
 	}
 	state.stage = "VERIFIED"
 	return state, nil

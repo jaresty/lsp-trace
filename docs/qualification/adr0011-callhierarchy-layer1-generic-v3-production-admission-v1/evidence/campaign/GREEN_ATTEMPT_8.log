@@ -1,0 +1,4 @@
+# lsp-trace/sessionruntime [lsp-trace/sessionruntime.test]
+sessionruntime/sessionruntime.go:1174:30: cannot use sha256.Sum256(read.raw) (value of type [32]byte) as string value in assignment
+FAIL	lsp-trace/sessionruntime [build failed]
+FAIL

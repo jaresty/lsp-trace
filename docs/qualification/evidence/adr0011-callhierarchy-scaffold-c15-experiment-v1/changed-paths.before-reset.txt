@@ -1,0 +1,5 @@
+sessionruntime/b4_owned_method_pair_lease.go
+sessionruntime/testdata/c15-census-v1/candidates.tsv
+sessionruntime/testdata/c15-census-v1/candidates.tsv.sha256
+sessionruntime/testdata/c15-census-v1/classifications.tsv
+sessionruntime/testdata/c15-census-v1/classifications.tsv.sha256

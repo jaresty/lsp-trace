@@ -1,0 +1,7 @@
+{
+  "old_line_occurrences_prior": 1,
+  "new_line_occurrences_corrected": 1,
+  "reverse_substitution_reconstructs_prior": true,
+  "prior_sha256": "81adfac96e7c7ddd42fd256bfb6bd60302a5acab36b0417efa71dea5648dafcd",
+  "corrected_sha256": "3511654b054d953258cd47f965c1baba2ffa37ae732fb92a32c4653f7a94157b"
+}

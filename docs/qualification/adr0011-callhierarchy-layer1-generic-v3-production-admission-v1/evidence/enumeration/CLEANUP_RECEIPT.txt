@@ -1,0 +1,15 @@
+base_head=ce4a1838f8a10bafc13429031e55df7e4dd812c6
+enumerator_removed=true
+remaining_patch_sha256=e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0
+remaining_status_begin
+ M sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+ M sessionruntime/sessionruntime.go
+remaining_status_end
+enumerator_path_absent=true
+worktree_disposed=true
+worktree_path=/tmp/adr0011-layer1-generic-v3-c15-enum-HZjXvO
+parent_head=ce4a1838f8a10bafc13429031e55df7e4dd812c6
+parent_status_begin
+parent_status_end

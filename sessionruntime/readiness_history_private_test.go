@@ -11,6 +11,18 @@ import (
 	"lsp-trace/internal/session"
 )
 
+func c06HistoryBackingCleared(h *privateReadinessHistory) bool {
+	if h == nil || h.outstanding != 0 {
+		return false
+	}
+	for _, chunk := range h.chunks {
+		if chunk != nil {
+			return false
+		}
+	}
+	return true
+}
+
 func TestC06PrivateHistoryStoreBoundsCopiesAndImmutableCut(t *testing.T) {
 	h := &privateReadinessHistory{identity: "generation"}
 	frame := []byte("exact")
@@ -43,7 +55,46 @@ func TestC06PrivateHistoryStoreBoundsCopiesAndImmutableCut(t *testing.T) {
 	}
 	h.retireLocked()
 	if h.outstanding == 0 {
-		t.Fatal("ASSERT_C06_HISTORY_RETIREMENT_RETAINED: retirement released backing")
+		t.Fatal("ASSERT_C06_HISTORY_OWNER_RETIREMENT_RETAINED: retirement released owner-held backing")
+	}
+	acquired, entries, identity, metadata := h.acquired, h.entries, h.identity, first.metadata
+	h.releaseReceiptOwnerLocked()
+	if !c06HistoryBackingCleared(h) || h.acquired != acquired || h.entries != entries || h.identity != identity || first.metadata != metadata {
+		t.Fatalf("ASSERT_C06_HISTORY_FINAL_OWNER_RELEASE_SETTLES: history=%+v metadata=%+v", h, first.metadata)
+	}
+	if _, err := h.freezeReceiptLocked(); err == nil || h.receiptOwners != 0 {
+		t.Fatalf("ASSERT_C06_HISTORY_RETIRED_FREEZE_REFUSED: err=%v owners=%d", err, h.receiptOwners)
+	}
+	h.releaseReceiptOwnerLocked()
+	h.retireLocked()
+	if !c06HistoryBackingCleared(h) || h.acquired != acquired || h.entries != entries {
+		t.Fatalf("ASSERT_C06_HISTORY_DUPLICATE_TERMINAL_IDEMPOTENT: history=%+v", h)
+	}
+}
+
+func TestC06PrivateHistoryUnownedRetirementSettlesBacking(t *testing.T) {
+	h := &privateReadinessHistory{identity: "unowned"}
+	if err := h.appendOwned(privateHistoryOutbound, []byte("request")); err != nil {
+		t.Fatal(err)
+	}
+	acquired, entries := h.acquired, h.entries
+	h.retireLocked()
+	if !c06HistoryBackingCleared(h) || h.acquired != acquired || h.entries != entries || !h.retired {
+		t.Fatalf("ASSERT_C06_HISTORY_UNOWNED_RETIREMENT_SETTLES: history=%+v", h)
+	}
+}
+
+func TestC06PrivateHistoryActiveBorrowerReleaseRetainsBacking(t *testing.T) {
+	h := &privateReadinessHistory{identity: "active"}
+	if err := h.appendOwned(privateHistoryOutbound, []byte("request")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.freezeReceiptLocked(); err != nil || !h.acquireBorrowerLocked() {
+		t.Fatalf("ASSERT_C06_HISTORY_ACTIVE_BORROWER_SETUP: err=%v", err)
+	}
+	h.releaseBorrowerLocked()
+	if h.outstanding == 0 || h.chunks[0] == nil || h.retired {
+		t.Fatalf("ASSERT_C06_HISTORY_ACTIVE_RELEASE_RETAINS: history=%+v", h)
 	}
 }
 
@@ -67,11 +118,8 @@ func TestC06PrivateHistoryIdentityDoesNotAliasAcrossGenerationsWithRepeatedEntro
 		m.mu.Unlock()
 		t.Fatal(err)
 	}
-	firstReceipt, err := first.freezeReceiptLocked()
+	firstIdentity, firstCut, firstEntries, firstAcquired := first.identity, first.cutDigest(), first.entries, first.acquired
 	m.mu.Unlock()
-	if err != nil {
-		t.Fatal(err)
-	}
 	accepted := m.Restart(context.Background(), started.SessionID, "history-identity")
 	terminal := waitOperation(t, m, accepted.IntentID, OperationComplete)
 	if terminal.Failure != "" {
@@ -88,8 +136,11 @@ func TestC06PrivateHistoryIdentityDoesNotAliasAcrossGenerationsWithRepeatedEntro
 	if err != nil {
 		t.Fatal(err)
 	}
-	if firstReceipt.metadata.Identity == secondReceipt.metadata.Identity || firstReceipt.metadata.Cut == secondReceipt.metadata.Cut {
-		t.Fatalf("ASSERT_C06_HISTORY_GENERATION_NON_ALIAS: first=%+v second=%+v", firstReceipt.metadata, secondReceipt.metadata)
+	if firstIdentity == secondReceipt.metadata.Identity || firstCut == secondReceipt.metadata.Cut {
+		t.Fatalf("ASSERT_C06_HISTORY_GENERATION_NON_ALIAS: first=%s/%s second=%+v", firstIdentity, firstCut, secondReceipt.metadata)
+	}
+	if !c06HistoryBackingCleared(first) || !first.retired || first.entries != firstEntries || first.acquired != firstAcquired {
+		t.Fatalf("ASSERT_C06_HISTORY_RESTART_SETTLES_OLD_GENERATION: history=%+v", first)
 	}
 	if records := m.Records(); len(records) != 1 || records[0].Generation != 2 || records[0].State != session.Initializing {
 		t.Fatalf("ASSERT_C06_HISTORY_EXACT_GENERATION_OWNER: records=%+v", records)
@@ -164,8 +215,14 @@ func TestC06PrivateHistoryBorrowerAndReceiptOwnerAccounting(t *testing.T) {
 	if h.outstanding == 0 {
 		t.Fatal("ASSERT_C06_HISTORY_BORROWED_RETIREMENT: borrowed backing released")
 	}
+	acquired, entries, identity, metadata := h.acquired, h.entries, h.identity, receipt.metadata
 	h.releaseBorrowerLocked()
-	if h.borrowers != 0 || h.outstanding == 0 {
-		t.Fatalf("ASSERT_C06_HISTORY_CONSERVATIVE_RELEASE: borrowers=%d outstanding=%d", h.borrowers, h.outstanding)
+	if h.borrowers != 0 || !c06HistoryBackingCleared(h) || h.acquired != acquired || h.entries != entries || h.identity != identity || receipt.metadata != metadata {
+		t.Fatalf("ASSERT_C06_HISTORY_FINAL_BORROWER_RELEASE_SETTLES: history=%+v metadata=%+v", h, receipt.metadata)
+	}
+	h.releaseBorrowerLocked()
+	h.retireLocked()
+	if h.borrowers != 0 || !c06HistoryBackingCleared(h) || h.acquired != acquired || h.entries != entries {
+		t.Fatalf("ASSERT_C06_HISTORY_DUPLICATE_BORROWER_RELEASE_IDEMPOTENT: history=%+v", h)
 	}
 }

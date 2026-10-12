@@ -1,0 +1,14 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.hash-manifest.v1",
+  "algorithm": "sha256",
+  "entries": [
+    {"path":"README.md","sha256":"951b901e4e9e59c45893d7368a038215e9494755c3bcd37d6753fc6b2f6222bc","byte_length":2152},
+    {"path":"acquisition-result.json","sha256":"781339ae5f4165bbba3802d65d6ff690fbb6ebe4fd572eded85f67fdc017298a","byte_length":3756},
+    {"path":"custody.json","sha256":"718d3ba594819891126045823e196adb31ae3f125a11039deb66ee11a87e52cd","byte_length":1892},
+    {"path":"incoming-bounded-method-record.json","sha256":"894c269679c552b7abd4636b901e3b98b1e863de067af76d8259c6402761ba7b","byte_length":2653},
+    {"path":"prepare-bounded-method-record.json","sha256":"b80e587970aa30701cb234cca59a070104aaa91adb63397df2ce409b47d1d2ab","byte_length":1672},
+    {"path":"target-bound-selection-receipt.json","sha256":"4524f0d2b3b6ad520214a00dd76f993b709ecdcc2b29727330b2be180004b34c","byte_length":1169},
+    {"path":"toolchain-and-managed-gopls-boundary.json","sha256":"49c89f5358596cf58a475bc2e54a6e8f7fee7a1f9562d116326ace9bd1a3a86b","byte_length":2195}
+  ],
+  "self_excluded": true
+}

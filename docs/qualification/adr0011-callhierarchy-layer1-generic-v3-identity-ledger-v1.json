@@ -1,0 +1,773 @@
+{
+  "$schema": "https://jaresty.github.io/lsp-trace/schemas/adr0011-callhierarchy-layer1-generic-v3-identity-ledger-v1.schema.json",
+  "schema_version": "adr0011-callhierarchy-layer1-generic-v3-identity-ledger-v1",
+  "status": "REVIEW_REQUIRED",
+  "base_head": "bf8741551899882efa06c3bee847337c794b7503",
+  "profile_identity": "corpus-profile-go",
+  "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "counts": {
+    "occurrences": 85,
+    "opaque_incoming": 45,
+    "opaque_outgoing": 40,
+    "unique_occurrence_addresses": 85,
+    "unique_occurrence_identities": 85,
+    "distinct_request_id_values": 52
+  },
+  "record_model": {
+    "all_values_are_direct_per_occurrence_literals": true,
+    "shared_values": false,
+    "defaults": false,
+    "inheritance": false,
+    "runtime_binding_derivation": false
+  },
+  "canonicalization": {
+    "scope": "records",
+    "algorithm": "UTF-8(JSON(records, ensure_ascii=false, sort_keys=true, separators=(',',':')) + LF)",
+    "sha256_lower_hex": "d626cbda96d875a2f3d0c04fa1a00d20c72481c5b74f742e0af8b5c4943802c5"
+  },
+  "provenance": {
+    "repository": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+    "base_head": "bf8741551899882efa06c3bee847337c794b7503",
+    "source_files": [
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-01.json",
+        "git_blob_oid_sha1": "e287903d3ffe96be6b70b574bab5e707f9c60ba0"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-02.json",
+        "git_blob_oid_sha1": "bc06ae9b9b6ac490708559024a7d656e70ffb50c"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-03.json",
+        "git_blob_oid_sha1": "164b8ecec7c475eb73c01463f8afc4078a4ffed8"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json",
+        "git_blob_oid_sha1": "6a1135bdaa36a8fd427c643cd83752b3f385a606"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json",
+        "git_blob_oid_sha1": "76724b9d01fd93651c4a9f43088a21c4d7c3d4a2"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-06.json",
+        "git_blob_oid_sha1": "6c010fca1a08f5bcd269962e117fb20bf02b9752"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-07.json",
+        "git_blob_oid_sha1": "f8a07e757f6d929ad4ccecb2ae97264589a2fddb"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-08.json",
+        "git_blob_oid_sha1": "3b526fd9cf35aae86a873b1ac2639860cf641c10"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-09.json",
+        "git_blob_oid_sha1": "e1f3fdaa95e9c5a136503714b11c77dcae196aaf"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-10.json",
+        "git_blob_oid_sha1": "73c0b27bda0af1f49850e0a0802ac50d42429ab7"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-11.json",
+        "git_blob_oid_sha1": "8ac0a5f6a151041f3c6ce47e02f3756cf34a983f"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-12.json",
+        "git_blob_oid_sha1": "76fea5689ccf2f49ca4e5a7b7d5e94d84bd31e64"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-13.json",
+        "git_blob_oid_sha1": "75395b3b23f564a46406141d042e31cf24851c67"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-14.json",
+        "git_blob_oid_sha1": "44064b8e96f0c5f04ec0198a307a32647b7d9190"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-15.json",
+        "git_blob_oid_sha1": "4d58c8500068d5a0b54c10a96e3f31d0fb394b7d"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-16.json",
+        "git_blob_oid_sha1": "f42eab8e4ed5c68257ddf7425e6e4dd49f05911e"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-17.json",
+        "git_blob_oid_sha1": "6454f5df7ba5a5bf2602a0e591ea8a859bca3fb9"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-18.json",
+        "git_blob_oid_sha1": "eb3765c703931ec8d1eb9e87fc3da72b72c37802"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-19.json",
+        "git_blob_oid_sha1": "17c7179b618b8041db93ec0a47c331e0599633af"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-20.json",
+        "git_blob_oid_sha1": "aad64431f4dc76441498ed3e696d95949169177b"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-21.json",
+        "git_blob_oid_sha1": "0bef5fc2c5d2260a8100aa3d4521927e4e685078"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-22.json",
+        "git_blob_oid_sha1": "b0e4f28d0596ba1b5d1f31084bcf079ec21a4879"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json",
+        "git_blob_oid_sha1": "8d1a44e59fc1430a1eb92c15f882dd96ff714bc6"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json",
+        "git_blob_oid_sha1": "4646b5197609dc7a4ea845a04461b7a13fe37314"
+      },
+      {
+        "path": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json",
+        "git_blob_oid_sha1": "691db983243fe90d4d9b81329a9fb050a592dfe6"
+      }
+    ],
+    "enumeration_invocation": "cd /Users/schwa/dev/lsp-trace-adr0011-c17 && python3 - <<'PY'\nimport glob\nimport json\nimport os\n\nroot = \"sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds\"\nrows = []\ndef walk(node, pointer, relative_path):\n    if isinstance(node, dict):\n        driver = node.get(\"driver\")\n        if isinstance(driver, dict):\n            request = driver.get(\"request\")\n            if isinstance(request, dict) and \"request_id\" in request:\n                rows.append({\n                    \"occurrence_address\": relative_path + pointer + \"/driver/request\",\n                    \"request_id\": request[\"request_id\"],\n                })\n        for key, child in node.items():\n            if key != \"driver\" and isinstance(child, (dict, list)):\n                walk(child, pointer + \"/\" + key.replace(\"~\", \"~0\").replace(\"/\", \"~1\"), relative_path)\n    elif isinstance(node, list):\n        for index, child in enumerate(node):\n            if isinstance(child, (dict, list)):\n                walk(child, pointer + f\"/{index}\", relative_path)\nfor path in sorted(glob.glob(root + \"/world-*.json\")):\n    with open(path, \"r\", encoding=\"utf-8\") as stream:\n        document = json.load(stream)\n    walk(document, \"#\", os.path.relpath(path, \".\"))\nprint(len(rows))\nprint(json.dumps(rows, ensure_ascii=False, separators=(\",\", \":\")))\nPY",
+    "enumeration_script": "import glob\nimport json\nimport os\n\nroot = \"sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds\"\nrows = []\ndef walk(node, pointer, relative_path):\n    if isinstance(node, dict):\n        driver = node.get(\"driver\")\n        if isinstance(driver, dict):\n            request = driver.get(\"request\")\n            if isinstance(request, dict) and \"request_id\" in request:\n                rows.append({\n                    \"occurrence_address\": relative_path + pointer + \"/driver/request\",\n                    \"request_id\": request[\"request_id\"],\n                })\n        for key, child in node.items():\n            if key != \"driver\" and isinstance(child, (dict, list)):\n                walk(child, pointer + \"/\" + key.replace(\"~\", \"~0\").replace(\"/\", \"~1\"), relative_path)\n    elif isinstance(node, list):\n        for index, child in enumerate(node):\n            if isinstance(child, (dict, list)):\n                walk(child, pointer + f\"/{index}\", relative_path)\nfor path in sorted(glob.glob(root + \"/world-*.json\")):\n    with open(path, \"r\", encoding=\"utf-8\") as stream:\n        document = json.load(stream)\n    walk(document, \"#\", os.path.relpath(path, \".\"))\nprint(len(rows))\nprint(json.dumps(rows, ensure_ascii=False, separators=(\",\", \":\")))\n",
+    "projection_boundary": [
+      "structural container position",
+      "driver.request.request_id"
+    ],
+    "forbidden_during_assignment": [
+      "method",
+      "expected outputs",
+      "expected identity",
+      "world semantic names",
+      "pair semantic names",
+      "implementation behavior",
+      "sibling values"
+    ],
+    "partition_authoring": "One-time producer ranking used canonical typed occurrence identity bytes exactly as specified in assignment_identity; ascending (SHA-256 lower-hex, occurrence_address) ranks 0..44 were frozen as opaque-incoming and ranks 45..84 as opaque-outgoing. This is truthful authoring provenance only, not a runtime derivation rule."
+  },
+  "mismatch_policy": "Any future corpus, address, request-id type/value, count, binding, profile, nonce, or canonical-hash mismatch MUST block the consumer or qualification step and MUST NOT alter this ledger.",
+  "records": [
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-01.json#/driver/request",
+      "request_id": 101,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-02.json#/driver/request",
+      "request_id": 102,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-03.json#/driver/request",
+      "request_id": 103,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json#/driver/request",
+      "request_id": 104,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json#/driver/request",
+      "request_id": 105,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-06.json#/driver/request",
+      "request_id": 106,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-07.json#/driver/request",
+      "request_id": 107,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-08.json#/driver/request",
+      "request_id": 108,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-09.json#/driver/request",
+      "request_id": 109,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-10.json#/driver/request",
+      "request_id": 110,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-11.json#/driver/request",
+      "request_id": 111,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-12.json#/driver/request",
+      "request_id": 112,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-13.json#/driver/request",
+      "request_id": 113,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-14.json#/driver/request",
+      "request_id": 114,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-15.json#/driver/request",
+      "request_id": 115,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-16.json#/driver/request",
+      "request_id": 116,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-17.json#/driver/request",
+      "request_id": 117,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-18.json#/driver/request",
+      "request_id": 118,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-19.json#/driver/request",
+      "request_id": 119,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-20.json#/driver/request",
+      "request_id": 120,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-21.json#/driver/request",
+      "request_id": 121,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-22.json#/driver/request",
+      "request_id": 122,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json#/driver/request",
+      "request_id": 123,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/driver/request",
+      "request_id": 124,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/0/driver/request",
+      "request_id": 201,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/1/driver/request",
+      "request_id": 202,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/2/driver/request",
+      "request_id": 203,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/3/driver/request",
+      "request_id": 204,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/4/driver/request",
+      "request_id": 205,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/5/driver/request",
+      "request_id": 206,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/6/driver/request",
+      "request_id": 207,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/7/driver/request",
+      "request_id": 208,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/8/driver/request",
+      "request_id": 209,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/9/driver/request",
+      "request_id": 210,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/10/driver/request",
+      "request_id": 211,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/11/driver/request",
+      "request_id": 212,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/12/driver/request",
+      "request_id": 213,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/13/driver/request",
+      "request_id": 214,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/14/driver/request",
+      "request_id": 215,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-24.json#/expected/concurrency/workers/15/driver/request",
+      "request_id": 216,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/driver/request",
+      "request_id": 125,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/0/driver/request",
+      "request_id": 301,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/1/driver/request",
+      "request_id": 301,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/2/driver/request",
+      "request_id": 303,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/3/driver/request",
+      "request_id": 303,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/4/driver/request",
+      "request_id": 305,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/5/driver/request",
+      "request_id": 305,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/6/driver/request",
+      "request_id": 307,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/7/driver/request",
+      "request_id": 307,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/8/driver/request",
+      "request_id": 309,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/9/driver/request",
+      "request_id": 309,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/10/driver/request",
+      "request_id": 311,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/11/driver/request",
+      "request_id": 311,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/12/driver/request",
+      "request_id": 313,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/13/driver/request",
+      "request_id": 313,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/14/driver/request",
+      "request_id": 315,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/15/driver/request",
+      "request_id": 315,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/16/driver/request",
+      "request_id": 317,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/17/driver/request",
+      "request_id": 317,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/18/driver/request",
+      "request_id": 319,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/19/driver/request",
+      "request_id": 319,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/20/driver/request",
+      "request_id": 321,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/executions/21/driver/request",
+      "request_id": 321,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/0/disabled/driver/request",
+      "request_id": 301,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/0/enabled/driver/request",
+      "request_id": 301,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/1/disabled/driver/request",
+      "request_id": 303,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/1/enabled/driver/request",
+      "request_id": 303,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/2/disabled/driver/request",
+      "request_id": 305,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/2/enabled/driver/request",
+      "request_id": 305,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/3/disabled/driver/request",
+      "request_id": 307,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/3/enabled/driver/request",
+      "request_id": 307,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/4/disabled/driver/request",
+      "request_id": 309,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/4/enabled/driver/request",
+      "request_id": 309,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/5/disabled/driver/request",
+      "request_id": 311,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/5/enabled/driver/request",
+      "request_id": 311,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/6/disabled/driver/request",
+      "request_id": 313,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/6/enabled/driver/request",
+      "request_id": 313,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/7/disabled/driver/request",
+      "request_id": 315,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/7/enabled/driver/request",
+      "request_id": 315,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/8/disabled/driver/request",
+      "request_id": 317,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/8/enabled/driver/request",
+      "request_id": 317,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/9/disabled/driver/request",
+      "request_id": 319,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/9/enabled/driver/request",
+      "request_id": 319,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-outgoing",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/10/disabled/driver/request",
+      "request_id": 321,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    },
+    {
+      "occurrence_address": "sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-25.json#/expected/comparison/pairs/10/enabled/driver/request",
+      "request_id": 321,
+      "profile_identity": "corpus-profile-go",
+      "binding_identity": "opaque-incoming",
+      "workspace_nonce_hex": "0101010101010101010101010101010101010101010101010101010101010101"
+    }
+  ],
+  "assignment_identity": {
+    "input_fields_only": [
+      "occurrence_address",
+      "request_id"
+    ],
+    "typed_identity_object": "{\"occurrence_address\":<JSON string>,\"request_id\":<exact original JSON value and type>}",
+    "canonical_identity_encoding": "json.dumps(typed_identity, ensure_ascii=False, sort_keys=True, separators=(',',':')) + one LF (U+000A), then UTF-8 encode",
+    "canonical_identity_bytes_detail": {
+      "member_order": [
+        "occurrence_address",
+        "request_id"
+      ],
+      "json_string_escaping": "Python 3 json.dumps with ensure_ascii=False",
+      "request_id_type_rule": "Preserve the parsed JSON type and value exactly; no stringification or numeric coercion",
+      "whitespace": "None inside JSON; append exactly one LF byte 0x0a after the closing brace",
+      "text_encoding": "UTF-8 without BOM"
+    },
+    "ranking": {
+      "primary": "Lowercase 64-character ASCII hexadecimal SHA-256 of canonical identity bytes, ascending lexicographic order",
+      "tie_break": "occurrence_address Python string ascending lexicographic order; every ledger address is ASCII, so this is byte-for-byte identical to ascending UTF-8 bytes",
+      "rank_assignment": "zero-based ranks 0 through 44 are opaque-incoming; ranks 45 through 84 are opaque-outgoing"
+    },
+    "authoring_only_not_runtime_derivation": true,
+    "executable_reproduction_script": "import hashlib\nimport json\n\nledger_path = \"docs/qualification/adr0011-callhierarchy-layer1-generic-v3-identity-ledger-v1.json\"\nwith open(ledger_path, \"r\", encoding=\"utf-8\") as stream:\n    ledger = json.load(stream)\nrecords = ledger[\"records\"]\n\ndef identity_bytes(record):\n    typed_identity = {\n        \"occurrence_address\": record[\"occurrence_address\"],\n        \"request_id\": record[\"request_id\"],\n    }\n    return (\n        json.dumps(\n            typed_identity,\n            ensure_ascii=False,\n            sort_keys=True,\n            separators=(\",\", \":\"),\n        )\n        + \"\\n\"\n    ).encode(\"utf-8\")\n\nranked = sorted(\n    records,\n    key=lambda record: (\n        hashlib.sha256(identity_bytes(record)).hexdigest(),\n        record[\"occurrence_address\"],\n    ),\n)\nreproduced = {\n    record[\"occurrence_address\"]: (\n        \"opaque-incoming\" if rank < 45 else \"opaque-outgoing\"\n    )\n    for rank, record in enumerate(ranked)\n}\nassert len(reproduced) == 85\nassert sum(value == \"opaque-incoming\" for value in reproduced.values()) == 45\nassert sum(value == \"opaque-outgoing\" for value in reproduced.values()) == 40\nassert all(\n    reproduced[record[\"occurrence_address\"]] == record[\"binding_identity\"]\n    for record in records\n)\nprint(json.dumps(reproduced, ensure_ascii=False, sort_keys=True, separators=(\",\", \":\")))\n"
+  }
+}

@@ -1,0 +1,28 @@
+HEAD=57b088e56f4ac5b0e5162a03a2f7d695f34085b1
+PATCH_HASH
+ca762452805215750a122ee250e92326387c343e92c36b844fcaf12ad2cefcba  /tmp/adr0011-v3-corpus-placement-evidence-l58atP/PATCH_CORRECTED.diff
+PATCH_PATHS
+diff --git a/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go b/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+diff --git a/sessionruntime/b4_owned_method_pair_lease.go b/sessionruntime/b4_owned_method_pair_lease.go
+diff --git a/sessionruntime/owned_method_pair.go b/sessionruntime/owned_method_pair.go
+diff --git a/sessionruntime/sessionruntime.go b/sessionruntime/sessionruntime.go
+STATUS
+ M sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+ M sessionruntime/sessionruntime.go
+CHANGED_PATHS
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+sessionruntime/b4_owned_method_pair_lease.go
+sessionruntime/owned_method_pair.go
+sessionruntime/sessionruntime.go
+CORPUS_DELTA_COUNT=0
+REVERSE_CHECK
+PASS
+CANONICAL_DIFF_HASH
+ca762452805215750a122ee250e92326387c343e92c36b844fcaf12ad2cefcba  -
+PER_FILE_HASHES
+fb3b648ba6d83d02e004f11a19b949415cdecb6b56c8048eec9f03ac747a2a93  sessionruntime/sessionruntime.go
+8685b78ac7883263c7279ae68a543bb365ab7de0ca8610955eb90236ba5b70b8  sessionruntime/owned_method_pair.go
+b53e51b89effa526337b96fcf883078da332b9b1a1457fcd1fc44a3db2e585e9  sessionruntime/b4_owned_method_pair_lease.go
+3511654b054d953258cd47f965c1baba2ffa37ae732fb92a32c4653f7a94157b  sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go

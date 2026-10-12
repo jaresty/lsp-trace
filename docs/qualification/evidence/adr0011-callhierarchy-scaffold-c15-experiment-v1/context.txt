@@ -1,0 +1,13 @@
+repository=/private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-e27bc7a9-6981-4d1-b7140091
+base_head=2f5fd760f8d39cf0bca63258291bffd67f44a06c
+status_before_regeneration_begin
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+status_before_regeneration_end
+go_version=go version go1.26.5 darwin/arm64
+goos=darwin
+goarch=arm64
+goversion=go1.26.5
+cgo_enabled=1
+command=C15_REGENERATE=1 go test ./sessionruntime -run ^TestPrivateB4C15RegenerateOfflineCatalog$ -count=1
+environment=C15_REGENERATE=1

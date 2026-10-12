@@ -36,6 +36,7 @@ var syntheticSourceDirectories = map[string]bool{
 	"internal/adr0011methodtransport": true,
 	"internal/adr0011sourcecontext":   true,
 	"internal/adr0011closure":         true,
+	"internal/adr0011work":            true,
 	"internal/publication":            true,
 	"internal/strictjson":             true,
 	"internal/lspwire":                true,

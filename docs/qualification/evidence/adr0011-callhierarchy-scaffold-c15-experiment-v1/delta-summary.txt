@@ -1,0 +1,16 @@
+{
+  "candidates": {
+    "before_count": 3805,
+    "after_count": 3838,
+    "delta": 33,
+    "old_rows_unchanged_count": 3805,
+    "all_retained_old_rows_byte_identical": true
+  },
+  "classifications": {
+    "before_count": 3805,
+    "after_count": 3838,
+    "delta": 33,
+    "old_rows_unchanged_count": 3805,
+    "all_retained_old_rows_byte_identical": true
+  }
+}

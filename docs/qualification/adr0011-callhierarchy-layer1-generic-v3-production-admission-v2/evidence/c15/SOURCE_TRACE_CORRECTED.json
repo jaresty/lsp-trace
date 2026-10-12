@@ -1,0 +1,892 @@
+{
+  "schema": "lsp-trace/adr0011-c15-corrected-source-trace-v1",
+  "artifact_equality": {
+    "ADDED.tsv": {
+      "prior_sha256": "f7c8e6259ba1cc396d77c871ee54669b93c68f501458da973b4b2a6565646dbc",
+      "corrected_sha256": "f7c8e6259ba1cc396d77c871ee54669b93c68f501458da973b4b2a6565646dbc",
+      "byte_equal": true
+    },
+    "REMOVED.tsv": {
+      "prior_sha256": "9c108b66f87935ad8f571960d20fa389ee630a16bed3af9e70392ae97ffe92d8",
+      "corrected_sha256": "9c108b66f87935ad8f571960d20fa389ee630a16bed3af9e70392ae97ffe92d8",
+      "byte_equal": true
+    },
+    "CHANGED.tsv": {
+      "prior_sha256": "8ef2257684ee18cccc271ea82a4c32a43d06b5041afb652024329fe1c3f69198",
+      "corrected_sha256": "8ef2257684ee18cccc271ea82a4c32a43d06b5041afb652024329fe1c3f69198",
+      "byte_equal": true
+    },
+    "UNCHANGED.tsv": {
+      "prior_sha256": "2e0d96f411b55d0823fe8eb6ca72c5bcc9ade0d135ba4361531717bd4b514ede",
+      "corrected_sha256": "2e0d96f411b55d0823fe8eb6ca72c5bcc9ade0d135ba4361531717bd4b514ede",
+      "byte_equal": true
+    },
+    "candidates.tsv": {
+      "prior_sha256": "4e1ec4a7cf20bf0d3a74b7b4e7206a05c7f14efd9a8dc91961eaa30c7bf080e4",
+      "corrected_sha256": "4e1ec4a7cf20bf0d3a74b7b4e7206a05c7f14efd9a8dc91961eaa30c7bf080e4",
+      "byte_equal": true
+    },
+    "classifications.tsv": {
+      "prior_sha256": "6b7d05e6ed36bbb38cbd9100e50e3473e858f0b295d96894eb4c6a47a7110ffd",
+      "corrected_sha256": "6b7d05e6ed36bbb38cbd9100e50e3473e858f0b295d96894eb4c6a47a7110ffd",
+      "byte_equal": true
+    },
+    "all-source-locations.tsv": {
+      "prior_sha256": "e12ef0a501ba9ceb84ae15285aa2e829eca231a5b8aff51f465a21313ff23e03",
+      "corrected_sha256": "e12ef0a501ba9ceb84ae15285aa2e829eca231a5b8aff51f465a21313ff23e03",
+      "byte_equal": true
+    }
+  },
+  "selected_source_tuple_checks": [
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.admit.builtin-make.make.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "549:12-549:27",
+        "ast_kind": "builtin-make",
+        "ast_hash": "93e3af7d1f4df6e8ed36c89ef8c6aebcd94cd54ae1235a8ff373208cd1bebad1"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.admit.builtin-make.make.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:549:12-549:27",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.admit.builtin-make.make.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "576:53-576:92",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e4f0159479758e4db5adb4d41fa92a902df13e5f353d2e0bcfa8da1ac1352330"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:576:53-576:92",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.2",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "579:12-579:61",
+        "ast_kind": "builtin-append",
+        "ast_hash": "5b5e5a627193866f7c655c46d3e70304fa5e27712f0c91bb001976399e18b7e0"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.2",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:579:12-579:61",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.captureresult.builtin-append.append.2",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "584:31-584:114",
+        "ast_kind": "builtin-append",
+        "ast_hash": "8aa5d1a70547d4d1578faa2ceb288571174c4d91a8ff565c55812067d3aec273"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:584:31-584:114",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.2",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "585:17-585:53",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e70379f24edfe2dfbddb10f4f4c45f851a29bd5a962c091432b127a1724474f3"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.2",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:585:17-585:53",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.2",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.3",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "586:28-586:75",
+        "ast_kind": "builtin-append",
+        "ast_hash": "7c8b0e5f2ff0a68f1671ed0012cefca88dd079c53b15fd738a3c000c2d6b60bc"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.3",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:586:28-586:75",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.3",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.4",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "587:34-587:87",
+        "ast_kind": "builtin-append",
+        "ast_hash": "2c4505de6c3d383701298218f748455d084206123c0b0b2eda2e3846f439b34e"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.4",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:587:34-587:87",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.4",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.5",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "588:30-588:79",
+        "ast_kind": "builtin-append",
+        "ast_hash": "11e85c11b34e99af694384bc376c03d6c92b4f4496022346a63d45e49e1b7228"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.5",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:588:30-588:79",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.5",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.6",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "589:32-589:83",
+        "ast_kind": "builtin-append",
+        "ast_hash": "d101a08908237fcbaa48801f021c8aaf0f771ca16fe83fe24a91a87225e7871d"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.6",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:589:32-589:83",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.6",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.7",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "590:33-590:85",
+        "ast_kind": "builtin-append",
+        "ast_hash": "55c456880d42f6016845580daef68472a5375d8de858e34e6daaf7dcbffaf69f"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.7",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:590:33-590:85",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.7",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.8",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "591:19-591:66",
+        "ast_kind": "builtin-append",
+        "ast_hash": "a244dd6a6afea9b921ef43897296abe5de77dd0dc20695ecbdad0fbf8e768c75"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.8",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:591:19-591:66",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.copygenericobservation.builtin-append.append.8",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "857:15-857:34",
+        "ast_kind": "builtin-append",
+        "ast_hash": "da6c79e56f5882c3a5962b086224b95225502f68a72af3baaa152a3dd184d373"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:857:15-857:34",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.2",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "859:15-859:34",
+        "ast_kind": "builtin-append",
+        "ast_hash": "d9b16894f27398fc270820361bba2c42c6d1b35d14d2ed530344f7008acb980a"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.2",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:859:15-859:34",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-append.append.2",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-make.make.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "852:14-852:98",
+        "ast_kind": "builtin-make",
+        "ast_hash": "9bec583d09a7958e4cbe8cb5a835fcdde4607130356312c62e2e382d4490c6c0"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-make.make.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:852:14-852:98",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.builtin-make.make.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "759:54-759:91",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e553b6969f1ad694842cb2fcdab6de9618dd41859cf2f6cb786a20b85b27f5ec"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:759:54-759:91",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.2",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "773:55-773:92",
+        "ast_kind": "builtin-append",
+        "ast_hash": "e553b6969f1ad694842cb2fcdab6de9618dd41859cf2f6cb786a20b85b27f5ec"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.2",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:773:55-773:92",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.2",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.3",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "782:118-782:146",
+        "ast_kind": "builtin-append",
+        "ast_hash": "62b2f95ff20cb11660049a9645a7a31b7022324bd19d128f03bea91f4bacf609"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.3",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:782:118-782:146",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.3",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.4",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "788:112-788:142",
+        "ast_kind": "builtin-append",
+        "ast_hash": "45004ae9e9fcd911c3eb5d0e6190f0871932cb7626b561f98d836fed041eda46"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.4",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:788:112-788:142",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.finishaccepted.builtin-append.append.4",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "789:16-793:39",
+        "ast_kind": "call",
+        "ast_hash": "091674c004b49dfb632e304b7a0a18c8c69d85967880044979b252288de955c6"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:789:16-793:39",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.2",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "802:16-806:42",
+        "ast_kind": "call",
+        "ast_hash": "005bcba3245100e312afe9288e5baa1e008a84ac136b28f1c6d12348cb561617"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.2",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:802:16-806:42",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.finishaccepted.call.json.marshal.2",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.genericframe.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "559:7-559:34",
+        "ast_kind": "builtin-append",
+        "ast_hash": "76117c73d3671cc00146f0f188bb50d958500b2df87ea09aa978c5116cfead72"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.genericframe.builtin-append.append.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:559:7-559:34",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.genericframe.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "535:38-535:116",
+        "ast_kind": "builtin-append",
+        "ast_hash": "9deaf0dbc751fdf0302b52ecf3b0944cb398197af051a7c10197d50f38b04c38"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.builtin-append.append.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:535:38-535:116",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.b4.owned.method.pair.lease.publishcallhierarchylayer1genericownerlocked.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/b4_owned_method_pair_lease.go",
+        "span": "848:39-848:88",
+        "ast_kind": "builtin-append",
+        "ast_hash": "3d56ac62d23567e84550e61da9f9ed98418a1d034d52e8ebdab7071d4c85968f"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.b4.owned.method.pair.lease.publishcallhierarchylayer1genericownerlocked.builtin-append.append.1",
+        "SOURCE:sessionruntime/b4_owned_method_pair_lease.go:848:39-848:88",
+        "PRIOR_V3:alloc.b4.owned.method.pair.lease.publishcallhierarchylayer1genericownerlocked.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.copycommitments.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "395:9-395:80",
+        "ast_kind": "builtin-append",
+        "ast_hash": "ac2f65cb87a172cfbcb3521f5ad092bd6db9d3a84cadae147a21119a232deedb"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.copycommitments.builtin-append.append.1",
+        "SOURCE:sessionruntime/owned_method_pair.go:395:9-395:80",
+        "PRIOR_V3:alloc.owned.method.pair.copycommitments.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.copyframebytes.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "431:9-431:45",
+        "ast_kind": "builtin-append",
+        "ast_hash": "4a2889cd2a5f2adec0a7c4f6d20b066abba76326b39e9b3613a5d09f5deb8f17"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.copyframebytes.builtin-append.append.1",
+        "SOURCE:sessionruntime/owned_method_pair.go:431:9-431:45",
+        "PRIOR_V3:alloc.owned.method.pair.copyframebytes.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.copyframebytes.builtin-append.append.2",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "437:9-437:45",
+        "ast_kind": "builtin-append",
+        "ast_hash": "4a2889cd2a5f2adec0a7c4f6d20b066abba76326b39e9b3613a5d09f5deb8f17"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.copyframebytes.builtin-append.append.2",
+        "SOURCE:sessionruntime/owned_method_pair.go:437:9-437:45",
+        "PRIOR_V3:alloc.owned.method.pair.copyframebytes.builtin-append.append.2",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.copyparamsbytes.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "434:9-434:91",
+        "ast_kind": "builtin-append",
+        "ast_hash": "b12ed674de1226b727225838febb9ca4ae51ae848c11c18def1eed3ba6bb1741"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.copyparamsbytes.builtin-append.append.1",
+        "SOURCE:sessionruntime/owned_method_pair.go:434:9-434:91",
+        "PRIOR_V3:alloc.owned.method.pair.copyparamsbytes.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.copyresultbytes.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "440:9-440:91",
+        "ast_kind": "builtin-append",
+        "ast_hash": "add1a810585a039a3dc85723c0774e1a5b76db0899375e3176a8c26dc3d3f2d1"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.copyresultbytes.builtin-append.append.1",
+        "SOURCE:sessionruntime/owned_method_pair.go:440:9-440:91",
+        "PRIOR_V3:alloc.owned.method.pair.copyresultbytes.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "418:11-418:40",
+        "ast_kind": "builtin-append",
+        "ast_hash": "b1ab03459d0ab43e1623b408e8e9e9e3cfd3bbdda6af8e0837678de361a9f866"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.builtin-append.append.1",
+        "SOURCE:sessionruntime/owned_method_pair.go:418:11-418:40",
+        "PRIOR_V3:alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "426:11-426:40",
+        "ast_kind": "builtin-append",
+        "ast_hash": "b1ab03459d0ab43e1623b408e8e9e9e3cfd3bbdda6af8e0837678de361a9f866"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.builtin-append.append.1",
+        "SOURCE:sessionruntime/owned_method_pair.go:426:11-426:40",
+        "PRIOR_V3:alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.owned.method.pair.privatecallhierarchylayer1withpredecessors.builtin-append.append.1",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/owned_method_pair.go",
+        "span": "487:72-487:135",
+        "ast_kind": "builtin-append",
+        "ast_hash": "8b6cd8f336f3bf2015380fbf7408c338be0739d9113022262ad880ad97872466"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.owned.method.pair.privatecallhierarchylayer1withpredecessors.builtin-append.append.1",
+        "SOURCE:sessionruntime/owned_method_pair.go:487:72-487:135",
+        "PRIOR_V3:alloc.owned.method.pair.privatecallhierarchylayer1withpredecessors.builtin-append.append.1",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.sessionruntime.runlifecycle.builtin-make.make.3",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/sessionruntime.go",
+        "span": "2961:129-2961:166",
+        "ast_kind": "builtin-make",
+        "ast_hash": "0ea68843a9a50cc154711a531af54cc7e981a0207c34876ac7d461c556bd2f0a"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.sessionruntime.runlifecycle.builtin-make.make.3",
+        "SOURCE:sessionruntime/sessionruntime.go:2961:129-2961:166",
+        "PRIOR_V3:alloc.sessionruntime.runlifecycle.builtin-make.make.3",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    },
+    {
+      "candidate_id": "alloc.sessionruntime.runlifecycle.builtin-make.make.4",
+      "delta": "ADDED",
+      "source": {
+        "path": "sessionruntime/sessionruntime.go",
+        "span": "2961:168-2961:197",
+        "ast_kind": "builtin-make",
+        "ast_hash": "fc84b204c50e9cebd8d9f1bf471f2d6e6f9df91a08473b5accc57d44b377393f"
+      },
+      "evidence_ids": [
+        "ENUM:ADDED.tsv:alloc.sessionruntime.runlifecycle.builtin-make.make.4",
+        "SOURCE:sessionruntime/sessionruntime.go:2961:168-2961:197",
+        "PRIOR_V3:alloc.sessionruntime.runlifecycle.builtin-make.make.4",
+        "PATCH_EQ:23-prior-replay-corrected-equivalence.json"
+      ]
+    }
+  ],
+  "false_positive_complement_ids": [
+    "alloc.b4.owned.method.pair.lease.admit.call.byte.1",
+    "alloc.b4.owned.method.pair.lease.admit.call.len.1",
+    "alloc.b4.owned.method.pair.lease.admit.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.errors.new.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.expression.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.fn.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.genericview.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.o.cond.broadcast.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.o.mu.lock.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.o.mu.lock.2",
+    "alloc.b4.owned.method.pair.lease.callback.call.o.mu.unlock.1",
+    "alloc.b4.owned.method.pair.lease.callback.call.o.mu.unlock.2",
+    "alloc.b4.owned.method.pair.lease.callback.call.o.mu.unlock.3",
+    "alloc.b4.owned.method.pair.lease.callback.call.recover.1",
+    "alloc.b4.owned.method.pair.lease.capturerequestframe.call.genericframe.1",
+    "alloc.b4.owned.method.pair.lease.captureresponseframe.call.genericframe.1",
+    "alloc.b4.owned.method.pair.lease.captureresult.call.json.rawmessage.1",
+    "alloc.b4.owned.method.pair.lease.captureresult.call.json.rawmessage.2",
+    "alloc.b4.owned.method.pair.lease.captureresult.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.expression.1",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.expression.2",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.expression.3",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.expression.4",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.expression.5",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.expression.6",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.expression.7",
+    "alloc.b4.owned.method.pair.lease.copygenericobservation.call.json.rawmessage.1",
+    "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.call.len.1",
+    "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.call.len.2",
+    "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.call.len.3",
+    "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.call.string.1",
+    "alloc.b4.owned.method.pair.lease.detachcallhierarchylayer1genericownerslocked.call.uint64.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.byte.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.bytes.contains.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.bytes.equal.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.bytes.equal.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.bytes.index.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.5",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.6",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.7",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.8",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.expression.9",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericavailable.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericavailable.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericavailable.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericavailable.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericmeasure.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericmeasure.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericmeasure.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.genericmeasure.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.int64.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.int64.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.json.rawmessage.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.json.rawmessage.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.len.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.len.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.len.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.len.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.len.5",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.len.6",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.session.failure.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.session.failure.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.session.failure.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.session.failure.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.string.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.string.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.string.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.string.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.strings.hasprefix.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.strings.trimprefix.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.uint64.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.uint64.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.uint64.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.call.uint64.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.10",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.11",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.12",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.13",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.14",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.15",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.16",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.17",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.18",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.19",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.2",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.20",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.21",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.22",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.23",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.24",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.25",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.26",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.27",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.28",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.29",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.3",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.30",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.4",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.5",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.6",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.7",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.8",
+    "alloc.b4.owned.method.pair.lease.finishaccepted.composite-literal.composite.literal.9",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.a.finishaccepted.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.a.recordrefusal.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.genericmeasure.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.m.mu.lock.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.m.mu.unlock.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.m.publishcallhierarchylayer1genericownerlocked.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.newcallhierarchylayer1genericowner.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.terminal.requestterminal.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.call.terminal.waitreleased.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.2",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.3",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.4",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.5",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.6",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.7",
+    "alloc.b4.owned.method.pair.lease.finishcallhierarchylayer1genericrefusal.composite-literal.composite.literal.8",
+    "alloc.b4.owned.method.pair.lease.genericavailable.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.genericdelta.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.genericdelta.composite-literal.composite.literal.2",
+    "alloc.b4.owned.method.pair.lease.genericframe.call.expression.1",
+    "alloc.b4.owned.method.pair.lease.genericframe.call.len.1",
+    "alloc.b4.owned.method.pair.lease.genericframe.call.len.2",
+    "alloc.b4.owned.method.pair.lease.genericframe.call.sha256.sum256.1",
+    "alloc.b4.owned.method.pair.lease.genericframe.call.uint64.1",
+    "alloc.b4.owned.method.pair.lease.genericframe.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.genericframe.composite-literal.composite.literal.2",
+    "alloc.b4.owned.method.pair.lease.genericmeasure.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.genericview.call.copygenericobservation.1",
+    "alloc.b4.owned.method.pair.lease.genericview.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.call.callhierarchygeneration.1",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.call.callhierarchymethodidentity.1",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.call.callhierarchysessionidentity.1",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.call.expression.1",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.composite-literal.composite.literal.2",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericattemptlineage.composite-literal.composite.literal.3",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericowner.call.copygenericobservation.1",
+    "alloc.b4.owned.method.pair.lease.newcallhierarchylayer1genericowner.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.privatecallhierarchylayer1genericlease.call.o.mu.lock.1",
+    "alloc.b4.owned.method.pair.lease.privatecallhierarchylayer1genericlease.call.o.mu.unlock.1",
+    "alloc.b4.owned.method.pair.lease.privatecallhierarchylayer1genericlease.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.publishcallhierarchylayer1genericownerlocked.call.string.1",
+    "alloc.b4.owned.method.pair.lease.publishcallhierarchylayer1genericownerlocked.call.uint64.1",
+    "alloc.b4.owned.method.pair.lease.publishcallhierarchylayer1genericownerlocked.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.release.call.o.cond.broadcast.3",
+    "alloc.b4.owned.method.pair.lease.release.call.o.cond.wait.2",
+    "alloc.b4.owned.method.pair.lease.release.call.o.mu.lock.2",
+    "alloc.b4.owned.method.pair.lease.release.call.o.mu.unlock.3",
+    "alloc.b4.owned.method.pair.lease.release.call.o.releaselocked.1",
+    "alloc.b4.owned.method.pair.lease.releaselocked.call.o.cond.broadcast.1",
+    "alloc.b4.owned.method.pair.lease.releaselocked.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.requestterminal.call.o.cond.broadcast.2",
+    "alloc.b4.owned.method.pair.lease.requestterminal.call.o.cond.wait.1",
+    "alloc.b4.owned.method.pair.lease.requestterminal.call.o.mu.lock.2",
+    "alloc.b4.owned.method.pair.lease.requestterminal.call.o.mu.unlock.2",
+    "alloc.b4.owned.method.pair.lease.requestterminal.call.o.releaselocked.1",
+    "alloc.b4.owned.method.pair.lease.view.call.genericview.1",
+    "alloc.b4.owned.method.pair.lease.view.call.o.mu.lock.1",
+    "alloc.b4.owned.method.pair.lease.view.call.o.mu.unlock.1",
+    "alloc.b4.owned.method.pair.lease.view.composite-literal.composite.literal.1",
+    "alloc.b4.owned.method.pair.lease.view.composite-literal.composite.literal.2",
+    "alloc.b4.owned.method.pair.lease.waitreleased.call.o.cond.wait.2",
+    "alloc.b4.owned.method.pair.lease.waitreleased.call.o.mu.lock.2",
+    "alloc.b4.owned.method.pair.lease.waitreleased.call.o.mu.unlock.2",
+    "alloc.owned.method.pair.copycommitments.call.expression.1",
+    "alloc.owned.method.pair.copyframebytes.call.expression.1",
+    "alloc.owned.method.pair.copyframebytes.call.expression.2",
+    "alloc.owned.method.pair.copyparamsbytes.call.expression.1",
+    "alloc.owned.method.pair.copyresultbytes.call.expression.1",
+    "alloc.owned.method.pair.newcallhierarchyobservationlimits.composite-literal.composite.literal.1",
+    "alloc.owned.method.pair.newcallhierarchyobservationlimits.composite-literal.composite.literal.2",
+    "alloc.owned.method.pair.newcallhierarchyobservationrequest.call.allowlist.permits.1",
+    "alloc.owned.method.pair.newcallhierarchyobservationrequest.composite-literal.composite.literal.1",
+    "alloc.owned.method.pair.newcallhierarchyobservationrequest.composite-literal.composite.literal.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.expression.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.len.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.len.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.len.3",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.len.4",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.len.5",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.len.6",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.len.7",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.sha256.sum256.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.sha256.sum256.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.sha256.sum256.3",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.uint64.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.uint64.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.uint64.3",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.uint64.4",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.uint64.5",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.call.uint64.6",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.composite-literal.composite.literal.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalrequestframeobservation.composite-literal.composite.literal.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.expression.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.len.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.len.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.len.3",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.len.4",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.len.5",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.len.6",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.len.7",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.sha256.sum256.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.sha256.sum256.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.sha256.sum256.3",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.uint64.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.uint64.2",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.uint64.3",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.uint64.4",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.uint64.5",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.call.uint64.6",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.composite-literal.composite.literal.1",
+    "alloc.owned.method.pair.newcallhierarchyoriginalresponseframeobservation.composite-literal.composite.literal.2",
+    "alloc.owned.method.pair.privatecallhierarchylayer1withpredecessors.call.expression.1",
+    "alloc.owned.method.pair.privatecallhierarchylayer1withpredecessors.call.len.1",
+    "alloc.owned.method.pair.privatecallhierarchylayer1withpredecessors.composite-literal.composite.literal.1",
+    "alloc.sessionruntime.finishroundtrip.call.attempt.finishaccepted.1",
+    "alloc.sessionruntime.finishroundtrip.call.genericterminal.requestterminal.1",
+    "alloc.sessionruntime.finishroundtrip.call.genericterminal.waitreleased.1",
+    "alloc.sessionruntime.finishroundtrip.call.m.publishcallhierarchylayer1genericownerlocked.1",
+    "alloc.sessionruntime.finishroundtrip.call.newcallhierarchylayer1genericowner.1",
+    "alloc.sessionruntime.finishroundtrip.call.string.1",
+    "alloc.sessionruntime.finishroundtrip.composite-literal.composite.literal.4",
+    "alloc.sessionruntime.finishroundtrip.composite-literal.composite.literal.5",
+    "alloc.sessionruntime.finishroundtrip.composite-literal.composite.literal.6",
+    "alloc.sessionruntime.roundtrip.call.m.finishcallhierarchylayer1genericrefusal.1",
+    "alloc.sessionruntime.roundtrip.call.m.finishcallhierarchylayer1genericrefusal.2",
+    "alloc.sessionruntime.roundtrip.call.newcallhierarchylayer1genericattemptlineage.1",
+    "alloc.sessionruntime.roundtrip.call.session.failure.1",
+    "alloc.sessionruntime.roundtrip.call.session.failure.2",
+    "alloc.sessionruntime.roundtrip.composite-literal.composite.literal.1",
+    "alloc.sessionruntime.roundtrip.composite-literal.composite.literal.2",
+    "alloc.sessionruntime.roundtrip.composite-literal.composite.literal.3",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.attempt.admit.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.child.stdout.3",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.expression.before.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.genericresponsecapture.retainedframe.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.genericresponsecapture.sha256.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.int64.10",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.int64.11",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.int64.13",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.int64.6",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.int64.7",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.io.reader.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.io.teereader.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.json.marshal.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.json.marshal.2",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.json.marshal.3",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.10",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.11",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.12",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.13",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.14",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.6",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.7",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.8",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.len.9",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.lspwire.newreader.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.lspwire.newreaderobservedatdecode.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.m.finishcallhierarchylayer1genericrefusal.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.m.finishcallhierarchylayer1genericrefusal.2",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.m.finishcallhierarchylayer1genericrefusal.3",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.m.finishcallhierarchylayer1genericrefusal.4",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.m.finishcallhierarchylayer1genericrefusal.5",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.newframedwritecapturebounded.2",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.read.err.error.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.req.deadline.iszero.4",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.req.deadline.sub.2",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.result.callhierarchylayer1genericattempt.capturerequestframe.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.result.callhierarchylayer1genericattempt.captureresponseframe.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.result.callhierarchylayer1genericattempt.captureresult.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.session.failure.1",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.call.writecapture.retainedframe.3",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.15",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.16",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.17",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.18",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.19",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.20",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.21",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.22",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.23",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.24",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.25",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.26",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.27",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.28",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.29",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.30",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.31",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.32",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.33",
+    "alloc.sessionruntime.roundtripwithprivatetransaction.composite-literal.composite.literal.34",
+    "alloc.sessionruntime.runlifecycle.builtin-make.make.1",
+    "alloc.sessionruntime.runlifecycle.builtin-make.make.2",
+    "alloc.sessionruntime.runlifecycle.call.genericowner.requestterminal.1",
+    "alloc.sessionruntime.runlifecycle.call.genericowner.requestterminal.2",
+    "alloc.sessionruntime.runlifecycle.call.genericowner.waitreleased.1",
+    "alloc.sessionruntime.runlifecycle.call.genericowner.waitreleased.2",
+    "alloc.sessionruntime.runlifecycle.call.m.detachcallhierarchylayer1genericownerslocked.1",
+    "alloc.sessionruntime.runlifecycle.call.m.detachcallhierarchylayer1genericownerslocked.2",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.10",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.11",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.4",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.5",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.6",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.7",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.8",
+    "alloc.sessionruntime.runlifecycle.composite-literal.composite.literal.9",
+    "alloc.sessionruntime.shutdown.call.genericowner.requestterminal.1",
+    "alloc.sessionruntime.shutdown.call.genericowner.waitreleased.1"
+  ],
+  "false_positive_complement_sha256": "0bdfdeb69508e0f3e21b4d5287f7d18fdba2f7b7b78d0d2db014558a79e223b9"
+}

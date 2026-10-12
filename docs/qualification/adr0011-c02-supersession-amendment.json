@@ -1,0 +1,35 @@
+{
+  "schema_version": "lsp-trace.private.adr0011-c-scope-amendment.v1",
+  "amendment_id": "ADR0011-C02-SUPERSEDED-BY-C01-V1",
+  "status": "ACCEPTED_SCOPE_AMENDMENT",
+  "predecessor": {
+    "path": "docs/qualification/adr0011-remaining-c-consolidated-plan.proposed.md",
+    "sha256": "b71e2e1947d2b33cc1fac5b37cd38176b80486b1da44a9367c11a63a30fd8b9e"
+  },
+  "row": "C02",
+  "historical_c02_row_sha256": "beb0c363bd849ce3890d78a7b34d2b719b8e4a7c5f5d23908db4243ca4cbc7fc",
+  "disposition": "SUPERSEDED_BY_C01",
+  "authoritative_successor": "C01",
+  "revised_scope": {
+    "active_rows": 23,
+    "superseded_inventory_rows": ["C02"],
+    "historical_row_count": 24
+  },
+  "semantics": {
+    "pre_decode_size_owner": "C01",
+    "pre_decode_rule": "Every complete inbound frame is subject to the authoritative generic C01 complete-original-frame bound before body allocation.",
+    "post_decode_rule": "Capability-family validation remains required for frames admitted by C01, but it is not an independent C02 size admission boundary.",
+    "c02_independent_pre_decode_requirement": false
+  },
+  "streaming_classifier_rejection": {
+    "decision": "REJECTED",
+    "reason": "A bounded streaming family classifier would duplicate transport parsing and correlation solely to distinguish a frame before decode, while C01 already supplies the required generic pre-allocation size refusal. The added parser, state, and lifecycle surface is disproportionate and would create a second interpretation path for JSON-RPC identity.",
+    "preserved_behavior": "No production behavior changes. Existing C01 admission and post-decode capability validation remain authoritative."
+  },
+  "claim_rules": {
+    "preserve_predecessor_bytes": true,
+    "future_c_exit_uses_revised_scope": true,
+    "supersession_is_not_implementation_closure": true,
+    "does_not_authorize_d_or_public_changes": true
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.toolchain-boundary.v1",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "managed_gopls": {
+    "role_status": "MISSING",
+    "executable_locator": null,
+    "executable_sha256": null,
+    "byte_length": null,
+    "reported_version": null,
+    "launch_argv": null,
+    "working_directory": null,
+    "environment": null,
+    "reason": "managed-session status exposes server_profile=gopls but does not expose immutable gopls executable bytes, digest, length, version, argv, cwd, or environment"
+  },
+  "shell_gopls_non_evidence": {
+    "path": "/Users/schwa/.local/bin/gopls",
+    "sha256": "82600f8b7f6ad337120b27ab738a5e44897ff1701919bc4620836ff7d98c2f7a",
+    "byte_length": 41038194,
+    "reported_version": "golang.org/x/tools/gopls v0.23.0",
+    "profile_binding": false,
+    "managed_process_identity": false,
+    "may_satisfy_managed_gopls_roles": false
+  },
+  "managed_go_toolchain": {
+    "role_status": "MISSING",
+    "reason": "no managed-session process/environment receipt binds a Go binary or go env to the managed gopls process"
+  },
+  "shell_go_non_evidence": {
+    "cwd": "/Users/schwa/dev/lsp-trace-adr0011-c17",
+    "path": "/opt/homebrew/bin/go",
+    "sha256_of_path_entry": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0",
+    "byte_length_of_path_entry": 26,
+    "reported_version": "go version go1.26.5 darwin/arm64",
+    "go_env": {
+      "GOENV": "/Users/schwa/Library/Application Support/go/env",
+      "GOFLAGS": "",
+      "GOOS": "darwin",
+      "GOARCH": "arm64",
+      "GOVERSION": "go1.26.5",
+      "GOTOOLCHAIN": "auto",
+      "GOWORK": "",
+      "GOMOD": "/Users/schwa/dev/lsp-trace-adr0011-c17/go.mod",
+      "GOPATH": "/Users/schwa/go",
+      "GOROOT": "/opt/homebrew/Cellar/go/1.26.5/libexec",
+      "CGO_ENABLED": "1"
+    },
+    "module_files": [
+      {"path":"go.mod","sha256":"913a10e68a02b94a5b0d48c49137a82c658da94e84f87681a5e79835d8b7c276","byte_length":252},
+      {"path":"go.sum","sha256":"a4f83c3e802ef6775aea19797c4d4dbf226f437ff64677b063eed1fe2f75b1c8","byte_length":1068}
+    ],
+    "profile_binding": false,
+    "may_satisfy_managed_toolchain_roles": false
+  }
+}

@@ -1,0 +1,40 @@
+--- FAIL: TestCallHierarchyLayer1GenericV3CorpusCausalRED (0.08s)
+    --- FAIL: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-07 (0.00s)
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=accounting.bytes.value got=164 expected=190
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=external.responses_hex got= expected=436f6e74656e742d4c656e6774683a206e6f70650d0a0d0a7b7d
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=frames.response.available got=false expected=true
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=frames.response.frame_hex got=<nil> expected=436f6e74656e742d4c656e6774683a206e6f70650d0a0d0a7b7d
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=frames.response.frame_length got=0 expected=26
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=frames.response.frame_sha256 got=0000000000000000000000000000000000000000000000000000000000000000 expected=138a9db5f8d8eb54884d5df8d0ffba294626a607c70b7bae9191edae5226739d
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.external_bytes.after got=0 expected=26
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.external_bytes.delta got=0 expected=26
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.external_bytes.known_zero got=true expected=false
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_bytes.after got=0 expected=26
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_bytes.delta got=0 expected=26
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_bytes.known_zero got=true expected=false
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_messages.after got=0 expected=1
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_messages.delta got=0 expected=1
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=round_trip_ledger.dimensions.transport_messages.known_zero got=true expected=false
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=transport.bytes.known_zero got=true expected=false
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=transport.bytes.value got=0 expected=26
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=transport.messages.known_zero got=true expected=false
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-07 path=transport.messages.value got=0 expected=1
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_A_COMPLETENESS_world-07 compared=97 errors=19 want_compared=116 want_errors=0
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-07 registry=116 compared=97 skipped=0 errors=19
+    --- FAIL: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-11 (0.00s)
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-11 path=error.class got=shutdown expected=transport-unavailable
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-11 path=external.failure got=shutdown expected=transport-unavailable
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-11 path=round_trip_ledger.terminal.after.value got=failed-shutdown expected=failed-transport-unavailable
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-11 path=terminal.value got=failed-shutdown expected=failed-transport-unavailable
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_A_COMPLETENESS_world-11 compared=112 errors=4 want_compared=116 want_errors=0
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-11 registry=116 compared=112 skipped=0 errors=4
+    --- FAIL: TestCallHierarchyLayer1GenericV3CorpusCausalRED/world-12 (0.00s)
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-12 path=round_trip_ledger.terminal.after.value got=successful-empty expected=successful-null
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_EXACT_world-12 path=terminal.value got=successful-empty expected=successful-null
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_A_COMPLETENESS_world-12 compared=114 errors=2 want_compared=116 want_errors=0
+        b4_callhierarchy_layer1_generic_v3_test.go:2236: ASSERT_CH_GENERIC_V3_PATH_COUNTS world=world-12 registry=116 compared=114 skipped=0 errors=2
+    b4_callhierarchy_layer1_generic_v3_test.go:2303: ASSERT_CH_GENERIC_V3_EXECUTION_COUNTERS roots=25 workers=16 executions=22 pair_members=22 total=85 attempted=85 executed=84 pre_effect_refused=1
+    b4_callhierarchy_layer1_generic_v3_test.go:2309: ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE_CROSS_RULE attempted=85 executed=84 pre_effect_refused=1 reason=typed-pre-effect-refusal
+FAIL
+FAIL	lsp-trace/sessionruntime	0.424s
+FAIL

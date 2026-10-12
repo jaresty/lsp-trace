@@ -1,0 +1,732 @@
+{
+  "accepted_patch_sha256": "e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0",
+  "artifacts": [
+    {
+      "bytes": 1965,
+      "path": "ADMISSION.md",
+      "provenance": {
+        "kind": "package-authored",
+        "source": "this packaging operation"
+      },
+      "sha256": "e93c32f2c635746f7b7098e3d9aef5b616da655bcf864b4cf6c98787a3a64636"
+    },
+    {
+      "bytes": 1238,
+      "path": "README.md",
+      "provenance": {
+        "kind": "package-authored",
+        "source": "this packaging operation"
+      },
+      "sha256": "5c0b71d4b988305bb6833b0faa037687de7cb0709d4bf6fb491f43d21697b49f"
+    },
+    {
+      "bytes": 75008,
+      "path": "evidence/adjudication/ADJUDICATION.json",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/ADJUDICATION.json",
+        "source_set": "adjudication"
+      },
+      "sha256": "0d4252ef944d958bd360cd5a74c5cb0b0f66ba6007e9c25a82f89d56fb2c0df6"
+    },
+    {
+      "bytes": 66323,
+      "path": "evidence/adjudication/ADJUDICATION.md",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/ADJUDICATION.md",
+        "source_set": "adjudication"
+      },
+      "sha256": "9b07d9349e07c8fc5c3a78fdaa74cb70e79472b49a487ba5e7bda8e056f433b0"
+    },
+    {
+      "bytes": 109316,
+      "path": "evidence/adjudication/ADJUDICATION_V2.json",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/ADJUDICATION_V2.json",
+        "source_set": "adjudication"
+      },
+      "sha256": "3992cae9729059aa33ebb3b41ee14f6ab328d6665e89376faffc602e789f3496"
+    },
+    {
+      "bytes": 95746,
+      "path": "evidence/adjudication/ADJUDICATION_V2.md",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/ADJUDICATION_V2.md",
+        "source_set": "adjudication"
+      },
+      "sha256": "d9e890762ffd66de326c04d51f1676effb9b643bca5094554e18c48f9dcfbea3"
+    },
+    {
+      "bytes": 111679,
+      "path": "evidence/adjudication/ADJUDICATION_V3.json",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/ADJUDICATION_V3.json",
+        "source_set": "adjudication"
+      },
+      "sha256": "202876345bb04152255a89b3c4c771fa5ae74b0e0bb2ce5278ba51c07ef25234"
+    },
+    {
+      "bytes": 98204,
+      "path": "evidence/adjudication/ADJUDICATION_V3.md",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/ADJUDICATION_V3.md",
+        "source_set": "adjudication"
+      },
+      "sha256": "5f98b24a3b2d1a5cc96f910a817608f1e10aef5484b45d6130bb04b2d6f7579f"
+    },
+    {
+      "bytes": 422,
+      "path": "evidence/adjudication/FINAL_HASHES.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/FINAL_HASHES.sha256",
+        "source_set": "adjudication"
+      },
+      "sha256": "ceb6187a1990c6b8d83db4097e19bf724c4d0ce60b48b213f73bf7385ea9280f"
+    },
+    {
+      "bytes": 2768,
+      "path": "evidence/adjudication/INPUT_HASHES.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/INPUT_HASHES.sha256",
+        "source_set": "adjudication"
+      },
+      "sha256": "72c26d41c04561251da8afa55a588331a187d5834993c3e1f2f9e7f410bc1f2f"
+    },
+    {
+      "bytes": 28181,
+      "path": "evidence/adjudication/SOURCE_TRACE.py",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/SOURCE_TRACE.py",
+        "source_set": "adjudication"
+      },
+      "sha256": "e2cde702df801a91092751dd4cd528d650842130cd8700b20cd6c316a0ea5a57"
+    },
+    {
+      "bytes": 12937,
+      "path": "evidence/adjudication/SOURCE_TRACE_V3.py",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V/SOURCE_TRACE_V3.py",
+        "source_set": "adjudication"
+      },
+      "sha256": "456b003f2095be5eece8a774d59591587fc9e1f66450a8fd5489217c769e0dfe"
+    },
+    {
+      "bytes": 207,
+      "path": "evidence/campaign/BASE.txt",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/BASE.txt",
+        "source_set": "campaign"
+      },
+      "sha256": "6493ac83611a64df4bb6306be130e6486218414927026b5b990c58297c967d28"
+    },
+    {
+      "bytes": 184,
+      "path": "evidence/campaign/BOUNDARY_STATUS.txt",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/BOUNDARY_STATUS.txt",
+        "source_set": "campaign"
+      },
+      "sha256": "ce48a445f7bbfc841f24b56226c24eb8a8f916298705de2c4545b7ea7bbdbc9f"
+    },
+    {
+      "bytes": 246,
+      "path": "evidence/campaign/C15_V2_CANONICAL.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/C15_V2_CANONICAL.log",
+        "source_set": "campaign"
+      },
+      "sha256": "09f7919b4685da73db73d5c8433593bae82dd03c42ce2da4dc83133070175f52"
+    },
+    {
+      "bytes": 417,
+      "path": "evidence/campaign/CLEANUP.md",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/CLEANUP.md",
+        "source_set": "campaign"
+      },
+      "sha256": "56a086d5fe34e0b22751f9c37de7e76f13c373cc827a52105beccca5db681db3"
+    },
+    {
+      "bytes": 646,
+      "path": "evidence/campaign/COMMANDS.txt",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/COMMANDS.txt",
+        "source_set": "campaign"
+      },
+      "sha256": "0216d2008f1d764d791f8ecfa06c4d2baab00806acf52b739ae65165bc4f4f0d"
+    },
+    {
+      "bytes": 335,
+      "path": "evidence/campaign/DIFF_CHECK_STAT.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/DIFF_CHECK_STAT.log",
+        "source_set": "campaign"
+      },
+      "sha256": "9c18faaf3be5b7413983da422704c3eb5f3112250adb9b2625e38b38063d5e7c"
+    },
+    {
+      "bytes": 37,
+      "path": "evidence/campaign/FINAL_FOCUSED_GREEN.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/FINAL_FOCUSED_GREEN.log",
+        "source_set": "campaign"
+      },
+      "sha256": "42104e6b2fdbd336324ddf1ce0fa115604a53519d0ebafd39a946d17d261c9d6"
+    },
+    {
+      "bytes": 37,
+      "path": "evidence/campaign/GREEN.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN.log",
+        "source_set": "campaign"
+      },
+      "sha256": "87c56ec6bda0292cdda0e485d6f6b572f6e88e087721896dd47f6b9cbe65ffc1"
+    },
+    {
+      "bytes": 2171,
+      "path": "evidence/campaign/GREEN_ATTEMPT_1.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_1.log",
+        "source_set": "campaign"
+      },
+      "sha256": "0d9f2654ae7b587c188d661ab9c8fbc655efbca4aa304828f1ab24e71ecfdb73"
+    },
+    {
+      "bytes": 0,
+      "path": "evidence/campaign/GREEN_ATTEMPT_2.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_2.log",
+        "source_set": "campaign"
+      },
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3041,
+      "path": "evidence/campaign/GREEN_ATTEMPT_2_TIMEOUT.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_2_TIMEOUT.log",
+        "source_set": "campaign"
+      },
+      "sha256": "a50c750af206cbcbd4b1e01d160439467735204266ea07a00935649fd8a32ca1"
+    },
+    {
+      "bytes": 1138539,
+      "path": "evidence/campaign/GREEN_ATTEMPT_3.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_3.log",
+        "source_set": "campaign"
+      },
+      "sha256": "cfb2736cfadbaf2a21d73d750b413af5c05b93820923b8402662defc34d18f17"
+    },
+    {
+      "bytes": 571,
+      "path": "evidence/campaign/GREEN_ATTEMPT_4.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_4.log",
+        "source_set": "campaign"
+      },
+      "sha256": "5313dc91b829ead9eea3b36be9833d151ccc215b6208674d2b2f9eb4cca9bb29"
+    },
+    {
+      "bytes": 125891,
+      "path": "evidence/campaign/GREEN_ATTEMPT_5.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_5.log",
+        "source_set": "campaign"
+      },
+      "sha256": "26279654ef6c09ae506c24260ddac90d2e540ad6d739572e334230b2cbe5df6e"
+    },
+    {
+      "bytes": 90294,
+      "path": "evidence/campaign/GREEN_ATTEMPT_6.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_6.log",
+        "source_set": "campaign"
+      },
+      "sha256": "619fe594143cc44fc2ff8eacc3b230d555c473a9ee01fb27a1b259f7f047f730"
+    },
+    {
+      "bytes": 5882,
+      "path": "evidence/campaign/GREEN_ATTEMPT_7.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_7.log",
+        "source_set": "campaign"
+      },
+      "sha256": "b94ab1278b9f273a91712da344325706ca5370f31db41228e41f9853e29e5fed"
+    },
+    {
+      "bytes": 241,
+      "path": "evidence/campaign/GREEN_ATTEMPT_8.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_8.log",
+        "source_set": "campaign"
+      },
+      "sha256": "eb22f9b4cec998587696901efa56698b04cf0d109162e70e06075d5443faf57c"
+    },
+    {
+      "bytes": 1679,
+      "path": "evidence/campaign/GREEN_ATTEMPT_9.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/GREEN_ATTEMPT_9.log",
+        "source_set": "campaign"
+      },
+      "sha256": "58dcb26241b5bc48666a01b6aae1854240d47a04b3e597f947e5ce849ffe0e4a"
+    },
+    {
+      "bytes": 41,
+      "path": "evidence/campaign/HEAD.txt",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/HEAD.txt",
+        "source_set": "campaign"
+      },
+      "sha256": "d590d72d6fad2ba25ab02829bd9c503488d491d44d99d8c4fb692f9ba220c5c8"
+    },
+    {
+      "bytes": 37,
+      "path": "evidence/campaign/NORMAL3.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/NORMAL3.log",
+        "source_set": "campaign"
+      },
+      "sha256": "4620a2ef306fa047266a0d2d9f829f551870946b17efe752cf8e4a0eb1e424a8"
+    },
+    {
+      "bytes": 77428,
+      "path": "evidence/campaign/PATCH.diff",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/PATCH.diff",
+        "source_set": "campaign"
+      },
+      "sha256": "e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0"
+    },
+    {
+      "bytes": 436,
+      "path": "evidence/campaign/POST_HASHES.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/POST_HASHES.sha256",
+        "source_set": "campaign"
+      },
+      "sha256": "290421fee4389eb5a67f9d2532fc397d91a555a9d2519065eb5ea1b62af0398a"
+    },
+    {
+      "bytes": 436,
+      "path": "evidence/campaign/PRE_HASHES.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/PRE_HASHES.sha256",
+        "source_set": "campaign"
+      },
+      "sha256": "53b55977660a5d65069eb8fc0ecb3e94e270d81e4073ffbb33989ebd03a6396f"
+    },
+    {
+      "bytes": 37,
+      "path": "evidence/campaign/RACE2.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/RACE2.log",
+        "source_set": "campaign"
+      },
+      "sha256": "a229220a8cb3133ba784f74338bf2a67e0c2c4293166ff8e8a6dd6135fe73f42"
+    },
+    {
+      "bytes": 1408,
+      "path": "evidence/campaign/RED.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/RED.log",
+        "source_set": "campaign"
+      },
+      "sha256": "a321f8320126a7bc8b928ec85621c9c058f62b902432f4ad8c0fbf138eef61fb"
+    },
+    {
+      "bytes": 1039585,
+      "path": "evidence/campaign/REGRESSIONS.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/REGRESSIONS.log",
+        "source_set": "campaign"
+      },
+      "sha256": "f71ce57f2085a247c13e411a63e0288805350c0a18dc27b37cf9342a3b7ecb20"
+    },
+    {
+      "bytes": 1894,
+      "path": "evidence/campaign/RESULT.md",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/RESULT.md",
+        "source_set": "campaign"
+      },
+      "sha256": "8f257820ff49c277876c49721d3d958762465e4770c6ed18311e421a0c638fc5"
+    },
+    {
+      "bytes": 37,
+      "path": "evidence/campaign/TARGETED_REGRESSIONS.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/TARGETED_REGRESSIONS.log",
+        "source_set": "campaign"
+      },
+      "sha256": "ebb8f805ca577f69681c39ae376e96f43bc13c5f59923c5af6a7e9acbbfb5bf1"
+    },
+    {
+      "bytes": 227,
+      "path": "evidence/campaign/TEST_LIST.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/TEST_LIST.log",
+        "source_set": "campaign"
+      },
+      "sha256": "d5bfc04009d016c05308af529fea10514fe6588110b71b0ae139db5b4ad6709a"
+    },
+    {
+      "bytes": 1030269,
+      "path": "evidence/campaign/V1_V2_V3.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7/V1_V2_V3.log",
+        "source_set": "campaign"
+      },
+      "sha256": "c882b470122c33364f092ac67ba77620e6a8cb3e543b808de6d28419b039da03"
+    },
+    {
+      "bytes": 203150,
+      "path": "evidence/enumeration/ADDED.tsv",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/ADDED.tsv",
+        "source_set": "enumeration"
+      },
+      "sha256": "f7c8e6259ba1cc396d77c871ee54669b93c68f501458da973b4b2a6565646dbc"
+    },
+    {
+      "bytes": 39951,
+      "path": "evidence/enumeration/CHANGED.tsv",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/CHANGED.tsv",
+        "source_set": "enumeration"
+      },
+      "sha256": "8ef2257684ee18cccc271ea82a4c32a43d06b5041afb652024329fe1c3f69198"
+    },
+    {
+      "bytes": 594,
+      "path": "evidence/enumeration/CLEANUP_RECEIPT.txt",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/CLEANUP_RECEIPT.txt",
+        "source_set": "enumeration"
+      },
+      "sha256": "ca74619b144240d616e6a44e9dcec38952d9ea14c80556d639226ac6fef6403c"
+    },
+    {
+      "bytes": 177,
+      "path": "evidence/enumeration/COMMANDS.txt",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/COMMANDS.txt",
+        "source_set": "enumeration"
+      },
+      "sha256": "e88aaa596cdb044f6273e2f655b641424520f303931fcbff6dece7c8a61f5bca"
+    },
+    {
+      "bytes": 1480,
+      "path": "evidence/enumeration/MANIFEST.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/MANIFEST.sha256",
+        "source_set": "enumeration"
+      },
+      "sha256": "48d361069b47438532a2608823b8b03ec446b15ca4daea055600e538ddff8161"
+    },
+    {
+      "bytes": 1517,
+      "path": "evidence/enumeration/REMOVED.tsv",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/REMOVED.tsv",
+        "source_set": "enumeration"
+      },
+      "sha256": "9c108b66f87935ad8f571960d20fa389ee630a16bed3af9e70392ae97ffe92d8"
+    },
+    {
+      "bytes": 154,
+      "path": "evidence/enumeration/RERUN_TEST.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/RERUN_TEST.log",
+        "source_set": "enumeration"
+      },
+      "sha256": "10dd073a41743978cf180ec4c77bacddfa27f016e5685270537558ae55866cdd"
+    },
+    {
+      "bytes": 1357,
+      "path": "evidence/enumeration/RESULT.md",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/RESULT.md",
+        "source_set": "enumeration"
+      },
+      "sha256": "e712eb11bf732e3167d552ed50a1f6654bca8807ab0455b22b18d6cfa0214cb7"
+    },
+    {
+      "bytes": 154,
+      "path": "evidence/enumeration/TEST.log",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/TEST.log",
+        "source_set": "enumeration"
+      },
+      "sha256": "c1c8c67f6d052df10f555dae1a3271fe1baa92a10ac7b736a33d3df27e7e0aeb"
+    },
+    {
+      "bytes": 3592976,
+      "path": "evidence/enumeration/UNCHANGED.tsv",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/UNCHANGED.tsv",
+        "source_set": "enumeration"
+      },
+      "sha256": "2e0d96f411b55d0823fe8eb6ca72c5bcc9ade0d135ba4361531717bd4b514ede"
+    },
+    {
+      "bytes": 77428,
+      "path": "evidence/enumeration/accepted4.patch",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/accepted4.patch",
+        "source_set": "enumeration"
+      },
+      "sha256": "e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0"
+    },
+    {
+      "bytes": 65,
+      "path": "evidence/enumeration/accepted4.patch.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/accepted4.patch.sha256",
+        "source_set": "enumeration"
+      },
+      "sha256": "8ec15ce7843c20931540aa09e03380ea78ec3497651d1f88ed1ff13ddbcd975a"
+    },
+    {
+      "bytes": 1126389,
+      "path": "evidence/enumeration/all-source-locations.tsv",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/all-source-locations.tsv",
+        "source_set": "enumeration"
+      },
+      "sha256": "e12ef0a501ba9ceb84ae15285aa2e829eca231a5b8aff51f465a21313ff23e03"
+    },
+    {
+      "bytes": 592013,
+      "path": "evidence/enumeration/candidates.tsv",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/candidates.tsv",
+        "source_set": "enumeration"
+      },
+      "sha256": "4e1ec4a7cf20bf0d3a74b7b4e7206a05c7f14efd9a8dc91961eaa30c7bf080e4"
+    },
+    {
+      "bytes": 65,
+      "path": "evidence/enumeration/candidates.tsv.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/candidates.tsv.sha256",
+        "source_set": "enumeration"
+      },
+      "sha256": "5bfc40ea4ddf751e4a03913d7210c277d8a564f32cf02769b3340062b0082725"
+    },
+    {
+      "bytes": 751422,
+      "path": "evidence/enumeration/classifications.tsv",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/classifications.tsv",
+        "source_set": "enumeration"
+      },
+      "sha256": "6b7d05e6ed36bbb38cbd9100e50e3473e858f0b295d96894eb4c6a47a7110ffd"
+    },
+    {
+      "bytes": 65,
+      "path": "evidence/enumeration/classifications.tsv.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/classifications.tsv.sha256",
+        "source_set": "enumeration"
+      },
+      "sha256": "f985b956453f5b447a91a67a988821cac83d67a0fcbe1ea3c1969bddeeabebcf"
+    },
+    {
+      "bytes": 24380,
+      "path": "evidence/enumeration/enumerator.go",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/enumerator.go",
+        "source_set": "enumeration"
+      },
+      "sha256": "b5e1fc97e14fddb02ee700963e1e36831446c81372c3c3ef8004270207358012"
+    },
+    {
+      "bytes": 65,
+      "path": "evidence/enumeration/enumerator.go.sha256",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/enumerator.go.sha256",
+        "source_set": "enumeration"
+      },
+      "sha256": "db4ec96fcff8d928e15f9c364c6e1cf45d016348d0ddbb35ca555198b5a04273"
+    },
+    {
+      "bytes": 1360,
+      "path": "evidence/enumeration/metadata.json",
+      "provenance": {
+        "kind": "exact-byte-copy",
+        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/metadata.json",
+        "source_set": "enumeration"
+      },
+      "sha256": "e1e25cdeb870dbe36a4694ecfddb3e2b5fd80d5d20903e307396af177beaf344"
+    }
+  ],
+  "authority_ceiling": {
+    "classification": "EVIDENCE_ONLY_REVIEW_REQUIRED",
+    "does_not_grant": [
+      "production",
+      "merge",
+      "release",
+      "deployment",
+      "acceptance",
+      "approval",
+      "implementation",
+      "lifecycle",
+      "inventory",
+      "directional_behavior"
+    ],
+    "grants": [],
+    "limitations": [
+      "static source-level evidence only",
+      "no runtime-frequency proof",
+      "no escape-or-heap-placement proof",
+      "no allocator-behavior proof",
+      "no production-execution proof",
+      "no unobserved-slice-capacity proof"
+    ]
+  },
+  "checksum_rule": {
+    "algorithm": "SHA-256",
+    "coverage": "every regular package file except SHA256SUMS itself",
+    "file": "SHA256SUMS",
+    "ordering": "LC_ALL=C bytewise path order",
+    "path_base": "package root",
+    "self_reference_exclusion": [
+      "SHA256SUMS"
+    ]
+  },
+  "counts": {
+    "added": 309,
+    "adjudication_total": 33,
+    "changed": 41,
+    "complement": 319,
+    "generated_candidates": 4154,
+    "necessary": 29,
+    "removed": 2,
+    "reuse": 4,
+    "unchanged": 3804,
+    "unresolved": 0
+  },
+  "exact_four_paths": [
+    "sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go",
+    "sessionruntime/b4_owned_method_pair_lease.go",
+    "sessionruntime/owned_method_pair.go",
+    "sessionruntime/sessionruntime.go"
+  ],
+  "exact_patch_path": "evidence/campaign/PATCH.diff",
+  "gates": {
+    "diff_check_green": {
+      "artifact": "evidence/campaign/DIFF_CHECK_STAT.log",
+      "passed": true
+    },
+    "enumeration_complete": {
+      "artifact": "evidence/enumeration/metadata.json",
+      "passed": true
+    },
+    "exact_four_path_boundary": {
+      "artifact": "evidence/campaign/BOUNDARY_STATUS.txt",
+      "passed": true
+    },
+    "final_focused_green": {
+      "artifact": "evidence/campaign/FINAL_FOCUSED_GREEN.log",
+      "passed": true
+    },
+    "focused_green": {
+      "artifact": "evidence/campaign/GREEN.log",
+      "passed": true
+    },
+    "normal_count_3_green": {
+      "artifact": "evidence/campaign/NORMAL3.log",
+      "passed": true
+    },
+    "production_admission": {
+      "passed": false,
+      "reason": "evidence package has no production authority",
+      "status": "REVIEW_REQUIRED"
+    },
+    "race_count_2_green": {
+      "artifact": "evidence/campaign/RACE2.log",
+      "passed": true
+    },
+    "semantic_adjudication_complete": {
+      "artifact": "evidence/adjudication/ADJUDICATION_V3.json",
+      "passed": true
+    },
+    "targeted_regressions_green": {
+      "artifact": "evidence/campaign/TARGETED_REGRESSIONS.log",
+      "passed": true
+    }
+  },
+  "manifest_self_hash": "recorded externally in SHA256SUMS to avoid recursive self-reference",
+  "parent_head": "ce4a1838f8a10bafc13429031e55df7e4dd812c6",
+  "provenance": {
+    "durable_authority": "packaged exact-byte artifacts and package-relative hashes",
+    "historical_input_locations": {
+      "adjudication": "/tmp/adr0011-layer1-generic-v3-c15-adjudication-Pjut6V",
+      "campaign": "/tmp/adr0011-layer1-generic-v3-campaign-evidence-kevso7",
+      "enumeration": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy"
+    },
+    "temporary_paths_are_not_sole_authority": true
+  },
+  "schema": "lsp-trace/adr0011-callhierarchy-layer1-generic-v3-production-admission-package-v1",
+  "status": "REVIEW_REQUIRED"
+}

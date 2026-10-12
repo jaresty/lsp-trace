@@ -1,0 +1,46 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.managed-discovery.v2",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "target_workspace_uri": "file:///Users/schwa/dev/lsp-trace-adr0011-c17",
+  "exact_workspace_lookup": {
+    "tool": "lsp_session_v1_list",
+    "request_id": "offline-1",
+    "detail": "full",
+    "uri": "file:///Users/schwa/dev/lsp-trace-adr0011-c17",
+    "outcome": "DOMAIN_ERROR",
+    "operation_status": "FAILED",
+    "code": "APPLICABLE_SESSION_NOT_FOUND",
+    "diagnostics": ["APPLICABLE_SESSION_NOT_FOUND"]
+  },
+  "all_session_lookup": {
+    "tool": "lsp_session_v1_list",
+    "request_id": "offline-4",
+    "detail": "full",
+    "outcome": "COMPLETE",
+    "operation_status": "SUCCEEDED",
+    "sessions": [
+      {
+        "session_id": "sk1:949e027243da188035cc5c6532c4cb10df4210f2bdde80acc58b7b7b9af5f283",
+        "alias": "project",
+        "workspace_root": "/Users/schwa/dev/lsp-trace",
+        "language_id": "go",
+        "server_profile": "gopls",
+        "generation": 1,
+        "readiness": "READY",
+        "started": "2026-10-10T13:27:55.575593-07:00",
+        "position_encoding": "utf-16",
+        "server_instance": {
+          "binary_version": "lsp-trace-mcp wip-adr0007",
+          "source_revision": "3ac56b455813831fa8fb691942cf66acead35cb0",
+          "dirty": false,
+          "custody": "SELF_MEASURED",
+          "executable_sha256": "sha256:f22613951a64f9101e924133a75f7783ec43d15856d9a4dc12e8301784549e81",
+          "instance_id": "si1:3e2e5c7a924b07809225fbc3762a91c4"
+        }
+      }
+    ],
+    "census": {"sessions":1,"generations":1,"requests":0,"children":1,"cancels":0,"tombstones":0,"observations":2,"operations":0,"workers":0}
+  },
+  "derivation_attempted": false,
+  "reason": "Derivation would create a managed child before mandatory gopls/toolchain/initialize/raw-frame custody was retainable."
+}

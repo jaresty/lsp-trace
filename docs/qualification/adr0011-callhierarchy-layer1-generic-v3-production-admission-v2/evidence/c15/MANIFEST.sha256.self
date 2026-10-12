@@ -1,0 +1,1 @@
+10071af80a96cfc6721c878b6662a23d319ff79485c96076aeece557cad860c8  /tmp/adr0011-v3-corpus-placement-evidence-l58atP/c15/MANIFEST.sha256

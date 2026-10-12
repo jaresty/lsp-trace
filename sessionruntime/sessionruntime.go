@@ -25,6 +25,7 @@ import (
 
 	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/adr0011cobserve"
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
@@ -250,7 +251,9 @@ type RoundTripRequest struct {
 	MaxMessages int
 	MaxBytes    int64
 	// Private default-off in-memory D/R query/result observation, not a receipt.
-	CaptureOwnedMethodPair bool `json:"-"`
+	CaptureOwnedMethodPair            bool                                 `json:"-"`
+	callHierarchyLayer1               callHierarchyLayer1RequestAttachment `json:"-"`
+	callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
 	// EnablePrivateC16ObjectAccounting is an experimental, default-off capability
 	// marker valid only for the marked private B4 transaction path. It is not a
 	// protocol, CLI, MCP, schema, or general Manager feature.
@@ -279,10 +282,11 @@ type RoundTripRequest struct {
 	CaptureDocumentSymbolRequestFrameMaxBytes  int64 `json:"-"`
 	CaptureDocumentSymbolResponseFrameMaxBytes int64 `json:"-"`
 	// Diagnostic join values must be opaque safe identities, never labels or paths.
-	DiagnosticCallerID string
-	DiagnosticTargetID string
-	DiagnosticSequence uint64 // scoped to the acquisition owner, not globally allocated
-	DiagnosticObserver func(manageddiagnostic.Record)
+	DiagnosticCallerID       string
+	DiagnosticTargetID       string
+	DiagnosticSequence       uint64 // scoped to the acquisition owner, not globally allocated
+	DiagnosticObserver       func(manageddiagnostic.Record)
+	callHierarchyObservation *callHierarchyObservationRequest `json:"-"`
 }
 
 // RoundTripResult is the immutable terminal observation of one transaction.
@@ -349,7 +353,7 @@ const DocumentSourceUnavailable session.Failure = "DOCUMENT_SOURCE_UNAVAILABLE"
 // Supply and version are returned only after a confirmed complete write (or the
 // historical unchanged-document cache hit, which returns no new Supply).
 func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) DocumentResult {
-	return m.prepareDocument(ctx, req, false)
+	return m.prepareDocumentAccounted(ctx, req, false)
 }
 
 // RefreshDocumentSupply deliberately emits a new full-text notification for an
@@ -359,7 +363,57 @@ func (m *Manager) RefreshDocumentSupply(ctx context.Context, req DocumentRequest
 	if !req.CaptureSupply {
 		return DocumentResult{Failure: DocumentSupplyUnavailable}
 	}
-	return m.prepareDocument(ctx, req, true)
+	return m.prepareDocumentAccounted(ctx, req, true)
+}
+
+func (m *Manager) prepareDocumentAccounted(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
+	account, ok := adr0011work.AccountFromContext(ctx)
+	if !ok {
+		return m.prepareDocument(ctx, req, refresh)
+	}
+
+	var result DocumentResult
+	identity := account.Snapshot().Identity
+	err := account.WithDocumentAcquisition(identity, req.URI, func() (bool, error) {
+		result = m.prepareDocument(ctx, req, refresh)
+		return m.validDocumentAcquisition(req, result), nil
+	})
+	if err != nil {
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
+	return result
+}
+
+func (m *Manager) validDocumentAcquisition(req DocumentRequest, result DocumentResult) bool {
+	if result.Failure != "" || result.URI != req.URI || result.Supply == nil {
+		return false
+	}
+	supply := result.Supply
+	if supply.Classification != "LSP_SUPPLIED" || supply.SessionID != req.SessionID ||
+		supply.Generation != req.Generation || supply.URI != req.URI ||
+		supply.DocumentVersion != result.Version ||
+		(supply.Method != "textDocument/didOpen" && supply.Method != "textDocument/didChange") {
+		return false
+	}
+
+	digest := sha256.Sum256(supply.Content)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[req.SessionID]
+	if r == nil || r.record.Generation != req.Generation {
+		return false
+	}
+	retained, ok := r.documents[req.URI]
+	return ok && retained.supply != nil && retained.languageID == result.LanguageID &&
+		retained.version == result.Version && retained.digest == digest &&
+		retained.supply.Classification == supply.Classification &&
+		retained.supply.SessionID == supply.SessionID &&
+		retained.supply.Generation == supply.Generation &&
+		retained.supply.URI == supply.URI &&
+		retained.supply.DocumentVersion == supply.DocumentVersion &&
+		retained.supply.Method == supply.Method &&
+		bytes.Equal(retained.supply.Content, supply.Content) &&
+		bytes.Equal(retained.supply.Params, supply.Params)
 }
 
 func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
@@ -646,46 +700,71 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 }
 
 type RoundTripResult struct {
-	Key                            lspwire.RequestKey
-	DiagnosticOperation            DiagnosticOperationHandle `json:"-"`
-	Result                         json.RawMessage
-	ServerError                    *lspwire.RPCError
-	Failure                        session.Failure
-	Messages                       int
-	Bytes                          int64
-	RequestMessages                int
-	RequestBytes                   int64
-	Duration                       time.Duration
-	ThermalPhase                   string
-	Notifications                  []lspwire.Message
-	Responses                      []lspwire.Message
-	started                        time.Time
-	diagnostic                     manageddiagnostic.RequestObservation
-	diagnosticSink                 func(manageddiagnostic.Record)
-	eventCollector                 *manageddiagnostic.EventCollector
-	requestWrite                   *RequestWriteObservation
-	methodRequestFrame             []byte
-	privateB4RequestFrame          *privateB4RequestFrameOwner
-	privateB4ResponseFrame         *privateB4ResponseFrameOwner
-	privateB4Result                *privateB4ResultOwner
-	responseRead                   *ResponseReadObservation
-	ownedMethodPair                *OwnedMethodPair
-	privateB4OwnedMethodPair       *privateB4OwnedMethodPairOwner
-	privateB4RetainedNotifications *privateB4RetainedNotificationOwner
-	privateB4ServerError           *privateB4ServerErrorOwner
-	privateB4RetainedResponses     *privateB4RetainedResponseOwner
-	definitionResponseFrame        []byte
-	referencesResponseFrame        []byte
-	documentSymbolRequestFrame     []byte
-	documentSymbolResponseFrame    []byte
+	Key                               lspwire.RequestKey
+	DiagnosticOperation               DiagnosticOperationHandle `json:"-"`
+	Result                            json.RawMessage
+	ServerError                       *lspwire.RPCError
+	Failure                           session.Failure
+	Messages                          int
+	Bytes                             int64
+	RequestMessages                   int
+	RequestBytes                      int64
+	Duration                          time.Duration
+	ThermalPhase                      string
+	Notifications                     []lspwire.Message
+	Responses                         []lspwire.Message
+	started                           time.Time
+	diagnostic                        manageddiagnostic.RequestObservation
+	diagnosticSink                    func(manageddiagnostic.Record)
+	eventCollector                    *manageddiagnostic.EventCollector
+	requestWrite                      *RequestWriteObservation
+	methodRequestFrame                []byte
+	privateB4RequestFrame             *privateB4RequestFrameOwner
+	privateB4ResponseFrame            *privateB4ResponseFrameOwner
+	privateB4Result                   *privateB4ResultOwner
+	responseRead                      *ResponseReadObservation
+	ownedMethodPair                   *OwnedMethodPair
+	privateB4OwnedMethodPair          *privateB4OwnedMethodPairOwner
+	privateB4RetainedNotifications    *privateB4RetainedNotificationOwner
+	privateB4ServerError              *privateB4ServerErrorOwner
+	privateB4RetainedResponses        *privateB4RetainedResponseOwner
+	callHierarchyObservation          *callHierarchyObservationOwner      `json:"-"`
+	callHierarchyLayer1               callHierarchyLayer1ResultAttachment `json:"-"`
+	callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
+	callHierarchyLayer1Generic        *callHierarchyLayer1GenericOwner `json:"-"`
+	definitionResponseFrame           []byte
+	referencesResponseFrame           []byte
+	documentSymbolRequestFrame        []byte
+	documentSymbolResponseFrame       []byte
+}
+
+func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyObservationLease, bool) {
+	if r.callHierarchyObservation == nil {
+		return callHierarchyObservationLease{}, false
+	}
+	owner := r.callHierarchyObservation
+	owner.mu.Lock()
+	live := !owner.admissionClosed && !owner.released
+	owner.mu.Unlock()
+	if !live {
+		return callHierarchyObservationLease{}, false
+	}
+	return callHierarchyObservationLease{owner: owner}, true
 }
 
 // RoundTrip executes one complete protocol transaction while exclusively
 // owning the exact generation's stdin/stdout stream. Concurrent transactions
 // and lifecycle operations are rejected rather than queued.
 func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
+	req.callHierarchyLayer1GenericAttempt = newCallHierarchyLayer1GenericAttemptLineage(req)
+	attempt := req.callHierarchyLayer1GenericAttempt
+	if attempt != nil && attempt.causalOutcome.class == callHierarchyLayer1GenericCausalOutcomePreEffectRefusal {
+		if attempt.causalOutcome.refusalType == callHierarchyLayer1GenericRefusalMethodUnavailable && attempt.causalOutcome.refusalReason == session.Failure("method unavailable") && attempt.causalOutcome.terminal == "" {
+			return m.finishCallHierarchyLayer1GenericRefusal(attempt, RoundTripResult{}, attempt.causalOutcome.refusalType, attempt.causalOutcome.refusalReason)
+		}
+	}
 	if req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
-		return RoundTripResult{Failure: session.ToolNotImplemented}
+		return m.finishCallHierarchyLayer1GenericRefusal(attempt, RoundTripResult{Failure: session.ToolNotImplemented}, callHierarchyLayer1GenericRefusalPrivateAccountingNotImplemented, session.Failure("private-accounting-not-implemented"))
 	}
 	if req.ADR0011PrivateP2 && (req.Method == "textDocument/definition" || req.Method == "textDocument/references") {
 		private := &privateB4Reservation{method: req.Method, nonCustodial: true}
@@ -724,7 +803,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	}
 	c18Receipt := adr0011c18.From(parent)
 	if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDeadline) {
-		return RoundTripResult{Failure: session.ToolNotImplemented}
+		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.ToolNotImplemented}, callHierarchyLayer1GenericRefusalRuntimeGate, session.ToolNotImplemented)
 	}
 	requestStarted := m.now()
 	if req.ExpectedOwnedDocument != nil {
@@ -735,21 +814,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		req.ExpectedOwnedDocument = &expected
 	}
 	if failure := contextFailure(parent); failure != "" {
-		return RoundTripResult{Failure: failure}
+		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: failure}, callHierarchyLayer1GenericRefusalContext, failure)
 	}
 	m.mu.Lock()
 	r := m.sessions[req.SessionID]
 	if r == nil {
 		m.mu.Unlock()
-		return RoundTripResult{Failure: session.SessionNotFound}
+		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.SessionNotFound}, callHierarchyLayer1GenericRefusalSession, session.SessionNotFound)
 	}
 	if req.Generation != r.record.Generation {
 		m.mu.Unlock()
-		return RoundTripResult{Failure: session.StaleGeneration}
+		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.StaleGeneration}, callHierarchyLayer1GenericRefusalGeneration, session.StaleGeneration)
 	}
 	if r.record.State != session.Ready || r.protocolOwned {
 		m.mu.Unlock()
-		return RoundTripResult{Failure: session.LifecycleConflict}
+		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.LifecycleConflict}, callHierarchyLayer1GenericRefusalLifecycle, session.LifecycleConflict)
 	}
 	if private != nil && req.ADR0011PrivateP2 {
 		callerDeadline, _ := parent.Deadline()
@@ -812,6 +891,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		}
 	}
 	key := r.pending.Begin(req.Generation)
+	if attempt := req.callHierarchyLayer1GenericAttempt; attempt != nil {
+		attempt.admit(key, callHierarchyLayer1GenericBeforeSnapshot{ledger: req.callHierarchyLayer1.ledger})
+	}
 	if private != nil {
 		private.selection.Key = key
 	}
@@ -840,7 +922,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	}
 	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
 	started := m.now()
-	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector}
+	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
 	var privateRetainedNotifications []lspwire.Message
 	var privateRetainedResponses []lspwire.Message
 	maxMessages := req.MaxMessages
@@ -887,6 +969,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		req.CaptureMethodRequestFrameMaxBytes > 0 && req.CaptureMethodRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes {
 		requestFrameCap = req.CaptureMethodRequestFrameMaxBytes
 	}
+	if req.callHierarchyLayer1GenericAttempt != nil {
+		requestFrameCap = maxBytes
+	}
 	documentSymbolCapture := req.Method == "textDocument/documentSymbol" &&
 		eligibleOwnedMethodRequest(req) && req.ExpectedOwnedDocument != nil &&
 		req.CaptureDocumentSymbolRequestFrameMaxBytes > 0 && req.CaptureDocumentSymbolRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes &&
@@ -921,6 +1006,13 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 		}
 		defer outboundTransport.release()
+	} else if req.callHierarchyLayer1GenericAttempt != nil {
+		requestBody, marshalErr = json.Marshal(struct {
+			ID      json.RawMessage `json:"id"`
+			JSONRPC string          `json:"jsonrpc"`
+			Method  string          `json:"method"`
+			Params  json.RawMessage `json:"params"`
+		}{ID: id, JSONRPC: lspwire.Version, Method: req.Method, Params: requestParams})
 	} else {
 		requestBody, marshalErr = json.Marshal(requestMessage)
 	}
@@ -940,7 +1032,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	}
 	collector.Record(diagnosticEventWriteAttempt, result.RequestBytes, false)
 	writeRequest := func() error { return writer.Write(requestMessage) }
-	if custodialPrivateB4 {
+	if custodialPrivateB4 || req.callHierarchyLayer1GenericAttempt != nil {
 		writeRequest = func() error { return writer.WriteEncodedBodyPrivate(requestBody) }
 	}
 	if err := owner.run(ctx, writeRequest); err != nil {
@@ -960,6 +1052,14 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	result.requestWrite = &RequestWriteObservation{
 		SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
 		FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
+	}
+	if result.callHierarchyLayer1GenericAttempt != nil {
+		if raw, retained := writeCapture.retainedFrame(); retained {
+			result.callHierarchyLayer1GenericAttempt.captureRequestFrame(raw, *result.requestWrite)
+		}
+	}
+	if m.roundTripRequestWriteAccountedTestHook != nil {
+		m.roundTripRequestWriteAccountedTestHook()
 	}
 
 	type readResult struct {
@@ -998,10 +1098,19 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		private.retainEntry = retainEntry
 	}
 	var reader *lspwire.Reader
+	stdout := io.Reader(child.Stdout())
+	var genericResponseCapture *framedWriteCapture
+	if req.callHierarchyLayer1GenericAttempt != nil {
+		genericResponseCapture = newFramedWriteCaptureBounded(io.Discard, maxBytes)
+		stdout = io.TeeReader(stdout, genericResponseCapture)
+	}
 	if m.cWireObserver == nil && decodeEntry == nil && retainEntry == nil {
-		reader = lspwire.NewReader(child.Stdout(), m.wire)
+		reader = lspwire.NewReader(stdout, m.wire)
 	} else {
-		reader = lspwire.NewReaderObservedAtDecode(child.Stdout(), m.wire, m.cWireObserver, decodeEntry, retainEntry)
+		reader = lspwire.NewReaderObservedAtDecode(stdout, m.wire, m.cWireObserver, decodeEntry, retainEntry)
+	}
+	if req.callHierarchyLayer1GenericAttempt != nil && captureCap == 0 {
+		captureCap = maxBytes
 	}
 	if private != nil {
 		// Checkpoint C, first increment: per complete original-wire frame,
@@ -1057,11 +1166,19 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				m.mu.Unlock()
 			}
 			failure := session.RequestCancelled
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) || (private != nil && req.ADR0011PrivateP2 && !m.now().Before(req.Deadline)) {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) || (!req.Deadline.IsZero() && req.Deadline.Sub(m.now()) <= time.Millisecond) {
 				failure = session.RequestTimeout
 			}
 			return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
 		case read := <-reads:
+			if len(read.raw) == 0 && read.err != nil && genericResponseCapture != nil {
+				read.raw, _ = genericResponseCapture.retainedFrame()
+				read.frame.FrameBytes = int64(len(read.raw))
+				read.frame.FrameSHA256 = genericResponseCapture.sha256()
+			}
+			if result.callHierarchyLayer1GenericAttempt != nil && len(read.raw) != 0 {
+				result.callHierarchyLayer1GenericAttempt.captureResponseFrame(read.raw, read.frame)
+			}
 			if read.err != nil {
 				failure := session.SessionPoisoned
 				if privateReader != nil && !errors.Is(read.err, io.EOF) && !errors.Is(read.err, errPrivateB4Transport) &&
@@ -1069,10 +1186,17 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 					failure = session.ResourceExhausted
 				} else if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(read.err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
 					failure = session.ResourceExhausted
+				} else if read.err.Error() == "transport-unavailable" {
+					failure = session.Failure("transport-unavailable")
 				} else if errors.Is(read.err, io.EOF) {
 					failure = session.SessionCrashed
 				}
 				return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+			}
+			if account, ok := adr0011work.AccountFromContext(parent); ok {
+				if err := account.ChargeMessagesProcessed(account.Snapshot().Identity, 1); err != nil {
+					return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+				}
 			}
 			bodyBytes := read.bodyBytes
 			if privateReader == nil {
@@ -1099,12 +1223,8 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				read.frameOwner.releaseManager()
 			}
 			if custodialPrivateB4 && read.message.Kind() == lspwire.KindRequest {
-				var capabilityProfile *privateB4EventAccountC17
-				if transaction != nil && transaction.c17 != nil {
-					capabilityProfile = transaction.c17.profile
-				}
-				failure, poison := writePrivateB4CapabilityResponseC17(capabilityProfile, read.message.Method, read.message.Params, func() (session.Failure, bool) {
-					return writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor)
+				failure, poison := writePrivateB4CapabilityResponseC17(transaction, read.message.Method, read.message.Params, func() (session.Failure, bool) {
+					return writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor, read.frameOwner)
 				})
 				releaseUnselectedFrame()
 				if failure != "" {
@@ -1154,7 +1274,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				if m.b4DecodedHooks.reserve != nil {
 					m.b4DecodedHooks.reserve(private.explicitBytes, capacity)
 				}
-				owned, lease, err := lspwire.CloneSuccessorMessageOwned(read.message, privateB4SuccessorAllocationOwner{account: private.explicitBytes})
+				owned, lease, err := lspwire.CloneSuccessorMessageOwned(read.message, privateB4SuccessorAllocationOwner{
+					account: private.explicitBytes, workAccount: private.workAccount, identity: private.selection.Transaction,
+				})
 				if err != nil {
 					if m.b4DecodedHooks.refused != nil {
 						m.b4DecodedHooks.refused(private.explicitBytes, capacity)
@@ -1213,6 +1335,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				if private != nil && read.message.Kind() == lspwire.KindSuccessResponse {
 					result.Result = append(json.RawMessage(nil), private.capture.Result...)
 				}
+			}
+			if result.callHierarchyLayer1GenericAttempt != nil {
+				result.callHierarchyLayer1GenericAttempt.captureResult(result.Result, result.ServerError)
 			}
 			collector.Record(diagnosticEventResponseDecoded, int64(len(result.Result)), read.message.Error == nil)
 			if classify != nil {
@@ -1369,12 +1494,23 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 	if result.Duration < 0 {
 		result.Duration = 0
 	}
+	var genericTerminal *callHierarchyLayer1GenericOwner
+	if attempt := result.callHierarchyLayer1GenericAttempt; attempt != nil {
+		after := callHierarchyLayer1GenericAfterSnapshot{ledger: result.callHierarchyLayer1.ledger, terminal: callHierarchyTransportTerminalSnapshot{value: string(terminal), available: true}}
+		observation := attempt.finishAccepted(result, failure, terminal, after)
+		result, genericTerminal = m.publishCallHierarchyLayer1GenericOwnerLocked(result, newCallHierarchyLayer1GenericOwner(observation))
+	}
+	result.callHierarchyLayer1GenericAttempt = nil
 	m.workers--
 	select {
 	case m.workerDone <- struct{}{}:
 	default:
 	}
 	m.mu.Unlock()
+	if genericTerminal != nil {
+		genericTerminal.requestTerminal()
+		genericTerminal.waitReleased()
+	}
 	if m.diagnostics != nil {
 		m.diagnostics.Record(diagnostic)
 	}
@@ -1426,55 +1562,59 @@ type privateB4DecodedTestHooks struct {
 }
 
 type Manager struct {
-	mu                       sync.Mutex
-	limits                   Limits
-	wire                     lspwire.Limits
-	starter                  Starter
-	algebra                  *session.Manager
-	sessions                 map[string]*runtimeSession
-	operations               map[string]OperationSnapshot
-	operationIDs             []string
-	readiness                map[string]*readinessOperation
-	readinessIDs             map[string]string
-	observations             []Observation
-	sequence                 uint64
-	readinessSeq             uint64
-	readinessTimeout         time.Duration
-	now                      func() time.Time
-	workers                  int
-	workerDone               chan struct{}
-	closed                   bool
-	diagnostics              *manageddiagnostic.Store
-	seedRevisionAuthority    seedbinding.RevisionAuthority
-	documentFinalHook        func()
-	gitWorktreeList          func(context.Context, string) ([]byte, error)
-	startupAttemptNonce      [16]byte
-	startupAttemptEntropy    func(uint64) []byte
-	startupAttemptSeq        uint64
-	transientIdentityRandom  io.Reader
-	readinessHistoryRandom   io.Reader
-	transientIdentities      map[string]struct{}
-	diagnosticSequence       uint64
-	diagnosticEvictions      uint64
-	diagnosticOmissions      uint64
-	diagnosticByteEvictions  uint64
-	diagnosticOperations     map[DiagnosticOperationHandle]diagnosticOperation
-	diagnosticOrder          []DiagnosticOperationHandle
-	methodCandidateTestHook  func(methodCandidateObservation)
-	ownedMethodPairTestHook  func(OwnedMethodPair)
-	b4OutboundHook           func(*privateB4ByteAccountV2)
-	b4AfterWriteHook         func(*privateB4ByteAccountV2)
-	b4ParamsHook             func(*privateB4ByteAccountV2)
-	b4DecodedHooks           privateB4DecodedTestHooks
-	b4OwnedPairHooks         privateB4OwnedMethodPairHooks
-	privateB4SourceIngress   *privateB4SourceIngressOwner
-	managerDiagnosticOwner   *managerDiagnosticOwner
-	privateDiagnosticHistory *privateDiagnosticHistory
-	cWireObserver            lspwire.Observer
-	cDecodeEntry             func()
-	cRetainEntry             func()
-	privateB4Leases          [privateB4MaxSlots]privateB4Slot
-	privateB4Bytes           int64
+	mu                                           sync.Mutex
+	limits                                       Limits
+	wire                                         lspwire.Limits
+	starter                                      Starter
+	algebra                                      *session.Manager
+	sessions                                     map[string]*runtimeSession
+	operations                                   map[string]OperationSnapshot
+	operationIDs                                 []string
+	readiness                                    map[string]*readinessOperation
+	readinessIDs                                 map[string]string
+	observations                                 []Observation
+	sequence                                     uint64
+	readinessSeq                                 uint64
+	readinessTimeout                             time.Duration
+	now                                          func() time.Time
+	workers                                      int
+	workerDone                                   chan struct{}
+	closed                                       bool
+	diagnostics                                  *manageddiagnostic.Store
+	seedRevisionAuthority                        seedbinding.RevisionAuthority
+	documentFinalHook                            func()
+	gitWorktreeList                              func(context.Context, string) ([]byte, error)
+	startupAttemptNonce                          [16]byte
+	startupAttemptEntropy                        func(uint64) []byte
+	startupAttemptSeq                            uint64
+	transientIdentityRandom                      io.Reader
+	readinessHistoryRandom                       io.Reader
+	transientIdentities                          map[string]struct{}
+	diagnosticSequence                           uint64
+	diagnosticEvictions                          uint64
+	diagnosticOmissions                          uint64
+	diagnosticByteEvictions                      uint64
+	diagnosticOperations                         map[DiagnosticOperationHandle]diagnosticOperation
+	diagnosticOrder                              []DiagnosticOperationHandle
+	methodCandidateTestHook                      func(methodCandidateObservation)
+	ownedMethodPairTestHook                      func(OwnedMethodPair)
+	roundTripRequestWriteAccountedTestHook       func()
+	b4OutboundHook                               func(*privateB4ByteAccountV2)
+	b4AfterWriteHook                             func(*privateB4ByteAccountV2)
+	b4ParamsHook                                 func(*privateB4ByteAccountV2)
+	b4DecodedHooks                               privateB4DecodedTestHooks
+	b4OwnedPairHooks                             privateB4OwnedMethodPairHooks
+	privateB4SourceIngress                       *privateB4SourceIngressOwner
+	managerDiagnosticOwner                       *managerDiagnosticOwner
+	privateDiagnosticHistory                     *privateDiagnosticHistory
+	privateB4C15Contexts                         map[string]privateB4C15ManagerContext
+	callHierarchyLayer1GenericOwners             []*callHierarchyLayer1GenericOwner
+	callHierarchyLayer1GenericRetiredGenerations map[callHierarchyLayer1GenericGenerationKey]struct{}
+	cWireObserver                                lspwire.Observer
+	cDecodeEntry                                 func()
+	cRetainEntry                                 func()
+	privateB4Leases                              [privateB4MaxSlots]privateB4Slot
+	privateB4Bytes                               int64
 }
 
 func New(c Config) (*Manager, error) {
@@ -1850,7 +1990,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		copy := *req.SeedBinding
 		retainedBinding = &copy
 	}
-	r := &runtimeSession{record: record, attemptID: attemptID, attemptStarted: m.now(), process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity}
+	r := &runtimeSession{record: record, attemptID: attemptID, attemptStarted: attemptStarted, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity}
 	history, historyErr := m.issuePrivateReadinessHistoryLocked(id, 1)
 	if historyErr != nil {
 		return m.failTransientIdentityStartLocked(id, r, session.ResourceExhausted, observed)
@@ -2753,8 +2893,17 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		// Only a completed STOP retires this exact session generation's
 		// manager-held private leases. Release and remove under the same lock.
 		join := m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
+		if m.callHierarchyLayer1GenericRetiredGenerations == nil {
+			m.callHierarchyLayer1GenericRetiredGenerations = make(map[callHierarchyLayer1GenericGenerationKey]struct{})
+		}
+		m.callHierarchyLayer1GenericRetiredGenerations[callHierarchyLayer1GenericGenerationKey{operation.SessionID, operation.Generation}] = struct{}{}
+		genericOwners := m.detachCallHierarchyLayer1GenericOwnersLocked(operation.SessionID, operation.Generation, true)
 		m.mu.Unlock()
 		join.wait()
+		for _, genericOwner := range genericOwners {
+			genericOwner.requestTerminal()
+			genericOwner.waitReleased()
+		}
 		m.mu.Lock()
 		delete(m.sessions, operation.SessionID)
 		operation.State = OperationComplete
@@ -2766,8 +2915,17 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	// that generation's private leases under the same lock before any successor
 	// startup can use the session or reserve new private capacity.
 	join := m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
+	if m.callHierarchyLayer1GenericRetiredGenerations == nil {
+		m.callHierarchyLayer1GenericRetiredGenerations = make(map[callHierarchyLayer1GenericGenerationKey]struct{})
+	}
+	m.callHierarchyLayer1GenericRetiredGenerations[callHierarchyLayer1GenericGenerationKey{operation.SessionID, operation.Generation}] = struct{}{}
+	genericOwners := m.detachCallHierarchyLayer1GenericOwnersLocked(operation.SessionID, operation.Generation, false)
 	m.mu.Unlock()
 	join.wait()
+	for _, genericOwner := range genericOwners {
+		genericOwner.requestTerminal()
+		genericOwner.waitReleased()
+	}
 
 	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
 	identity := managedprocess.ObserveIdentity(spec, r.record.Profile.ProfileName(), r.record.Profile.Workspace().String())
@@ -2799,7 +2957,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
 	r.readinessHistory = nextHistory
 	r.attemptID = attemptID
-	r.attemptStarted = m.now()
+	r.attemptStarted = attemptStarted
 	r.identity = identity
 	r.diagnosticGeneration = m.newDiagnosticGeneration(attemptID, operation.SessionID, completed.Generation)
 	m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Generation: completed.Generation, State: session.Initializing, Start: start})
@@ -2915,7 +3073,14 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	if m.privateB4SourceIngress != nil {
 		m.privateB4SourceIngress.releaseTableBacking()
 	}
+	genericOwners := m.callHierarchyLayer1GenericOwners
+	m.callHierarchyLayer1GenericOwners = nil
+	m.callHierarchyLayer1GenericRetiredGenerations = nil
 	m.mu.Unlock()
+	for _, genericOwner := range genericOwners {
+		genericOwner.requestTerminal()
+		genericOwner.waitReleased()
+	}
 	return nil
 }
 

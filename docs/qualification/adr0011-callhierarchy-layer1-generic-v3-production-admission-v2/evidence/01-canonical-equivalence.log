@@ -1,0 +1,18 @@
+PRODUCTION_ARTIFACT_PATH_ORDER
+diff --git a/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go b/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+diff --git a/sessionruntime/b4_owned_method_pair_lease.go b/sessionruntime/b4_owned_method_pair_lease.go
+diff --git a/sessionruntime/owned_method_pair.go b/sessionruntime/owned_method_pair.go
+diff --git a/sessionruntime/sessionruntime.go b/sessionruntime/sessionruntime.go
+CORPUS_ARTIFACT_PATH_ORDER
+diff --git a/sessionruntime/testdata/callhierarchy-layer1-red-v3/manifest.json b/sessionruntime/testdata/callhierarchy-layer1-red-v3/manifest.json
+diff --git a/sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json b/sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json
+diff --git a/sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json b/sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json
+diff --git a/sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json b/sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json
+EXACT_ORDER_PRODUCTION_HASH
+e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0  -
+PRODUCTION_ARTIFACT_HASH
+e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0  /tmp/adr0011-v3-corpus-placement-evidence-l58atP/reconstructed-production.patch
+PRODUCTION_REVERSE_CHECK
+PASS
+CORPUS_REVERSE_CHECK
+PASS

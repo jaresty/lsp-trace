@@ -5,12 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math"
+	"time"
 
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/session"
 )
 
-func (m *Manager) beginStartupAttempt() (manageddiagnostic.StartupAttemptID, uint64, int64) {
+func (m *Manager) beginStartupAttempt() (manageddiagnostic.StartupAttemptID, uint64, time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.startupAttemptSeq == math.MaxUint64 {
@@ -22,7 +23,7 @@ func (m *Manager) beginStartupAttempt() (manageddiagnostic.StartupAttemptID, uin
 	if m.startupAttemptEntropy != nil {
 		entropy = m.startupAttemptEntropy(sequence)
 	}
-	return deriveStartupAttemptID(m.startupAttemptNonce, sequence, entropy), sequence, m.now().UnixNano()
+	return deriveStartupAttemptID(m.startupAttemptNonce, sequence, entropy), sequence, m.now()
 }
 
 func deriveStartupAttemptID(managerNonce [16]byte, sequence uint64, testEntropy []byte) manageddiagnostic.StartupAttemptID {
@@ -78,20 +79,21 @@ func staticStartupReason(result StartResult) string {
 	}
 }
 
-func (m *Manager) finishStartupAttempt(id manageddiagnostic.StartupAttemptID, sequence uint64, started int64, result StartResult) bool {
+func (m *Manager) finishStartupAttempt(id manageddiagnostic.StartupAttemptID, sequence uint64, started time.Time, result StartResult) bool {
 	if m.diagnostics == nil {
 		return true
 	}
+	startedUnixNano := started.UnixNano()
 	ended := m.now().UnixNano()
-	if ended < started {
-		ended = started
+	if ended < startedUnixNano {
+		ended = startedUnixNano
 	}
 	reason := staticStartupReason(result)
 	r := manageddiagnostic.StartupAttemptRecord{
 		SchemaVersion: manageddiagnostic.StartupAttemptSchemaVersion,
 		AttemptID:     id, Sequence: sequence, Outcome: manageddiagnostic.StartupFailed,
 		Reason:       manageddiagnostic.Fact[string]{Status: manageddiagnostic.Observed, Value: reason},
-		Timing:       manageddiagnostic.Timing{Scope: "startup-attempt", Start: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: started}, End: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: ended}, Elapsed: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: ended - started}},
+		Timing:       manageddiagnostic.Timing{Scope: "startup-attempt", Start: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: startedUnixNano}, End: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: ended}, Elapsed: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: ended - startedUnixNano}},
 		Stderr:       manageddiagnostic.Stderr{Status: manageddiagnostic.Withheld},
 		ProcessExit:  manageddiagnostic.ProcessExit{Status: manageddiagnostic.Unavailable},
 		SafeSubcodes: []string{reason},

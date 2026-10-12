@@ -1,0 +1,18 @@
+head=57b088e56f4ac5b0e5162a03a2f7d695f34085b1
+patch_sha256=ca762452805215750a122ee250e92326387c343e92c36b844fcaf12ad2cefcba
+target_exists=false
+tracked_status_count=4
+untracked_status_count=0
+temporary_replay_worktrees=0
+status_begin
+ M sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+ M sessionruntime/sessionruntime.go
+status_end
+changed_names_begin
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+sessionruntime/b4_owned_method_pair_lease.go
+sessionruntime/owned_method_pair.go
+sessionruntime/sessionruntime.go
+changed_names_end

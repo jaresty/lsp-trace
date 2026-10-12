@@ -1,0 +1,12 @@
+sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json: equals_HEAD=True sha256=3d69449faa66007f3e310ae20e69a848a79ba5158236677b0a097217c63ddc87 bytes=8527
+sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json: equals_HEAD=True sha256=e2e253772d588ac81409b063cd22cfb07db49b27bc55b43740f6a739216f52b4 bytes=8856
+sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json: equals_HEAD=True sha256=6a7c5b428049a2fc9d9e5a6ab4c6f749bf8e52775e57bc882dfcca6b135942f8 bytes=6496
+sessionruntime/testdata/callhierarchy-layer1-red-v3/manifest.json: equals_HEAD=True sha256=bc826f925ac1c9a67bd9ba5241a9525fee733edda75c59c0896de350660556b0 bytes=4733
+guard old occurrence: 0
+guard canonical occurrence: 1
+guard tuple: world-04/104, world-05/105, world-23/123
+absent guard occurrence: 1
+targeted verification: go test -run ^TestCallHierarchyLayer1GenericV3CausalOutcomeGuards$ -count=1
+targeted verification result: 88 passed in 1 packages
+patch sha256: 92ddc6170c46a83aaa2a701b71adc4545e142947eb2c61ad8e45873cf84e7434
+commit created: false

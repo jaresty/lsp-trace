@@ -1,0 +1,15 @@
+HEAD=57b088e56f4ac5b0e5162a03a2f7d695f34085b1
+STATUS_BEGIN
+ M sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+ M sessionruntime/sessionruntime.go
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/manifest.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json
+STATUS_END
+production_diff_sha256=a4fb049d72634d1ea28e8458acf1a06c8acd0704fa957adff26b81000afe5106
+production_patch_sha256=e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0
+corpus_diff_sha256=576420a7ba24f6f00991137e7cd63735a55acdc6e697bb7300315a9ef1abda54
+corpus_patch_sha256=1feaf2068f3c9f747eb5eef95b6b600ecf0637029eed3dc43133321abecd7037

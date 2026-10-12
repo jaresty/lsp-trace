@@ -2,6 +2,7 @@ package sessionruntime
 
 import (
 	"bytes"
+	"context"
 	"testing"
 	"unsafe"
 
@@ -9,7 +10,8 @@ import (
 )
 
 func privateB4C15FinalCaptureBytes(c PrivateB4DefinitionCapture) uint64 {
-	total := uint64(len(c.RequestFrame) + len(c.RequestParams) + len(c.ResponseFrame))
+	total := uint64(len(c.RequestFrame)+len(c.RequestParams)+len(c.ResponseFrame)) +
+		uint64(len(c.TargetSources))*privateB4C15TargetSourceDescriptorBytes
 	for i := range c.TargetSources {
 		total += uint64(len(c.TargetSources[i].Bytes))
 	}
@@ -63,13 +65,21 @@ func TestPrivateB4C15SourceAndFinalCopiesChargeCallbackAndRelease(t *testing.T) 
 		t.Fatal("ASSERT_C15_RESERVATION_LEDGER_ATTACHED")
 	}
 	sourceCharge := uint64(len(f.source.Bytes))
-	descriptorCharge := privateB4SourceIngressStateBytes
+	descriptorCharge := privateB4SourceIngressStateBytes + sourceCharge
 	sourceHandleCharge := uint64(len(f.owner.TargetSources)) * uint64(unsafe.Sizeof(B4DefinitionSourceLease{}))
 	captureParamsCharge := uint64(len(f.req.Params))
 	persistentCharge := sourceHandleCharge + captureParamsCharge
 	if got := reservation.explicitBytes.snapshot(); got.Live != privateB4ByteLedgerV2TableBytes+descriptorCharge+sourceCharge+persistentCharge+frameCharge+responseCharge+resultCharge || got.Cumulative < privateB4ByteLedgerV2TableBytes+sourceCharge+persistentCharge+frameCharge+responseCharge+resultCharge {
 		f.m.mu.Unlock()
 		t.Fatalf("ASSERT_C15_SOURCE_COPY_CHARGED_SEPARATELY snapshot=%+v want=%d", got, sourceCharge)
+	}
+	if got := f.m.privateB4SourceIngress.snapshot(); got.Live != privateB4SourceIngressTableBytes {
+		f.m.mu.Unlock()
+		t.Fatalf("ASSERT_C15_COPY_03_MANAGER_OWNERSHIP_TRANSFERRED snapshot=%+v", got)
+	}
+	if source := f.owner.TargetSources[0].state; source.state.Load() != privateB4SourceTransferred || !bytes.Equal(source.source.Bytes, f.source.Bytes) {
+		f.m.mu.Unlock()
+		t.Fatalf("ASSERT_C15_COPY_03_SOURCE_BYTES_TRANSFERRED state=%d bytes=%d", source.state.Load(), len(source.source.Bytes))
 	}
 	f.m.mu.Unlock()
 
@@ -134,6 +144,12 @@ func TestPrivateB4C15SourceAndFinalCopiesChargeCallbackAndRelease(t *testing.T) 
 	}
 	if got := reservation.explicitBytes.snapshot(); got.Live != 0 || got.Cumulative < wantCallback-descriptorCharge {
 		t.Fatalf("ASSERT_C15_REPLAY_RELEASE_INERT snapshot=%+v", got)
+	}
+	if err := f.m.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := reservation.explicitBytes.snapshot(); got.Live != 0 {
+		t.Fatalf("ASSERT_C15_COPY_03_MANAGER_SHUTDOWN_NO_DOUBLE_RELEASE snapshot=%+v", got)
 	}
 }
 
@@ -253,7 +269,7 @@ func TestPrivateB4C15RepeatedPrepareMetadataExhaustionAtomic(t *testing.T) {
 		}
 	}
 	reservation.explicitBytes.mu.Unlock()
-	leasesPerPrepare := 3 + len(reservation.capture.TargetSources)
+	leasesPerPrepare := 4 + len(reservation.capture.TargetSources)
 	successfulPrepares := (privateB4ByteSlots - initialActiveSlots) / leasesPerPrepare
 	var oneCharge uint64
 	for i := 0; i < successfulPrepares; i++ {

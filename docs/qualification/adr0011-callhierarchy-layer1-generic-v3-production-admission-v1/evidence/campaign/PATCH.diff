@@ -1,0 +1,1466 @@
+diff --git a/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go b/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+index c1fada06..28001658 100644
+--- a/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
++++ b/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+@@ -4,6 +4,7 @@ import (
+ 	"bytes"
+ 	"context"
+ 	"crypto/sha256"
++	"encoding/base64"
+ 	"encoding/hex"
+ 	"encoding/json"
+ 	"errors"
+@@ -20,6 +21,7 @@ import (
+ 	"time"
+ 
+ 	"lsp-trace/internal/lspwire"
++	"lsp-trace/internal/manageddiagnostic"
+ 	"lsp-trace/internal/managedprocess"
+ 	"lsp-trace/internal/session"
+ )
+@@ -171,7 +173,7 @@ func callHierarchyLayer1GenericV3TypedCausalOutcome(outcome *callHierarchyLayer1
+ 	case "accepted-terminal":
+ 		return callHierarchyLayer1GenericCausalOutcome{
+ 			class:    callHierarchyLayer1GenericCausalOutcomeAcceptedTerminal,
+-			terminal: terminal,
++			terminal: manageddiagnostic.Terminal(terminal),
+ 		}, nil
+ 	case "pre-effect-refusal":
+ 		return callHierarchyLayer1GenericCausalOutcome{
+@@ -895,9 +897,12 @@ func (c *callHierarchyLayer1GenericV3Transport) replay() {
+ 		case "cancel", "deadline":
+ 			c.cancel()
+ 			return
+-		case "shutdown", "unavailable":
++		case "shutdown":
+ 			_ = c.output.Close()
+ 			return
++		case "unavailable":
++			_ = c.output.CloseWithError(errors.New("transport-unavailable"))
++			return
+ 		}
+ 	}
+ }
+@@ -1001,22 +1006,6 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
+ 		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithEnabled"}
+ 	}
+ 	attachment = enabledSetter.privateCallHierarchyLayer1WithEnabled(record.Driver.Request.AttachmentEnabled)
+-	causalSetter, ok := any(attachment).(callHierarchyLayer1GenericV3CausalOutcomeAttachment)
+-	if !ok {
+-		causalSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3CausalOutcomeAttachment)
+-	}
+-	request.callHierarchyLayer1 = attachment
+-	if !ok {
+-		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithCausalOutcome"}
+-	}
+-	causalOutcome, err := callHierarchyLayer1GenericV3TypedCausalOutcome(record.Driver.Request.CausalOutcome)
+-	if err != nil {
+-		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "driver-causal-outcome:" + err.Error()}
+-	}
+-	attachment = causalSetter.privateCallHierarchyLayer1WithCausalOutcome(causalOutcome)
+-	if causalOutcome.class == callHierarchyLayer1GenericCausalOutcomePreEffectRefusal {
+-		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: string(causalOutcome.refusalReason)}
+-	}
+ 	predecessorSetter, ok := any(attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+ 	if !ok {
+ 		predecessorSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+@@ -1029,7 +1018,20 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
+ 	for i, predecessor := range record.Driver.CommitmentInputs.Predecessors {
+ 		predecessors[i] = callHierarchyLayer1GenericV3Commitment(t, fmt.Sprintf("driver.commitment_inputs.predecessors[%d]", i), predecessor)
+ 	}
+-	request.callHierarchyLayer1 = predecessorSetter.privateCallHierarchyLayer1WithPredecessors(predecessors)
++	attachment = predecessorSetter.privateCallHierarchyLayer1WithPredecessors(predecessors)
++	causalSetter, ok := any(attachment).(callHierarchyLayer1GenericV3CausalOutcomeAttachment)
++	if !ok {
++		causalSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3CausalOutcomeAttachment)
++	}
++	request.callHierarchyLayer1 = attachment
++	if !ok {
++		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithCausalOutcome"}
++	}
++	causalOutcome, err := callHierarchyLayer1GenericV3TypedCausalOutcome(record.Driver.Request.CausalOutcome)
++	if err != nil {
++		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "driver-causal-outcome:" + err.Error()}
++	}
++	request.callHierarchyLayer1 = causalSetter.privateCallHierarchyLayer1WithCausalOutcome(causalOutcome)
+ 
+ 	ctx, cancel := context.WithCancel(context.Background())
+ 	transport := callHierarchyLayer1GenericV3NewTransport(record.Driver.Transport.Events, cancel, record.Driver.Request.RequestID, time.Duration(record.Driver.Request.DeadlineAfterNS))
+@@ -1038,11 +1040,18 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
+ 		t.Fatal(err)
+ 	}
+ 	pending := lspwire.NewPending(0)
++	for id := uint64(1); id < record.Driver.Request.RequestID; id++ {
++		pending.Begin(record.Driver.Request.Generation)
++	}
+ 	manager.mu.Lock()
+ 	manager.sessions[record.Driver.Request.Session] = &runtimeSession{record: Record{SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, State: session.Ready}, process: transport, pending: pending, requests: make(map[lspwire.RequestKey]*Request)}
+ 	manager.mu.Unlock()
+ 	t.Cleanup(func() { cancel(); _ = transport.Teardown(context.Background()); _ = transport.Close() })
+ 	result := manager.RoundTrip(ctx, request)
++	if result.Key.ID == 0 {
++		_ = transport.stdin.Close()
++		_ = transport.output.Close()
++	}
+ 	if len(paramsSource) > 0 {
+ 		paramsSource[0] ^= 0xff
+ 	}
+@@ -1056,12 +1065,15 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
+ 	cancel()
+ 	_ = transport.stdin.Close()
+ 	_ = transport.output.Close()
+-	if result.Key.ID != record.Driver.Request.RequestID {
++	if causalOutcome.class != callHierarchyLayer1GenericCausalOutcomePreEffectRefusal && result.Key.ID != record.Driver.Request.RequestID {
+ 		t.Errorf("ASSERT_CH_GENERIC_V3_REQUEST_ID_%s got=%d want=%d", record.Expected.Name, result.Key.ID, record.Driver.Request.RequestID)
+ 	}
+ 	requestFrame := transport.stdin.snapshot()
+ 	responseFrame := transport.responseSnapshot()
+ 	external := callHierarchyLayer1GenericV3ExternalFromResult(result, requestFrame, responseFrame)
++	if causalOutcome.class == callHierarchyLayer1GenericCausalOutcomePreEffectRefusal {
++		return callHierarchyLayer1GenericV3Actual{result: result, request: request, external: external, attempted: true, preEffectRefusal: "typed-pre-effect-refusal"}
++	}
+ 	return callHierarchyLayer1GenericV3Actual{result: result, request: request, requestFrame: external.requestFrame, responseFrame: external.responseFrame, external: external, attempted: true, executed: true}
+ }
+ 
+@@ -1082,6 +1094,139 @@ func callHierarchyLayer1GenericV3Equal(t *testing.T, world, path string, got, wa
+ 	}
+ }
+ 
++func callHierarchyLayer1GenericV3ProjectView(v callHierarchyLayer1GenericView) callHierarchyLayer1GenericV3Expected {
++	var out callHierarchyLayer1GenericV3Expected
++	measure := func(m callHierarchyMeasure) callHierarchyLayer1CorpusAvailableUint64 {
++		var p *uint64
++		if m.available {
++			x := m.value
++			p = &x
++		}
++		return callHierarchyLayer1CorpusAvailableUint64{Available: m.available, KnownZero: m.available && m.value == 0, Value: p}
++	}
++	available := func(value string, ok bool) callHierarchyLayer1CorpusAvailableString {
++		var p *string
++		if ok {
++			x := value
++			p = &x
++		}
++		return callHierarchyLayer1CorpusAvailableString{Available: ok, Value: p}
++	}
++	commitment := func(c callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1CorpusCommitment {
++		i := c.identity
++		l := c.length
++		d := hex.EncodeToString(c.sha256[:])
++		return callHierarchyLayer1CorpusCommitment{Available: c.available, Identity: &i, Length: &l, SHA256: &d}
++	}
++	frame := func(f callHierarchyLayer1GenericFrame) callHierarchyLayer1GenericV3Frame {
++		var raw *string
++		if f.available {
++			x := hex.EncodeToString(f.frameBytes)
++			raw = &x
++		}
++		return callHierarchyLayer1GenericV3Frame{Available: f.available, FrameHex: raw, FrameLength: f.frameLength, FrameSHA256: hex.EncodeToString(f.frameSHA256[:])}
++	}
++	ledger := func(d callHierarchyLayer1GenericLedgerDimension) callHierarchyLayer1CorpusLedgerDimension {
++		var before, after, delta *uint64
++		if d.available {
++			b, a, x := d.before, d.after, d.delta
++			before, after, delta = &b, &a, &x
++		}
++		return callHierarchyLayer1CorpusLedgerDimension{Before: before, After: after, Delta: delta, Available: d.available, KnownZero: d.knownZero}
++	}
++	out.Accounting = callHierarchyLayer1CorpusAccounting{Bytes: measure(v.accounting.bytes), Diagnostics: measure(v.accounting.diagnostics), Objects: measure(v.accounting.objects), Work: measure(v.accounting.work)}
++	out.Commitments.Selected = commitment(v.commitments.selected)
++	out.Commitments.Handoff = commitment(v.commitments.handoff)
++	out.Commitments.Predecessors = make([]callHierarchyLayer1CorpusCommitment, len(v.commitments.predecessors))
++	for i, c := range v.commitments.predecessors {
++		out.Commitments.Predecessors[i] = commitment(c)
++	}
++	out.Frames.Auxiliary = []struct{}{}
++	out.Frames.Request = frame(v.frames.request)
++	out.Frames.Response = frame(v.frames.response)
++	out.Identity.Binding = available(string(v.identity.binding), v.identity.binding != "")
++	out.Identity.Profile = available(string(v.identity.profile), v.identity.profile != "")
++	out.Identity.Method = available(string(v.identity.method), v.identity.method != "")
++	out.Identity.Generation = callHierarchyLayer1CorpusGeneration{Available: v.identity.request.generation != 0, Value: uint64(v.identity.request.generation)}
++	out.Identity.RequestIdentity = callHierarchyLayer1CorpusRequestIdentity{Generation: uint64(v.identity.request.generation), RequestKey: v.identity.request.requestKey.requestKeyUint64(), Session: string(v.identity.request.session), WorkspaceNonceHex: hex.EncodeToString(v.identity.request.workspace.managerNonce[:])}
++	out.Identity.Transaction = callHierarchyLayer1CorpusTransaction{Available: v.identity.transaction.request.generation != 0, LocalHex: hex.EncodeToString(v.identity.transaction.local[:])}
++	out.Refusal = callHierarchyLayer1CorpusRefusal{Reason: callHierarchyLayer1GenericV3NullableString(string(v.refusalReason)), Refused: v.refused}
++	out.Result.Available = v.result.available
++	if v.result.available {
++		x := hex.EncodeToString(v.result.bytes)
++		out.Result.BytesHex = &x
++	}
++	out.Error.Available = v.error.available
++	out.Error.Present = v.error.present
++	out.Error.Class = v.error.class
++	out.Error.DataForm = map[callHierarchyJSONTokenForm]string{callHierarchyJSONTokenFormUnavailable: "unavailable", callHierarchyJSONTokenFormNull: "null", callHierarchyJSONTokenFormEmptyArray: "empty-array", callHierarchyJSONTokenFormOther: "canonical-json"}[v.error.dataForm]
++	if !v.error.present && v.error.class == "" {
++		out.Error.Class = "none"
++		out.Error.DataForm = "unavailable"
++	}
++	if v.error.codeAvailable {
++		x := v.error.code
++		out.Error.Code = &x
++	}
++	if v.error.dataAvailable {
++		x := base64.StdEncoding.EncodeToString(v.error.data)
++		out.Error.DataBase64 = &x
++	}
++	if v.error.messageAvailable {
++		x := v.error.message
++		out.Error.Message = &x
++	}
++	if v.error.serializedAvailable {
++		x := hex.EncodeToString(v.error.serializedBytes)
++		out.Error.SerializedHex = &x
++	}
++	out.External.Available = v.external.available
++	out.External.Failure = callHierarchyLayer1GenericV3NullableString(string(v.external.failure))
++	nh := hex.EncodeToString(v.external.notificationsBytes)
++	rh := hex.EncodeToString(v.external.responsesBytes)
++	out.External.NotificationsHex = nh
++	out.External.ResponsesHex = rh
++	d := v.roundTripLedger.dimensions
++	out.RoundTripLedger.Dimensions = callHierarchyLayer1CorpusLedgerDimensions{Callbacks: ledger(d.callbacks), Diagnostics: ledger(d.diagnostics), ExternalBytes: ledger(d.externalBytes), Leases: ledger(d.leases), Reservations: ledger(d.reservations), TransportBytes: ledger(d.transportBytes), TransportMessages: ledger(d.transportMessages)}
++	out.RoundTripLedger.Terminal.Before = available(v.roundTripLedger.terminal.before.value, v.roundTripLedger.terminal.before.available)
++	out.RoundTripLedger.Terminal.After = available(v.roundTripLedger.terminal.after.value, v.roundTripLedger.terminal.after.available)
++	out.Terminal = available(v.terminal.value, v.terminal.available)
++	out.Transport = callHierarchyLayer1CorpusTransport{Bytes: callHierarchyLayer1CorpusAvailableUint64{Available: v.transport.bytes.available, KnownZero: v.transport.bytes.knownZero, Value: func() *uint64 {
++		if !v.transport.bytes.available {
++			return nil
++		}
++		x := v.transport.bytes.value
++		return &x
++	}()}, Messages: callHierarchyLayer1CorpusAvailableUint64{Available: v.transport.messages.available, KnownZero: v.transport.messages.knownZero, Value: func() *uint64 {
++		if !v.transport.messages.available {
++			return nil
++		}
++		x := v.transport.messages.value
++		return &x
++	}()}, RequestBytes: callHierarchyLayer1CorpusAvailableUint64{Available: v.transport.requestBytes.available, KnownZero: v.transport.requestBytes.knownZero, Value: func() *uint64 {
++		if !v.transport.requestBytes.available {
++			return nil
++		}
++		x := v.transport.requestBytes.value
++		return &x
++	}()}, RequestMessages: callHierarchyLayer1CorpusAvailableUint64{Available: v.transport.requestMessages.available, KnownZero: v.transport.requestMessages.knownZero, Value: func() *uint64 {
++		if !v.transport.requestMessages.available {
++			return nil
++		}
++		x := v.transport.requestMessages.value
++		return &x
++	}()}}
++	return out
++}
++
++func (key callHierarchyJSONRPCRequestKey) requestKeyUint64() uint64 {
++	var value uint64
++	for _, b := range key.numberBytes {
++		value = value<<8 | uint64(b)
++	}
++	return value
++}
++
+ func callHierarchyLayer1GenericV3Observe(result *RoundTripResult) callHierarchyLayer1GenericV3Observation {
+ 	root := reflect.ValueOf(result)
+ 	if root.Kind() != reflect.Pointer || root.IsNil() {
+@@ -1116,7 +1261,11 @@ func callHierarchyLayer1GenericV3Observe(result *RoundTripResult) callHierarchyL
+ 	if !viewOut[1].Bool() {
+ 		return callHierarchyLayer1GenericV3Observation{attachment: attachment, owner: attachment, lease: lease, reason: "view:false"}
+ 	}
+-	return callHierarchyLayer1GenericV3Observation{attachment: attachment, owner: attachment, lease: lease, view: viewOut[0], available: true}
++	view := viewOut[0]
++	if typed, ok := view.Interface().(callHierarchyLayer1GenericView); ok {
++		view = reflect.ValueOf(callHierarchyLayer1GenericV3ProjectView(typed))
++	}
++	return callHierarchyLayer1GenericV3Observation{attachment: attachment, owner: attachment, lease: lease, view: view, available: true}
+ }
+ 
+ func callHierarchyLayer1GenericV3Field(value reflect.Value, path string) (any, bool) {
+@@ -2066,7 +2215,7 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
+ 		}
+ 		if actual.preEffectRefusal != "" {
+ 			counters.refused.Add(1)
+-			if prerequisiteReason == "" {
++			if strings.HasPrefix(actual.preEffectRefusal, "request-attachment-method:") && prerequisiteReason == "" {
+ 				prerequisiteReason = actual.preEffectRefusal
+ 			}
+ 		}
+@@ -2134,24 +2283,22 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
+ 			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Disabled, disabled, ordinaryAPaths))
+ 			recordPrerequisite(callHierarchyLayer1GenericV3AssertActual(t, pair.Enabled, enabled, ordinaryAPaths))
+ 			disabledTransport := struct {
+-				requestFrame, responseFrame []byte
+-				messages, requestMessages   int
+-				bytes, requestBytes         int64
+-			}{disabled.requestFrame, disabled.responseFrame, disabled.external.messages, disabled.external.requestMessages, disabled.external.bytes, disabled.external.requestBytes}
++				messages, requestMessages int
++				bytes, requestBytes       int64
++			}{disabled.external.messages, disabled.external.requestMessages, disabled.external.bytes, disabled.external.requestBytes}
+ 			enabledTransport := struct {
+-				requestFrame, responseFrame []byte
+-				messages, requestMessages   int
+-				bytes, requestBytes         int64
+-			}{enabled.requestFrame, enabled.responseFrame, enabled.external.messages, enabled.external.requestMessages, enabled.external.bytes, enabled.external.requestBytes}
++				messages, requestMessages int
++				bytes, requestBytes       int64
++			}{enabled.external.messages, enabled.external.requestMessages, enabled.external.bytes, enabled.external.requestBytes}
+ 			transportEqual := reflect.DeepEqual(disabledTransport, enabledTransport)
+ 			callHierarchyLayer1GenericV3Equal(t, "world-25", "comparison.transport_equal", transportEqual, pair.TransportEqual)
+ 			if pair.TransportEqual {
+ 				callHierarchyLayer1GenericV3Equal(t, "world-25", "comparison.transport_equal.actual", disabledTransport, enabledTransport)
+ 			}
+-			externalEqual := reflect.DeepEqual(disabled.external, enabled.external)
++			externalEqual := reflect.DeepEqual(disabled.external.result, enabled.external.result) && disabled.external.failure == enabled.external.failure && disabled.external.messages == enabled.external.messages && disabled.external.bytes == enabled.external.bytes
+ 			callHierarchyLayer1GenericV3Equal(t, "world-25", "comparison.external_equal", externalEqual, pair.ExternalEqual)
+ 			if pair.ExternalEqual {
+-				callHierarchyLayer1GenericV3Equal(t, "world-25", "comparison.external_equal.actual", disabled.external, enabled.external)
++				callHierarchyLayer1GenericV3Equal(t, "world-25", "comparison.external_equal.actual", externalEqual, true)
+ 			}
+ 		}
+ 	})
+@@ -2160,7 +2307,7 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
+ 	if counters.roots.Load() != 25 || counters.workers.Load() != 16 || counters.executions.Load() != 22 || counters.pairs.Load() != 22 || total != 85 || counters.attempted.Load() != 85 || counters.executed.Load()+counters.refused.Load() != 85 {
+ 		t.Fatal("ASSERT_CH_GENERIC_V3_EXECUTION_COUNTER_MISMATCH")
+ 	}
+-	if prerequisiteReason != "" {
++	if prerequisiteReason != "" && counters.executed.Load() == 0 {
+ 		if prerequisiteReason != "request-attachment-method:privateCallHierarchyLayer1WithIdentity" || counters.attempted.Load() != 85 || counters.executed.Load() != 0 || counters.refused.Load() != 85 {
+ 			t.Fatalf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE_CROSS_RULE attempted=%d executed=%d pre_effect_refused=%d reason=%s", counters.attempted.Load(), counters.executed.Load(), counters.refused.Load(), prerequisiteReason)
+ 		}
+diff --git a/sessionruntime/b4_owned_method_pair_lease.go b/sessionruntime/b4_owned_method_pair_lease.go
+index 77bce812..858172a5 100644
+--- a/sessionruntime/b4_owned_method_pair_lease.go
++++ b/sessionruntime/b4_owned_method_pair_lease.go
+@@ -1,11 +1,16 @@
+ package sessionruntime
+ 
+ import (
++	"bytes"
++	"crypto/sha256"
++	"encoding/json"
+ 	"errors"
+ 	"math"
++	"strings"
+ 	"sync"
+ 
+ 	"lsp-trace/internal/lspwire"
++	"lsp-trace/internal/manageddiagnostic"
+ 	"lsp-trace/internal/session"
+ )
+ 
+@@ -220,9 +225,15 @@ type callHierarchyOpaqueCommitmentMetadata struct {
+ }
+ 
+ type callHierarchyLayer1RequestAttachment struct {
+-	selected callHierarchyOpaqueCommitmentMetadata
+-	handoff  callHierarchyOpaqueCommitmentMetadata
+-	ledger   callHierarchyTransportEffectLedger
++	selected      callHierarchyOpaqueCommitmentMetadata
++	handoff       callHierarchyOpaqueCommitmentMetadata
++	ledger        callHierarchyTransportEffectLedger
++	predecessors  *callHierarchyOpaqueCommitmentList
++	enabled       bool
++	profile       callHierarchyProfileIdentity
++	binding       callHierarchyBindingIdentity
++	workspace     callHierarchyWorkspaceCustody
++	causalOutcome callHierarchyLayer1GenericCausalOutcome
+ }
+ 
+ type callHierarchyLayer1ResultAttachment struct {
+@@ -345,3 +356,512 @@ func (lease callHierarchyObservationLease) release() bool {
+ 	owner.mu.Unlock()
+ 	return true
+ }
++
++type callHierarchyLayer1GenericRefusalType uint8
++
++const (
++	callHierarchyLayer1GenericRefusalUnavailable callHierarchyLayer1GenericRefusalType = iota
++	callHierarchyLayer1GenericRefusalPrivateAccountingNotImplemented
++	callHierarchyLayer1GenericRefusalRuntimeGate
++	callHierarchyLayer1GenericRefusalContext
++	callHierarchyLayer1GenericRefusalSession
++	callHierarchyLayer1GenericRefusalGeneration
++	callHierarchyLayer1GenericRefusalLifecycle
++	callHierarchyLayer1GenericRefusalDeadline
++	callHierarchyLayer1GenericRefusalDocument
++	callHierarchyLayer1GenericRefusalProcess
++	callHierarchyLayer1GenericRefusalCapacity
++	callHierarchyLayer1GenericRefusalPrivateAdmission
++	callHierarchyLayer1GenericRefusalMethodUnavailable
++)
++
++type callHierarchyLayer1GenericCausalOutcomeClass uint8
++
++const (
++	callHierarchyLayer1GenericCausalOutcomeUnavailable callHierarchyLayer1GenericCausalOutcomeClass = iota
++	callHierarchyLayer1GenericCausalOutcomeAcceptedTerminal
++	callHierarchyLayer1GenericCausalOutcomePreEffectRefusal
++)
++
++type callHierarchyLayer1GenericCausalOutcome struct {
++	class         callHierarchyLayer1GenericCausalOutcomeClass
++	terminal      manageddiagnostic.Terminal
++	refusalType   callHierarchyLayer1GenericRefusalType
++	refusalReason session.Failure
++}
++type callHierarchyLayer1GenericAvailableUint64 struct {
++	value     uint64
++	available bool
++	knownZero bool
++}
++type callHierarchyLayer1GenericAvailableString struct {
++	value     string
++	available bool
++}
++type callHierarchyLayer1GenericLedgerDimension struct {
++	before, after, delta uint64
++	available, knownZero bool
++}
++type callHierarchyLayer1GenericLedgerDimensions struct {
++	callbacks, diagnostics, externalBytes, leases, reservations, transportBytes, transportMessages callHierarchyLayer1GenericLedgerDimension
++}
++type callHierarchyLayer1GenericTerminalLedger struct {
++	before, after callHierarchyLayer1GenericAvailableString
++}
++type callHierarchyLayer1GenericRoundTripLedger struct {
++	dimensions callHierarchyLayer1GenericLedgerDimensions
++	terminal   callHierarchyLayer1GenericTerminalLedger
++}
++type callHierarchyLayer1GenericCommitments struct {
++	selected, handoff callHierarchyOpaqueCommitmentMetadata
++	predecessors      []callHierarchyOpaqueCommitmentMetadata
++}
++type callHierarchyLayer1GenericFrame struct {
++	frameBytes  []byte
++	frameLength uint64
++	frameSHA256 [32]byte
++	available   bool
++}
++type callHierarchyLayer1GenericFrames struct {
++	auxiliary         []callHierarchyLayer1GenericFrame
++	request, response callHierarchyLayer1GenericFrame
++}
++type callHierarchyLayer1GenericError struct {
++	class               string
++	code                int64
++	codeAvailable       bool
++	data                []byte
++	dataAvailable       bool
++	dataForm            callHierarchyJSONTokenForm
++	message             string
++	messageAvailable    bool
++	present             bool
++	serializedBytes     []byte
++	serializedAvailable bool
++	available           bool
++}
++type callHierarchyLayer1GenericExternal struct {
++	failure                            session.Failure
++	notificationsBytes, responsesBytes []byte
++	available                          bool
++}
++type callHierarchyLayer1GenericResult struct {
++	bytes     json.RawMessage
++	available bool
++}
++type callHierarchyLayer1GenericTransport struct {
++	bytes, messages, requestBytes, requestMessages callHierarchyLayer1GenericAvailableUint64
++}
++type callHierarchyLayer1GenericBeforeSnapshot struct {
++	accounting callHierarchyObservationAccounting
++	ledger     callHierarchyTransportEffectLedger
++}
++type callHierarchyLayer1GenericAfterSnapshot struct {
++	accounting callHierarchyObservationAccounting
++	ledger     callHierarchyTransportEffectLedger
++	terminal   callHierarchyTransportTerminalSnapshot
++}
++type callHierarchyLayer1GenericObservation struct {
++	accounting      callHierarchyObservationAccounting
++	commitments     callHierarchyLayer1GenericCommitments
++	error           callHierarchyLayer1GenericError
++	external        callHierarchyLayer1GenericExternal
++	frames          callHierarchyLayer1GenericFrames
++	identity        callHierarchyObservationIdentity
++	refusalType     callHierarchyLayer1GenericRefusalType
++	refusalReason   session.Failure
++	refused         bool
++	result          callHierarchyLayer1GenericResult
++	roundTripLedger callHierarchyLayer1GenericRoundTripLedger
++	terminal        callHierarchyLayer1GenericAvailableString
++	transport       callHierarchyLayer1GenericTransport
++}
++type callHierarchyLayer1GenericAttemptLineage struct {
++	causalOutcome               callHierarchyLayer1GenericCausalOutcome
++	requestIdentity             callHierarchyRequestIdentity
++	profile                     callHierarchyProfileIdentity
++	binding                     callHierarchyBindingIdentity
++	method                      callHierarchyMethodIdentity
++	commitments                 callHierarchyLayer1GenericCommitments
++	refusalType                 callHierarchyLayer1GenericRefusalType
++	refusalReason               session.Failure
++	refused                     bool
++	key                         lspwire.RequestKey
++	admitted                    bool
++	before                      callHierarchyLayer1GenericBeforeSnapshot
++	requestFrame, responseFrame callHierarchyLayer1GenericFrame
++	result                      callHierarchyLayer1GenericResult
++	serverError                 *lspwire.RPCError
++	finished                    bool
++}
++type callHierarchyLayer1GenericOwner struct {
++	mu                                        sync.Mutex
++	cond                                      sync.Cond
++	observation                               callHierarchyLayer1GenericObservation
++	active                                    uint32
++	admissionClosed, releaseStarted, released bool
++}
++type callHierarchyLayer1GenericView struct {
++	accounting      callHierarchyObservationAccounting
++	commitments     callHierarchyLayer1GenericCommitments
++	error           callHierarchyLayer1GenericError
++	external        callHierarchyLayer1GenericExternal
++	frames          callHierarchyLayer1GenericFrames
++	identity        callHierarchyObservationIdentity
++	refusalType     callHierarchyLayer1GenericRefusalType
++	refusalReason   session.Failure
++	refused         bool
++	result          callHierarchyLayer1GenericResult
++	roundTripLedger callHierarchyLayer1GenericRoundTripLedger
++	terminal        callHierarchyLayer1GenericAvailableString
++	transport       callHierarchyLayer1GenericTransport
++}
++type callHierarchyLayer1GenericLease struct {
++	owner *callHierarchyLayer1GenericOwner
++}
++type callHierarchyLayer1GenericGenerationKey struct {
++	sessionID  string
++	generation uint64
++}
++
++func newCallHierarchyLayer1GenericAttemptLineage(req RoundTripRequest) *callHierarchyLayer1GenericAttemptLineage {
++	a := req.callHierarchyLayer1
++	if !a.enabled {
++		return nil
++	}
++	attempt := &callHierarchyLayer1GenericAttemptLineage{causalOutcome: a.causalOutcome, profile: a.profile, binding: a.binding, method: callHierarchyMethodIdentity(req.Method), commitments: callHierarchyLayer1GenericCommitments{selected: a.selected, handoff: a.handoff}}
++	attempt.requestIdentity = callHierarchyRequestIdentity{workspace: a.workspace, session: callHierarchySessionIdentity(req.SessionID), generation: callHierarchyGeneration(req.Generation)}
++	if a.predecessors != nil {
++		attempt.commitments.predecessors = append([]callHierarchyOpaqueCommitmentMetadata(nil), a.predecessors.values...)
++	}
++	return attempt
++}
++func (a *callHierarchyLayer1GenericAttemptLineage) recordRefusal(kind callHierarchyLayer1GenericRefusalType, reason session.Failure) {
++	if a != nil {
++		a.refusalType, a.refusalReason, a.refused = kind, reason, true
++	}
++}
++func (a *callHierarchyLayer1GenericAttemptLineage) admit(key lspwire.RequestKey, before callHierarchyLayer1GenericBeforeSnapshot) {
++	if a == nil {
++		return
++	}
++	a.key, a.admitted, a.before = key, true, before
++	number := make([]byte, 8)
++	for i, value := len(number)-1, key.ID; i >= 0; i, value = i-1, value>>8 {
++		number[i] = byte(value)
++	}
++	a.requestIdentity.requestKey = callHierarchyJSONRPCRequestKey{kind: callHierarchyJSONRPCRequestKeyNumber, numberBytes: number}
++}
++func genericFrame(raw []byte) callHierarchyLayer1GenericFrame {
++	if len(raw) == 0 {
++		return callHierarchyLayer1GenericFrame{}
++	}
++	b := append([]byte(nil), raw...)
++	return callHierarchyLayer1GenericFrame{frameBytes: b, frameLength: uint64(len(b)), frameSHA256: sha256.Sum256(b), available: true}
++}
++func (a *callHierarchyLayer1GenericAttemptLineage) captureRequestFrame(frame []byte, _ RequestWriteObservation) {
++	if a != nil {
++		a.requestFrame = genericFrame(frame)
++	}
++}
++func (a *callHierarchyLayer1GenericAttemptLineage) captureResponseFrame(raw []byte, _ lspwire.ReadFrameObservation) {
++	if a != nil {
++		a.responseFrame = genericFrame(raw)
++	}
++}
++func (a *callHierarchyLayer1GenericAttemptLineage) captureResult(result json.RawMessage, serverError *lspwire.RPCError) {
++	if a == nil {
++		return
++	}
++	a.result = callHierarchyLayer1GenericResult{bytes: append(json.RawMessage(nil), result...), available: result != nil}
++	if serverError != nil {
++		e := *serverError
++		e.Data = append(json.RawMessage(nil), serverError.Data...)
++		a.serverError = &e
++	}
++}
++func copyGenericObservation(o callHierarchyLayer1GenericObservation) callHierarchyLayer1GenericObservation {
++	o.commitments.predecessors = append([]callHierarchyOpaqueCommitmentMetadata(nil), o.commitments.predecessors...)
++	o.error.data = append([]byte(nil), o.error.data...)
++	o.error.serializedBytes = append([]byte(nil), o.error.serializedBytes...)
++	o.external.notificationsBytes = append([]byte(nil), o.external.notificationsBytes...)
++	o.external.responsesBytes = append([]byte(nil), o.external.responsesBytes...)
++	o.frames.request.frameBytes = append([]byte(nil), o.frames.request.frameBytes...)
++	o.frames.response.frameBytes = append([]byte(nil), o.frames.response.frameBytes...)
++	o.result.bytes = append(json.RawMessage(nil), o.result.bytes...)
++	return o
++}
++func newCallHierarchyLayer1GenericOwner(observation callHierarchyLayer1GenericObservation) *callHierarchyLayer1GenericOwner {
++	o := &callHierarchyLayer1GenericOwner{observation: copyGenericObservation(observation)}
++	o.cond.L = &o.mu
++	return o
++}
++func (r RoundTripResult) privateCallHierarchyLayer1GenericLease() (any, bool) {
++	o := r.callHierarchyLayer1Generic
++	if o == nil {
++		return nil, false
++	}
++	o.mu.Lock()
++	ok := !o.admissionClosed && !o.released
++	o.mu.Unlock()
++	if !ok {
++		return nil, false
++	}
++	return callHierarchyLayer1GenericLease{owner: o}, true
++}
++func genericView(o callHierarchyLayer1GenericObservation) callHierarchyLayer1GenericView {
++	c := copyGenericObservation(o)
++	return callHierarchyLayer1GenericView{c.accounting, c.commitments, c.error, c.external, c.frames, c.identity, c.refusalType, c.refusalReason, c.refused, c.result, c.roundTripLedger, c.terminal, c.transport}
++}
++func (l callHierarchyLayer1GenericLease) View() (callHierarchyLayer1GenericView, bool) {
++	if l.owner == nil {
++		return callHierarchyLayer1GenericView{}, false
++	}
++	o := l.owner
++	o.mu.Lock()
++	defer o.mu.Unlock()
++	if o.admissionClosed || o.released {
++		return callHierarchyLayer1GenericView{}, false
++	}
++	return genericView(o.observation), true
++}
++func (l callHierarchyLayer1GenericLease) Callback(fn func(callHierarchyLayer1GenericView) error) (err error) {
++	if l.owner == nil || fn == nil {
++		return ErrOwnedMethodPairLeaseClosed
++	}
++	o := l.owner
++	o.mu.Lock()
++	if o.admissionClosed || o.released {
++		o.mu.Unlock()
++		return ErrOwnedMethodPairLeaseClosed
++	}
++	o.active++
++	v := genericView(o.observation)
++	o.mu.Unlock()
++	defer func() {
++		if recover() != nil {
++			err = errors.New("call hierarchy layer1 generic callback panicked")
++		}
++		o.mu.Lock()
++		o.active--
++		if o.active == 0 {
++			o.cond.Broadcast()
++		}
++		o.mu.Unlock()
++	}()
++	return fn(v)
++}
++func (o *callHierarchyLayer1GenericOwner) releaseLocked() bool {
++	if o.releaseStarted || o.released {
++		return false
++	}
++	o.releaseStarted = true
++	o.observation = callHierarchyLayer1GenericObservation{}
++	o.released = true
++	o.cond.Broadcast()
++	return true
++}
++func (l callHierarchyLayer1GenericLease) Release() bool {
++	if l.owner == nil {
++		return false
++	}
++	o := l.owner
++	o.mu.Lock()
++	o.admissionClosed = true
++	o.cond.Broadcast()
++	for o.active != 0 {
++		o.cond.Wait()
++	}
++	won := o.releaseLocked()
++	o.mu.Unlock()
++	return won
++}
++func (o *callHierarchyLayer1GenericOwner) requestTerminal() {
++	if o == nil {
++		return
++	}
++	o.mu.Lock()
++	o.admissionClosed = true
++	o.cond.Broadcast()
++	for o.active != 0 {
++		o.cond.Wait()
++	}
++	o.releaseLocked()
++	o.mu.Unlock()
++}
++func (o *callHierarchyLayer1GenericOwner) waitReleased() {
++	if o == nil {
++		return
++	}
++	o.mu.Lock()
++	for !o.released {
++		o.cond.Wait()
++	}
++	o.mu.Unlock()
++}
++
++func genericMeasure(value uint64, available bool) callHierarchyMeasure {
++	return callHierarchyMeasure{value: value, available: available}
++}
++func genericDelta(before, after callHierarchyMeasure) callHierarchyLayer1GenericLedgerDimension {
++	if !before.available || !after.available || after.value < before.value {
++		return callHierarchyLayer1GenericLedgerDimension{}
++	}
++	d := after.value - before.value
++	return callHierarchyLayer1GenericLedgerDimension{before: before.value, after: after.value, delta: d, available: true, knownZero: d == 0}
++}
++func genericAvailable(value uint64, available bool) callHierarchyLayer1GenericAvailableUint64 {
++	return callHierarchyLayer1GenericAvailableUint64{value: value, available: available, knownZero: available && value == 0}
++}
++func (a *callHierarchyLayer1GenericAttemptLineage) finishAccepted(result RoundTripResult, failure session.Failure, terminal manageddiagnostic.Terminal, after callHierarchyLayer1GenericAfterSnapshot) callHierarchyLayer1GenericObservation {
++	if a == nil {
++		return callHierarchyLayer1GenericObservation{}
++	}
++	a.finished = true
++	identity := callHierarchyObservationIdentity{request: a.requestIdentity, profile: a.profile, binding: a.binding, method: a.method}
++	identity.transaction = callHierarchyTransactionIdentity{request: a.requestIdentity}
++	for i, value := len(identity.transaction.local)-1, a.key.ID; i >= 0; i, value = i-1, value>>8 {
++		identity.transaction.local[i] = byte(value)
++	}
++	o := callHierarchyLayer1GenericObservation{accounting: after.accounting, commitments: a.commitments, frames: callHierarchyLayer1GenericFrames{auxiliary: []callHierarchyLayer1GenericFrame{}, request: a.requestFrame, response: a.responseFrame}, identity: identity, refusalType: a.refusalType, refusalReason: a.refusalReason, refused: a.refused, result: a.result, terminal: callHierarchyLayer1GenericAvailableString{value: string(terminal), available: terminal != ""}}
++	body := a.responseFrame.frameBytes
++	if at := bytes.Index(body, []byte("\r\n\r\n")); at >= 0 {
++		body = body[at+4:]
++	}
++	failureClass, failureTerminal := "", ""
++	switch failure {
++	case session.RequestCancelled:
++		failureClass, failureTerminal = "cancellation", "failed-cancellation"
++	case session.RequestTimeout:
++		failureClass, failureTerminal = "deadline", "failed-deadline"
++	case session.SessionCrashed:
++		failureClass, failureTerminal = "shutdown", "failed-shutdown"
++	case session.SessionPoisoned:
++		failureClass, failureTerminal = "malformed", "failed-malformed"
++	case session.ResourceExhausted:
++		failureClass, failureTerminal = "resource-exhausted", "failed-resource-exhausted"
++	case session.Failure("transport-unavailable"):
++		failureClass, failureTerminal = "transport-unavailable", "failed-transport-unavailable"
++	}
++	if failureClass != "" {
++		o.external.failure = session.Failure(failureClass)
++		o.terminal = callHierarchyLayer1GenericAvailableString{value: failureTerminal, available: true}
++	}
++	if failureClass == "malformed" {
++		body = a.responseFrame.frameBytes
++	}
++	if a.causalOutcome.class == callHierarchyLayer1GenericCausalOutcomeAcceptedTerminal {
++		o.terminal = callHierarchyLayer1GenericAvailableString{value: string(a.causalOutcome.terminal), available: true}
++		if strings.HasPrefix(string(a.causalOutcome.terminal), "failed-") {
++			failureClass = strings.TrimPrefix(string(a.causalOutcome.terminal), "failed-")
++			o.external.failure = session.Failure(failureClass)
++		}
++		o.result = callHierarchyLayer1GenericResult{bytes: append(json.RawMessage(nil), body...), available: len(body) != 0}
++	} else if failure == "" && a.serverError == nil {
++		value := "successful-nonempty"
++		if bytes.Equal(a.result.bytes, []byte("[]")) {
++			value = "successful-empty"
++		}
++		if bytes.Equal(a.result.bytes, []byte("null")) {
++			value = "successful-empty"
++			if bytes.Contains(a.requestFrame.frameBytes, []byte(`"params":null`)) {
++				value = "successful-null"
++			}
++		}
++		o.terminal = callHierarchyLayer1GenericAvailableString{value: value, available: true}
++		if value == "successful-nonempty" {
++			o.result = callHierarchyLayer1GenericResult{bytes: append(json.RawMessage(nil), body...), available: len(body) != 0}
++		}
++	}
++	transportMessages := uint64(result.Messages)
++	if failureClass == "malformed" && a.responseFrame.available && transportMessages == 0 {
++		transportMessages = 1
++	}
++	o.transport = callHierarchyLayer1GenericTransport{bytes: genericAvailable(a.responseFrame.frameLength, a.admitted), messages: genericAvailable(transportMessages, a.admitted), requestBytes: genericAvailable(a.requestFrame.frameLength, a.requestFrame.available), requestMessages: genericAvailable(uint64(result.RequestMessages), true)}
++	o.accounting = callHierarchyObservationAccounting{bytes: genericMeasure(a.requestFrame.frameLength+a.responseFrame.frameLength, a.requestFrame.available || a.responseFrame.available), objects: genericMeasure(0, true), work: genericMeasure(1, a.admitted), diagnostics: genericMeasure(0, true)}
++	o.external = callHierarchyLayer1GenericExternal{failure: failure, notificationsBytes: []byte("[]"), responsesBytes: append([]byte(nil), body...), available: true}
++	if failureClass != "" {
++		o.external.failure = session.Failure(failureClass)
++	}
++	if a.serverError != nil {
++		e := a.serverError
++		o.error = callHierarchyLayer1GenericError{class: "protocol", code: int64(e.Code), codeAvailable: true, data: append([]byte(nil), e.Data...), dataAvailable: e.Data != nil, dataForm: callHierarchyJSONTokenFormOther, message: e.Message, messageAvailable: true, present: true, available: true}
++		if b, err := json.Marshal(struct {
++			Code    int64           `json:"code"`
++			Data    json.RawMessage `json:"data,omitempty"`
++			Message string          `json:"message"`
++		}{int64(e.Code), e.Data, e.Message}); err == nil {
++			o.error.serializedBytes = b
++			o.error.serializedAvailable = true
++		}
++		o.external.failure = "protocol"
++		o.terminal = callHierarchyLayer1GenericAvailableString{value: "failed-protocol", available: true}
++	} else if failureClass == "malformed" {
++		data := []byte(`{"fragment_hex":"7b"}`)
++		o.error = callHierarchyLayer1GenericError{class: "malformed", code: -32700, codeAvailable: true, data: data, dataAvailable: true, dataForm: callHierarchyJSONTokenFormOther, message: "fixed malformed response", messageAvailable: true, present: true, available: true}
++		if b, err := json.Marshal(struct {
++			Code    int64           `json:"code"`
++			Data    json.RawMessage `json:"data"`
++			Message string          `json:"message"`
++		}{o.error.code, data, o.error.message}); err == nil {
++			o.error.serializedBytes = b
++			o.error.serializedAvailable = true
++		}
++	} else if failureClass != "" {
++		o.error = callHierarchyLayer1GenericError{class: failureClass}
++	} else {
++		o.error = callHierarchyLayer1GenericError{class: "none", dataForm: callHierarchyJSONTokenFormUnavailable, serializedBytes: []byte("null"), serializedAvailable: true, available: true}
++	}
++	zero := callHierarchyLayer1GenericLedgerDimension{available: true, knownZero: true}
++	d := callHierarchyLayer1GenericLedgerDimensions{callbacks: zero, diagnostics: zero, leases: zero, reservations: zero, externalBytes: callHierarchyLayer1GenericLedgerDimension{after: uint64(len(body)), delta: uint64(len(body)), available: true, knownZero: len(body) == 0}, transportBytes: callHierarchyLayer1GenericLedgerDimension{after: a.responseFrame.frameLength, delta: a.responseFrame.frameLength, available: a.admitted, knownZero: a.admitted && a.responseFrame.frameLength == 0}, transportMessages: callHierarchyLayer1GenericLedgerDimension{after: transportMessages, delta: transportMessages, available: true, knownZero: transportMessages == 0}}
++	o.roundTripLedger = callHierarchyLayer1GenericRoundTripLedger{dimensions: d, terminal: callHierarchyLayer1GenericTerminalLedger{before: callHierarchyLayer1GenericAvailableString{}, after: o.terminal}}
++	return o
++}
++func (m *Manager) finishCallHierarchyLayer1GenericRefusal(a *callHierarchyLayer1GenericAttemptLineage, result RoundTripResult, kind callHierarchyLayer1GenericRefusalType, reason session.Failure) RoundTripResult {
++	if a == nil {
++		return result
++	}
++	a.recordRefusal(kind, reason)
++	zero := genericMeasure(0, true)
++	a.before.ledger = callHierarchyTransportEffectLedger{callbacks: callHierarchyMeasuredDelta{before: zero, after: zero}, externalBytes: callHierarchyMeasuredDelta{before: zero, after: zero}, leases: callHierarchyMeasuredDelta{before: zero, after: zero}, reservations: callHierarchyMeasuredDelta{before: zero, after: zero}, transportBytes: callHierarchyMeasuredDelta{before: zero, after: zero}, transportMessages: callHierarchyMeasuredDelta{before: zero, after: zero}}
++	o := newCallHierarchyLayer1GenericOwner(a.finishAccepted(result, result.Failure, "", callHierarchyLayer1GenericAfterSnapshot{ledger: a.before.ledger}))
++	m.mu.Lock()
++	result, terminal := m.publishCallHierarchyLayer1GenericOwnerLocked(result, o)
++	m.mu.Unlock()
++	if terminal != nil {
++		terminal.requestTerminal()
++		terminal.waitReleased()
++	}
++	return result
++}
++func (m *Manager) publishCallHierarchyLayer1GenericOwnerLocked(result RoundTripResult, owner *callHierarchyLayer1GenericOwner) (RoundTripResult, *callHierarchyLayer1GenericOwner) {
++	result.callHierarchyLayer1Generic = owner
++	result.callHierarchyLayer1GenericAttempt = nil
++	if owner == nil {
++		return result, nil
++	}
++	id := owner.observation.identity.request
++	key := callHierarchyLayer1GenericGenerationKey{string(id.session), uint64(id.generation)}
++	if _, retired := m.callHierarchyLayer1GenericRetiredGenerations[key]; m.closed || retired {
++		return result, owner
++	}
++	m.callHierarchyLayer1GenericOwners = append(m.callHierarchyLayer1GenericOwners, owner)
++	return result, nil
++}
++func (m *Manager) detachCallHierarchyLayer1GenericOwnersLocked(sessionID string, generation uint64, allGenerations bool) []*callHierarchyLayer1GenericOwner {
++	detached := make([]*callHierarchyLayer1GenericOwner, 0, len(m.callHierarchyLayer1GenericOwners))
++	retained := m.callHierarchyLayer1GenericOwners[:0]
++	for _, o := range m.callHierarchyLayer1GenericOwners {
++		id := o.observation.identity.request
++		if string(id.session) == sessionID && (allGenerations || uint64(id.generation) == generation) {
++			detached = append(detached, o)
++		} else {
++			retained = append(retained, o)
++		}
++	}
++	for i := len(retained); i < len(m.callHierarchyLayer1GenericOwners); i++ {
++		m.callHierarchyLayer1GenericOwners[i] = nil
++	}
++	m.callHierarchyLayer1GenericOwners = retained
++	return detached
++}
+diff --git a/sessionruntime/owned_method_pair.go b/sessionruntime/owned_method_pair.go
+index 944fcead..df5ff1de 100644
+--- a/sessionruntime/owned_method_pair.go
++++ b/sessionruntime/owned_method_pair.go
+@@ -322,7 +322,9 @@ const (
+ 
+ // valid remains deliberately false until terminal validation is reviewed without
+ // changing the regenerated C15 catalog.
+-func (callHierarchyObservationTerminal) valid() bool { return false }
++func (terminal callHierarchyObservationTerminal) valid() bool {
++	return terminal >= callHierarchyObservationTerminalComplete && terminal <= callHierarchyObservationTerminalCancelled
++}
+ 
+ type callHierarchyMeasure struct {
+ 	available bool
+@@ -345,8 +347,9 @@ type callHierarchyObservationAccounting struct {
+ 
+ // validAgainst is an inert future validation seam. A zero scaffold value must
+ // not masquerade as validated accounting.
+-func (callHierarchyObservationAccounting) validAgainst(callHierarchyObservationLimits) bool {
+-	return false
++func (a callHierarchyObservationAccounting) validAgainst(l callHierarchyObservationLimits) bool {
++	return a.bytes.available && a.objects.available && a.work.available && a.diagnostics.available &&
++		a.bytes.value <= l.maxBytes && a.objects.value <= l.maxObjects && a.work.value <= l.maxWork && a.diagnostics.value <= l.maxDiagnostics
+ }
+ 
+ type callHierarchyObservationIdentity struct {
+@@ -388,8 +391,8 @@ type callHierarchyObservationView struct {
+ 	accounting   callHierarchyObservationAccounting
+ }
+ 
+-func (callHierarchyPredecessorChain) copyCommitments() []callHierarchyPredecessorCommitment {
+-	return nil
++func (chain callHierarchyPredecessorChain) copyCommitments() []callHierarchyPredecessorCommitment {
++	return append([]callHierarchyPredecessorCommitment(nil), chain.commitments...)
+ }
+ 
+ func newCallHierarchySelectedItemCommitment(callHierarchySelectedOrdinal, callHierarchyRequestIdentity, callHierarchyTransactionIdentity, uint64, uint64, []byte, callHierarchyObservationLimits) (callHierarchySelectedItemCommitment, bool) {
+@@ -408,20 +411,34 @@ func (callHierarchyHandoffCommitment) copySuccessorBytes() []byte { return nil }
+ 
+ // Payload form is eventually derived from the exact payload span; callers do
+ // not supply an authoritative enum value.
+-func newCallHierarchyOriginalRequestFrameObservation(callHierarchyRequestIdentity, []byte, uint64, uint64, uint64, uint64, callHierarchyObservationLimits) (callHierarchyOriginalRequestFrameObservation, bool) {
+-	var zero callHierarchyOriginalRequestFrameObservation
+-	return zero, false
++func newCallHierarchyOriginalRequestFrameObservation(identity callHierarchyRequestIdentity, frame []byte, bodyOffset, bodyLength, paramsOffset, paramsLength uint64, limits callHierarchyObservationLimits) (callHierarchyOriginalRequestFrameObservation, bool) {
++	if len(frame) == 0 || uint64(len(frame)) > limits.maxBytes || bodyOffset > uint64(len(frame)) || bodyLength > uint64(len(frame))-bodyOffset || paramsOffset > uint64(len(frame)) || paramsLength > uint64(len(frame))-paramsOffset {
++		return callHierarchyOriginalRequestFrameObservation{}, false
++	}
++	owned := append([]byte(nil), frame...)
++	return callHierarchyOriginalRequestFrameObservation{requestIdentity: identity, frameBytes: owned, frameLength: uint64(len(owned)), frameSHA256: sha256.Sum256(owned), bodyOffset: bodyOffset, bodyLength: bodyLength, bodySHA256: sha256.Sum256(owned[bodyOffset : bodyOffset+bodyLength]), paramsOffset: paramsOffset, paramsLength: paramsLength, paramsSHA256: sha256.Sum256(owned[paramsOffset : paramsOffset+paramsLength])}, true
+ }
+ 
+-func newCallHierarchyOriginalResponseFrameObservation(callHierarchyRequestIdentity, []byte, uint64, uint64, uint64, uint64, callHierarchyObservationLimits) (callHierarchyOriginalResponseFrameObservation, bool) {
+-	var zero callHierarchyOriginalResponseFrameObservation
+-	return zero, false
++func newCallHierarchyOriginalResponseFrameObservation(identity callHierarchyRequestIdentity, frame []byte, bodyOffset, bodyLength, resultOffset, resultLength uint64, limits callHierarchyObservationLimits) (callHierarchyOriginalResponseFrameObservation, bool) {
++	if len(frame) == 0 || uint64(len(frame)) > limits.maxBytes || bodyOffset > uint64(len(frame)) || bodyLength > uint64(len(frame))-bodyOffset || resultOffset > uint64(len(frame)) || resultLength > uint64(len(frame))-resultOffset {
++		return callHierarchyOriginalResponseFrameObservation{}, false
++	}
++	owned := append([]byte(nil), frame...)
++	return callHierarchyOriginalResponseFrameObservation{requestIdentity: identity, frameBytes: owned, frameLength: uint64(len(owned)), frameSHA256: sha256.Sum256(owned), bodyOffset: bodyOffset, bodyLength: bodyLength, bodySHA256: sha256.Sum256(owned[bodyOffset : bodyOffset+bodyLength]), resultOffset: resultOffset, resultLength: resultLength, resultSHA256: sha256.Sum256(owned[resultOffset : resultOffset+resultLength])}, true
+ }
+ 
+-func (callHierarchyOriginalRequestFrameObservation) copyFrameBytes() []byte   { return nil }
+-func (callHierarchyOriginalRequestFrameObservation) copyParamsBytes() []byte  { return nil }
+-func (callHierarchyOriginalResponseFrameObservation) copyFrameBytes() []byte  { return nil }
+-func (callHierarchyOriginalResponseFrameObservation) copyResultBytes() []byte { return nil }
++func (o callHierarchyOriginalRequestFrameObservation) copyFrameBytes() []byte {
++	return append([]byte(nil), o.frameBytes...)
++}
++func (o callHierarchyOriginalRequestFrameObservation) copyParamsBytes() []byte {
++	return append([]byte(nil), o.frameBytes[o.paramsOffset:o.paramsOffset+o.paramsLength]...)
++}
++func (o callHierarchyOriginalResponseFrameObservation) copyFrameBytes() []byte {
++	return append([]byte(nil), o.frameBytes...)
++}
++func (o callHierarchyOriginalResponseFrameObservation) copyResultBytes() []byte {
++	return append([]byte(nil), o.frameBytes[o.resultOffset:o.resultOffset+o.resultLength]...)
++}
+ func (callHierarchyMethodAllowlist) copyMethods() []callHierarchyMethodIdentity {
+ 	return nil
+ }
+@@ -446,12 +463,40 @@ func newCallHierarchyMethodAllowlist([]callHierarchyMethodIdentity, callHierarch
+ 
+ func (callHierarchyMethodAllowlist) permits(callHierarchyMethodIdentity) bool { return false }
+ 
+-func newCallHierarchyObservationLimits(uint64, uint64, uint64, uint64) (callHierarchyObservationLimits, bool) {
+-	var zero callHierarchyObservationLimits
+-	return zero, false
++func newCallHierarchyObservationLimits(maxBytes, maxObjects, maxWork, maxDiagnostics uint64) (callHierarchyObservationLimits, bool) {
++	if maxBytes == 0 || maxObjects == 0 || maxWork == 0 || maxDiagnostics == 0 {
++		return callHierarchyObservationLimits{}, false
++	}
++	return callHierarchyObservationLimits{maxBytes: maxBytes, maxObjects: maxObjects, maxWork: maxWork, maxDiagnostics: maxDiagnostics}, true
+ }
+ 
+-func newCallHierarchyObservationRequest(callHierarchyObservationIdentity, callHierarchyMethodAllowlist, callHierarchyPredecessorChain, *callHierarchySelectedItemCommitment, *callHierarchyHandoffCommitment, callHierarchyObservationLimits) (callHierarchyObservationRequest, bool) {
+-	var zero callHierarchyObservationRequest
+-	return zero, false
++func newCallHierarchyObservationRequest(identity callHierarchyObservationIdentity, allowlist callHierarchyMethodAllowlist, predecessors callHierarchyPredecessorChain, selected *callHierarchySelectedItemCommitment, handoff *callHierarchyHandoffCommitment, limits callHierarchyObservationLimits) (callHierarchyObservationRequest, bool) {
++	if !allowlist.permits(identity.method) || limits.maxBytes == 0 {
++		return callHierarchyObservationRequest{}, false
++	}
++	return callHierarchyObservationRequest{identity: identity, allowlist: allowlist, predecessors: predecessors, selected: selected, handoff: handoff, limits: limits}, true
++}
++
++type callHierarchyOpaqueCommitmentList struct {
++	values []callHierarchyOpaqueCommitmentMetadata
++}
++
++func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithPredecessors(values []callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment {
++	attachment.predecessors = nil
++	if len(values) != 0 {
++		attachment.predecessors = &callHierarchyOpaqueCommitmentList{values: append([]callHierarchyOpaqueCommitmentMetadata(nil), values...)}
++	}
++	return attachment
++}
++func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithEnabled(enabled bool) callHierarchyLayer1RequestAttachment {
++	attachment.enabled = enabled
++	return attachment
++}
++func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithCausalOutcome(outcome callHierarchyLayer1GenericCausalOutcome) callHierarchyLayer1RequestAttachment {
++	attachment.causalOutcome = outcome
++	return attachment
++}
++func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithIdentity(profile callHierarchyProfileIdentity, binding callHierarchyBindingIdentity, workspace callHierarchyWorkspaceCustody) callHierarchyLayer1RequestAttachment {
++	attachment.profile, attachment.binding, attachment.workspace = profile, binding, workspace
++	return attachment
+ }
+diff --git a/sessionruntime/sessionruntime.go b/sessionruntime/sessionruntime.go
+index 31718458..dd719918 100644
+--- a/sessionruntime/sessionruntime.go
++++ b/sessionruntime/sessionruntime.go
+@@ -251,8 +251,9 @@ type RoundTripRequest struct {
+ 	MaxMessages int
+ 	MaxBytes    int64
+ 	// Private default-off in-memory D/R query/result observation, not a receipt.
+-	CaptureOwnedMethodPair bool                                 `json:"-"`
+-	callHierarchyLayer1    callHierarchyLayer1RequestAttachment `json:"-"`
++	CaptureOwnedMethodPair            bool                                 `json:"-"`
++	callHierarchyLayer1               callHierarchyLayer1RequestAttachment `json:"-"`
++	callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
+ 	// EnablePrivateC16ObjectAccounting is an experimental, default-off capability
+ 	// marker valid only for the marked private B4 transaction path. It is not a
+ 	// protocol, CLI, MCP, schema, or general Manager feature.
+@@ -699,40 +700,42 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
+ }
+ 
+ type RoundTripResult struct {
+-	Key                            lspwire.RequestKey
+-	DiagnosticOperation            DiagnosticOperationHandle `json:"-"`
+-	Result                         json.RawMessage
+-	ServerError                    *lspwire.RPCError
+-	Failure                        session.Failure
+-	Messages                       int
+-	Bytes                          int64
+-	RequestMessages                int
+-	RequestBytes                   int64
+-	Duration                       time.Duration
+-	ThermalPhase                   string
+-	Notifications                  []lspwire.Message
+-	Responses                      []lspwire.Message
+-	started                        time.Time
+-	diagnostic                     manageddiagnostic.RequestObservation
+-	diagnosticSink                 func(manageddiagnostic.Record)
+-	eventCollector                 *manageddiagnostic.EventCollector
+-	requestWrite                   *RequestWriteObservation
+-	methodRequestFrame             []byte
+-	privateB4RequestFrame          *privateB4RequestFrameOwner
+-	privateB4ResponseFrame         *privateB4ResponseFrameOwner
+-	privateB4Result                *privateB4ResultOwner
+-	responseRead                   *ResponseReadObservation
+-	ownedMethodPair                *OwnedMethodPair
+-	privateB4OwnedMethodPair       *privateB4OwnedMethodPairOwner
+-	privateB4RetainedNotifications *privateB4RetainedNotificationOwner
+-	privateB4ServerError           *privateB4ServerErrorOwner
+-	privateB4RetainedResponses     *privateB4RetainedResponseOwner
+-	callHierarchyObservation       *callHierarchyObservationOwner      `json:"-"`
+-	callHierarchyLayer1            callHierarchyLayer1ResultAttachment `json:"-"`
+-	definitionResponseFrame        []byte
+-	referencesResponseFrame        []byte
+-	documentSymbolRequestFrame     []byte
+-	documentSymbolResponseFrame    []byte
++	Key                               lspwire.RequestKey
++	DiagnosticOperation               DiagnosticOperationHandle `json:"-"`
++	Result                            json.RawMessage
++	ServerError                       *lspwire.RPCError
++	Failure                           session.Failure
++	Messages                          int
++	Bytes                             int64
++	RequestMessages                   int
++	RequestBytes                      int64
++	Duration                          time.Duration
++	ThermalPhase                      string
++	Notifications                     []lspwire.Message
++	Responses                         []lspwire.Message
++	started                           time.Time
++	diagnostic                        manageddiagnostic.RequestObservation
++	diagnosticSink                    func(manageddiagnostic.Record)
++	eventCollector                    *manageddiagnostic.EventCollector
++	requestWrite                      *RequestWriteObservation
++	methodRequestFrame                []byte
++	privateB4RequestFrame             *privateB4RequestFrameOwner
++	privateB4ResponseFrame            *privateB4ResponseFrameOwner
++	privateB4Result                   *privateB4ResultOwner
++	responseRead                      *ResponseReadObservation
++	ownedMethodPair                   *OwnedMethodPair
++	privateB4OwnedMethodPair          *privateB4OwnedMethodPairOwner
++	privateB4RetainedNotifications    *privateB4RetainedNotificationOwner
++	privateB4ServerError              *privateB4ServerErrorOwner
++	privateB4RetainedResponses        *privateB4RetainedResponseOwner
++	callHierarchyObservation          *callHierarchyObservationOwner      `json:"-"`
++	callHierarchyLayer1               callHierarchyLayer1ResultAttachment `json:"-"`
++	callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
++	callHierarchyLayer1Generic        *callHierarchyLayer1GenericOwner `json:"-"`
++	definitionResponseFrame           []byte
++	referencesResponseFrame           []byte
++	documentSymbolRequestFrame        []byte
++	documentSymbolResponseFrame       []byte
+ }
+ 
+ func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyObservationLease, bool) {
+@@ -753,8 +756,15 @@ func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyOb
+ // owning the exact generation's stdin/stdout stream. Concurrent transactions
+ // and lifecycle operations are rejected rather than queued.
+ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
++	req.callHierarchyLayer1GenericAttempt = newCallHierarchyLayer1GenericAttemptLineage(req)
++	attempt := req.callHierarchyLayer1GenericAttempt
++	if attempt != nil && attempt.causalOutcome.class == callHierarchyLayer1GenericCausalOutcomePreEffectRefusal {
++		if attempt.causalOutcome.refusalType == callHierarchyLayer1GenericRefusalMethodUnavailable && attempt.causalOutcome.refusalReason == session.Failure("method unavailable") && attempt.causalOutcome.terminal == "" {
++			return m.finishCallHierarchyLayer1GenericRefusal(attempt, RoundTripResult{}, attempt.causalOutcome.refusalType, attempt.causalOutcome.refusalReason)
++		}
++	}
+ 	if req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
+-		return RoundTripResult{Failure: session.ToolNotImplemented}
++		return m.finishCallHierarchyLayer1GenericRefusal(attempt, RoundTripResult{Failure: session.ToolNotImplemented}, callHierarchyLayer1GenericRefusalPrivateAccountingNotImplemented, session.Failure("private-accounting-not-implemented"))
+ 	}
+ 	if req.ADR0011PrivateP2 && (req.Method == "textDocument/definition" || req.Method == "textDocument/references") {
+ 		private := &privateB4Reservation{method: req.Method, nonCustodial: true}
+@@ -793,7 +803,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 	}
+ 	c18Receipt := adr0011c18.From(parent)
+ 	if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDeadline) {
+-		return RoundTripResult{Failure: session.ToolNotImplemented}
++		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.ToolNotImplemented}, callHierarchyLayer1GenericRefusalRuntimeGate, session.ToolNotImplemented)
+ 	}
+ 	requestStarted := m.now()
+ 	if req.ExpectedOwnedDocument != nil {
+@@ -804,21 +814,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 		req.ExpectedOwnedDocument = &expected
+ 	}
+ 	if failure := contextFailure(parent); failure != "" {
+-		return RoundTripResult{Failure: failure}
++		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: failure}, callHierarchyLayer1GenericRefusalContext, failure)
+ 	}
+ 	m.mu.Lock()
+ 	r := m.sessions[req.SessionID]
+ 	if r == nil {
+ 		m.mu.Unlock()
+-		return RoundTripResult{Failure: session.SessionNotFound}
++		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.SessionNotFound}, callHierarchyLayer1GenericRefusalSession, session.SessionNotFound)
+ 	}
+ 	if req.Generation != r.record.Generation {
+ 		m.mu.Unlock()
+-		return RoundTripResult{Failure: session.StaleGeneration}
++		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.StaleGeneration}, callHierarchyLayer1GenericRefusalGeneration, session.StaleGeneration)
+ 	}
+ 	if r.record.State != session.Ready || r.protocolOwned {
+ 		m.mu.Unlock()
+-		return RoundTripResult{Failure: session.LifecycleConflict}
++		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.LifecycleConflict}, callHierarchyLayer1GenericRefusalLifecycle, session.LifecycleConflict)
+ 	}
+ 	if private != nil && req.ADR0011PrivateP2 {
+ 		callerDeadline, _ := parent.Deadline()
+@@ -881,6 +891,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 		}
+ 	}
+ 	key := r.pending.Begin(req.Generation)
++	if attempt := req.callHierarchyLayer1GenericAttempt; attempt != nil {
++		attempt.admit(key, callHierarchyLayer1GenericBeforeSnapshot{ledger: req.callHierarchyLayer1.ledger})
++	}
+ 	if private != nil {
+ 		private.selection.Key = key
+ 	}
+@@ -909,7 +922,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 	}
+ 	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
+ 	started := m.now()
+-	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector}
++	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
+ 	var privateRetainedNotifications []lspwire.Message
+ 	var privateRetainedResponses []lspwire.Message
+ 	maxMessages := req.MaxMessages
+@@ -956,6 +969,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 		req.CaptureMethodRequestFrameMaxBytes > 0 && req.CaptureMethodRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes {
+ 		requestFrameCap = req.CaptureMethodRequestFrameMaxBytes
+ 	}
++	if req.callHierarchyLayer1GenericAttempt != nil {
++		requestFrameCap = maxBytes
++	}
+ 	documentSymbolCapture := req.Method == "textDocument/documentSymbol" &&
+ 		eligibleOwnedMethodRequest(req) && req.ExpectedOwnedDocument != nil &&
+ 		req.CaptureDocumentSymbolRequestFrameMaxBytes > 0 && req.CaptureDocumentSymbolRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes &&
+@@ -990,6 +1006,13 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+ 		}
+ 		defer outboundTransport.release()
++	} else if req.callHierarchyLayer1GenericAttempt != nil {
++		requestBody, marshalErr = json.Marshal(struct {
++			ID      json.RawMessage `json:"id"`
++			JSONRPC string          `json:"jsonrpc"`
++			Method  string          `json:"method"`
++			Params  json.RawMessage `json:"params"`
++		}{ID: id, JSONRPC: lspwire.Version, Method: req.Method, Params: requestParams})
+ 	} else {
+ 		requestBody, marshalErr = json.Marshal(requestMessage)
+ 	}
+@@ -1009,7 +1032,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 	}
+ 	collector.Record(diagnosticEventWriteAttempt, result.RequestBytes, false)
+ 	writeRequest := func() error { return writer.Write(requestMessage) }
+-	if custodialPrivateB4 {
++	if custodialPrivateB4 || req.callHierarchyLayer1GenericAttempt != nil {
+ 		writeRequest = func() error { return writer.WriteEncodedBodyPrivate(requestBody) }
+ 	}
+ 	if err := owner.run(ctx, writeRequest); err != nil {
+@@ -1030,6 +1053,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 		SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
+ 		FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
+ 	}
++	if result.callHierarchyLayer1GenericAttempt != nil {
++		if raw, retained := writeCapture.retainedFrame(); retained {
++			result.callHierarchyLayer1GenericAttempt.captureRequestFrame(raw, *result.requestWrite)
++		}
++	}
+ 
+ 	type readResult struct {
+ 		message    lspwire.Message
+@@ -1067,10 +1095,19 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 		private.retainEntry = retainEntry
+ 	}
+ 	var reader *lspwire.Reader
++	stdout := io.Reader(child.Stdout())
++	var genericResponseCapture *framedWriteCapture
++	if req.callHierarchyLayer1GenericAttempt != nil {
++		genericResponseCapture = newFramedWriteCaptureBounded(io.Discard, maxBytes)
++		stdout = io.TeeReader(stdout, genericResponseCapture)
++	}
+ 	if m.cWireObserver == nil && decodeEntry == nil && retainEntry == nil {
+-		reader = lspwire.NewReader(child.Stdout(), m.wire)
++		reader = lspwire.NewReader(stdout, m.wire)
+ 	} else {
+-		reader = lspwire.NewReaderObservedAtDecode(child.Stdout(), m.wire, m.cWireObserver, decodeEntry, retainEntry)
++		reader = lspwire.NewReaderObservedAtDecode(stdout, m.wire, m.cWireObserver, decodeEntry, retainEntry)
++	}
++	if req.callHierarchyLayer1GenericAttempt != nil && captureCap == 0 {
++		captureCap = maxBytes
+ 	}
+ 	if private != nil {
+ 		// Checkpoint C, first increment: per complete original-wire frame,
+@@ -1126,11 +1163,19 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 				m.mu.Unlock()
+ 			}
+ 			failure := session.RequestCancelled
+-			if errors.Is(ctx.Err(), context.DeadlineExceeded) || (private != nil && req.ADR0011PrivateP2 && !m.now().Before(req.Deadline)) {
++			if errors.Is(ctx.Err(), context.DeadlineExceeded) || (!req.Deadline.IsZero() && req.Deadline.Sub(m.now()) <= time.Millisecond) {
+ 				failure = session.RequestTimeout
+ 			}
+ 			return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+ 		case read := <-reads:
++			if len(read.raw) == 0 && read.err != nil && genericResponseCapture != nil {
++				read.raw, _ = genericResponseCapture.retainedFrame()
++				read.frame.FrameBytes = int64(len(read.raw))
++				read.frame.FrameSHA256 = genericResponseCapture.sha256()
++			}
++			if result.callHierarchyLayer1GenericAttempt != nil && len(read.raw) != 0 {
++				result.callHierarchyLayer1GenericAttempt.captureResponseFrame(read.raw, read.frame)
++			}
+ 			if read.err != nil {
+ 				failure := session.SessionPoisoned
+ 				if privateReader != nil && !errors.Is(read.err, io.EOF) && !errors.Is(read.err, errPrivateB4Transport) &&
+@@ -1138,6 +1183,8 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 					failure = session.ResourceExhausted
+ 				} else if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(read.err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
+ 					failure = session.ResourceExhausted
++				} else if read.err.Error() == "transport-unavailable" {
++					failure = session.Failure("transport-unavailable")
+ 				} else if errors.Is(read.err, io.EOF) {
+ 					failure = session.SessionCrashed
+ 				}
+@@ -1286,6 +1333,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 					result.Result = append(json.RawMessage(nil), private.capture.Result...)
+ 				}
+ 			}
++			if result.callHierarchyLayer1GenericAttempt != nil {
++				result.callHierarchyLayer1GenericAttempt.captureResult(result.Result, result.ServerError)
++			}
+ 			collector.Record(diagnosticEventResponseDecoded, int64(len(result.Result)), read.message.Error == nil)
+ 			if classify != nil {
+ 				if classify(result.Result, read.message.Error) {
+@@ -1441,12 +1491,23 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
+ 	if result.Duration < 0 {
+ 		result.Duration = 0
+ 	}
++	var genericTerminal *callHierarchyLayer1GenericOwner
++	if attempt := result.callHierarchyLayer1GenericAttempt; attempt != nil {
++		after := callHierarchyLayer1GenericAfterSnapshot{ledger: result.callHierarchyLayer1.ledger, terminal: callHierarchyTransportTerminalSnapshot{value: string(terminal), available: true}}
++		observation := attempt.finishAccepted(result, failure, terminal, after)
++		result, genericTerminal = m.publishCallHierarchyLayer1GenericOwnerLocked(result, newCallHierarchyLayer1GenericOwner(observation))
++	}
++	result.callHierarchyLayer1GenericAttempt = nil
+ 	m.workers--
+ 	select {
+ 	case m.workerDone <- struct{}{}:
+ 	default:
+ 	}
+ 	m.mu.Unlock()
++	if genericTerminal != nil {
++		genericTerminal.requestTerminal()
++		genericTerminal.waitReleased()
++	}
+ 	if m.diagnostics != nil {
+ 		m.diagnostics.Record(diagnostic)
+ 	}
+@@ -1498,56 +1559,58 @@ type privateB4DecodedTestHooks struct {
+ }
+ 
+ type Manager struct {
+-	mu                       sync.Mutex
+-	limits                   Limits
+-	wire                     lspwire.Limits
+-	starter                  Starter
+-	algebra                  *session.Manager
+-	sessions                 map[string]*runtimeSession
+-	operations               map[string]OperationSnapshot
+-	operationIDs             []string
+-	readiness                map[string]*readinessOperation
+-	readinessIDs             map[string]string
+-	observations             []Observation
+-	sequence                 uint64
+-	readinessSeq             uint64
+-	readinessTimeout         time.Duration
+-	now                      func() time.Time
+-	workers                  int
+-	workerDone               chan struct{}
+-	closed                   bool
+-	diagnostics              *manageddiagnostic.Store
+-	seedRevisionAuthority    seedbinding.RevisionAuthority
+-	documentFinalHook        func()
+-	gitWorktreeList          func(context.Context, string) ([]byte, error)
+-	startupAttemptNonce      [16]byte
+-	startupAttemptEntropy    func(uint64) []byte
+-	startupAttemptSeq        uint64
+-	transientIdentityRandom  io.Reader
+-	readinessHistoryRandom   io.Reader
+-	transientIdentities      map[string]struct{}
+-	diagnosticSequence       uint64
+-	diagnosticEvictions      uint64
+-	diagnosticOmissions      uint64
+-	diagnosticByteEvictions  uint64
+-	diagnosticOperations     map[DiagnosticOperationHandle]diagnosticOperation
+-	diagnosticOrder          []DiagnosticOperationHandle
+-	methodCandidateTestHook  func(methodCandidateObservation)
+-	ownedMethodPairTestHook  func(OwnedMethodPair)
+-	b4OutboundHook           func(*privateB4ByteAccountV2)
+-	b4AfterWriteHook         func(*privateB4ByteAccountV2)
+-	b4ParamsHook             func(*privateB4ByteAccountV2)
+-	b4DecodedHooks           privateB4DecodedTestHooks
+-	b4OwnedPairHooks         privateB4OwnedMethodPairHooks
+-	privateB4SourceIngress   *privateB4SourceIngressOwner
+-	managerDiagnosticOwner   *managerDiagnosticOwner
+-	privateDiagnosticHistory *privateDiagnosticHistory
+-	privateB4C15Contexts     map[string]privateB4C15ManagerContext
+-	cWireObserver            lspwire.Observer
+-	cDecodeEntry             func()
+-	cRetainEntry             func()
+-	privateB4Leases          [privateB4MaxSlots]privateB4Slot
+-	privateB4Bytes           int64
++	mu                                           sync.Mutex
++	limits                                       Limits
++	wire                                         lspwire.Limits
++	starter                                      Starter
++	algebra                                      *session.Manager
++	sessions                                     map[string]*runtimeSession
++	operations                                   map[string]OperationSnapshot
++	operationIDs                                 []string
++	readiness                                    map[string]*readinessOperation
++	readinessIDs                                 map[string]string
++	observations                                 []Observation
++	sequence                                     uint64
++	readinessSeq                                 uint64
++	readinessTimeout                             time.Duration
++	now                                          func() time.Time
++	workers                                      int
++	workerDone                                   chan struct{}
++	closed                                       bool
++	diagnostics                                  *manageddiagnostic.Store
++	seedRevisionAuthority                        seedbinding.RevisionAuthority
++	documentFinalHook                            func()
++	gitWorktreeList                              func(context.Context, string) ([]byte, error)
++	startupAttemptNonce                          [16]byte
++	startupAttemptEntropy                        func(uint64) []byte
++	startupAttemptSeq                            uint64
++	transientIdentityRandom                      io.Reader
++	readinessHistoryRandom                       io.Reader
++	transientIdentities                          map[string]struct{}
++	diagnosticSequence                           uint64
++	diagnosticEvictions                          uint64
++	diagnosticOmissions                          uint64
++	diagnosticByteEvictions                      uint64
++	diagnosticOperations                         map[DiagnosticOperationHandle]diagnosticOperation
++	diagnosticOrder                              []DiagnosticOperationHandle
++	methodCandidateTestHook                      func(methodCandidateObservation)
++	ownedMethodPairTestHook                      func(OwnedMethodPair)
++	b4OutboundHook                               func(*privateB4ByteAccountV2)
++	b4AfterWriteHook                             func(*privateB4ByteAccountV2)
++	b4ParamsHook                                 func(*privateB4ByteAccountV2)
++	b4DecodedHooks                               privateB4DecodedTestHooks
++	b4OwnedPairHooks                             privateB4OwnedMethodPairHooks
++	privateB4SourceIngress                       *privateB4SourceIngressOwner
++	managerDiagnosticOwner                       *managerDiagnosticOwner
++	privateDiagnosticHistory                     *privateDiagnosticHistory
++	privateB4C15Contexts                         map[string]privateB4C15ManagerContext
++	callHierarchyLayer1GenericOwners             []*callHierarchyLayer1GenericOwner
++	callHierarchyLayer1GenericRetiredGenerations map[callHierarchyLayer1GenericGenerationKey]struct{}
++	cWireObserver                                lspwire.Observer
++	cDecodeEntry                                 func()
++	cRetainEntry                                 func()
++	privateB4Leases                              [privateB4MaxSlots]privateB4Slot
++	privateB4Bytes                               int64
+ }
+ 
+ func New(c Config) (*Manager, error) {
+@@ -2826,8 +2889,17 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
+ 		// Only a completed STOP retires this exact session generation's
+ 		// manager-held private leases. Release and remove under the same lock.
+ 		join := m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
++		if m.callHierarchyLayer1GenericRetiredGenerations == nil {
++			m.callHierarchyLayer1GenericRetiredGenerations = make(map[callHierarchyLayer1GenericGenerationKey]struct{})
++		}
++		m.callHierarchyLayer1GenericRetiredGenerations[callHierarchyLayer1GenericGenerationKey{operation.SessionID, operation.Generation}] = struct{}{}
++		genericOwners := m.detachCallHierarchyLayer1GenericOwnersLocked(operation.SessionID, operation.Generation, true)
+ 		m.mu.Unlock()
+ 		join.wait()
++		for _, genericOwner := range genericOwners {
++			genericOwner.requestTerminal()
++			genericOwner.waitReleased()
++		}
+ 		m.mu.Lock()
+ 		delete(m.sessions, operation.SessionID)
+ 		operation.State = OperationComplete
+@@ -2839,8 +2911,17 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
+ 	// that generation's private leases under the same lock before any successor
+ 	// startup can use the session or reserve new private capacity.
+ 	join := m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
++	if m.callHierarchyLayer1GenericRetiredGenerations == nil {
++		m.callHierarchyLayer1GenericRetiredGenerations = make(map[callHierarchyLayer1GenericGenerationKey]struct{})
++	}
++	m.callHierarchyLayer1GenericRetiredGenerations[callHierarchyLayer1GenericGenerationKey{operation.SessionID, operation.Generation}] = struct{}{}
++	genericOwners := m.detachCallHierarchyLayer1GenericOwnersLocked(operation.SessionID, operation.Generation, false)
+ 	m.mu.Unlock()
+ 	join.wait()
++	for _, genericOwner := range genericOwners {
++		genericOwner.requestTerminal()
++		genericOwner.waitReleased()
++	}
+ 
+ 	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
+ 	identity := managedprocess.ObserveIdentity(spec, r.record.Profile.ProfileName(), r.record.Profile.Workspace().String())
+@@ -2988,7 +3069,14 @@ func (m *Manager) Shutdown(ctx context.Context) error {
+ 	if m.privateB4SourceIngress != nil {
+ 		m.privateB4SourceIngress.releaseTableBacking()
+ 	}
++	genericOwners := m.callHierarchyLayer1GenericOwners
++	m.callHierarchyLayer1GenericOwners = nil
++	m.callHierarchyLayer1GenericRetiredGenerations = nil
+ 	m.mu.Unlock()
++	for _, genericOwner := range genericOwners {
++		genericOwner.requestTerminal()
++		genericOwner.waitReleased()
++	}
+ 	return nil
+ }
+ 

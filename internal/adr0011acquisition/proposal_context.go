@@ -2,6 +2,7 @@ package adr0011acquisition
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -16,6 +17,7 @@ import (
 // claimant proposal. Its occurrence is synthetic and never admits a live query.
 // ImplementationDigest is an explicit independent TEST-ONLY owner pin.
 type proposalContextInputs struct {
+	Context                                                  context.Context
 	TargetInputs                                             targetRecordInputs
 	ResponseInputs                                           responseReadInputs
 	MethodInputs                                             methodRecordInputs
@@ -68,9 +70,13 @@ func canonicalProposalContext(root *publication.Root, x proposalContextInputs, r
 	if !replayPreparedSource(root, t.Prepared, t.Source, x.SourceBytes, t.Binding.URI, t.Binding.Version, t.Workspace, x.SchemaDigest, read) ||
 		!replayRevisionIdentity(root, t.Revision, t.Before, t.After, x.Git, x.SchemaDigest, read) ||
 		!replayTargetRecord(root, x.Target, t, read) || !replayResponseRead(root, x.ResponseRead, r, read) ||
-		!replayRawResult(root, x.RawResult, x.ResponseRead, r.Payload, r, read) ||
-		!replayScannerRecord(root, x.Scanner, x.ResponseRead, x.RawResult, r.Payload, r, read, nil) ||
-		!replayMethodRecord(root, x.Method, m, read) {
+		!replayRawResult(root, x.RawResult, x.ResponseRead, r.Payload, r, read) {
+		return fail()
+	}
+	if err := replayScannerRecord(root, x.Scanner, x.ResponseRead, x.RawResult, r.Payload, r, read, nil, x.Context); err != nil {
+		return nil, errors.Join(errProposalContext, err)
+	}
+	if !replayMethodRecord(root, x.Method, m, read) {
 		return fail()
 	}
 	for i, p := range x.Policies {
@@ -88,7 +94,7 @@ func canonicalProposalContext(root *publication.Root, x proposalContextInputs, r
 		!replayEvents(root, x.Events, x.ResponseRead, x.RawResult, x.ScannerObservation, r, tx, x.Payload, x.Journal, read) {
 		return fail()
 	}
-	observed, err := observeRawScanner(root, r.Payload, read)
+	observed, err := observeRawScanner(root, r.Payload, read, x.Context)
 	if err != nil || observed != x.ScannerObservation || !validTargetIdentityString(r.Pair.SessionID) || !validTargetIdentityString(r.Frames.invocation) {
 		return fail()
 	}

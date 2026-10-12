@@ -14,14 +14,19 @@ import (
 var ErrRetainedResponseLeaseClosed = errors.New("retained response lease closed")
 
 type privateB4RetainedResponseOwner struct {
-	mu              sync.Mutex
-	cond            sync.Cond
-	responses       []lspwire.Message
-	charge          privateB4ByteLeaseV2
-	active          uint32
-	admissionClosed bool
-	releaseStarted  bool
-	released        bool
+	mu                   sync.Mutex
+	cond                 sync.Cond
+	responses            []lspwire.Message
+	charge               privateB4ByteLeaseV2
+	c18Capacity          uint64
+	active               uint32
+	admissionClosed      bool
+	releaseStarted       bool
+	released             bool
+	c18Barrier           privateC18OwnerBarrier
+	c18BarrierGeneration uint64
+	c18BarrierToken      *struct{}
+	c18Pair              privateC18PairCoordinator
 }
 
 type RetainedResponseLease struct {
@@ -100,7 +105,10 @@ func newPrivateB4RetainedResponseOwner(account *privateB4ByteAccountV2, source [
 	if !ok {
 		return nil, session.ResourceExhausted
 	}
-	charge, failure := account.reserve(capacity)
+	_ = privateC15SiteC15Copy30RetainedResponseSet
+	transactionID, objectID, sequence := "", "", uint64(0)
+	reachPrivateC18OwnerBarrier(transactionID, objectID, sequence, privateC18RetentionCommit)
+	charge, failure := account.reservePrivateB4C15(capacity, privateC15SiteC15Copy30RetainedResponseSet, privateB4C15Operation("copy"))
 	if failure != "" {
 		return nil, failure
 	}
@@ -108,7 +116,7 @@ func newPrivateB4RetainedResponseOwner(account *privateB4ByteAccountV2, source [
 	for i := range source {
 		responses[i] = cloneRetainedResponse(source[i])
 	}
-	o := &privateB4RetainedResponseOwner{responses: responses, charge: charge}
+	o := &privateB4RetainedResponseOwner{responses: responses, charge: charge, c18Capacity: capacity, c18Pair: privateC18NewPairCoordinator(9)}
 	o.cond.L = &o.mu
 	return o, ""
 }
@@ -121,13 +129,28 @@ func (l RetainedResponseLease) WithResponses(fn func([]lspwire.Message) error) e
 	}
 	o := l.owner
 	o.mu.Lock()
-	if o.admissionClosed || o.released {
-		o.mu.Unlock()
+	live := !o.admissionClosed && !o.released
+	o.mu.Unlock()
+	if !live {
 		return ErrRetainedResponseLeaseClosed
 	}
-	o.active++
-	responses := o.responses
+	_ = privateC15SiteC15Alias31ResponsesCallback
+	transactionID, objectID, sequence := o.privateC18Metadata()
+	if err := o.reachPrivateC18OwnerBarrier(transactionID, objectID, sequence, privateC18ReadbackBorrow); err != nil {
+		return ErrRetainedResponseLeaseClosed
+	}
+	failure := o.charge.account.aliasPrivateB4C15(o.charge.lease, privateC15SiteC15Alias31ResponsesCallback)
+	o.mu.Lock()
+	admitted := failure == "" && !o.admissionClosed && !o.released
+	var responses []lspwire.Message
+	if admitted {
+		o.active++
+		responses = o.responses
+	}
 	o.mu.Unlock()
+	if !admitted {
+		return ErrRetainedResponseLeaseClosed
+	}
 	defer func() {
 		o.mu.Lock()
 		o.active--
@@ -160,15 +183,11 @@ func (o *privateB4RetainedResponseOwner) waitReleased() {
 	o.mu.Unlock()
 }
 
-func (l RetainedResponseLease) Release() bool {
-	if l.owner == nil {
-		return false
-	}
-	o := l.owner
+func (o *privateB4RetainedResponseOwner) preparePrivateC18Release() (string, string, uint64, bool) {
 	o.mu.Lock()
+	defer o.mu.Unlock()
 	if o.releaseStarted || o.released {
-		o.mu.Unlock()
-		return false
+		return "", "", 0, false
 	}
 	o.admissionClosed = true
 	o.releaseStarted = true
@@ -176,6 +195,20 @@ func (l RetainedResponseLease) Release() bool {
 	for o.active != 0 {
 		o.cond.Wait()
 	}
+	transactionID, objectID, sequence := o.privateC18MetadataLocked()
+	return transactionID, objectID, sequence, true
+}
+
+func (o *privateB4RetainedResponseOwner) cancelPrivateC18Release() {
+	o.mu.Lock()
+	o.releaseStarted = false
+	o.admissionClosed = false
+	o.cond.Broadcast()
+	o.mu.Unlock()
+}
+
+func (o *privateB4RetainedResponseOwner) finishPrivateC18Release() {
+	o.mu.Lock()
 	for i := range o.responses {
 		m := &o.responses[i]
 		for j := range m.ID {
@@ -194,9 +227,56 @@ func (l RetainedResponseLease) Release() bool {
 		}
 	}
 	o.responses = nil
-	o.charge.release()
 	o.released = true
 	o.cond.Broadcast()
 	o.mu.Unlock()
+}
+
+func (o *privateB4RetainedResponseOwner) restartPrivateC18Custody(generation uint64) bool {
+	return false
+	/* permanently closed owner
+	o.mu.Lock()
+	if !o.released || o.active != 0 || o.charge.account == nil {
+		o.mu.Unlock()
+		return false
+	}
+	account, capacity := o.charge.account, o.c18Capacity
+	o.mu.Unlock()
+
+	account.mu.Lock()
+	if account.c15 != nil {
+		account.c15.generation++
+		account.c15.transactionID += "-restart-" + privateC18Decimal(generation)
+	}
+	account.mu.Unlock()
+	charge, failure := account.reservePrivateB4C15(capacity, privateC15SiteC15Copy30RetainedResponseSet, privateB4C15Operation("copy"))
+	if failure != "" {
+		return false
+	}
+	o.mu.Lock()
+	o.charge = charge
+	o.admissionClosed = false
+	o.releaseStarted = false
+	o.released = false
+	o.mu.Unlock()
+	return true
+	*/
+}
+
+func (l RetainedResponseLease) Release() bool {
+	if l.owner == nil {
+		return false
+	}
+	o := l.owner
+	transactionID, objectID, sequence, release := o.preparePrivateC18Release()
+	if !release {
+		return false
+	}
+	if err := o.reachPrivateC18OwnerBarrier(transactionID, objectID, sequence, privateC18Release); err != nil {
+		o.cancelPrivateC18Release()
+		return false
+	}
+	o.charge.release()
+	o.finishPrivateC18Release()
 	return true
 }

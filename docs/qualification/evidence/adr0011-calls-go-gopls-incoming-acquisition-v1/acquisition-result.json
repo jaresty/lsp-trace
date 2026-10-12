@@ -1,0 +1,47 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.managed-acquisition-result.v1",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "mcp_operation": "lsp_trace_v1_incoming",
+  "mcp_request_id": "offline-5",
+  "mcp_outcome": "PARTIAL",
+  "mcp_operation_status": "PARTIAL",
+  "artifact_schema_id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.incoming-composition.v1.schema.json",
+  "session_id": "sk1:33544354924d71648883b07b3cf158f8ce7564dc8ebcc66b87db42b9d3c961ef",
+  "generation": 1,
+  "target": {"uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go","line":749,"character":24},
+  "limits": {"max_depth":1,"max_nodes":20,"request_timeout_ms":30000,"timeout_ms":60000},
+  "workspace_revision": {"kind":"git","commit":"082e3f6dfb5aac82fdeef804153f73d07de408e2","custody":"CALLER_ASSERTED"},
+  "composition": {
+    "complete": false,
+    "execution_bundle_id": "sha256:6e90fecd46b37ee30ac10e442c11da308452b5cb2f68e34d26afe4af0ed65c77",
+    "capabilities_projection": {"call_hierarchy_provider":true},
+    "capability_quality": {"advertised":true,"prepare_succeeded":true,"incoming_request_successes":1,"incoming_edges":2,"cross_file_edges":2,"cross_module_edges":"UNKNOWN","unresolved_calls":0,"dynamic_calls":0},
+    "target_node": {"name":"IncomingCalls","kind":12,"detail":"lsp-trace/incomingops • executor.go","uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/incomingops/executor.go","range":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}},"selection_range":{"start":{"line":749,"character":24},"end":{"line":749,"character":37}}},
+    "callers": [
+      {"name":"query","kind":12,"detail":"lsp-trace/incomingops • coordinator.go","uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/internal/acquisition/coordinator.go","range":{"start":{"line":715,"character":17},"end":{"line":715,"character":22}},"selection_range":{"start":{"line":715,"character":17},"end":{"line":715,"character":22}},"fromRanges":[{"start":{"line":741,"character":29},"end":{"line":741,"character":42}}]},
+      {"name":"Incoming","kind":12,"detail":"lsp-trace/incomingops • traverse.go","uri":"file:///Users/schwa/dev/lsp-trace-adr0011-c17/internal/traverse/traverse.go","range":{"start":{"line":71,"character":5},"end":{"line":71,"character":13}},"selection_range":{"start":{"line":71,"character":5},"end":{"line":71,"character":13}},"fromRanges":[{"start":{"line":191,"character":32},"end":{"line":191,"character":45}}]}
+    ],
+    "frontier": [
+      {"name":"query","reason":"MAX_DEPTH","provenance":"CLIENT_DERIVED"},
+      {"name":"Incoming","reason":"MAX_DEPTH","provenance":"CLIENT_DERIVED"}
+    ],
+    "diagnostics": [
+      {"phase":"traverse","method":"callHierarchy/incomingCalls","name":"query","message":"SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"},
+      {"phase":"traverse","method":"callHierarchy/incomingCalls","name":"Incoming","message":"SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"}
+    ],
+    "summary": {"node_count":3,"edge_count":2,"terminal_count":0,"cycle_count":0,"traversal_complete":false,"source_graph_complete":"UNKNOWN","truncated":true},
+    "semantic_commitment_digest": "sha256:16c8a72c10a0b33d6adbeb166e377c667b4fe14303ee80ad5f65863d1b870318"
+  },
+  "wire_custody": {
+    "protocol_transcript_state": "ABSENT",
+    "original_prepare_frame_available": false,
+    "original_incoming_frame_available": false,
+    "original_result_order_available": false,
+    "original_null_array_distinction_available": false
+  },
+  "capability_role_status": "MISSING",
+  "capability_role_reason": "initialize request/result custody is absent; composed advertised=true is not initialize custody",
+  "authority": 0,
+  "accepted": false,
+  "production_admission": "REFUSED_MISSING_EVIDENCE"
+}

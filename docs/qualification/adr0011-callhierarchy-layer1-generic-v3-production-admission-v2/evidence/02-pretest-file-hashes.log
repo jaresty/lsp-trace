@@ -1,0 +1,23 @@
+HEAD=57b088e56f4ac5b0e5162a03a2f7d695f34085b1
+CORPUS_EXACT_ORDER_HASH
+1feaf2068f3c9f747eb5eef95b6b600ecf0637029eed3dc43133321abecd7037  -
+CORPUS_ARTIFACT_HASH
+1feaf2068f3c9f747eb5eef95b6b600ecf0637029eed3dc43133321abecd7037  /tmp/adr0011-v3-corpus-placement-evidence-l58atP/corpus-placement.patch
+CURRENT_FILE_HASHES
+fb3b648ba6d83d02e004f11a19b949415cdecb6b56c8048eec9f03ac747a2a93  sessionruntime/sessionruntime.go
+8685b78ac7883263c7279ae68a543bb365ab7de0ca8610955eb90236ba5b70b8  sessionruntime/owned_method_pair.go
+b53e51b89effa526337b96fcf883078da332b9b1a1457fcd1fc44a3db2e585e9  sessionruntime/b4_owned_method_pair_lease.go
+81adfac96e7c7ddd42fd256bfb6bd60302a5acab36b0417efa71dea5648dafcd  sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+3f04779f5c919091c524faff217c7ecec03db5e73da0ce52a7c324ee5b492654  sessionruntime/testdata/callhierarchy-layer1-red-v3/manifest.json
+dfd70f44370b0168cdc7b604d53e9a443d7b6af1e1f54a38c5c96a152f911f72  sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json
+9f864e7d2e9c18b6503e148ebfb4099657f245ab7630bd1170b6f747c7383879  sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json
+5dd2102708586e2370c23fe5608d935f61e421a4ab2abf666560443c80bf73b1  sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json
+STATUS
+ M sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+ M sessionruntime/sessionruntime.go
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/manifest.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json

@@ -82,6 +82,9 @@ func lifecycleSuccessor(t *testing.T, f b4ID1Fixture) (*b4ID1Child, <-chan error
 			return
 		}
 		msg, _, frame, kept, err := reader.ReadWithFrameIfWithin(4096)
+		if err == nil && msg.Method == "textDocument/didOpen" && len(msg.ID) == 0 {
+			msg, _, frame, kept, err = reader.ReadWithFrameIfWithin(4096)
+		}
 		if err != nil || !kept || !bytes.Equal(frame, request) || msg.Method != "textDocument/definition" || string(msg.ID) != "1" {
 			done <- fmt.Errorf("successor definition WRITE: %v", err)
 			return
@@ -204,7 +207,7 @@ func b4LeaseRequestForRestart(t *testing.T, f b4ID1Fixture, id string) (RoundTri
 		lifecycleBlocked(t, "successor declaration")
 	}
 	req := RoundTripRequest{SessionID: id, Method: "textDocument/definition", Params: json.RawMessage(b4LeaseGet(t, f, "A/request.params")), MaxMessages: 1, MaxBytes: 4096, CaptureDefinitionResponseFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/response.frame"))), CaptureMethodRequestFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/request.frame")))}
-	return req, B4DefinitionOwner{Transaction: d.Transaction, CompletedOwnerKey: d.CompletedOwnerKey}
+	return req, B4DefinitionOwner{Transaction: d.Transaction + "-restart", CompletedOwnerKey: d.CompletedOwnerKey}
 }
 
 // A controllable child waits after a completed WRITE. Teardown/Close release

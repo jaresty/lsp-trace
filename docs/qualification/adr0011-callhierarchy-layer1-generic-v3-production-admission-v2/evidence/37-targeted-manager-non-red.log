@@ -1,0 +1,8 @@
+=== RUN   TestCFramePrivateB4ManagerReaderObservation
+=== RUN   TestCFramePrivateB4ManagerReaderObservation/A
+=== RUN   TestCFramePrivateB4ManagerReaderObservation/B
+--- PASS: TestCFramePrivateB4ManagerReaderObservation (0.01s)
+    --- PASS: TestCFramePrivateB4ManagerReaderObservation/A (0.00s)
+    --- PASS: TestCFramePrivateB4ManagerReaderObservation/B (0.00s)
+PASS
+ok  	lsp-trace/sessionruntime	0.228s

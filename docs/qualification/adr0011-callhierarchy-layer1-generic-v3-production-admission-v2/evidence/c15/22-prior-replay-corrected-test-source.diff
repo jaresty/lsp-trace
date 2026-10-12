@@ -1,0 +1,11 @@
+--- /tmp/adr0011-c15-prior-patch-replay-4210/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go	2026-10-12 11:51:05
++++ /tmp/adr0011-v3-corpus-placement-lqbyYP/sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go	2026-10-12 11:42:04
+@@ -1954,7 +1954,7 @@
+ }
+ 
+ func callHierarchyLayer1GenericV3CausalOutcomePlacementErrors(worlds []callHierarchyLayer1GenericV3Loaded) []string {
+-	want := map[string]uint64{"W04": 104, "W05": 105, "W23": 123}
++	want := map[string]uint64{"world-04": 104, "world-05": 105, "world-23": 123}
+ 	seen := map[string]int{}
+ 	absent := 0
+ 	errors := []string{}

@@ -1,0 +1,14 @@
+# lsp-trace/sessionruntime [lsp-trace/sessionruntime.test]
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:165:112: undefined: callHierarchyLayer1GenericCausalOutcome
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:168:10: undefined: callHierarchyLayer1GenericCausalOutcome
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:172:10: undefined: callHierarchyLayer1GenericCausalOutcome
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:173:14: undefined: callHierarchyLayer1GenericCausalOutcomeAcceptedTerminal
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:177:10: undefined: callHierarchyLayer1GenericCausalOutcome
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:178:19: undefined: callHierarchyLayer1GenericCausalOutcomePreEffectRefusal
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:179:19: undefined: callHierarchyLayer1GenericRefusalMethodUnavailable
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:783:46: undefined: callHierarchyLayer1GenericCausalOutcome
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:1797:13: undefined: callHierarchyLayer1GenericCausalOutcome
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:1801:120: undefined: callHierarchyLayer1GenericCausalOutcome
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go:179:19: too many errors
+FAIL	lsp-trace/sessionruntime [build failed]
+FAIL
