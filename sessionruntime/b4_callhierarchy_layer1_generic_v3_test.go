@@ -83,17 +83,141 @@ type callHierarchyLayer1GenericV3DriverExternal struct {
 	ServerErrorBytes   *string `json:"server_error_bytes"`
 }
 
+type callHierarchyLayer1GenericV3DriverIdentity struct {
+	Binding           string `json:"binding"`
+	Profile           string `json:"profile"`
+	WorkspaceNonceHex string `json:"workspace_nonce_hex"`
+}
+
+func (identity *callHierarchyLayer1GenericV3DriverIdentity) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
+		return fmt.Errorf("identity must be an object")
+	}
+	seen := make(map[string]bool, 3)
+	for decoder.More() {
+		token, err = decoder.Token()
+		if err != nil {
+			return err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return fmt.Errorf("identity member name must be a string")
+		}
+		if seen[name] {
+			return fmt.Errorf("duplicate identity member %q", name)
+		}
+		seen[name] = true
+		switch name {
+		case "binding":
+			err = decoder.Decode(&identity.Binding)
+		case "profile":
+			err = decoder.Decode(&identity.Profile)
+		case "workspace_nonce_hex":
+			err = decoder.Decode(&identity.WorkspaceNonceHex)
+		default:
+			return fmt.Errorf("unknown identity member %q", name)
+		}
+		if err != nil {
+			return fmt.Errorf("identity member %q: %w", name, err)
+		}
+	}
+	if _, err = decoder.Token(); err != nil {
+		return err
+	}
+	if len(seen) != 3 || !seen["binding"] || !seen["profile"] || !seen["workspace_nonce_hex"] {
+		return fmt.Errorf("identity requires exactly binding, profile, and workspace_nonce_hex")
+	}
+	if err = decoder.Decode(&token); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("identity trailing value: %v", err)
+	}
+	return nil
+}
+
+func callHierarchyLayer1GenericV3IdentityValues(identity *callHierarchyLayer1GenericV3DriverIdentity) (callHierarchyProfileIdentity, callHierarchyBindingIdentity, callHierarchyWorkspaceCustody, error) {
+	if identity == nil {
+		return "", "", callHierarchyWorkspaceCustody{}, errors.New("missing identity")
+	}
+	if identity.Profile == "" || identity.Binding == "" {
+		return "", "", callHierarchyWorkspaceCustody{}, errors.New("empty profile or binding")
+	}
+	if len(identity.WorkspaceNonceHex) != sha256.Size*2 || identity.WorkspaceNonceHex != strings.ToLower(identity.WorkspaceNonceHex) || strings.HasPrefix(identity.WorkspaceNonceHex, "0x") {
+		return "", "", callHierarchyWorkspaceCustody{}, errors.New("workspace nonce is not exactly 64 lowercase hexadecimal characters")
+	}
+	workspaceBytes, err := hex.DecodeString(identity.WorkspaceNonceHex)
+	if err != nil || len(workspaceBytes) != sha256.Size {
+		return "", "", callHierarchyWorkspaceCustody{}, errors.New("workspace nonce does not decode to 32 bytes")
+	}
+	var nonce [32]byte
+	copy(nonce[:], workspaceBytes)
+	if nonce == [32]byte{} {
+		return "", "", callHierarchyWorkspaceCustody{}, errors.New("workspace nonce is zero")
+	}
+	return callHierarchyProfileIdentity(identity.Profile), callHierarchyBindingIdentity(identity.Binding), callHierarchyWorkspaceCustody{managerNonce: nonce}, nil
+}
+
 type callHierarchyLayer1GenericV3DriverRequest struct {
-	AttachmentEnabled bool    `json:"attachment_enabled"`
-	DeadlineAfterNS   int64   `json:"deadline_after_ns"`
-	Generation        uint64  `json:"generation"`
-	MaxBytes          int64   `json:"max_bytes"`
-	MaxMessages       int     `json:"max_messages"`
-	Method            string  `json:"method"`
-	ParamsHex         *string `json:"params_hex"`
-	ParamsState       string  `json:"params_state"`
-	RequestID         uint64  `json:"request_id"`
-	Session           string  `json:"session"`
+	AttachmentEnabled bool                                        `json:"attachment_enabled"`
+	DeadlineAfterNS   int64                                       `json:"deadline_after_ns"`
+	Generation        uint64                                      `json:"generation"`
+	Identity          *callHierarchyLayer1GenericV3DriverIdentity `json:"identity"`
+	MaxBytes          int64                                       `json:"max_bytes"`
+	MaxMessages       int                                         `json:"max_messages"`
+	Method            string                                      `json:"method"`
+	ParamsHex         *string                                     `json:"params_hex"`
+	ParamsState       string                                      `json:"params_state"`
+	RequestID         uint64                                      `json:"request_id"`
+	Session           string                                      `json:"session"`
+}
+
+func (request *callHierarchyLayer1GenericV3DriverRequest) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
+		return fmt.Errorf("driver request must be an object")
+	}
+	seen := make(map[string]bool, 11)
+	for decoder.More() {
+		token, err = decoder.Token()
+		if err != nil {
+			return err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return fmt.Errorf("driver request member name must be a string")
+		}
+		if seen[name] {
+			return fmt.Errorf("duplicate driver request member %q", name)
+		}
+		seen[name] = true
+		var discard json.RawMessage
+		if err := decoder.Decode(&discard); err != nil {
+			return err
+		}
+	}
+	if _, err := decoder.Token(); err != nil {
+		return err
+	}
+	type plain callHierarchyLayer1GenericV3DriverRequest
+	strict := json.NewDecoder(bytes.NewReader(raw))
+	strict.DisallowUnknownFields()
+	if err := strict.Decode((*plain)(request)); err != nil {
+		return err
+	}
+	if len(seen) != 11 || !seen["identity"] {
+		return fmt.Errorf("driver request requires exactly 11 members including identity")
+	}
+	if err := strict.Decode(&token); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("driver request trailing value: %v", err)
+	}
+	return nil
 }
 
 type callHierarchyLayer1GenericV3DriverTransport struct {
@@ -308,6 +432,9 @@ func callHierarchyLayer1GenericV3ValidateDriver(t *testing.T, e callHierarchyLay
 		}
 	default:
 		t.Fatalf("ASSERT_CH_GENERIC_V3_PARAMS_STATE_%s: %q", e.Expected.Name, d.Request.ParamsState)
+	}
+	if _, _, _, err := callHierarchyLayer1GenericV3IdentityValues(d.Request.Identity); err != nil {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_DRIVER_IDENTITY_%s: %v", e.Expected.Name, err)
 	}
 	allowed := map[string]bool{"response-frame": true, "transport-error": true, "cancel": true, "deadline": true, "shutdown": true, "unavailable": true}
 	for i, event := range d.Transport.Events {
@@ -536,6 +663,10 @@ type callHierarchyLayer1GenericV3Actual struct {
 	preEffectRefusal string
 }
 
+type callHierarchyLayer1GenericV3IdentityAttachment interface {
+	privateCallHierarchyLayer1WithIdentity(callHierarchyProfileIdentity, callHierarchyBindingIdentity, callHierarchyWorkspaceCustody) callHierarchyLayer1RequestAttachment
+}
+
 type callHierarchyLayer1GenericV3EnabledAttachment interface {
 	privateCallHierarchyLayer1WithEnabled(bool) callHierarchyLayer1RequestAttachment
 }
@@ -714,8 +845,64 @@ func callHierarchyLayer1GenericV3Commitment(t *testing.T, path string, value cal
 	return callHierarchyOpaqueCommitmentMetadata{identity: value.Identity, sha256: digest, length: value.Length, available: value.Available}
 }
 
+func callHierarchyLayer1GenericV3ApplyIdentity(candidate any, identity *callHierarchyLayer1GenericV3DriverIdentity) (callHierarchyLayer1RequestAttachment, bool) {
+	setter, ok := candidate.(callHierarchyLayer1GenericV3IdentityAttachment)
+	if !ok {
+		return callHierarchyLayer1RequestAttachment{}, false
+	}
+	profile, binding, workspace, err := callHierarchyLayer1GenericV3IdentityValues(identity)
+	if err != nil {
+		return callHierarchyLayer1RequestAttachment{}, false
+	}
+	return setter.privateCallHierarchyLayer1WithIdentity(profile, binding, workspace), true
+}
+
 func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer1GenericV3Envelope) callHierarchyLayer1GenericV3Actual {
 	t.Helper()
+	params := callHierarchyLayer1GenericV3Hex(t, record.Expected.Name+".driver.request.params_hex", record.Driver.Request.ParamsHex)
+	var wireParams json.RawMessage
+	if record.Driver.Request.ParamsHex != nil {
+		wireParams = json.RawMessage(append([]byte(nil), params...))
+	}
+	paramsSource := params
+	attachment := callHierarchyLayer1RequestAttachment{
+		selected: callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.selected", record.Driver.CommitmentInputs.Selected),
+		handoff:  callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.handoff", record.Driver.CommitmentInputs.Handoff),
+	}
+	identityAttachment, ok := callHierarchyLayer1GenericV3ApplyIdentity(any(attachment), record.Driver.Request.Identity)
+	request := RoundTripRequest{
+		SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, Method: record.Driver.Request.Method,
+		Params: wireParams, Deadline: time.Now().Add(time.Duration(record.Driver.Request.DeadlineAfterNS)),
+		MaxMessages: record.Driver.Request.MaxMessages, MaxBytes: record.Driver.Request.MaxBytes,
+		callHierarchyLayer1: attachment,
+	}
+	if !ok {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithIdentity"}
+	}
+	attachment = identityAttachment
+	enabledSetter, ok := any(attachment).(callHierarchyLayer1GenericV3EnabledAttachment)
+	if !ok {
+		enabledSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3EnabledAttachment)
+	}
+	request.callHierarchyLayer1 = attachment
+	if !ok {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithEnabled"}
+	}
+	attachment = enabledSetter.privateCallHierarchyLayer1WithEnabled(record.Driver.Request.AttachmentEnabled)
+	predecessorSetter, ok := any(attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+	if !ok {
+		predecessorSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
+	}
+	request.callHierarchyLayer1 = attachment
+	if !ok {
+		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithPredecessors"}
+	}
+	predecessors := make([]callHierarchyOpaqueCommitmentMetadata, len(record.Driver.CommitmentInputs.Predecessors))
+	for i, predecessor := range record.Driver.CommitmentInputs.Predecessors {
+		predecessors[i] = callHierarchyLayer1GenericV3Commitment(t, fmt.Sprintf("driver.commitment_inputs.predecessors[%d]", i), predecessor)
+	}
+	request.callHierarchyLayer1 = predecessorSetter.privateCallHierarchyLayer1WithPredecessors(predecessors)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	transport := callHierarchyLayer1GenericV3NewTransport(record.Driver.Transport.Events, cancel, record.Driver.Request.RequestID, time.Duration(record.Driver.Request.DeadlineAfterNS))
 	manager, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 1, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{transport}})
@@ -733,43 +920,6 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 	manager.sessions[record.Driver.Request.Session] = &runtimeSession{record: Record{SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, State: session.Ready}, process: transport, pending: pending, requests: make(map[lspwire.RequestKey]*Request)}
 	manager.mu.Unlock()
 	t.Cleanup(func() { cancel(); _ = transport.Teardown(context.Background()); _ = transport.Close() })
-	params := callHierarchyLayer1GenericV3Hex(t, record.Expected.Name+".driver.request.params_hex", record.Driver.Request.ParamsHex)
-	var wireParams json.RawMessage
-	if record.Driver.Request.ParamsHex != nil {
-		wireParams = json.RawMessage(append([]byte(nil), params...))
-	}
-	paramsSource := params
-	attachment := callHierarchyLayer1RequestAttachment{
-		selected: callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.selected", record.Driver.CommitmentInputs.Selected),
-		handoff:  callHierarchyLayer1GenericV3Commitment(t, "driver.commitment_inputs.handoff", record.Driver.CommitmentInputs.Handoff),
-	}
-	predecessors := make([]callHierarchyOpaqueCommitmentMetadata, len(record.Driver.CommitmentInputs.Predecessors))
-	for i, predecessor := range record.Driver.CommitmentInputs.Predecessors {
-		predecessors[i] = callHierarchyLayer1GenericV3Commitment(t, fmt.Sprintf("driver.commitment_inputs.predecessors[%d]", i), predecessor)
-	}
-	enabledSetter, ok := any(attachment).(callHierarchyLayer1GenericV3EnabledAttachment)
-	if !ok {
-		enabledSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3EnabledAttachment)
-	}
-	request := RoundTripRequest{
-		SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, Method: record.Driver.Request.Method,
-		Params: wireParams, Deadline: time.Now().Add(time.Duration(record.Driver.Request.DeadlineAfterNS)),
-		MaxMessages: record.Driver.Request.MaxMessages, MaxBytes: record.Driver.Request.MaxBytes,
-		callHierarchyLayer1: attachment,
-	}
-	if !ok {
-		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithEnabled"}
-	}
-	attachment = enabledSetter.privateCallHierarchyLayer1WithEnabled(record.Driver.Request.AttachmentEnabled)
-	predecessorSetter, ok := any(attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
-	if !ok {
-		predecessorSetter, ok = any(&attachment).(callHierarchyLayer1GenericV3PredecessorAttachment)
-	}
-	request.callHierarchyLayer1 = attachment
-	if !ok {
-		return callHierarchyLayer1GenericV3Actual{request: request, attempted: true, preEffectRefusal: "request-attachment-method:privateCallHierarchyLayer1WithPredecessors"}
-	}
-	request.callHierarchyLayer1 = predecessorSetter.privateCallHierarchyLayer1WithPredecessors(predecessors)
 	result := manager.RoundTrip(ctx, request)
 	if len(paramsSource) > 0 {
 		paramsSource[0] ^= 0xff
@@ -1359,6 +1509,167 @@ func TestCallHierarchyLayer1GenericV3AttachmentMappingControls(t *testing.T) {
 	})
 }
 
+type callHierarchyLayer1GenericV3IdentityRecorder struct {
+	attachment callHierarchyLayer1RequestAttachment
+	profile    callHierarchyProfileIdentity
+	binding    callHierarchyBindingIdentity
+	workspace  callHierarchyWorkspaceCustody
+	calls      int
+}
+
+func (recorder *callHierarchyLayer1GenericV3IdentityRecorder) privateCallHierarchyLayer1WithIdentity(profile callHierarchyProfileIdentity, binding callHierarchyBindingIdentity, workspace callHierarchyWorkspaceCustody) callHierarchyLayer1RequestAttachment {
+	recorder.calls++
+	recorder.profile = profile
+	recorder.binding = binding
+	recorder.workspace = workspace
+	return recorder.attachment
+}
+
+func TestCallHierarchyLayer1GenericV3IdentityCausalGuards(t *testing.T) {
+	const valid = `{"binding":"opaque-incoming","profile":"corpus-profile-go","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`
+	decode := func(raw string) (*callHierarchyLayer1GenericV3DriverIdentity, error) {
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		var identity *callHierarchyLayer1GenericV3DriverIdentity
+		if err := decoder.Decode(&identity); err != nil {
+			return nil, err
+		}
+		var trailing json.RawMessage
+		if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("identity trailing value: %v", err)
+		}
+		return identity, nil
+	}
+
+	t.Run("strict-malformed-duplicate-missing-zero", func(t *testing.T) {
+		var duplicateRequest callHierarchyLayer1GenericV3DriverRequest
+		if err := json.Unmarshal([]byte(`{"attachment_enabled":true,"deadline_after_ns":1,"generation":1,"identity":{"binding":"b","profile":"p","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"},"identity":{"binding":"b","profile":"p","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"},"max_bytes":1,"max_messages":1,"method":"m","params_hex":null,"params_state":"nil","request_id":1,"session":"s"}`), &duplicateRequest); err == nil {
+			t.Fatal("ASSERT_CH_GENERIC_V3_DUPLICATE_IDENTITY_PATH_ACCEPTED")
+		}
+		invalidJSON := []struct {
+			name string
+			raw  string
+		}{
+			{"null-identity", `null`},
+			{"empty-object", `{}`},
+			{"absent-profile", `{"binding":"b","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"absent-binding", `{"profile":"p","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"absent-workspace", `{"binding":"b","profile":"p"}`},
+			{"null-profile", `{"binding":"b","profile":null,"workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"null-binding", `{"binding":null,"profile":"p","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"null-workspace", `{"binding":"b","profile":"p","workspace_nonce_hex":null}`},
+			{"wrong-type-profile", `{"binding":"b","profile":1,"workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"wrong-type-binding", `{"binding":true,"profile":"p","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"wrong-type-workspace", `{"binding":"b","profile":"p","workspace_nonce_hex":[]}`},
+			{"duplicate-binding", `{"binding":"b","binding":"b2","profile":"p","workspace_nonce_hex":"0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"unknown-member", `{"binding":"b","profile":"p","workspace_nonce_hex":"01","extra":"x"}`},
+			{"workspace-0x-prefix", `{"binding":"b","profile":"p","workspace_nonce_hex":"0x0101010101010101010101010101010101010101010101010101010101010101"}`},
+			{"trailing-json", valid + ` null`},
+		}
+		for _, test := range invalidJSON {
+			t.Run(test.name, func(t *testing.T) {
+				identity, err := decode(test.raw)
+				if err == nil {
+					_, _, _, err = callHierarchyLayer1GenericV3IdentityValues(identity)
+				}
+				if err == nil {
+					t.Fatalf("ASSERT_CH_GENERIC_V3_IDENTITY_INVALID_ACCEPTED raw=%s", test.raw)
+				}
+			})
+		}
+		for _, identity := range []*callHierarchyLayer1GenericV3DriverIdentity{
+			{Binding: "", Profile: "p", WorkspaceNonceHex: strings.Repeat("01", 32)},
+			{Binding: "b", Profile: "", WorkspaceNonceHex: strings.Repeat("01", 32)},
+			{Binding: "b", Profile: "p", WorkspaceNonceHex: strings.Repeat("0", 64)},
+			{Binding: "b", Profile: "p", WorkspaceNonceHex: strings.Repeat("A1", 32)},
+			{Binding: "b", Profile: "p", WorkspaceNonceHex: strings.Repeat("1", 63)},
+			{Binding: "b", Profile: "p", WorkspaceNonceHex: strings.Repeat("1", 65)},
+			{Binding: "b", Profile: "p", WorkspaceNonceHex: strings.Repeat("gg", 32)},
+		} {
+			if _, _, _, err := callHierarchyLayer1GenericV3IdentityValues(identity); err == nil {
+				t.Errorf("ASSERT_CH_GENERIC_V3_IDENTITY_VALUE_INVALID_ACCEPTED identity=%+v", identity)
+			}
+		}
+	})
+
+	t.Run("expected-and-method-are-not-input-oracles", func(t *testing.T) {
+		identity, err := decode(valid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := *identity
+		record := callHierarchyLayer1GenericV3Envelope{}
+		record.Driver.Request.Identity = identity
+		record.Driver.Request.Method = "method-that-does-not-match-binding"
+		changedExpected := "changed-expected-only"
+		record.Expected.Identity.Profile.Value = &changedExpected
+		recorder := &callHierarchyLayer1GenericV3IdentityRecorder{}
+		if _, ok := callHierarchyLayer1GenericV3ApplyIdentity(recorder, record.Driver.Request.Identity); !ok {
+			t.Fatal("ASSERT_CH_GENERIC_V3_IDENTITY_CAUSAL_INPUT_REFUSED")
+		}
+		if *record.Driver.Request.Identity != before || recorder.profile != callHierarchyProfileIdentity(before.Profile) || recorder.binding != callHierarchyBindingIdentity(before.Binding) || recorder.calls != 1 {
+			t.Fatalf("ASSERT_CH_GENERIC_V3_EXPECTED_OR_METHOD_ORACLE driver=%+v actual=%q/%q calls=%d", record.Driver.Request.Identity, recorder.profile, recorder.binding, recorder.calls)
+		}
+	})
+
+	apply := func(t *testing.T, identity *callHierarchyLayer1GenericV3DriverIdentity) *callHierarchyLayer1GenericV3IdentityRecorder {
+		t.Helper()
+		recorder := &callHierarchyLayer1GenericV3IdentityRecorder{}
+		if _, ok := callHierarchyLayer1GenericV3ApplyIdentity(recorder, identity); !ok {
+			t.Fatal("ASSERT_CH_GENERIC_V3_IDENTITY_MUTATION_REFUSED")
+		}
+		return recorder
+	}
+
+	t.Run("profile-mutation-changes-only-profile-argument", func(t *testing.T) {
+		first, err := decode(valid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second := *first
+		second.Profile = "mutated-profile"
+		left, right := apply(t, first), apply(t, &second)
+		if left.calls != 1 || right.calls != 1 || left.profile != callHierarchyProfileIdentity(first.Profile) || right.profile != callHierarchyProfileIdentity(second.Profile) || left.binding != right.binding || left.workspace != right.workspace {
+			t.Fatalf("ASSERT_CH_GENERIC_V3_IDENTITY_PROFILE_MUTATION_SCOPE left=%+v right=%+v", left, right)
+		}
+	})
+
+	for _, test := range []struct {
+		name              string
+		mutate            func(*callHierarchyLayer1GenericV3DriverIdentity)
+		wantProfileSame   bool
+		wantBindingSame   bool
+		wantWorkspaceSame bool
+	}{
+		{"binding-mutation-changes-only-binding-argument", func(identity *callHierarchyLayer1GenericV3DriverIdentity) { identity.Binding = "mutated-binding" }, true, false, true},
+		{"nonce-nibble-mutation-changes-only-workspace-argument", func(identity *callHierarchyLayer1GenericV3DriverIdentity) {
+			identity.WorkspaceNonceHex = "11" + identity.WorkspaceNonceHex[2:]
+		}, true, true, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			first, err := decode(valid)
+			if err != nil {
+				t.Fatal(err)
+			}
+			baseline := callHierarchyLayer1GenericV3Envelope{}
+			baseline.Driver.Request.Identity = first
+			baseline.Driver.Request.Method = "method-is-not-an-identity-source"
+			expected := "expected-is-not-an-identity-source"
+			baseline.Expected.Identity.Profile.Value = &expected
+			mutated := baseline
+			second := *first
+			test.mutate(&second)
+			mutated.Driver.Request.Identity = &second
+			left, right := apply(t, baseline.Driver.Request.Identity), apply(t, mutated.Driver.Request.Identity)
+			profileSame := left.profile == right.profile
+			bindingSame := left.binding == right.binding
+			workspaceSame := left.workspace == right.workspace
+			if baseline.Driver.Request.Method != mutated.Driver.Request.Method || baseline.Expected.Identity.Profile.Value != mutated.Expected.Identity.Profile.Value || left.calls != 1 || right.calls != 1 || profileSame != test.wantProfileSame || bindingSame != test.wantBindingSame || workspaceSame != test.wantWorkspaceSame {
+				t.Fatalf("ASSERT_CH_GENERIC_V3_IDENTITY_ARGUMENT_MUTATION_SCOPE test=%s method=%q/%q expected=%p/%p profile_same=%t binding_same=%t workspace_same=%t left=%+v right=%+v", test.name, baseline.Driver.Request.Method, mutated.Driver.Request.Method, baseline.Expected.Identity.Profile.Value, mutated.Expected.Identity.Profile.Value, profileSame, bindingSame, workspaceSame, left, right)
+			}
+		})
+	}
+}
+
 func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 	expectedPaths := callHierarchyLayer1GenericV3ValidateExpectedSchema(t)
 	ordinaryAPaths, world24APaths := callHierarchyLayer1GenericV3Partition(t, expectedPaths)
@@ -1481,10 +1792,10 @@ func TestCallHierarchyLayer1GenericV3CorpusCausalRED(t *testing.T) {
 		t.Fatal("ASSERT_CH_GENERIC_V3_EXECUTION_COUNTER_MISMATCH")
 	}
 	if prerequisiteReason != "" {
-		if prerequisiteReason != "request-attachment-method:privateCallHierarchyLayer1WithEnabled" || counters.attempted.Load() != 85 || counters.executed.Load() != 0 || counters.refused.Load() != 85 {
+		if prerequisiteReason != "request-attachment-method:privateCallHierarchyLayer1WithIdentity" || counters.attempted.Load() != 85 || counters.executed.Load() != 0 || counters.refused.Load() != 85 {
 			t.Fatalf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE_CROSS_RULE attempted=%d executed=%d pre_effect_refused=%d reason=%s", counters.attempted.Load(), counters.executed.Load(), counters.refused.Load(), prerequisiteReason)
 		}
-		t.Errorf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE attempted=85 executed=0 pre_effect_refused=85 contract=RoundTripRequest.callHierarchyLayer1.privateCallHierarchyLayer1WithEnabled reason=%s", prerequisiteReason)
+		t.Errorf("ASSERT_CH_GENERIC_V3_ATTACHMENT_PREREQUISITE attempted=85 executed=0 pre_effect_refused=85 contract=RoundTripRequest.callHierarchyLayer1.privateCallHierarchyLayer1WithIdentity reason=%s", prerequisiteReason)
 		return
 	}
 	callHierarchyLayer1GenericV3AssertLifecycle(t, worlds[0].envelope, &rootActuals[0].result)
