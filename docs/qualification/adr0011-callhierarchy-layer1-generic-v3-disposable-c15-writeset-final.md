@@ -3,8 +3,8 @@
 Status: **REVIEW_REQUIRED / NO GO**
 
 - Repository: `/Users/schwa/dev/lsp-trace-adr0011-c17`
-- Pinned HEAD: `83e43a14f3d0ec4f3f02f14eb8ff9930ded98fde`
-- Required starting state: exact clean worktree at the pinned HEAD
+- Pinned HEAD: `b283d7ea6cf3d4da71cb0bed75517b9995d1922a`
+- Required starting state: exact clean tracked worktree at the pinned HEAD; the refusal-owner-registry amendment is review input only
 - Scope: documentation-only refresh of the finite disposable prototype write-set
 - Source, test, corpus, RED, prototype, generated-artifact, execution, commit, activation, semantic, carrier-acceptance, production-writer, and production authority: **not issued**
 - Mutation authorized by this task: this document only
@@ -17,7 +17,10 @@ This document refreshes the disposable C15 boundary from the following accepted 
 2. the private attachment-enable carrier contract, limited to its still-current field/setter shape;
 3. the accepted raw-response-custody correction;
 4. the accepted semantic-residue correction; and
-5. the accepted causal-lineage replacement-v3 and independent review.
+5. the accepted causal-lineage replacement-v3 and independent review; and
+6. the qualified refusal-owner-registry amendment, which supersedes the prior session registry and its lifecycle collection rules.
+
+The prior disposable effort stopped before mutation because the session-only registry could not retain enabled pre-admission refusal owners for absent or stale sessions. It produced no canonical C15 result. This integrated write-set is therefore new review input: no prior disposable authorization survives, and a new disposable writer authorization is required only after independent review accepts this exact revision.
 
 The replacement-v3 occurrence mapping controls: exactly 85 occurrences partition as 22 disabled and 63 enabled. Physical C controls exist on exactly 69 occurrences and partition as 22 false and 47 true. All 16 W24 workers are independently enabled while their C controls remain structurally absent. Earlier `11 false / 74 true` or universal-all-85 C-agreement claims are superseded and must not drive the prototype.
 
@@ -41,7 +44,7 @@ No source file is authorized by this document. The three paths above are the com
 
 ## 3. Cross-file causal contract
 
-The prototype, if separately authorized, must satisfy this exact flow:
+The prototype, if separately reviewed and newly authorized, must satisfy this exact flow:
 
 ```text
 explicit request attachment
@@ -55,12 +58,14 @@ explicit request attachment
   -> raw request/response/result capture
   -> finishRoundTrip terminal/error/result/accounting/ledger finalizer
   -> clear transient attempt carrier before every external return
-  -> one immutable owner publication
+  -> one immutable owner publication under Manager lock
+  -> retain in the Manager owner slice, or commit closed/retired refusal
+  -> immediate outside-lock terminalize/join for refused publication
   -> (any, bool) lease acquisition
-  -> copied View / copied Callback / Release / drain
+  -> copied View / copied Callback / Release / lifecycle drain
 ```
 
-There is no package global, `Manager` field, context value, side table, reconstructed builder, replacement builder, alternate owner, or second publication path. The only attempt transfer is the qualified private `RoundTripRequest` field followed by the transient private `RoundTripResult` field specified in §6.2; neither field is serialized, exposed, retained after finalization, or usable as identity/equality evidence.
+There is no package global, context value, side table, reconstructed builder, replacement builder, alternate owner, session registry, or second publication path. `Manager` has exactly the owner slice and exact-generation retired map specified in §6.2 and no other generic-owner field. The only attempt transfer is the qualified private `RoundTripRequest` field followed by the transient private `RoundTripResult` field specified in §6.2; neither field is serialized, exposed, retained after finalization, or usable as identity/equality evidence.
 
 Disabled means `req.callHierarchyLayer1.enabled == false`: no attempt object, no generic owner, `(nil, false)` acquisition, no view/callback lifecycle, and no change to external result, error, failure, messages, bytes, transport, accounting, timing, or existing attachments.
 
@@ -353,14 +358,15 @@ The complete proposed symbol/signature set in this file is:
 ```go
 func newCallHierarchyLayer1GenericAttemptLineage(req RoundTripRequest) *callHierarchyLayer1GenericAttemptLineage
 func (attempt *callHierarchyLayer1GenericAttemptLineage) recordRefusal(kind callHierarchyLayer1GenericRefusalType, reason session.Failure)
-func (attempt *callHierarchyLayer1GenericAttemptLineage) finishRefusal(result RoundTripResult) RoundTripResult
 func (attempt *callHierarchyLayer1GenericAttemptLineage) admit(key lspwire.RequestKey, snapshot callHierarchyLayer1GenericBeforeSnapshot)
 func (attempt *callHierarchyLayer1GenericAttemptLineage) captureRequestFrame(frame []byte, write RequestWriteObservation)
 func (attempt *callHierarchyLayer1GenericAttemptLineage) captureResponseFrame(raw []byte, frame lspwire.ReadFrameObservation)
 func (attempt *callHierarchyLayer1GenericAttemptLineage) captureResult(result json.RawMessage, serverError *lspwire.RPCError)
 func (attempt *callHierarchyLayer1GenericAttemptLineage) finishAccepted(result RoundTripResult, failure session.Failure, terminal manageddiagnostic.Terminal, after callHierarchyLayer1GenericAfterSnapshot) callHierarchyLayer1GenericObservation
 func newCallHierarchyLayer1GenericOwner(observation callHierarchyLayer1GenericObservation) *callHierarchyLayer1GenericOwner
-func publishCallHierarchyLayer1GenericOwner(result RoundTripResult, owner *callHierarchyLayer1GenericOwner) RoundTripResult
+func (m *Manager) finishCallHierarchyLayer1GenericRefusal(attempt *callHierarchyLayer1GenericAttemptLineage, result RoundTripResult, kind callHierarchyLayer1GenericRefusalType, reason session.Failure) RoundTripResult
+func (m *Manager) publishCallHierarchyLayer1GenericOwnerLocked(result RoundTripResult, owner *callHierarchyLayer1GenericOwner) (RoundTripResult, *callHierarchyLayer1GenericOwner)
+func (m *Manager) detachCallHierarchyLayer1GenericOwnersLocked(sessionID string, generation uint64, allGenerations bool) []*callHierarchyLayer1GenericOwner
 func (result RoundTripResult) privateCallHierarchyLayer1GenericLease() (any, bool)
 func (lease callHierarchyLayer1GenericLease) View() (callHierarchyLayer1GenericView, bool)
 func (lease callHierarchyLayer1GenericLease) Callback(fn func(callHierarchyLayer1GenericView) error) error
@@ -374,14 +380,14 @@ Permitted mutation and semantics are exact:
 
 - constructor: copy only request identity and explicit attachment inputs; never inspect expected/world/occurrence/commitment content/failure text;
 - refusal recorder: record only the finite enum and already-selected typed current failure; perform no allocation/effect named in §7;
-- refusal finalizer: nil receiver is unchanged/no owner; enabled receiver freezes exactly one refusal observation and publishes exactly one owner while preserving the public result/failure;
+- refusal finalizer: the Manager method owns `m.mu`; nil attempt returns the result unchanged without locking or allocation; enabled attempt records the exact typed refusal, freezes exactly one observation, constructs exactly one owner, and calls the locked publication helper in the same critical section while preserving public result/failure;
 - admission: mutate the same pointer immediately after `pending.Begin`, recording the allocated key and before snapshot only;
 - request capture: copy the exact emitted request frame from retained write custody, never params reserialization;
 - response capture: copy `readResult.raw` before parsing-derived normalization; retain malformed emitted bytes; fabricate nothing for control/read-error/no-frame branches;
 - result capture: preserve raw result and RPC-error availability after current result/error assignment and before any private clearing;
 - accepted finalizer: normalize current terminal/error/result/accounting/ledger values only after current terminal mapping and under the exact snapshot custody described above;
-- owner constructor/publication: deep-copy all mutable bytes/slices, initialize `cond.L = &owner.mu`, publish once, and append that same owner pointer once to the exact session registry described in §6;
-- ordinary `RoundTrip` finalization returns the published owner open and acquirable; it MUST NOT call `requestTerminal` or `waitReleased`;
+- owner constructor/publication: deep-copy all mutable bytes/slices and initialize `cond.L = &owner.mu`; while holding `m.mu`, the locked helper assigns the owner to the result, clears the transient attempt, derives the exact generation key from immutable owner identity, and either appends that same pointer once to the Manager owner slice or, when `m.closed` or retired-key gated, returns it as the exact outside-lock terminal action;
+- ordinary non-closed, non-retired `RoundTrip` finalization returns the registered owner open and acquirable; a closed/retired-gated publication MUST unlock and immediately call `requestTerminal` then `waitReleased` before returning the already released/fail-closed owner;
 - acquisition: return `(nil, false)` when owner is absent, admission is closed, or owner is released; otherwise return the dynamic `callHierarchyLayer1GenericLease` as `any` and `true`;
 - `View`: lock the owner; fail when closed/released; otherwise deep-copy the observation, unlock, and return the copied view and `true`;
 - `Callback`: reject nil lease/nil callback; under the owner lock reject closed/released, increment `active`, build a fresh deep-copied view, and unlock; invoke the callback under a defer that converts any panic to `errors.New("call hierarchy layer1 generic callback panicked")`, preserves a nonpanic callback error unchanged, then locks, decrements `active` exactly once, broadcasts when it reaches zero, and unlocks;
@@ -456,9 +462,9 @@ At the first executable line, `RoundTrip` unconditionally overwrites all caller-
 
 Immediately after `key := r.pending.Begin(req.Generation)` and before request registration, identity capture, protocol ownership, worker allocation, or `m.mu.Unlock()`, `roundTripWithPrivateTransaction` reads `attempt := req.callHierarchyLayer1GenericAttempt`, admits that pointer, and copies it exactly once into the transaction's one `RoundTripResult` initialization as `callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt`. All later admitted capture and terminal mutations consume only that transient result field, and every existing `finishRoundTrip` call carries the result unchanged.
 
-Every pre-admission return finalizes the request-carried attempt directly through `finishRefusal`; it never places the pointer in the transient result field and never calls `finishRoundTrip` for carrier transfer. Every admitted return reaches `finishRoundTrip`; it reads only `result.callHierarchyLayer1GenericAttempt`, performs the existing terminal/error/result/accounting/ledger finalization and at most one owner publication, assigns the final owner field, then unconditionally clears the transient field before returning. Disabled and direct legacy nil-attempt paths preserve current public behavior and return no owner. The owner field is not the attempt carrier and remains open/acquirable after successful publication. Neither carrier field has a JSON tag, public setter, exported alias, interface indirection, wrapper, serialization, or persistence semantics.
+Every pre-admission return finalizes the request-carried attempt directly through `m.finishCallHierarchyLayer1GenericRefusal`; it never places the pointer in the transient result field and never calls `finishRoundTrip` for carrier transfer. Every admitted return reaches `finishRoundTrip`; it reads only `result.callHierarchyLayer1GenericAttempt`, performs the existing terminal/error/result/accounting/ledger finalization and at most one owner publication, assigns the final owner field, then unconditionally clears the transient field before returning. Disabled and direct legacy nil-attempt paths preserve current public behavior and return no owner. The owner field is not the attempt carrier and remains open/acquirable after successful publication. Neither carrier field has a JSON tag, public setter, exported alias, interface indirection, wrapper, serialization, or persistence semantics.
 
-No field is added to `Manager`, `privateB4Reservation`, `privateB4Transaction`, `ownedTransport`, context, or another carrier. No `AdmitSeedBinding`, `RoundTripPrivateB4`, equivalent bridge interface, alternate private wrapper, or signature-level pointer parameter is proposed or implied.
+No field is added to `privateB4Reservation`, `privateB4Transaction`, `ownedTransport`, context, or another carrier. `Manager` receives exactly the two registry fields below. No `AdmitSeedBinding`, `RoundTripPrivateB4`, equivalent bridge interface, alternate private wrapper, or signature-level pointer parameter is proposed or implied.
 
 Permitted mutations are limited to:
 
@@ -474,24 +480,35 @@ Permitted mutations are limited to:
 10. exactly one private publication before return, leaving the owner open/acquirable, followed by unconditional clearing of `result.callHierarchyLayer1GenericAttempt`; and
 11. no ordinary-return `requestTerminal` or `waitReleased`; lifecycle joining occurs only at the exact teardown branches below.
 
-The sole proposed session registry field is:
+The exact comparable key and only two proposed Manager fields are:
 
 ```go
-// in runtimeSession
-callHierarchyLayer1GenericOwners []*callHierarchyLayer1GenericOwner
+type callHierarchyLayer1GenericGenerationKey struct {
+    sessionID  string
+    generation uint64
+}
+
+// in Manager; both guarded exclusively by m.mu
+callHierarchyLayer1GenericOwners             []*callHierarchyLayer1GenericOwner
+callHierarchyLayer1GenericRetiredGenerations map[callHierarchyLayer1GenericGenerationKey]struct{}
 ```
 
-There is no Manager-global owner field, map, side table, registry-entry type, or owner back-pointer. `publishCallHierarchyLayer1GenericOwner`, while `finishRoundTrip` still holds `m.mu`, appends the newly published pointer exactly once to `m.sessions[id].callHierarchyLayer1GenericOwners` when the generation still matches. Ownership then splits exactly: `RoundTripResult.callHierarchyLayer1Generic` permits lease acquisition, while the session slice permits only teardown joining.
+The key uses exact `string` session identity and `uint64` generation value equality. The retired set is initialized lazily or in the existing Manager constructor, contains only exact generations committed retired by completed STOP/RESTART, has no wildcard/session-only key, survives until Shutdown, and is bounded by one Manager lifetime. The Manager slice contains every retained refusal or admitted owner exactly once and contains no disabled, nil, duplicate, wrapper, session bucket, generation bucket, or secondary index. Selection uses immutable owner request identity, never current-session reconstruction. Every owner-slice or retired-map operation occurs under `m.mu`.
+
+`publishCallHierarchyLayer1GenericOwnerLocked` requires `m.mu`: assign the owner to the result, clear the transient attempt, derive the exact key, and append once unless `m.closed` or that key is retired. A refused append returns the same owner as the second result. After unlocking, the caller immediately calls `requestTerminal()` then `waitReleased()` before returning; no owner callback, drain, terminal request, or wait runs under `m.mu`.
+
+`detachCallHierarchyLayer1GenericOwnersLocked` requires `m.mu` and performs one exact stable pass. It must allocate `detached := make([]*callHierarchyLayer1GenericOwner, 0, len(m.callHierarchyLayer1GenericOwners))` at the single named site, compact retained pointers in place into `m.callHierarchyLayer1GenericOwners[:0]`, append matching pointers to `detached`, nil every vacated tail element, and then assign the compacted retained slice back to the Manager field. `allGenerations=true` detaches every immutable-owner identity for the session ID; otherwise it detaches only the exact session/generation. It preserves detached and retained order and performs no retained-slice backing allocation, alternate filtering allocation, owner locking, terminal action, waiting, goroutine creation, accounting mutation, or session lookup.
 
 Exact invocation ownership and integration call sites are:
 
-1. `(*Manager).finishRoundTrip`, after terminal mapping/after-snapshot normalization and before `m.mu.Unlock`, constructs, publishes, and registers the owner. It does not request terminal state or wait.
-2. `(*Manager).runLifecycle`, completed STOP branch, immediately before `delete(m.sessions, operation.SessionID)`, uses this exact call order: while holding `m.mu`, copy `r.callHierarchyLayer1GenericOwners` to a local `[]*callHierarchyLayer1GenericOwner`; set the session field to nil; unlock `m.mu`; for every copied owner call `owner.requestTerminal()` and then `owner.waitReleased()`; reacquire `m.mu`; call `delete(m.sessions, operation.SessionID)`; complete the operation. `requestTerminal` itself arbitrates an already released owner through `releaseLocked`; no pre-check may replace or reorder the pair.
-3. `(*Manager).runLifecycle`, completed RESTART branch, immediately before successor startup, uses this exact call order for the old generation: while holding `m.mu`, copy the owner slice; set the old-generation session field to nil; unlock `m.mu`; for every copied owner call `owner.requestTerminal()` and then `owner.waitReleased()`; reacquire `m.mu`; call `m.starter.Start`. The successor begins with `r.callHierarchyLayer1GenericOwners = nil`.
-4. `(*Manager).Shutdown`, after `m.workers` reaches zero, uses this exact call order: while holding `m.mu`, append every remaining session's finite owner slice into one local `[]*callHierarchyLayer1GenericOwner`; nil every session slice; unlock `m.mu`; for every copied owner call `owner.requestTerminal()` and then `owner.waitReleased()`; reacquire `m.mu`; continue the existing shutdown-owned release sequence; perform the existing final unlock. `requestTerminal`/`waitReleased` remain mandatory for already-released owners and complete immediately through the shared state.
-5. Failure branches in `runLifecycle` before completed STOP/RESTART do not detach or terminalize the owners because the session remains present/poisoned and no completed manager/session teardown has occurred.
+1. `(*Manager).finishCallHierarchyLayer1GenericRefusal`, called exactly once by each §7 pre-key branch and never while its caller holds `m.mu`, records/freezes/constructs/publishes atomically under `m.mu`, unlocks, and immediately executes any returned terminal action before returning the result.
+2. `(*Manager).finishRoundTrip`, with unchanged signature, remains the sole admitted finalizer. After terminal mapping and after-snapshot normalization while holding `m.mu`, it freezes, constructs, and calls the locked publication helper; it completes existing locked accounting, unlocks at its existing handoff, immediately terminalizes/joins any refused publication, and only then returns.
+3. Completed STOP inserts the exact current-generation retired key before detach, then detaches all generations for the session ID under `m.mu`; it unlocks, drains each detached owner in registry order, relocks, and only then deletes/completes the session. `SessionNotFound` STOP marks and detaches nothing; absent-session owners remain Manager-lifetime bounded.
+4. Completed RESTART inserts the exact old-generation retired key before detach, detaches only that generation under `m.mu`, unlocks and drains in registry order, relocks, and only then starts the successor. The successor has no session registry.
+5. `(*Manager).Shutdown`, after worker drain reaches zero and with `m.closed` durably true under `m.mu`, moves the complete Manager slice to a local, nils the field, and clears the retired set; it unlocks, drains every owner in order, relocks, and continues the existing shutdown sequence.
+6. Failure branches before committed STOP/RESTART retirement do not mark, detach, or terminalize owners. After retirement/detach, owners are never reinserted even if later lifecycle work fails.
 
-No other function may call `requestTerminal` or `waitReleased`. No alternate transaction path, parser, serializer, retry, diagnostic, transport behavior, public result behavior, public error behavior, public accounting behavior, timing change, feature flag, CLI/MCP/schema behavior, or `internal/lspwire` mutation is permitted.
+Publication, retirement marking, and detach serialize under `m.mu`: publication before a mark is selected by detach; matching publication after a mark or after closure is refused and terminalized outside the lock. No other function may call `requestTerminal` or `waitReleased`. No alternate transaction path, parser, serializer, retry, diagnostic, transport behavior, public result behavior, public error behavior, public accounting behavior, timing change, feature flag, CLI/MCP/schema behavior, or `internal/lspwire` mutation is permitted.
 
 ## 7. Complete pre-admission refusal closure
 
@@ -499,12 +516,11 @@ For every enabled pre-key return, the exact sequence is:
 
 ```text
 attempt := req.callHierarchyLayer1GenericAttempt
-attempt.recordRefusal(<exact enum>, <exact typed private reason>)
-result = attempt.finishRefusal(<current public result>)
+result = m.finishCallHierarchyLayer1GenericRefusal(attempt, <current public result>, <exact enum>, <exact typed private reason>)
 return result
 ```
 
-The direct return never uses `RoundTripResult.callHierarchyLayer1GenericAttempt` and never calls `finishRoundTrip` for carrier transfer. No helper parameter, alternate bridge, or reconstruction is permitted. For disabled requests the overwritten nil request carrier preserves the current return and publishes no owner.
+At call sites currently holding `m.mu`, the branch unlocks before invoking the lock-owning finalizer and returns directly without relocking. No effect may enter that unlock/finalize boundary. The direct return never uses `RoundTripResult.callHierarchyLayer1GenericAttempt` and never calls `finishRoundTrip` for carrier transfer. No helper parameter, alternate bridge, reconstruction, failure-string parsing, or second publication helper is permitted. For disabled requests the overwritten nil request carrier preserves the current return and publishes no owner.
 
 The finite refusal rows, in current evaluation order, are:
 
@@ -527,7 +543,7 @@ No failure-string parsing is permitted. The private-accounting branch is exact: 
 
 Every refusal observation has refusal true and exact typed reason; request key, accepted identity, frames, result, RPC payload, external response/notification payload, admitted snapshots, protocol terminal, and terminal ledger are unavailable. `callbacks`, `external_bytes`, `leases`, `reservations`, `transport_bytes`, and `transport_messages` are `before=0`, `after=0`, `delta=0`, `available=true`, `known_zero=true` only because refusal precedes those effects. Diagnostics and other counters are unavailable unless the current result independently establishes them. Unavailable is never converted to zero.
 
-Any early return after key allocation is admitted and must funnel through `finishRoundTrip`; it must not use `finishRefusal`.
+Any early return after key allocation is admitted and must funnel through `finishRoundTrip`; it must not use `finishCallHierarchyLayer1GenericRefusal`.
 
 ## 8. A116 normalization and current sources
 
@@ -632,7 +648,7 @@ func (result RoundTripResult) privateCallHierarchyLayer1GenericLease() (any, boo
 
 The dynamic value is `callHierarchyLayer1GenericLease`. Disabled/no-owner returns `(nil, false)`. Closed/released owner returns `(nil, false)`. No zero lease is reported as available.
 
-Ordinary `RoundTrip` ownership remains open until either an explicit `callHierarchyLayer1GenericLease.Release` or actual Manager/session teardown. Explicit `Release` and teardown `requestTerminal` both close admission, drain already admitted callbacks, and invoke the same `releaseLocked` transition; exactly one racer wins that helper, clears retained observation custody, and marks released, while every repeated or losing explicit release returns false. Teardown does not depend on an explicit actor: `requestTerminal` performs forced release itself, then `waitReleased` only observes the guaranteed transition. Callback panic is contained as the exact error in §5.3, callback errors return unchanged, and the active-count defer decrements exactly once and broadcasts at zero. Abandoned leases/views are invalid after teardown; later acquisition, view, and callback fail closed.
+Ordinary non-closed, non-retired `RoundTrip` ownership remains open until either an explicit `callHierarchyLayer1GenericLease.Release` or matching Manager lifecycle teardown. Closed or exact-retired publication attaches the owner but returns only after immediate outside-lock terminalization/join, so acquisition fails closed. Explicit `Release` does not remove its pointer from the Manager registry; it clears observation custody through `releaseLocked`, and later lifecycle drain is idempotent. Explicit `Release` and teardown `requestTerminal` both close admission, drain already admitted callbacks, and invoke the same `releaseLocked` transition; exactly one racer wins that helper, clears retained observation custody, and marks released, while every repeated or losing explicit release returns false. Teardown does not depend on an explicit actor: `requestTerminal` performs forced release itself, then `waitReleased` only observes the guaranteed transition. Callback panic is contained as the exact error in §5.3, callback errors return unchanged, and the active-count defer decrements exactly once and broadcasts at zero. Abandoned leases/views are invalid after teardown; later acquisition, view, and callback fail closed.
 
 ## 11. Exact closed C15 expected candidate set — unclassified
 
@@ -646,13 +662,15 @@ callHierarchyLayer1RequestAttachment.enabled bool
 RoundTripRequest.callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
 RoundTripResult.callHierarchyLayer1GenericAttempt *callHierarchyLayer1GenericAttemptLineage
 RoundTripResult.callHierarchyLayer1Generic *callHierarchyLayer1GenericOwner
-runtimeSession.callHierarchyLayer1GenericOwners []*callHierarchyLayer1GenericOwner
+Manager.callHierarchyLayer1GenericOwners []*callHierarchyLayer1GenericOwner
+Manager.callHierarchyLayer1GenericRetiredGenerations map[callHierarchyLayer1GenericGenerationKey]struct{}
 ```
 
 ### Type candidates
 
 ```text
 callHierarchyOpaqueCommitmentList
+callHierarchyLayer1GenericGenerationKey
 callHierarchyLayer1GenericRefusalType and its exact twelve constants from §5.2
 callHierarchyLayer1GenericAvailableUint64
 callHierarchyLayer1GenericAvailableString
@@ -676,7 +694,7 @@ callHierarchyLayer1GenericView
 callHierarchyLayer1GenericLease
 ```
 
-Every field declared in §4.2, §5.1, §5.2, and §6.2 is part of its containing type candidate; there are no anonymous or dynamically discovered field candidates. The exact carrier delta is the two named attempt fields above. `(*Manager).roundTrip` and `(*Manager).roundTripWithPrivate` have no carrier-caused declaration or body edit. No changed helper signature, explicit attempt parameter, `(*Manager).AdmitSeedBinding` call-site edit, `(*Manager).RoundTripPrivateB4` call-site edit, immutable direct-test call-site edit, or equivalent bridge declaration is a C15 candidate. Copying the request and performing the one transaction-result field initialization copy only the pointer value and introduce no allocation.
+Every field declared in §4.2, §5.1, §5.2, and §6.2 is part of its containing type candidate; there are no anonymous or dynamically discovered field candidates. The exact carrier delta is the two named attempt fields above. The generation key is a type candidate, not a field candidate or anonymous map-key spelling. `(*Manager).roundTrip` and `(*Manager).roundTripWithPrivate` have no carrier-caused declaration or body edit. No changed helper signature, explicit attempt parameter, `(*Manager).AdmitSeedBinding` call-site edit, `(*Manager).RoundTripPrivateB4` call-site edit, immutable direct-test call-site edit, or equivalent bridge declaration is a C15 candidate. Copying the request and performing the one transaction-result field initialization copy only the pointer value and introduce no allocation.
 
 ### Existing declarations expected to change
 
@@ -692,7 +710,9 @@ callHierarchyOriginalResponseFrameObservation.copyFrameBytes
 (*Manager).RoundTrip (body only; signature unchanged)
 (*Manager).roundTripWithPrivateTransaction (body only; signature unchanged)
 (*Manager).finishRoundTrip (body only; signature unchanged)
-runtimeSession
+(*Manager).runLifecycle (body only; signature unchanged)
+(*Manager).Shutdown (body only; signature unchanged)
+Manager
 RoundTripRequest
 RoundTripResult
 callHierarchyLayer1RequestAttachment
@@ -705,14 +725,15 @@ callHierarchyLayer1RequestAttachment
 (callHierarchyLayer1RequestAttachment).privateCallHierarchyLayer1WithEnabled
 newCallHierarchyLayer1GenericAttemptLineage
 (*callHierarchyLayer1GenericAttemptLineage).recordRefusal
-(*callHierarchyLayer1GenericAttemptLineage).finishRefusal
+(*Manager).finishCallHierarchyLayer1GenericRefusal
 (*callHierarchyLayer1GenericAttemptLineage).admit
 (*callHierarchyLayer1GenericAttemptLineage).captureRequestFrame
 (*callHierarchyLayer1GenericAttemptLineage).captureResponseFrame
 (*callHierarchyLayer1GenericAttemptLineage).captureResult
 (*callHierarchyLayer1GenericAttemptLineage).finishAccepted
 newCallHierarchyLayer1GenericOwner
-publishCallHierarchyLayer1GenericOwner
+(*Manager).publishCallHierarchyLayer1GenericOwnerLocked
+(*Manager).detachCallHierarchyLayer1GenericOwnersLocked
 (RoundTripResult).privateCallHierarchyLayer1GenericLease
 (callHierarchyLayer1GenericLease).View
 (callHierarchyLayer1GenericLease).Callback
@@ -730,18 +751,20 @@ newCallHierarchyLayer1GenericAttemptLineage: one &callHierarchyLayer1GenericAtte
 captureRequestFrame: one append([]byte(nil), frame...) backing allocation when frame is available/nonempty
 captureResponseFrame: one append([]byte(nil), raw...) backing allocation when raw is available/nonempty
 captureResult: one append(json.RawMessage(nil), result...) backing allocation when result is available, including a non-nil zero-length slice for available-empty
-finishRefusal: no allocation; it transfers the attempt's already detached predecessor slice into the by-value refusal observation and leaves every unavailable byte/slice member nil
+finishCallHierarchyLayer1GenericRefusal: one owner construction for an enabled attempt, then at most one append-induced Manager-slice growth; no allocation for nil attempt; it transfers already detached refusal custody and leaves unavailable byte/slice members nil
 finishAccepted: no allocation; it transfers the attempt's already detached predecessor/request-frame/response-frame/result custody and the current by-value snapshots into the observation
 newCallHierarchyLayer1GenericOwner: one &callHierarchyLayer1GenericOwner{} allocation; one backing allocation for each non-nil mutable member among exactly observation.commitments.predecessors, observation.frames.auxiliary, each auxiliary[i].frameBytes, observation.frames.request.frameBytes, observation.frames.response.frameBytes, observation.error.data, observation.error.serializedBytes, observation.external.notificationsBytes, observation.external.responsesBytes, and observation.result.bytes
-publishCallHierarchyLayer1GenericOwner: append of exactly one owner pointer to runtimeSession.callHierarchyLayer1GenericOwners; only the slice growth allocation induced by that append
+publishCallHierarchyLayer1GenericOwnerLocked: append of exactly one owner pointer to Manager.callHierarchyLayer1GenericOwners only when not closed/retired; only append-induced Manager-slice growth
+detachCallHierarchyLayer1GenericOwnersLocked: exactly one unconditional detached-slice `make([]*callHierarchyLayer1GenericOwner, 0, len(m.callHierarchyLayer1GenericOwners))` allocation site; retained pointers compact in place with no retained-slice backing allocation, and every vacated tail slot is nilled
+retired-generation set: exact-key map initialization and insert growth only
 callHierarchyLayer1GenericLease.View: exact deep-copy backing allocations for the same mutable observation members
 callHierarchyLayer1GenericLease.Callback: exact deep-copy backing allocations for the same mutable observation members; errors.New allocates only on recovered panic
-runLifecycle STOP registry detach: append([]*callHierarchyLayer1GenericOwner(nil), r.callHierarchyLayer1GenericOwners...) backing allocation, then nil the field
-runLifecycle RESTART registry detach: append([]*callHierarchyLayer1GenericOwner(nil), r.callHierarchyLayer1GenericOwners...) backing allocation, then nil the field
-Manager.Shutdown registry gather: append into one local []*callHierarchyLayer1GenericOwner from each session slice; only growth allocations of that one local slice
+runLifecycle STOP Manager detach: no additional owner-slice copy; retirement-key insert plus the single detached-slice allocation above
+runLifecycle RESTART Manager detach: no additional owner-slice copy; retirement-key insert plus the single detached-slice allocation above
+Manager.Shutdown registry detach: direct whole-slice transfer, nil assignment, and retired-set clear; no owner-slice copy allocation required
 ```
 
-No allocation site exists in `releaseLocked`, `requestTerminal`, `waitReleased`, or `Release`. `releaseLocked` has only the exact observation-clear and release-bit effects specified in §5.3; `Release` and `requestTerminal` have only admission close, callback drain, and invocation of that helper, while `waitReleased` only observes/waits. No builder, holder, owner, view, lease, registry-entry, map, goroutine, channel, callback wrapper, or error allocation beyond the exact list above is permitted.
+No allocation site exists in `releaseLocked`, `requestTerminal`, `waitReleased`, or `Release`. The exact retired-generation map is the sole admitted map addition; no session registry, registry-entry type, wrapper, second index, owner back-pointer, goroutine, or channel is admitted. `releaseLocked` has only the exact observation-clear and release-bit effects specified in §5.3; `Release` and `requestTerminal` have only admission close, callback drain, and invocation of that helper, while `waitReleased` only observes/waits. No builder, holder, owner, view, lease, registry-entry, map, goroutine, channel, callback wrapper, or error allocation beyond the exact list above is permitted.
 
 This is the exact expected C15 candidate set, not a C15 result. Canonical enumeration may attach generated identifiers, source locations, AST hashes, and `UNKNOWN` classifications to these exact candidates only. One extra or missing field, type, declaration, function, method, allocation/copy site, or candidate is:
 
@@ -775,26 +798,29 @@ This document is also immutable during the experiment. The prototype may write o
 
 The sequence is strict and non-circular:
 
-1. **One disposable writer:** a separate review names exactly one disposable writer with exclusive custody of only the three files and exact symbols above in a newly created disposable worktree at the pinned HEAD.
-2. **Qualified v3 GREEN:** that writer implements only enough of the finite boundary to make the immutable qualified current v3 RED compile and pass; no test/corpus/RED edit is permitted.
-3. **Canonical C15 enumeration:** with the exact disposable patch still present, run the canonical enumerator and preserve the exact patch, implemented symbol set, baseline/generated candidate sets, locations, AST hashes, pre/post classifications, and complete `ADDED`, `REMOVED`, and `CHANGED` delta.
-4. **Independent delta review:** a different reviewer accepts or rejects the finite symbol set, candidate set, complete delta, causal behavior, and hard-stop compliance. The prototype writer does not classify or bind the result.
-5. **Dispose:** remove all prototype changes and delete the disposable worktree without commit; independently verify disposal.
-6. **Later production gate:** only after accepted review and verified disposal may a separate gate freeze the final production file/symbol/candidate write-set and name exactly one production writer.
+1. **New review and authorization:** independently review this integrated Manager-owner-slice and exact-generation-retired-map revision; the prior pre-mutation disposable blocker produced no canonical C15 and grants no authority.
+2. **One new disposable writer:** only after that review, a new authorization names exactly one disposable writer with exclusive custody of only the three files and exact symbols above in a newly created disposable worktree at the pinned HEAD.
+3. **Qualified v3 GREEN:** that writer implements only enough of the finite boundary to make the immutable qualified current v3 RED compile and pass; no test/corpus/RED edit is permitted.
+4. **New canonical C15 enumeration:** with the exact disposable patch still present, run the canonical enumerator and preserve the exact patch, implemented symbol set, baseline/generated candidate sets, locations, AST hashes, pre/post classifications, and complete `ADDED`, `REMOVED`, and `CHANGED` delta.
+5. **Independent delta review:** a different reviewer accepts or rejects the finite symbol set, candidate set, complete delta, causal behavior, and hard-stop compliance. The prototype writer does not classify or bind the result.
+6. **Dispose:** remove all prototype changes and delete the disposable worktree without commit; independently verify disposal.
+7. **Later production gate:** only after accepted review and verified disposal may a separate gate freeze the final production file/symbol/candidate write-set and name exactly one production writer.
 
-The disposable writer is not the production writer. The disposable patch has no presumptive reuse authority.
+The disposable writer is not the production writer. The disposable patch has no presumptive reuse authority. The prior blocked disposable path and any noncanonical candidate list cannot be reused; this changed registry/lock/lifecycle set requires the new reviewed authorization and new canonical C15 run.
 
 ## 15. Hard stops
 
 Stop immediately and report the exact blocker if any of the following is required:
 
 - a fourth production file;
-- any field, type, function, method, helper, alternate attachment, or carrier outside this finite list;
+- any field, type, function, method, helper, alternate attachment, or carrier outside this finite list, including any session registry, registry-entry type, owner back-pointer, second index, or map other than the exact generation-key retired set;
 - any helper signature change or explicit attempt-pointer parameter on `roundTrip`, `roundTripWithPrivate`, `roundTripWithPrivateTransaction`, or `finishRoundTrip`;
 - any edit to `(*Manager).AdmitSeedBinding`, `(*Manager).RoundTripPrivateB4`, their call sites, immutable direct helper-call tests, or the fourth production file `sessionruntime/b4_definition_private.go`;
 - any `AdmitSeedBinding`, `RoundTripPrivateB4`, equivalent bridge interface, hidden/alternate attempt carrier, or second builder;
 - failure to unconditionally overwrite the private request carrier at the first executable `RoundTrip` line, preserve exact pointer identity through ordinary by-value request transfer, initialize the transient result carrier exactly once after admission, or clear it in every `finishRoundTrip` return;
-- any pre-admission return without refusal finalization;
+- any of the exact twelve pre-admission returns without exactly one call to the Manager refusal finalizer, or any additional pre-key return;
+- any owner append while `m.closed` or its exact generation key is retired, or return before the required outside-lock terminalize/join completes;
+- any STOP/RESTART detach before exact retirement marking, or any owner callback/drain/terminal/wait while holding `m.mu`;
 - any post-admission return bypassing `finishRoundTrip`;
 - any raw frame available only after parsing/normalization;
 - any B/C value in production;
@@ -807,7 +833,7 @@ Do not improvise, broaden an allowance, create a helper in another file, or weak
 
 ## 16. Disposition
 
-The exact three-file physical boundary remains the only candidate boundary. The finite proposed source-symbol and expected C15 candidate sets above are review inputs only. No disposable writer is named, no execution is authorized, no candidate is classified, and no production custody is issued.
+The exact three-file physical boundary remains the only candidate boundary. The finite proposed source-symbol and expected C15 candidate sets above are review inputs only. No disposable writer is named, no execution is authorized, no candidate is classified, and no production custody is issued. The prior disposable path was blocked before mutation and produced no canonical C15; independent review of this integrated revision and a new explicit disposable authorization are required before any experiment.
 
 ```text
 ADR0011_CALLHIERARCHY_LAYER1_GENERIC_V3_DISPOSABLE_C15_WRITESET_FINAL — REVIEW_REQUIRED
