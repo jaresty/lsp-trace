@@ -1,0 +1,4 @@
+source_sha256=b5e1fc97e14fddb02ee700963e1e36831446c81372c3c3ef8004270207358012
+installed_sha256=b5e1fc97e14fddb02ee700963e1e36831446c81372c3c3ef8004270207358012
+output_dir=/tmp/adr0011-v3-corpus-placement-evidence-l58atP/c15/output
+output_entries_before=0

@@ -1,0 +1,13 @@
+{
+  "schema": "lsp-trace/adr0011-c15-corrected-delta-summary-v1",
+  "disposition": "C15_DELTA_GO",
+  "canonical_enumerator_sha256": "b5e1fc97e14fddb02ee700963e1e36831446c81372c3c3ef8004270207358012",
+  "derived_enumerator_sha256": "46128beee82ac8eb9deadfa96bdb6422a166e8462ec8be5247c1410673cacd9b",
+  "head": "57b088e56f4ac5b0e5162a03a2f7d695f34085b1",
+  "patch_sha256": "ca762452805215750a122ee250e92326387c343e92c36b844fcaf12ad2cefcba",
+  "mechanical": {"observed": 4154, "added": 309, "removed": 2, "changed": 41, "unchanged": 3804, "baseline_duplicates": 0, "generated_duplicates": 0},
+  "semantic": {"affected": 352, "NECESSARY": 29, "REUSE": 4, "FALSE_POSITIVE": 319, "UNRESOLVED": 0},
+  "temporary_enumerator_removed": true,
+  "tracked_files": 4,
+  "untracked_files": 0
+}

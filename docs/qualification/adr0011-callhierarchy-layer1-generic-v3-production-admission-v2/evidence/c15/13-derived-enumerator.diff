@@ -1,0 +1,20 @@
+--- /Users/schwa/dev/lsp-trace-adr0011-c17/docs/qualification/adr0011-callhierarchy-layer1-generic-v3-production-admission-v1/evidence/enumeration/enumerator.go	2026-10-12 10:53:55
++++ /tmp/adr0011-v3-corpus-placement-evidence-l58atP/c15/derived-enumerator.go	2026-10-12 11:49:18
+@@ -20,7 +20,7 @@
+ 	"testing"
+ )
+ 
+-const adr0011C15AcceptedPatchSHA = "e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0"
++const adr0011C15AcceptedPatchSHA = "ca762452805215750a122ee250e92326387c343e92c36b844fcaf12ad2cefcba"
+ 
+ type adr0011C15Location struct {
+ 	ID, Path, Enclosing, Kind, Digest          string
+@@ -68,7 +68,7 @@
+ 	stage := t.TempDir()
+ 
+ 	head := adr0011C15Git(t, repo, "rev-parse", "HEAD")
+-	if head != "ce4a1838f8a10bafc13429031e55df7e4dd812c6" {
++	if head != "57b088e56f4ac5b0e5162a03a2f7d695f34085b1" {
+ 		t.Fatalf("HEAD=%s", head)
+ 	}
+ 	patch := adr0011C15GitBytes(t, repo, "diff", "--binary", "--", "sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go", "sessionruntime/b4_owned_method_pair_lease.go", "sessionruntime/owned_method_pair.go", "sessionruntime/sessionruntime.go")

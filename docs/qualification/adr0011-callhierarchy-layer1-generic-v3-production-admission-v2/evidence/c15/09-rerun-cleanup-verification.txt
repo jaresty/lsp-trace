@@ -1,0 +1,15 @@
+canonical_rerun_exit_status=1
+target_exists_after_cleanup=false
+output_entries_after=0
+tracked_status:
+ M sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+ M sessionruntime/sessionruntime.go
+changed_names:
+sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+sessionruntime/b4_owned_method_pair_lease.go
+sessionruntime/owned_method_pair.go
+sessionruntime/sessionruntime.go
+patch_sha256=ca762452805215750a122ee250e92326387c343e92c36b844fcaf12ad2cefcba
+untracked_enumerator_matches=0

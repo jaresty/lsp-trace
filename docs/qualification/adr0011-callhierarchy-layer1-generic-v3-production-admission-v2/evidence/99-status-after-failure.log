@@ -1,0 +1,13 @@
+STATUS_AFTER_FAILURE
+ M sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/owned_method_pair.go
+ M sessionruntime/sessionruntime.go
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/manifest.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-04.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-05.json
+ M sessionruntime/testdata/callhierarchy-layer1-red-v3/worlds/world-23.json
+PRODUCTION_DIFF_HASH_AFTER_FAILURE
+e78f86d07354f03517b4d25ca42079cda0dc1d3114cf5ee4d3b4a5a4904137e0  -
+CORPUS_DIFF_HASH_AFTER_FAILURE
+1feaf2068f3c9f747eb5eef95b6b600ecf0637029eed3dc43133321abecd7037  -

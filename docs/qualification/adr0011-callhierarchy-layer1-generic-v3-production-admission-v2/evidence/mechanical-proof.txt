@@ -1,0 +1,9 @@
+world-04/104->W04/104: byte_length 8527->8522 delta=-5; old_name 1->0; new_name 0->1; request_id 1->1; request_key 1->1; exact_replacement=True
+world-05/105->W05/105: byte_length 8856->8851 delta=-5; old_name 1->0; new_name 0->1; request_id 1->1; request_key 1->1; exact_replacement=True
+world-23/123->W23/123: byte_length 6496->6491 delta=-5; old_name 1->0; new_name 0->1; request_id 1->1; request_key 1->1; exact_replacement=True
+corpus request_id occurrences: 85->85; targeted=3; other=82 unchanged
+corpus request_key occurrences: 85->85; targeted=3; other=82 unchanged
+aggregate byte_length: 596596
+aggregate sha256: 9371017f432877a40c0f4e21e75adff208ce503abeb329f768f0ed43c6331ed4
+patch sha256: 1feaf2068f3c9f747eb5eef95b6b600ecf0637029eed3dc43133321abecd7037
+changed path boundary: manifest.json + world-04.json + world-05.json + world-23.json only
