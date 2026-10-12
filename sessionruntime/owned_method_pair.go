@@ -322,7 +322,9 @@ const (
 
 // valid remains deliberately false until terminal validation is reviewed without
 // changing the regenerated C15 catalog.
-func (callHierarchyObservationTerminal) valid() bool { return false }
+func (terminal callHierarchyObservationTerminal) valid() bool {
+	return terminal >= callHierarchyObservationTerminalComplete && terminal <= callHierarchyObservationTerminalCancelled
+}
 
 type callHierarchyMeasure struct {
 	available bool
@@ -345,8 +347,9 @@ type callHierarchyObservationAccounting struct {
 
 // validAgainst is an inert future validation seam. A zero scaffold value must
 // not masquerade as validated accounting.
-func (callHierarchyObservationAccounting) validAgainst(callHierarchyObservationLimits) bool {
-	return false
+func (a callHierarchyObservationAccounting) validAgainst(l callHierarchyObservationLimits) bool {
+	return a.bytes.available && a.objects.available && a.work.available && a.diagnostics.available &&
+		a.bytes.value <= l.maxBytes && a.objects.value <= l.maxObjects && a.work.value <= l.maxWork && a.diagnostics.value <= l.maxDiagnostics
 }
 
 type callHierarchyObservationIdentity struct {
@@ -388,8 +391,8 @@ type callHierarchyObservationView struct {
 	accounting   callHierarchyObservationAccounting
 }
 
-func (callHierarchyPredecessorChain) copyCommitments() []callHierarchyPredecessorCommitment {
-	return nil
+func (chain callHierarchyPredecessorChain) copyCommitments() []callHierarchyPredecessorCommitment {
+	return append([]callHierarchyPredecessorCommitment(nil), chain.commitments...)
 }
 
 func newCallHierarchySelectedItemCommitment(callHierarchySelectedOrdinal, callHierarchyRequestIdentity, callHierarchyTransactionIdentity, uint64, uint64, []byte, callHierarchyObservationLimits) (callHierarchySelectedItemCommitment, bool) {
@@ -408,20 +411,34 @@ func (callHierarchyHandoffCommitment) copySuccessorBytes() []byte { return nil }
 
 // Payload form is eventually derived from the exact payload span; callers do
 // not supply an authoritative enum value.
-func newCallHierarchyOriginalRequestFrameObservation(callHierarchyRequestIdentity, []byte, uint64, uint64, uint64, uint64, callHierarchyObservationLimits) (callHierarchyOriginalRequestFrameObservation, bool) {
-	var zero callHierarchyOriginalRequestFrameObservation
-	return zero, false
+func newCallHierarchyOriginalRequestFrameObservation(identity callHierarchyRequestIdentity, frame []byte, bodyOffset, bodyLength, paramsOffset, paramsLength uint64, limits callHierarchyObservationLimits) (callHierarchyOriginalRequestFrameObservation, bool) {
+	if len(frame) == 0 || uint64(len(frame)) > limits.maxBytes || bodyOffset > uint64(len(frame)) || bodyLength > uint64(len(frame))-bodyOffset || paramsOffset > uint64(len(frame)) || paramsLength > uint64(len(frame))-paramsOffset {
+		return callHierarchyOriginalRequestFrameObservation{}, false
+	}
+	owned := append([]byte(nil), frame...)
+	return callHierarchyOriginalRequestFrameObservation{requestIdentity: identity, frameBytes: owned, frameLength: uint64(len(owned)), frameSHA256: sha256.Sum256(owned), bodyOffset: bodyOffset, bodyLength: bodyLength, bodySHA256: sha256.Sum256(owned[bodyOffset : bodyOffset+bodyLength]), paramsOffset: paramsOffset, paramsLength: paramsLength, paramsSHA256: sha256.Sum256(owned[paramsOffset : paramsOffset+paramsLength])}, true
 }
 
-func newCallHierarchyOriginalResponseFrameObservation(callHierarchyRequestIdentity, []byte, uint64, uint64, uint64, uint64, callHierarchyObservationLimits) (callHierarchyOriginalResponseFrameObservation, bool) {
-	var zero callHierarchyOriginalResponseFrameObservation
-	return zero, false
+func newCallHierarchyOriginalResponseFrameObservation(identity callHierarchyRequestIdentity, frame []byte, bodyOffset, bodyLength, resultOffset, resultLength uint64, limits callHierarchyObservationLimits) (callHierarchyOriginalResponseFrameObservation, bool) {
+	if len(frame) == 0 || uint64(len(frame)) > limits.maxBytes || bodyOffset > uint64(len(frame)) || bodyLength > uint64(len(frame))-bodyOffset || resultOffset > uint64(len(frame)) || resultLength > uint64(len(frame))-resultOffset {
+		return callHierarchyOriginalResponseFrameObservation{}, false
+	}
+	owned := append([]byte(nil), frame...)
+	return callHierarchyOriginalResponseFrameObservation{requestIdentity: identity, frameBytes: owned, frameLength: uint64(len(owned)), frameSHA256: sha256.Sum256(owned), bodyOffset: bodyOffset, bodyLength: bodyLength, bodySHA256: sha256.Sum256(owned[bodyOffset : bodyOffset+bodyLength]), resultOffset: resultOffset, resultLength: resultLength, resultSHA256: sha256.Sum256(owned[resultOffset : resultOffset+resultLength])}, true
 }
 
-func (callHierarchyOriginalRequestFrameObservation) copyFrameBytes() []byte   { return nil }
-func (callHierarchyOriginalRequestFrameObservation) copyParamsBytes() []byte  { return nil }
-func (callHierarchyOriginalResponseFrameObservation) copyFrameBytes() []byte  { return nil }
-func (callHierarchyOriginalResponseFrameObservation) copyResultBytes() []byte { return nil }
+func (o callHierarchyOriginalRequestFrameObservation) copyFrameBytes() []byte {
+	return append([]byte(nil), o.frameBytes...)
+}
+func (o callHierarchyOriginalRequestFrameObservation) copyParamsBytes() []byte {
+	return append([]byte(nil), o.frameBytes[o.paramsOffset:o.paramsOffset+o.paramsLength]...)
+}
+func (o callHierarchyOriginalResponseFrameObservation) copyFrameBytes() []byte {
+	return append([]byte(nil), o.frameBytes...)
+}
+func (o callHierarchyOriginalResponseFrameObservation) copyResultBytes() []byte {
+	return append([]byte(nil), o.frameBytes[o.resultOffset:o.resultOffset+o.resultLength]...)
+}
 func (callHierarchyMethodAllowlist) copyMethods() []callHierarchyMethodIdentity {
 	return nil
 }
@@ -446,12 +463,40 @@ func newCallHierarchyMethodAllowlist([]callHierarchyMethodIdentity, callHierarch
 
 func (callHierarchyMethodAllowlist) permits(callHierarchyMethodIdentity) bool { return false }
 
-func newCallHierarchyObservationLimits(uint64, uint64, uint64, uint64) (callHierarchyObservationLimits, bool) {
-	var zero callHierarchyObservationLimits
-	return zero, false
+func newCallHierarchyObservationLimits(maxBytes, maxObjects, maxWork, maxDiagnostics uint64) (callHierarchyObservationLimits, bool) {
+	if maxBytes == 0 || maxObjects == 0 || maxWork == 0 || maxDiagnostics == 0 {
+		return callHierarchyObservationLimits{}, false
+	}
+	return callHierarchyObservationLimits{maxBytes: maxBytes, maxObjects: maxObjects, maxWork: maxWork, maxDiagnostics: maxDiagnostics}, true
 }
 
-func newCallHierarchyObservationRequest(callHierarchyObservationIdentity, callHierarchyMethodAllowlist, callHierarchyPredecessorChain, *callHierarchySelectedItemCommitment, *callHierarchyHandoffCommitment, callHierarchyObservationLimits) (callHierarchyObservationRequest, bool) {
-	var zero callHierarchyObservationRequest
-	return zero, false
+func newCallHierarchyObservationRequest(identity callHierarchyObservationIdentity, allowlist callHierarchyMethodAllowlist, predecessors callHierarchyPredecessorChain, selected *callHierarchySelectedItemCommitment, handoff *callHierarchyHandoffCommitment, limits callHierarchyObservationLimits) (callHierarchyObservationRequest, bool) {
+	if !allowlist.permits(identity.method) || limits.maxBytes == 0 {
+		return callHierarchyObservationRequest{}, false
+	}
+	return callHierarchyObservationRequest{identity: identity, allowlist: allowlist, predecessors: predecessors, selected: selected, handoff: handoff, limits: limits}, true
+}
+
+type callHierarchyOpaqueCommitmentList struct {
+	values []callHierarchyOpaqueCommitmentMetadata
+}
+
+func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithPredecessors(values []callHierarchyOpaqueCommitmentMetadata) callHierarchyLayer1RequestAttachment {
+	attachment.predecessors = nil
+	if len(values) != 0 {
+		attachment.predecessors = &callHierarchyOpaqueCommitmentList{values: append([]callHierarchyOpaqueCommitmentMetadata(nil), values...)}
+	}
+	return attachment
+}
+func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithEnabled(enabled bool) callHierarchyLayer1RequestAttachment {
+	attachment.enabled = enabled
+	return attachment
+}
+func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithCausalOutcome(outcome callHierarchyLayer1GenericCausalOutcome) callHierarchyLayer1RequestAttachment {
+	attachment.causalOutcome = outcome
+	return attachment
+}
+func (attachment callHierarchyLayer1RequestAttachment) privateCallHierarchyLayer1WithIdentity(profile callHierarchyProfileIdentity, binding callHierarchyBindingIdentity, workspace callHierarchyWorkspaceCustody) callHierarchyLayer1RequestAttachment {
+	attachment.profile, attachment.binding, attachment.workspace = profile, binding, workspace
+	return attachment
 }
