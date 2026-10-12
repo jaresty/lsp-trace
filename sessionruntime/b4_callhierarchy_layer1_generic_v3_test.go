@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -836,8 +837,20 @@ func (w *callHierarchyLayer1GenericV3WriteCapture) Write(p []byte) (int, error) 
 	n := len(p)
 	w.mu.Lock()
 	w.frame = append(w.frame, p[:n]...)
+	frame := append([]byte(nil), w.frame...)
 	w.mu.Unlock()
-	w.once.Do(func() { close(w.wrote) })
+	if headerEnd := bytes.Index(frame, []byte("\r\n\r\n")); headerEnd >= 0 {
+		for _, header := range bytes.Split(frame[:headerEnd], []byte("\r\n")) {
+			const prefix = "Content-Length: "
+			if bytes.HasPrefix(header, []byte(prefix)) {
+				bodyBytes, err := strconv.Atoi(string(header[len(prefix):]))
+				if err == nil && len(frame) >= headerEnd+4+bodyBytes {
+					w.once.Do(func() { close(w.wrote) })
+				}
+				break
+			}
+		}
+	}
 	return n, nil
 }
 func (w *callHierarchyLayer1GenericV3WriteCapture) Close() error {
@@ -851,29 +864,42 @@ func (w *callHierarchyLayer1GenericV3WriteCapture) snapshot() []byte {
 }
 
 type callHierarchyLayer1GenericV3Transport struct {
-	stdin     *callHierarchyLayer1GenericV3WriteCapture
-	output    *io.PipeWriter
-	stdout    *io.PipeReader
-	events    []callHierarchyLayer1GenericV3DriverEvent
-	cancel    context.CancelFunc
-	done      chan struct{}
-	closeOnce sync.Once
-	mu        sync.Mutex
-	response  []byte
-	requestID uint64
-	deadline  time.Duration
+	stdin                   *callHierarchyLayer1GenericV3WriteCapture
+	output                  *io.PipeWriter
+	stdout                  *io.PipeReader
+	events                  []callHierarchyLayer1GenericV3DriverEvent
+	cancel                  context.CancelFunc
+	requestWriteAccounted   chan struct{}
+	requestWriteAccountOnce sync.Once
+	abort                   chan struct{}
+	abortOnce               sync.Once
+	done                    chan struct{}
+	closeOnce               sync.Once
+	mu                      sync.Mutex
+	response                []byte
+	requestID               uint64
+	deadline                time.Duration
 }
 
 func callHierarchyLayer1GenericV3NewTransport(events []callHierarchyLayer1GenericV3DriverEvent, cancel context.CancelFunc, requestID uint64, deadline time.Duration) *callHierarchyLayer1GenericV3Transport {
 	stdout, output := io.Pipe()
-	c := &callHierarchyLayer1GenericV3Transport{stdin: &callHierarchyLayer1GenericV3WriteCapture{wrote: make(chan struct{})}, output: output, stdout: stdout, events: events, cancel: cancel, done: make(chan struct{}), requestID: requestID, deadline: deadline}
+	c := &callHierarchyLayer1GenericV3Transport{stdin: &callHierarchyLayer1GenericV3WriteCapture{wrote: make(chan struct{})}, output: output, stdout: stdout, events: events, cancel: cancel, requestWriteAccounted: make(chan struct{}), abort: make(chan struct{}), done: make(chan struct{}), requestID: requestID, deadline: deadline}
 	go c.replay()
 	return c
 }
 
 func (c *callHierarchyLayer1GenericV3Transport) replay() {
 	defer close(c.done)
-	<-c.stdin.wrote
+	select {
+	case <-c.stdin.wrote:
+	case <-c.abort:
+		return
+	}
+	select {
+	case <-c.requestWriteAccounted:
+	case <-c.abort:
+		return
+	}
 	started := time.Now()
 	for _, event := range c.events {
 		if wait := time.Duration(event.AtOffsetNS) - time.Since(started); wait > 0 {
@@ -1045,10 +1071,14 @@ func callHierarchyLayer1GenericV3Execute(t *testing.T, record callHierarchyLayer
 	}
 	manager.mu.Lock()
 	manager.sessions[record.Driver.Request.Session] = &runtimeSession{record: Record{SessionID: record.Driver.Request.Session, Generation: record.Driver.Request.Generation, State: session.Ready}, process: transport, pending: pending, requests: make(map[lspwire.RequestKey]*Request)}
+	manager.roundTripRequestWriteAccountedTestHook = func() {
+		transport.requestWriteAccountOnce.Do(func() { close(transport.requestWriteAccounted) })
+	}
 	manager.mu.Unlock()
 	t.Cleanup(func() { cancel(); _ = transport.Teardown(context.Background()); _ = transport.Close() })
 	result := manager.RoundTrip(ctx, request)
 	if result.Key.ID == 0 {
+		transport.abortOnce.Do(func() { close(transport.abort) })
 		_ = transport.stdin.Close()
 		_ = transport.output.Close()
 	}
@@ -2185,6 +2215,42 @@ func TestCallHierarchyLayer1GenericV3CausalOutcomeGuards(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestCallHierarchyLayer1GenericV3World08CancellationAfterCompleteRequestFrame(t *testing.T) {
+	expectedPaths := callHierarchyLayer1GenericV3ValidateExpectedSchema(t)
+	ordinaryAPaths, _ := callHierarchyLayer1GenericV3Partition(t, expectedPaths)
+	worlds := callHierarchyLayer1GenericV3Load(t)
+	if len(worlds) <= 7 || worlds[7].entry.Name != "world-08" {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_WORLD08_FIXTURE got=%d", len(worlds))
+	}
+	record := worlds[7].envelope
+	actual := callHierarchyLayer1GenericV3Execute(t, record)
+	if !actual.executed || actual.preEffectRefusal != "" {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_WORLD08_EXECUTION executed=%t refusal=%q", actual.executed, actual.preEffectRefusal)
+	}
+	headerEnd := bytes.Index(actual.requestFrame, []byte("\r\n\r\n"))
+	if headerEnd < 0 {
+		t.Fatal("ASSERT_CH_GENERIC_V3_WORLD08_REQUEST_HEADER")
+	}
+	bodyBytes := -1
+	for _, header := range bytes.Split(actual.requestFrame[:headerEnd], []byte("\r\n")) {
+		const prefix = "Content-Length: "
+		if bytes.HasPrefix(header, []byte(prefix)) {
+			bodyBytes, _ = strconv.Atoi(string(header[len(prefix):]))
+			break
+		}
+	}
+	if frameBytes := headerEnd + 4 + bodyBytes; bodyBytes < 0 || frameBytes != 170 || len(actual.requestFrame) < frameBytes {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_WORLD08_COMPLETE_REQUEST_FRAME frame=%d captured=%d want=170", frameBytes, len(actual.requestFrame))
+	}
+	if actual.result.RequestMessages != 1 || actual.result.RequestBytes != 147 || actual.result.requestWrite == nil || actual.result.requestWrite.FrameBytes != 170 {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_WORLD08_REQUEST_ACCOUNTING messages=%d body_bytes=%d write=%+v", actual.result.RequestMessages, actual.result.RequestBytes, actual.result.requestWrite)
+	}
+	observation := callHierarchyLayer1GenericV3AssertActual(t, record, actual, ordinaryAPaths)
+	if !observation.available {
+		t.Fatalf("ASSERT_CH_GENERIC_V3_WORLD08_ACCOUNTING reason=%s", observation.reason)
 	}
 }
 

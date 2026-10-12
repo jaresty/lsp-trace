@@ -1058,6 +1058,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			result.callHierarchyLayer1GenericAttempt.captureRequestFrame(raw, *result.requestWrite)
 		}
 	}
+	if m.roundTripRequestWriteAccountedTestHook != nil {
+		m.roundTripRequestWriteAccountedTestHook()
+	}
 
 	type readResult struct {
 		message    lspwire.Message
@@ -1595,6 +1598,7 @@ type Manager struct {
 	diagnosticOrder                              []DiagnosticOperationHandle
 	methodCandidateTestHook                      func(methodCandidateObservation)
 	ownedMethodPairTestHook                      func(OwnedMethodPair)
+	roundTripRequestWriteAccountedTestHook       func()
 	b4OutboundHook                               func(*privateB4ByteAccountV2)
 	b4AfterWriteHook                             func(*privateB4ByteAccountV2)
 	b4ParamsHook                                 func(*privateB4ByteAccountV2)
