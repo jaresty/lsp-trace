@@ -1,0 +1,484 @@
+package sessionruntime
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"errors"
+	"sync"
+)
+
+const (
+	privateCallsLSPIncomingExactV1                         = "CALLS_LSP_INCOMING_EXACT_V1"
+	privateCallsLSPOutgoingExactV1                         = "CALLS_LSP_OUTGOING_EXACT_V1"
+	privateCallsLSPIncomingDomainV1                        = "lsp-trace.adr0011.calls.lsp.incoming.exact.v1"
+	privateCallsLSPOutgoingDomainV1                        = "lsp-trace.adr0011.calls.lsp.outgoing.exact.v1"
+	privateCallsLSPProfileDigestDomainV1                   = "lsp-trace.adr0011.calls.profile-identity.digest.v1\x00"
+	privateCallHierarchyDirectionalMaxBytesV3       uint64 = 32 << 20
+	privateCallHierarchyDirectionalComponentCountV3        = 6
+)
+
+type privateCallHierarchyDirectionV1 uint8
+
+const (
+	privateCallHierarchyDirectionInvalidV1 privateCallHierarchyDirectionV1 = iota
+	privateCallHierarchyDirectionIncomingV1
+	privateCallHierarchyDirectionOutgoingV1
+)
+
+type privateCallHierarchyDirectionalComponentV3 uint8
+
+const (
+	privateCallHierarchyDirectionalComponentInvalidV3 privateCallHierarchyDirectionalComponentV3 = iota
+	privateCallHierarchyDirectionalComponentPrepareFrameV3
+	privateCallHierarchyDirectionalComponentPrepareResultV3
+	privateCallHierarchyDirectionalComponentSelectedHandoffV3
+	privateCallHierarchyDirectionalComponentDirectionalFrameV3
+	privateCallHierarchyDirectionalComponentDirectionalResultV3
+	privateCallHierarchyDirectionalComponentRetainedExternalEvidenceV3
+)
+
+type privateCallHierarchyDirectionalOwnershipV3 uint8
+
+const (
+	privateCallHierarchyDirectionalOwnershipInvalidV3 privateCallHierarchyDirectionalOwnershipV3 = iota
+	privateCallHierarchyDirectionalOwnershipOwnedV3
+	privateCallHierarchyDirectionalOwnershipAliasV3
+)
+
+type privateCallHierarchyDirectionalStateV3 uint8
+
+const (
+	privateCallHierarchyDirectionalStateUnreservedV3 privateCallHierarchyDirectionalStateV3 = iota
+	privateCallHierarchyDirectionalStateReservedV3
+	privateCallHierarchyDirectionalStateAcquiredV3
+	privateCallHierarchyDirectionalStateTerminalV3
+	privateCallHierarchyDirectionalStateReleasedV3
+)
+
+type privateCallHierarchyStageV3 uint8
+
+const (
+	privateCallHierarchyStageInvalidV3 privateCallHierarchyStageV3 = iota
+	privateCallHierarchyStageReservationV3
+	privateCallHierarchyStageAcquisitionV3
+	privateCallHierarchyStageAliasV3
+	privateCallHierarchyStageTransferV3
+	privateCallHierarchyStagePublicationV3
+	privateCallHierarchyStageTerminalV3
+	privateCallHierarchyStageReleaseV3
+)
+
+type privateCallHierarchyRefusalV3 uint8
+
+const (
+	privateCallHierarchyRefusalNoneV3 privateCallHierarchyRefusalV3 = iota
+	privateCallHierarchyRefusalInvalidV3
+	privateCallHierarchyRefusalNilV3
+	privateCallHierarchyRefusalStaleV3
+	privateCallHierarchyRefusalForeignV3
+	privateCallHierarchyRefusalTerminalV3
+	privateCallHierarchyRefusalDuplicateComponentV3
+	privateCallHierarchyRefusalOverflowV3
+	privateCallHierarchyRefusalAttemptLimitV3
+	privateCallHierarchyRefusalAccountLimitV3
+	privateCallHierarchyRefusalLeaseV3
+	privateCallHierarchyRefusalAcquireV3
+	privateCallHierarchyRefusalPublishV3
+	privateCallHierarchyRefusalTerminalRaceV3
+)
+
+type privateCallHierarchyTerminalV3 uint8
+
+const (
+	privateCallHierarchyTerminalNoneV3 privateCallHierarchyTerminalV3 = iota
+	privateCallHierarchyTerminalCompleteV3
+	privateCallHierarchyTerminalCompleteEmptyV3
+	privateCallHierarchyTerminalMalformedV3
+	privateCallHierarchyTerminalProtocolV3
+	privateCallHierarchyTerminalTransportV3
+	privateCallHierarchyTerminalUnsupportedV3
+	privateCallHierarchyTerminalTimeoutV3
+	privateCallHierarchyTerminalCancelledV3
+	privateCallHierarchyTerminalRefusedV3
+	privateCallHierarchyTerminalStopV3
+	privateCallHierarchyTerminalRestartV3
+	privateCallHierarchyTerminalShutdownV3
+	privateCallHierarchyTerminalStaleGenerationV3
+)
+
+type privateCallHierarchyCompletenessV3 uint8
+
+const (
+	privateCallHierarchyCompletenessUnknownV3 privateCallHierarchyCompletenessV3 = iota
+	privateCallHierarchyCompletenessTargetSetCompleteV3
+)
+
+type privateCallHierarchyDirectionalAttemptIDV3 struct{ Generation, Sequence uint64 }
+type privateCallHierarchyDirectionalAccountIDV3 uint64
+type privateCallHierarchyDirectionalLeaseIDV3 uint64
+type privateCallHierarchyDirectionalTransferIDV3 uint64
+type privateCallHierarchyDirectionalReleaseIDV3 uint64
+
+type privateCallHierarchyProfileIdentityV3 struct {
+	ID, Domain string
+	Digest     [sha256.Size]byte
+}
+type privateCallHierarchyTargetIdentityV3 struct {
+	Ordinal                                   uint64
+	URI                                       string
+	Selection, SourceCustody, RevisionCustody [sha256.Size]byte
+}
+type privateCallHierarchyAttemptOutcomeV3 struct {
+	TargetOrdinal uint64
+	Terminal      privateCallHierarchyTerminalV3
+	Stage         privateCallHierarchyStageV3
+	Refusal       privateCallHierarchyRefusalV3
+}
+type privateCallHierarchyFrontierV3 struct {
+	Present             bool
+	TargetOrdinal       uint64
+	Stage               privateCallHierarchyStageV3
+	Refusal             privateCallHierarchyRefusalV3
+	UnattemptedOrdinals []uint64
+}
+type privateCallHierarchyTargetAccountingV3 struct {
+	TargetSetID                         [sha256.Size]byte
+	DenominatorKnown                    bool
+	Denominator, Attempted, Unattempted uint64
+	Outcomes                            []privateCallHierarchyAttemptOutcomeV3
+	Frontier                            privateCallHierarchyFrontierV3
+	Completeness                        privateCallHierarchyCompletenessV3
+}
+
+type privateB4ByteAccountV2 struct{ mu sync.Mutex }
+type privateB4ByteLeaseV2 struct {
+	ID       uint64
+	Capacity uint64
+	Active   bool
+}
+type callHierarchyLayer1GenericOwner struct{ mu sync.Mutex }
+
+type privateCallHierarchyDirectionalLeaseV3 struct {
+	ID                  privateCallHierarchyDirectionalLeaseIDV3
+	Account             privateCallHierarchyDirectionalAccountIDV3
+	Attempt             privateCallHierarchyDirectionalAttemptIDV3
+	Component           privateCallHierarchyDirectionalComponentV3
+	Capacity, BackingID uint64
+	Active              bool
+	C15                 privateB4ByteLeaseV2
+}
+type privateCallHierarchyDirectionalAliasV3 struct {
+	OwnerLease     privateCallHierarchyDirectionalLeaseIDV3
+	Offset, Length uint64
+	OwnerRelease   privateCallHierarchyDirectionalReleaseIDV3
+}
+type privateCallHierarchyDirectionalOwnedSourceV3 struct {
+	Bytes               []byte
+	Capacity, BackingID uint64
+	Leases              []privateCallHierarchyDirectionalLeaseV3
+}
+type privateCallHierarchyDirectionalAliasSourceV3 struct {
+	Owner          *privateCallHierarchyDirectionalAcquisitionV3
+	Offset, Length uint64
+}
+type privateCallHierarchyDirectionalAcquisitionV3 struct {
+	Account   privateCallHierarchyDirectionalAccountIDV3
+	Attempt   privateCallHierarchyDirectionalAttemptIDV3
+	Component privateCallHierarchyDirectionalComponentV3
+	Ownership privateCallHierarchyDirectionalOwnershipV3
+	Bytes     []byte
+	Capacity  uint64
+	Leases    []privateCallHierarchyDirectionalLeaseV3
+	Alias     *privateCallHierarchyDirectionalAliasV3
+	Digest    [sha256.Size]byte
+	Valid     bool
+}
+type privateCallHierarchyDirectionalComponentAccountV3 struct {
+	Component                privateCallHierarchyDirectionalComponentV3
+	ReservedBytes, LiveBytes uint64
+	OwnerLease               privateCallHierarchyDirectionalLeaseIDV3
+	AliasCount               uint64
+}
+type privateCallHierarchyDirectionalAccountV3 struct {
+	mu                       sync.Mutex
+	ID                       privateCallHierarchyDirectionalAccountIDV3
+	Attempt                  privateCallHierarchyDirectionalAttemptIDV3
+	Direction                privateCallHierarchyDirectionV1
+	Profile                  privateCallHierarchyProfileIdentityV3
+	State                    privateCallHierarchyDirectionalStateV3
+	ReservedBytes, LiveBytes uint64
+	Components               [privateCallHierarchyDirectionalComponentCountV3]privateCallHierarchyDirectionalComponentAccountV3
+	Terminal                 privateCallHierarchyTerminalV3
+	ReleaseID                privateCallHierarchyDirectionalReleaseIDV3
+	C15                      *privateB4ByteAccountV2
+}
+type privateCallHierarchyDirectionalReservationV3 struct {
+	Account   privateCallHierarchyDirectionalAccountIDV3
+	Attempt   privateCallHierarchyDirectionalAttemptIDV3
+	Component privateCallHierarchyDirectionalComponentV3
+	Bytes     uint64
+	Stage     privateCallHierarchyStageV3
+	Refusal   privateCallHierarchyRefusalV3
+	Admitted  bool
+}
+type privateCallHierarchyDirectionalTransferV3 struct {
+	ID                                privateCallHierarchyDirectionalTransferIDV3
+	SourceAttempt, DestinationAttempt privateCallHierarchyDirectionalAttemptIDV3
+	Component                         privateCallHierarchyDirectionalComponentV3
+}
+type privateCallHierarchyDirectionalPublicationReceiptV3 struct {
+	Attempt   privateCallHierarchyDirectionalAttemptIDV3
+	Component privateCallHierarchyDirectionalComponentV3
+	Digest    [sha256.Size]byte
+	Present   bool
+}
+type privateCallHierarchyDirectionalSubledgerV3 struct {
+	Accounts           map[privateCallHierarchyDirectionalAccountIDV3]*privateCallHierarchyDirectionalAccountV3
+	NextAccount        uint64
+	AggregateLiveBytes uint64
+	RefusalPreeffects  map[privateCallHierarchyRefusalV3]uint64
+}
+type Manager struct {
+	mu               sync.Mutex
+	directionalRawV3 privateCallHierarchyDirectionalSubledgerV3
+}
+
+func privateCallHierarchyProfileDigestV3(id, domain string) [sha256.Size]byte {
+	p := []byte(privateCallsLSPProfileDigestDomainV1)
+	var n [4]byte
+	binary.BigEndian.PutUint32(n[:], uint32(len(domain)))
+	p = append(p, n[:]...)
+	p = append(p, domain...)
+	binary.BigEndian.PutUint32(n[:], uint32(len(id)))
+	p = append(p, n[:]...)
+	p = append(p, id...)
+	return sha256.Sum256(p)
+}
+func newPrivateCallsLSPIncomingProfileV3() privateCallHierarchyProfileIdentityV3 {
+	return privateCallHierarchyProfileIdentityV3{privateCallsLSPIncomingExactV1, privateCallsLSPIncomingDomainV1, privateCallHierarchyProfileDigestV3(privateCallsLSPIncomingExactV1, privateCallsLSPIncomingDomainV1)}
+}
+func newPrivateCallsLSPOutgoingProfileV3() privateCallHierarchyProfileIdentityV3 {
+	return privateCallHierarchyProfileIdentityV3{privateCallsLSPOutgoingExactV1, privateCallsLSPOutgoingDomainV1, privateCallHierarchyProfileDigestV3(privateCallsLSPOutgoingExactV1, privateCallsLSPOutgoingDomainV1)}
+}
+func newPrivateCallHierarchyDirectionalSubledgerV3() privateCallHierarchyDirectionalSubledgerV3 {
+	return privateCallHierarchyDirectionalSubledgerV3{Accounts: make(map[privateCallHierarchyDirectionalAccountIDV3]*privateCallHierarchyDirectionalAccountV3), RefusalPreeffects: make(map[privateCallHierarchyRefusalV3]uint64)}
+}
+func (m *Manager) newDirectionalAccountV3(attempt privateCallHierarchyDirectionalAttemptIDV3, direction privateCallHierarchyDirectionV1, profile privateCallHierarchyProfileIdentityV3, c15 *privateB4ByteAccountV2) (*privateCallHierarchyDirectionalAccountV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return nil, 0, 0
+}
+func (m *Manager) reserveDirectionalComponentV3(account *privateCallHierarchyDirectionalAccountV3, attempt privateCallHierarchyDirectionalAttemptIDV3, component privateCallHierarchyDirectionalComponentV3, bytes uint64) (privateCallHierarchyDirectionalReservationV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return privateCallHierarchyDirectionalReservationV3{}, 0, 0
+}
+func (m *Manager) acquireDirectionalOwnedV3(owner *callHierarchyLayer1GenericOwner, account *privateCallHierarchyDirectionalAccountV3, reservation privateCallHierarchyDirectionalReservationV3, source privateCallHierarchyDirectionalOwnedSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return privateCallHierarchyDirectionalAcquisitionV3{}, 0, 0, nil
+}
+func (m *Manager) declareDirectionalAliasV3(owner *callHierarchyLayer1GenericOwner, account *privateCallHierarchyDirectionalAccountV3, source privateCallHierarchyDirectionalAliasSourceV3, component privateCallHierarchyDirectionalComponentV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return privateCallHierarchyDirectionalAcquisitionV3{}, 0, 0
+}
+func (m *Manager) transferDirectionalAcquisitionCoreV3(owner *callHierarchyLayer1GenericOwner, source *privateCallHierarchyDirectionalAcquisitionV3, destination *privateCallHierarchyDirectionalAccountV3) (privateCallHierarchyDirectionalTransferV3, privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return privateCallHierarchyDirectionalTransferV3{}, privateCallHierarchyDirectionalAcquisitionV3{}, 0, 0
+}
+func (m *Manager) borrowDirectionalV3(owner *callHierarchyLayer1GenericOwner, acquisition *privateCallHierarchyDirectionalAcquisitionV3, fn func([]byte) error) error {
+	if fn == nil {
+		return errors.New("nil borrow callback")
+	}
+	return nil
+}
+func (m *Manager) publishDirectionalV3(owner *callHierarchyLayer1GenericOwner, acquisition *privateCallHierarchyDirectionalAcquisitionV3) (privateCallHierarchyDirectionalPublicationReceiptV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return privateCallHierarchyDirectionalPublicationReceiptV3{}, 0, 0, nil
+}
+func (m *Manager) releaseDirectionalTerminalCoreV3(owner *callHierarchyLayer1GenericOwner, account *privateCallHierarchyDirectionalAccountV3, terminal privateCallHierarchyTerminalV3) bool {
+	return false
+}
+
+const privateStageAReservePrepareFrameV3 = "299523ae8df6878b9e9100746c96dbaa22ab11e437c3629e4ecac8f277a2bd8e"
+
+func (m *Manager) reserveDirectionalPrepareFrameV3(a *privateCallHierarchyDirectionalAccountV3, id privateCallHierarchyDirectionalAttemptIDV3, n uint64) (privateCallHierarchyDirectionalReservationV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.reserveDirectionalComponentV3(a, id, privateCallHierarchyDirectionalComponentPrepareFrameV3, n)
+}
+
+const privateStageACopyPrepareFrameV3 = "51590290aea507a4972547c0923647c52d1c657fdecdfbb3aa6244ba5a417347"
+
+func (m *Manager) copyDirectionalPrepareFrameV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, r privateCallHierarchyDirectionalReservationV3, s privateCallHierarchyDirectionalOwnedSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return m.acquireDirectionalOwnedV3(o, a, r, s)
+}
+
+const privateStageAAliasPrepareFrameV3 = "055df35ed225ff329f21bd094f0c1f2c172848bb7c2ff772a93c8fbd6386521b"
+
+func (m *Manager) aliasDirectionalPrepareFrameV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, s privateCallHierarchyDirectionalAliasSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.declareDirectionalAliasV3(o, a, s, privateCallHierarchyDirectionalComponentPrepareFrameV3)
+}
+
+const privateStageAReservePrepareResultV3 = "2087074f6c253c7566e94420b67919d0f1cf032a01cdd79ca73345159fc38506"
+
+func (m *Manager) reserveDirectionalPrepareResultV3(a *privateCallHierarchyDirectionalAccountV3, id privateCallHierarchyDirectionalAttemptIDV3, n uint64) (privateCallHierarchyDirectionalReservationV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.reserveDirectionalComponentV3(a, id, privateCallHierarchyDirectionalComponentPrepareResultV3, n)
+}
+
+const privateStageACopyPrepareResultV3 = "ddbbfd7184803b94919684bb5762ef16309986b1d5b091d650c1e05a9b578779"
+
+func (m *Manager) copyDirectionalPrepareResultV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, r privateCallHierarchyDirectionalReservationV3, s privateCallHierarchyDirectionalOwnedSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return m.acquireDirectionalOwnedV3(o, a, r, s)
+}
+
+const privateStageAAliasPrepareResultV3 = "7069d8601cb76101ee1a2c7886f223d0a6119e74b76891d3dd49f35117cb0736"
+
+func (m *Manager) aliasDirectionalPrepareResultV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, s privateCallHierarchyDirectionalAliasSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.declareDirectionalAliasV3(o, a, s, privateCallHierarchyDirectionalComponentPrepareResultV3)
+}
+
+const privateStageAReserveSelectedHandoffV3 = "480446a4372c7fb04f694840320ffdf3ee29da89e9c4e6423ac261916068ca5b"
+
+func (m *Manager) reserveDirectionalSelectedHandoffV3(a *privateCallHierarchyDirectionalAccountV3, id privateCallHierarchyDirectionalAttemptIDV3, n uint64) (privateCallHierarchyDirectionalReservationV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.reserveDirectionalComponentV3(a, id, privateCallHierarchyDirectionalComponentSelectedHandoffV3, n)
+}
+
+const privateStageACopySelectedHandoffV3 = "2c914f9c29b62ddd6c32e2dc7a2e6008ece26d7c1bca3f26e2ceb761e02e77b2"
+
+func (m *Manager) copyDirectionalSelectedHandoffV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, r privateCallHierarchyDirectionalReservationV3, s privateCallHierarchyDirectionalOwnedSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return m.acquireDirectionalOwnedV3(o, a, r, s)
+}
+
+const privateStageAAliasSelectedHandoffV3 = "b1bf63296afd47f73f2be7e8a9c70db37f0ce77677b5ddf38a8b3a15fcba77d3"
+
+func (m *Manager) aliasDirectionalSelectedHandoffV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, s privateCallHierarchyDirectionalAliasSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.declareDirectionalAliasV3(o, a, s, privateCallHierarchyDirectionalComponentSelectedHandoffV3)
+}
+
+const privateStageAReserveDirectionalFrameV3 = "a3ec11a555246160475c5519e29735fc4f86ce88eeef053bd0f97c88e4221102"
+
+func (m *Manager) reserveDirectionalDirectionalFrameV3(a *privateCallHierarchyDirectionalAccountV3, id privateCallHierarchyDirectionalAttemptIDV3, n uint64) (privateCallHierarchyDirectionalReservationV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.reserveDirectionalComponentV3(a, id, privateCallHierarchyDirectionalComponentDirectionalFrameV3, n)
+}
+
+const privateStageACopyDirectionalFrameV3 = "645cf06e35e54bc3fe5a827bc0f6a4156c2b23e5739d70d2b012c5c1884ae894"
+
+func (m *Manager) copyDirectionalDirectionalFrameV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, r privateCallHierarchyDirectionalReservationV3, s privateCallHierarchyDirectionalOwnedSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return m.acquireDirectionalOwnedV3(o, a, r, s)
+}
+
+const privateStageAAliasDirectionalFrameV3 = "c2d3d4696cd315f18b986c14afd02a5ed642d7a99c2888ae172177a48f5ff1bc"
+
+func (m *Manager) aliasDirectionalDirectionalFrameV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, s privateCallHierarchyDirectionalAliasSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.declareDirectionalAliasV3(o, a, s, privateCallHierarchyDirectionalComponentDirectionalFrameV3)
+}
+
+const privateStageAReserveDirectionalResultV3 = "d3ed276e5de20a331b277b63638f7bc5ef05a45c9366a06ece882bb90502ac20"
+
+func (m *Manager) reserveDirectionalDirectionalResultV3(a *privateCallHierarchyDirectionalAccountV3, id privateCallHierarchyDirectionalAttemptIDV3, n uint64) (privateCallHierarchyDirectionalReservationV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.reserveDirectionalComponentV3(a, id, privateCallHierarchyDirectionalComponentDirectionalResultV3, n)
+}
+
+const privateStageACopyDirectionalResultV3 = "b3846db09b2b683ea536a8d6ddcdf3c5ff7408b0c4f6e0097656a4f7a2e16800"
+
+func (m *Manager) copyDirectionalDirectionalResultV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, r privateCallHierarchyDirectionalReservationV3, s privateCallHierarchyDirectionalOwnedSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return m.acquireDirectionalOwnedV3(o, a, r, s)
+}
+
+const privateStageAAliasDirectionalResultV3 = "7f46d76e8acde79c1eec46102632bd6db557ac394d329b31b68c9697abbd4ea2"
+
+func (m *Manager) aliasDirectionalDirectionalResultV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, s privateCallHierarchyDirectionalAliasSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.declareDirectionalAliasV3(o, a, s, privateCallHierarchyDirectionalComponentDirectionalResultV3)
+}
+
+const privateStageAReserveRetainedExternalEvidenceV3 = "c730d1a3978f99c2de26d634266e05a0909a0d5662eee7e86889f7b7603cb5aa"
+
+func (m *Manager) reserveDirectionalRetainedExternalEvidenceV3(a *privateCallHierarchyDirectionalAccountV3, id privateCallHierarchyDirectionalAttemptIDV3, n uint64) (privateCallHierarchyDirectionalReservationV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.reserveDirectionalComponentV3(a, id, privateCallHierarchyDirectionalComponentRetainedExternalEvidenceV3, n)
+}
+
+const privateStageACopyRetainedExternalEvidenceV3 = "422d413c63ede254ab3b8004e9cb58aec083b1c470da2b28c92084d378c5a2a5"
+
+func (m *Manager) copyDirectionalRetainedExternalEvidenceV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, r privateCallHierarchyDirectionalReservationV3, s privateCallHierarchyDirectionalOwnedSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3, error) {
+	return m.acquireDirectionalOwnedV3(o, a, r, s)
+}
+
+const privateStageAAliasRetainedExternalEvidenceV3 = "75e32e98aaf21d7ec04d26d13fd202699b4bf6ad466688edb8f70231835a14e7"
+
+func (m *Manager) aliasDirectionalRetainedExternalEvidenceV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, s privateCallHierarchyDirectionalAliasSourceV3) (privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.declareDirectionalAliasV3(o, a, s, privateCallHierarchyDirectionalComponentRetainedExternalEvidenceV3)
+}
+
+const privateStageATransferAcquisitionV3 = "00f52d648d11e611a85f4fa643f503746864c5c82e0f317284481a4be9bd7737"
+
+func (m *Manager) transferDirectionalAcquisitionV3(o *callHierarchyLayer1GenericOwner, s *privateCallHierarchyDirectionalAcquisitionV3, d *privateCallHierarchyDirectionalAccountV3) (privateCallHierarchyDirectionalTransferV3, privateCallHierarchyDirectionalAcquisitionV3, privateCallHierarchyStageV3, privateCallHierarchyRefusalV3) {
+	return m.transferDirectionalAcquisitionCoreV3(o, s, d)
+}
+
+const privateStageAReleaseTerminalV3 = "1ec36108e922c83c2dcad7426641e323349738253a6ff509e73647a3cc149907"
+
+func (m *Manager) releaseDirectionalTerminalV3(o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3, t privateCallHierarchyTerminalV3) bool {
+	return m.releaseDirectionalTerminalCoreV3(o, a, t)
+}
+
+func compileLockOrderSurfaceV3(m *Manager, o *callHierarchyLayer1GenericOwner, a *privateCallHierarchyDirectionalAccountV3) {
+	m.mu.Lock()
+	o.mu.Lock()
+	a.C15.mu.Lock()
+	a.C15.mu.Unlock()
+	o.mu.Unlock()
+	m.mu.Unlock()
+}
+func rejectAccountHeldInversionV3(*privateB4ByteAccountV2) privateCallHierarchyRefusalV3 {
+	return privateCallHierarchyRefusalInvalidV3
+}
+
+func compilePlannedV3(profile privateCallHierarchyProfileIdentityV3, direction privateCallHierarchyDirectionV1) {
+	m := &Manager{directionalRawV3: newPrivateCallHierarchyDirectionalSubledgerV3()}
+	owner := &callHierarchyLayer1GenericOwner{}
+	c15 := &privateB4ByteAccountV2{}
+	attempt := privateCallHierarchyDirectionalAttemptIDV3{1, 1}
+	account, stage, refusal := m.newDirectionalAccountV3(attempt, direction, profile, c15)
+	owned := privateCallHierarchyDirectionalOwnedSourceV3{Bytes: []byte("x"), Capacity: 1, Leases: []privateCallHierarchyDirectionalLeaseV3{{Active: true, Capacity: 1}}}
+	alias := privateCallHierarchyDirectionalAliasSourceV3{Owner: &privateCallHierarchyDirectionalAcquisitionV3{Valid: true}, Length: 1}
+	r1, _, _ := m.reserveDirectionalPrepareFrameV3(account, attempt, 1)
+	_, _, _, _ = m.copyDirectionalPrepareFrameV3(owner, account, r1, owned)
+	_, _, _ = m.aliasDirectionalPrepareFrameV3(owner, account, alias)
+	r2, _, _ := m.reserveDirectionalPrepareResultV3(account, attempt, 1)
+	_, _, _, _ = m.copyDirectionalPrepareResultV3(owner, account, r2, owned)
+	_, _, _ = m.aliasDirectionalPrepareResultV3(owner, account, alias)
+	r3, _, _ := m.reserveDirectionalSelectedHandoffV3(account, attempt, 1)
+	_, _, _, _ = m.copyDirectionalSelectedHandoffV3(owner, account, r3, owned)
+	_, _, _ = m.aliasDirectionalSelectedHandoffV3(owner, account, alias)
+	r4, _, _ := m.reserveDirectionalDirectionalFrameV3(account, attempt, 1)
+	_, _, _, _ = m.copyDirectionalDirectionalFrameV3(owner, account, r4, owned)
+	_, _, _ = m.aliasDirectionalDirectionalFrameV3(owner, account, alias)
+	r5, _, _ := m.reserveDirectionalDirectionalResultV3(account, attempt, 1)
+	_, _, _, _ = m.copyDirectionalDirectionalResultV3(owner, account, r5, owned)
+	_, _, _ = m.aliasDirectionalDirectionalResultV3(owner, account, alias)
+	r6, _, _ := m.reserveDirectionalRetainedExternalEvidenceV3(account, attempt, 1)
+	_, _, _, _ = m.copyDirectionalRetainedExternalEvidenceV3(owner, account, r6, owned)
+	_, _, _ = m.aliasDirectionalRetainedExternalEvidenceV3(owner, account, alias)
+	_, _, _ = m.reserveDirectionalPrepareFrameV3(account, attempt, ^uint64(0))
+	_, _, _ = m.reserveDirectionalPrepareFrameV3(account, attempt, privateCallHierarchyDirectionalMaxBytesV3+1)
+	_, _, _ = m.reserveDirectionalPrepareFrameV3(nil, privateCallHierarchyDirectionalAttemptIDV3{}, 0)
+	_, _, _ = m.reserveDirectionalComponentV3(account, attempt, privateCallHierarchyDirectionalComponentInvalidV3, 1)
+	var nilManager *Manager
+	_, _, _ = nilManager.reserveDirectionalPrepareFrameV3(nil, privateCallHierarchyDirectionalAttemptIDV3{}, 0)
+	source := privateCallHierarchyDirectionalAcquisitionV3{Valid: true}
+	_, destination, _, transferRefusal := m.transferDirectionalAcquisitionV3(owner, &source, account)
+	_, _, _, _ = m.transferDirectionalAcquisitionV3(nil, &source, nil)
+	_, _, _, _ = m.transferDirectionalAcquisitionV3(owner, nil, account)
+	_ = m.borrowDirectionalV3(owner, &destination, nil)
+	_ = m.borrowDirectionalV3(owner, nil, func([]byte) error { return nil })
+	callbackRefusal := m.borrowDirectionalV3(owner, &destination, func([]byte) error { return errors.New("planned callback refusal") })
+	_, _, _, _ = m.publishDirectionalV3(nil, nil)
+	compileLockOrderSurfaceV3(m, owner, account)
+	_ = rejectAccountHeldInversionV3(c15)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); _, _, _, _ = m.transferDirectionalAcquisitionV3(owner, &source, account) }()
+	go func() {
+		defer wg.Done()
+		_ = m.releaseDirectionalTerminalV3(owner, account, privateCallHierarchyTerminalCancelledV3)
+	}()
+	go func() { defer wg.Done(); _ = m.borrowDirectionalV3(owner, &source, func([]byte) error { return nil }) }()
+	wg.Wait()
+	_ = m.releaseDirectionalTerminalV3(owner, account, privateCallHierarchyTerminalCompleteV3)
+	_ = m.releaseDirectionalTerminalV3(owner, account, privateCallHierarchyTerminalCompleteV3)
+	_, _, _, _, _, _, _, _, _ = stage, refusal, transferRefusal, callbackRefusal, source, destination, privateStageAReservePrepareFrameV3, privateStageATransferAcquisitionV3, privateStageAReleaseTerminalV3
+}
+func compileAllPlannedV3() {
+	compilePlannedV3(newPrivateCallsLSPIncomingProfileV3(), privateCallHierarchyDirectionIncomingV1)
+	compilePlannedV3(newPrivateCallsLSPOutgoingProfileV3(), privateCallHierarchyDirectionOutgoingV1)
+}
