@@ -1,0 +1,8 @@
+# HEAD a1cd77950ffa45ebed52310878f772f3c7344756
+debf86b8b4568d49abd538da14f9a93fb34990936dd13b1156bdbf6de93d21cd  38132  sessionruntime/b4_explicit_bytes_c15_private.go
+b53e51b89effa526337b96fcf883078da332b9b1a1457fcd1fc44a3db2e585e9  32794  sessionruntime/b4_owned_method_pair_lease.go
+ad06c64bf3e267587dc94197a80ece1a03bc7933bd9263b4bb1ac78cad69fb8d  135554  sessionruntime/sessionruntime.go
+c6bc284bf7233589e334130ef2ade0129086e29dff79b9ec48b35805e4b50cb4  51346  docs/qualification/adr0011-directional-raw-custody-c15-enumeration-v1/UNRESOLVED.tsv
+98f3c28da317c9d517925692dbb4fe3475c7fc3d8a816ba68b4f73817b6b61f4  345  docs/qualification/adr0011-directional-raw-custody-c15-enumeration-v1/COUNTS.json
+ec91fd21760b90178a780fc51c21a82c4c09a9798b87c5feab6c6d4b8d5e2514  1351  docs/qualification/adr0011-directional-raw-custody-c15-enumeration-v1/RUN_MANIFEST.sha256
+c899bddb82680c4cde5caad003a1eacf3e7becaa60525a2b85ca58162131c50d  12406  docs/qualification/adr0011-directional-raw-custody-c15-enumeration-v1/generate.py

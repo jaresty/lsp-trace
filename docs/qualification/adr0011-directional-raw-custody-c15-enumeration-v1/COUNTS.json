@@ -1,0 +1,17 @@
+{
+  "ADDED": 14,
+  "CHANGED": 0,
+  "REMOVED": 0,
+  "UNCHANGED": 33,
+  "authority": 0,
+  "baseline_rows": 33,
+  "branches": 0,
+  "current_candidate_rows": 47,
+  "duplicates": 0,
+  "genesis_errors": 0,
+  "lineage_cycles": 0,
+  "missing_predecessors": 0,
+  "status": "ENUMERATION_COMPLETE_NOT_ADJUDICATED",
+  "total_rows": 47,
+  "unresolved": 47
+}

@@ -1,0 +1,11 @@
+# HEAD a1cd77950ffa45ebed52310878f772f3c7344756
+ABSENT_REQUIRED_NEW  0  sessionruntime/call_hierarchy_directional_raw_v1_private.go
+ad06c64bf3e267587dc94197a80ece1a03bc7933bd9263b4bb1ac78cad69fb8d  135554  sessionruntime/sessionruntime.go
+9e58a1ae4a79171799134d8640c99731842589125f229088f39196d3d7b9fa58  4208  internal/lspwire/read_frame.go
+df4e53790ba611164b2d1d35751bf56bf788abf447cc7bdd3601a0617ac49fa2  34476  internal/lspwire/successor_ingress.go
+b53e51b89effa526337b96fcf883078da332b9b1a1457fcd1fc44a3db2e585e9  32794  sessionruntime/b4_owned_method_pair_lease.go
+314a9a89f1f483ac9ced32479bccdea1fb8d1649e083c9a7c167f2baca444274  25463  sessionruntime/b4_c15_ownership_registry_private.go
+28e626b5434a2857b3d5b2918cda5ed9347f85cb1835f8df598fa0c378c7c479  9826  docs/qualification/adr0011-c15-allocation-census.provisional.md
+7240c1b67e50ead52ccee9357cb951d401fee4f3fc7f13204300bd02f44313f0  8824  docs/qualification/adr0011-directional-raw-custody-c15-lease-source-v2-go-v1/C15_ENUMERATION_PLAN.md
+366908002355e637b7e33c766416fa29e4dcf7d6737a455ef83563e7affe3f19  11432  docs/qualification/adr0011-directional-raw-custody-c15-lease-source-v2-go-v1/ARCHITECTURE.md
+e894436696fab5c3156961e017d0c81f64c22ebc86601db5bd13f6de39ccdc28  3111  docs/qualification/adr0011-directional-raw-custody-c15-lease-source-v2-go-v1/WRITESET.md
