@@ -1,0 +1,6 @@
+=== RUN   TestV5CausalExact32MiB
+    directional_v5_four_causal_private_test.go:355: ASSERT_C4_MANAGER_OBSERVATION
+--- FAIL: TestV5CausalExact32MiB (0.30s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.599s
+FAIL

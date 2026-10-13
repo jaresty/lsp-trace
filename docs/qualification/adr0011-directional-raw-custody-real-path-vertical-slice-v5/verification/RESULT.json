@@ -1,0 +1,320 @@
+{
+  "status": "AUTHORED_NOT_GO",
+  "binding": "ADR0011_V5_REFRAME",
+  "production_go": false,
+  "base": "04a4ca85ffbfd3916010897fb6fcc193ba47252d",
+  "witnesses": [
+    {
+      "name": "EXACT32",
+      "test": "TestV5CausalExact32MiB",
+      "pid": 94517,
+      "exit_code": 0,
+      "log_sha256": "e81e257fdbe1a5e14c44558e0332281f620ee8aedbaff07050a45ff70e6d0ea5",
+      "receipt_sha256": "a43de5e4b4808a7ca5400de9620f897c949725f29ad1a5752285ee95952f83d0"
+    },
+    {
+      "name": "PLUS_ONE",
+      "test": "TestV5CausalOver32MiBPreEffect",
+      "pid": 94524,
+      "exit_code": 0,
+      "log_sha256": "c63e31ed22bd906e96f002514dba8219c4e1a1ea999c995a85f860e3c04c8f62",
+      "receipt_sha256": "1c9cb5d7362e286c3065f4c765ec781b6e5f7de73716fae1f71c70b7d4db2b49"
+    },
+    {
+      "name": "PARTIAL_EXTERNAL",
+      "test": "TestV5CausalPartialExternalFailure",
+      "pid": 94534,
+      "exit_code": 0,
+      "log_sha256": "997ff0fc468e7471aeadcd26f3e2b264c5b5117e3fcb9e752a70cfe9f3722da1",
+      "receipt_sha256": "b30a40d3eca294cb2698c53678780b6df3581f4087939204cbad54870ab72ee2"
+    },
+    {
+      "name": "EARLY_TERMINAL",
+      "test": "TestV5CausalEarlyTerminalOnce",
+      "pid": 94541,
+      "exit_code": 0,
+      "log_sha256": "1a1c71da65019caf6ef9ddef2d505c54e56183b6f1baf918c1eb15bb2461e8a7",
+      "receipt_sha256": "eecf1c78ad0736dccd4314c2992a65964eff3e5f633fa66036f64ced743a2da3"
+    }
+  ],
+  "mutations": [
+    {
+      "id": "production-dispatch",
+      "witness": "EXACT32",
+      "critical_edge": "production executor SessionClient.call -> private path",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+      "log_sha256": "3318a6023dc021e5de4b220802199b81ecefe060c1af5b498d44b34d0f59bb93",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "runtime-context",
+      "witness": "EXACT32",
+      "critical_edge": "real private Runtime receives explicit carrier",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+      "log_sha256": "4cf18c45db4cccf26bff53e55cb3704a708911ef65027766bbd162be4ecee988",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "shared-transaction",
+      "witness": "EXACT32",
+      "critical_edge": "actual Manager ingress -> shared transaction marker",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+      "log_sha256": "ef54975d81f0f8ce02957fc3093a92af90e8446f6d6d4067e00949ab926ff1db",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "manager-admission",
+      "witness": "EXACT32",
+      "critical_edge": "ordinary preflight -> real Manager admission",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+      "log_sha256": "6d3a1982f5f636d3ebcf2075e2e5c338641db2ddd8f69090efa8abb6e2b3e315",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "request-allocation",
+      "witness": "EXACT32",
+      "critical_edge": "retained request frame allocated only via Manager reservation",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+      "log_sha256": "b76555af960e393b860a346d0575c72cf07166c7131268108228b7af9ec54fba",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "response-allocation",
+      "witness": "EXACT32",
+      "critical_edge": "retained response frame allocated only via Manager reservation",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+      "log_sha256": "580f8b345d96076cda4b12d4d8618bca74a0d105c4c45a61fd5fd72d70181d0a",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "request-charge",
+      "witness": "EXACT32",
+      "critical_edge": "request allocation has its full prior charge",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_EXACT32_RESERVATION",
+      "log_sha256": "e4fdbe563220bb9d5915f8122216cd436274899765843f54667f371ced7597fa",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "response-charge",
+      "witness": "EXACT32",
+      "critical_edge": "response allocation has its full prior charge",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_EXACT32_RESERVATION",
+      "log_sha256": "86e5c528b8ca69bb0b46c4d244403ce04de1be764946a25c6809a847b6086b4f",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "result-original-alias",
+      "witness": "EXACT32",
+      "critical_edge": "accepted original response -> exact leased result alias",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+      "log_sha256": "484d4804d265bb82701a6da3237e7b28e417dbcd4228ef4e055e1bd0a3d393f9",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "lexical-binding",
+      "witness": "EXACT32",
+      "critical_edge": "acquisition binds original lexical offsets before typed decode",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+      "log_sha256": "af3d4c67965694ef46a63c69206d2b0eb1c0f220dc1e46bf44661e2b7b6fe0e8",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "provider-ordinal",
+      "witness": "EXACT32",
+      "critical_edge": "physical provider ordinal 1 -> original selected span",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+      "log_sha256": "91cc702b11c1a093e3d84d31e8c502f3ccba08d03d836d9917ee51ef1b9b69db",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "frame-sha",
+      "witness": "EXACT32",
+      "critical_edge": "actual frame bytes -> Manager digest/length",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_EXACT_ACQUIRED_DIGEST",
+      "log_sha256": "42aa5045622760b15c762be77689924d484a6266fde227a7e2f508503038e5cd",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "selected-sha",
+      "witness": "EXACT32",
+      "critical_edge": "actual provider element -> digest/length",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+      "log_sha256": "118c3f6ec5f02f07ac705a7a0bd7c9a1b252b98bd84118bcc98839a97d8cbfb4",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "noncopy-view",
+      "witness": "EXACT32",
+      "critical_edge": "immutable view aliases reserved backing, not a clone",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+      "log_sha256": "b14de3830bc2106aefd1bd682dbba6f18edaf6b0191e9979747023ca40b768aa",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "manager-observation",
+      "witness": "EXACT32",
+      "critical_edge": "observations attached to actual accepted Manager record",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_MANAGER_OBSERVATION",
+      "log_sha256": "230ee3f5f293fcab48b83fd6e616b69af4ca440dd67e020ad02e976ffbaee630",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "plus-one-bound",
+      "witness": "PLUS_ONE",
+      "critical_edge": "32 MiB+1 reservation refused before raw allocation/WRITE",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PLUS_ONE_PRE_EFFECT",
+      "log_sha256": "f600c8622acd2dce15c7ca0146775ed072dfe9eb8583eaf70d5361a99e52ac7d",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "nonpoisoning-refusal",
+      "witness": "PLUS_ONE",
+      "critical_edge": "raw quota refusal classified ResourceExhausted without poisoning READY",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PLUS_ONE_PRE_EFFECT",
+      "log_sha256": "3c673810ff41f4e536c7556c8fd09ff03f0d061e518c44ed7ac7b5b9bdc19ac2",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "proposed-refusal-observation",
+      "witness": "PLUS_ONE",
+      "critical_edge": "zero-effect refusal records proposed, not acquired, bytes",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PROPOSED_COMMITMENT",
+      "log_sha256": "ac63472170d1968119163b92e40cd8a37a99376562390020fbda9c655178229c",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "proposed-refusal-sha",
+      "witness": "PLUS_ONE",
+      "critical_edge": "prospective request exact bytes -> actual commitment",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PROPOSED_COMMITMENT",
+      "log_sha256": "89baad874773f829765e7595ed8f8b3bc699652b617aa8911681a6673b0f42a4",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "refusal-incomplete-prefix-write",
+      "witness": "PLUS_ONE",
+      "critical_edge": "after quota refusal, even one incomplete prefix byte is a forbidden Write call/raw-byte effect before any frame decoding",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PLUS_ONE_ZERO_WIRE",
+      "log_sha256": "ee0d25237624abb73679419b9d562d9bd4ae0ad2c56d51f99539a426948c173f",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "external-partial-observation",
+      "witness": "PARTIAL_EXTERNAL",
+      "critical_edge": "every external/partial acquired frame remains observed",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_PARTIAL_EXTERNAL_SPANS",
+      "log_sha256": "368d933bdd8f63e781af0e202d1c458cc1734e27b2d4d43fbe03e31d72418dc5",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "partial-prefix-not-planned",
+      "witness": "PARTIAL_EXTERNAL",
+      "critical_edge": "partial digest binds actual acquired prefix, not reserved full capacity",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_EXACT_ACQUIRED_DIGEST",
+      "log_sha256": "aa597c7839f9da9f48e81374c16a8cc1d58b13f42fcf07914311205fd198dad3",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "early-null-return",
+      "witness": "EARLY_TERMINAL",
+      "critical_edge": "actual null response takes early-return branch",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_EARLY_RETURN",
+      "log_sha256": "89a83ff76f8467412f5c2b9440c3dab4313e872ca0740d4c8e2c14d081f4155f",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "generic-terminal-callback",
+      "witness": "EARLY_TERMINAL",
+      "critical_edge": "caller Release converges on actual generic sole terminal",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_GENERIC_ACCOUNT_RELEASE",
+      "log_sha256": "6fcf3a2422ee20345629607c4094e8ce139626f5e1ad33605110fd5dc1d9ee5e",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "generic-terminal-clearing",
+      "witness": "EARLY_TERMINAL",
+      "critical_edge": "generic releaseLocked clears reservation and invalidates views",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_GENERIC_ACCOUNT_RELEASE",
+      "log_sha256": "0ba607116632a3067d0b06448097873264f4a50a6e4619f09da3758f14929ead",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "reservation-object-record",
+      "witness": "EARLY_TERMINAL",
+      "critical_edge": "each retained allocation has an actual ownership object",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_RESERVATION_OBJECT_RECORD",
+      "log_sha256": "fb8cddd6f0672290a5c8fa10d4209a6e1daea66c0cdfa650999fb13246197623",
+      "behaviorally_detected": true
+    },
+    {
+      "id": "table-terminal-release",
+      "witness": "EARLY_TERMINAL",
+      "critical_edge": "generic terminal invokes inherited V2 table account release",
+      "exit_code": 1,
+      "assertion": "ASSERT_C4_GENERIC_ACCOUNT_RELEASE",
+      "log_sha256": "f4c54aab423c94d251c22cd19f616ae326564c48dc0ffd78452f1861ac1e617e",
+      "behaviorally_detected": true
+    }
+  ],
+  "restored_witnesses": [
+    {
+      "name": "EXACT32",
+      "test": "TestV5CausalExact32MiB",
+      "pid": 95063,
+      "exit_code": 0,
+      "log_sha256": "a9eec5dabf599dfeb3c0ac393726f87c72de98cc82251ea845569c194b08eb47",
+      "receipt_sha256": "3905f796e99a68c85975a28c2b88a65ef4735525862d4abc68c897901d3844cc"
+    },
+    {
+      "name": "PLUS_ONE",
+      "test": "TestV5CausalOver32MiBPreEffect",
+      "pid": 95070,
+      "exit_code": 0,
+      "log_sha256": "24e52ddf67a102bb31ff9362e5928cbe6a788782e3b0a1a6c4f83cea35f5d208",
+      "receipt_sha256": "7f5140f26a8ca7234e111438ac97b669b3496c4bf76761ef0b82035c4537d497"
+    },
+    {
+      "name": "PARTIAL_EXTERNAL",
+      "test": "TestV5CausalPartialExternalFailure",
+      "pid": 95077,
+      "exit_code": 0,
+      "log_sha256": "6369cbb3d8e45a0204aa7fa2478205e9267a8cba1e8d065f2238a8f9b06fc2ce",
+      "receipt_sha256": "89433f3b0cbfe639dc9726cf199e408bf84922b5e770632d6bf79448c5ce265b"
+    },
+    {
+      "name": "EARLY_TERMINAL",
+      "test": "TestV5CausalEarlyTerminalOnce",
+      "pid": 95084,
+      "exit_code": 0,
+      "log_sha256": "7e1b57d18d7311d2f5a9689a692eb80b9e71f1e4f8af8e8e8e722881f3e61e3a",
+      "receipt_sha256": "a07ac31fcc207d21287fa98e6b9107ebefcda6161c36624d72bc7aba4cdf3ca4"
+    }
+  ],
+  "verifier_exit_code": 0
+}

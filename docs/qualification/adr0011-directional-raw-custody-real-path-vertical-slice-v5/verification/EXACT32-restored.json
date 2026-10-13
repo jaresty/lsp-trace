@@ -1,0 +1,64 @@
+{
+  "entry": "incomingops.SessionClient.call -\u003e private Runtime -\u003e actual Manager -\u003e shared transport",
+  "facts": {
+    "accepted": true,
+    "limit": 33554432,
+    "measurement_scope": "directional raw-frame custody; general bookkeeping is separately reported",
+    "source_ordinal": 1
+  },
+  "observations": [
+    {
+      "component": "request-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 190,
+      "request_id": 1,
+      "selected": false,
+      "sha256": "c079029c2ef8676d3e900c03f805945314eccdbefc722261ff5d37be6573f895",
+      "source_ordinal": null
+    },
+    {
+      "component": "response-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 33554242,
+      "request_id": 1,
+      "selected": false,
+      "sha256": "dcd96f0c75bf95b41e1cc68a28db79bc47e29002a8559ed238c176b7e63a22fe",
+      "source_ordinal": null
+    },
+    {
+      "component": "element",
+      "failure": "",
+      "generation": 1,
+      "length": 33553943,
+      "request_id": 1,
+      "selected": true,
+      "sha256": "3b6f31893c9bd89c07af2c1ce0d8097ae76536cde1e3590645649f1fc5fc7c30",
+      "source_ordinal": 1
+    }
+  ],
+  "pid": 95063,
+  "production_go": false,
+  "release": {
+    "cumulative": 33554432,
+    "general_table_live_before": 24600,
+    "generic_released": true,
+    "live_after": 0,
+    "live_before": 33554432,
+    "object_creations": {
+      "c15-object-1": 1,
+      "c15-object-2": 1,
+      "c15-object-3": 1
+    },
+    "object_terminal_releases": {
+      "c15-object-1": 1,
+      "c15-object-2": 1,
+      "c15-object-3": 1
+    },
+    "partition_releases": 1,
+    "retained_allocations": 2,
+    "terminal_wins": 1
+  },
+  "witness": "EXACT32"
+}

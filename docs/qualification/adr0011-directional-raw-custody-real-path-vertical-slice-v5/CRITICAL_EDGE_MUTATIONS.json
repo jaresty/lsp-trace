@@ -1,0 +1,245 @@
+[
+  {
+    "id": "production-dispatch",
+    "path": "incomingops/executor.go",
+    "old": "if directionalPrivateEnabled(parent, method) {",
+    "new": "if false && directionalPrivateEnabled(parent, method) {",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+    "edge": "production executor SessionClient.call -> private path"
+  },
+  {
+    "id": "runtime-context",
+    "path": "incomingops/directional_private.go",
+    "old": "runtime.RoundTripDirectionalPrivate(ctx, sessionruntime.RoundTripRequest{",
+    "new": "runtime.RoundTripDirectionalPrivate(context.Background(), sessionruntime.RoundTripRequest{",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+    "edge": "real private Runtime receives explicit carrier"
+  },
+  {
+    "id": "shared-transaction",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "m.roundTripWithPrivateTransaction(ctx, req, nil, &privateB4Transaction{directionalV5: req.directionalV5})",
+    "new": "m.RoundTrip(ctx, req)",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+    "edge": "actual Manager ingress -> shared transaction marker"
+  },
+  {
+    "id": "manager-admission",
+    "path": "sessionruntime/sessionruntime.go",
+    "old": "if failure := m.admitDirectionalV5Locked(req); failure != \"\" {",
+    "new": "if failure := session.ResourceExhausted; failure != \"\" {",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+    "edge": "ordinary preflight -> real Manager admission"
+  },
+  {
+    "id": "request-allocation",
+    "path": "internal/lspwire/read_frame.go",
+    "old": "frame, err := lease.Allocate(\"request-frame\", len(header)+bodyLen)",
+    "new": "frame, err := make([]byte, len(header)+bodyLen), error(nil)",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+    "edge": "retained request frame allocated only via Manager reservation"
+  },
+  {
+    "id": "response-allocation",
+    "path": "internal/lspwire/read_frame.go",
+    "old": "frame, err := lease.Allocate(\"response-frame\", used+length)",
+    "new": "frame, err := make([]byte, used+length), error(nil)",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+    "edge": "retained response frame allocated only via Manager reservation"
+  },
+  {
+    "id": "request-charge",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "p.live += uint64(n)",
+    "new": "if component != \"request-frame\" { p.live += uint64(n) }",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_EXACT32_RESERVATION",
+    "edge": "request allocation has its full prior charge"
+  },
+  {
+    "id": "response-charge",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "p.live += uint64(n)",
+    "new": "if component != \"response-frame\" { p.live += uint64(n) }",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_EXACT32_RESERVATION",
+    "edge": "response allocation has its full prior charge"
+  },
+  {
+    "id": "result-original-alias",
+    "path": "sessionruntime/sessionruntime.go",
+    "old": "!req.directionalV5.lease.Result(read.message.Result)",
+    "new": "!req.directionalV5.lease.Result(append([]byte(nil), read.message.Result...))",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
+    "edge": "accepted original response -> exact leased result alias"
+  },
+  {
+    "id": "lexical-binding",
+    "path": "internal/acquisition/wire.go",
+    "old": "return lease.BindElementsPrivate()",
+    "new": "return nil",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+    "edge": "acquisition binds original lexical offsets before typed decode"
+  },
+  {
+    "id": "provider-ordinal",
+    "path": "internal/directionalraw/carrier.go",
+    "old": "span := p.elements[q.Ordinal]",
+    "new": "span := p.elements[q.Ordinal*0]",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+    "edge": "physical provider ordinal 1 -> original selected span"
+  },
+  {
+    "id": "frame-sha",
+    "path": "internal/directionalraw/carrier.go",
+    "old": "SHA256: sha256.Sum256(b[:n])",
+    "new": "SHA256: [32]byte{}",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_EXACT_ACQUIRED_DIGEST",
+    "edge": "actual frame bytes -> Manager digest/length"
+  },
+  {
+    "id": "selected-sha",
+    "path": "internal/directionalraw/carrier.go",
+    "old": "SHA256: sha256.Sum256(p.result[span[0]:span[1]])",
+    "new": "SHA256: [32]byte{}",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+    "edge": "actual provider element -> digest/length"
+  },
+  {
+    "id": "noncopy-view",
+    "path": "internal/directionalraw/carrier.go",
+    "old": "func (p PreparedSelection) View() View               { return p.view }",
+    "new": "func (p PreparedSelection) View() View { v:=p.view;if v.record!=nil{copied:=*v.record;copied.result=append([]byte(nil),v.record.result...);v.record=&copied};return v }",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_SOURCE_ORDINAL_SPAN",
+    "edge": "immutable view aliases reserved backing, not a clone"
+  },
+  {
+    "id": "manager-observation",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "d.accepted[i].observations = append(d.accepted[i].observations, o)",
+    "new": "d.accepted[i].observations = d.accepted[i].observations",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_MANAGER_OBSERVATION",
+    "edge": "observations attached to actual accepted Manager record"
+  },
+  {
+    "id": "plus-one-bound",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "uint64(n) > privateDirectionalMaxV5-p.live",
+    "new": "false && uint64(n) > privateDirectionalMaxV5-p.live",
+    "witness": "PLUS_ONE",
+    "assertion": "ASSERT_C4_PLUS_ONE_PRE_EFFECT",
+    "edge": "32 MiB+1 reservation refused before raw allocation/WRITE"
+  },
+  {
+    "id": "nonpoisoning-refusal",
+    "path": "sessionruntime/sessionruntime.go",
+    "old": "req.directionalV5 != nil && errors.Is(err, directionalraw.ErrReservationRefused)",
+    "new": "false && req.directionalV5 != nil && errors.Is(err, directionalraw.ErrReservationRefused)",
+    "witness": "PLUS_ONE",
+    "assertion": "ASSERT_C4_PLUS_ONE_PRE_EFFECT",
+    "edge": "raw quota refusal classified ResourceExhausted without poisoning READY"
+  },
+  {
+    "id": "proposed-refusal-observation",
+    "path": "internal/lspwire/read_frame.go",
+    "old": "lease.RefusedPrivate(\"request-frame\", len(header)+bodyLen, sum)",
+    "new": "_ = sum",
+    "witness": "PLUS_ONE",
+    "assertion": "ASSERT_C4_PROPOSED_COMMITMENT",
+    "edge": "zero-effect refusal records proposed, not acquired, bytes"
+  },
+  {
+    "id": "proposed-refusal-sha",
+    "path": "internal/lspwire/read_frame.go",
+    "old": "lease.RefusedPrivate(\"request-frame\", len(header)+bodyLen, sum)",
+    "new": "lease.RefusedPrivate(\"request-frame\", len(header)+bodyLen, [32]byte{})",
+    "witness": "PLUS_ONE",
+    "assertion": "ASSERT_C4_PROPOSED_COMMITMENT",
+    "edge": "prospective request exact bytes -> actual commitment"
+  },
+  {
+    "id": "refusal-incomplete-prefix-write",
+    "path": "internal/lspwire/read_frame.go",
+    "old": "lease.RefusedPrivate(\"request-frame\", len(header)+bodyLen, sum)",
+    "new": "lease.RefusedPrivate(\"request-frame\", len(header)+bodyLen, sum); _, _ = w.Write([]byte{'C'})",
+    "witness": "PLUS_ONE",
+    "assertion": "ASSERT_C4_PLUS_ONE_ZERO_WIRE",
+    "edge": "after quota refusal, even one incomplete prefix byte is a forbidden Write call/raw-byte effect before any frame decoding"
+  },
+  {
+    "id": "external-partial-observation",
+    "path": "internal/lspwire/read_frame.go",
+    "old": "lease.Frame(\"response-frame\", len(raw))",
+    "new": "_ = len(raw)",
+    "witness": "PARTIAL_EXTERNAL",
+    "assertion": "ASSERT_C4_PARTIAL_EXTERNAL_SPANS",
+    "edge": "every external/partial acquired frame remains observed"
+  },
+  {
+    "id": "partial-prefix-not-planned",
+    "path": "internal/directionalraw/carrier.go",
+    "old": "SHA256: sha256.Sum256(b[:n])",
+    "new": "SHA256: sha256.Sum256(b)",
+    "witness": "PARTIAL_EXTERNAL",
+    "assertion": "ASSERT_C4_EXACT_ACQUIRED_DIGEST",
+    "edge": "partial digest binds actual acquired prefix, not reserved full capacity"
+  },
+  {
+    "id": "early-null-return",
+    "path": "incomingops/directional_private.go",
+    "old": "if lease.Null() {",
+    "new": "if false && lease.Null() {",
+    "witness": "EARLY_TERMINAL",
+    "assertion": "ASSERT_C4_EARLY_RETURN",
+    "edge": "actual null response takes early-return branch"
+  },
+  {
+    "id": "generic-terminal-callback",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "return (callHierarchyLayer1GenericLease{owner: o}).Release()",
+    "new": "return r.Terminate()",
+    "witness": "EARLY_TERMINAL",
+    "assertion": "ASSERT_C4_GENERIC_ACCOUNT_RELEASE",
+    "edge": "caller Release converges on actual generic sole terminal"
+  },
+  {
+    "id": "generic-terminal-clearing",
+    "path": "sessionruntime/b4_owned_method_pair_lease.go",
+    "old": "o.directionalV5.reservation.Terminate()",
+    "new": "_ = o.directionalV5.reservation",
+    "witness": "EARLY_TERMINAL",
+    "assertion": "ASSERT_C4_GENERIC_ACCOUNT_RELEASE",
+    "edge": "generic releaseLocked clears reservation and invalidates views"
+  },
+  {
+    "id": "reservation-object-record",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "a.c15.create(site, privateB4C15Operation(\"allocation\"))",
+    "new": "uint64(0), session.Failure(\"\")",
+    "witness": "EARLY_TERMINAL",
+    "assertion": "ASSERT_C4_RESERVATION_OBJECT_RECORD",
+    "edge": "each retained allocation has an actual ownership object"
+  },
+  {
+    "id": "table-terminal-release",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "a.requestTerminalRelease()",
+    "new": "_ = a",
+    "witness": "EARLY_TERMINAL",
+    "assertion": "ASSERT_C4_GENERIC_ACCOUNT_RELEASE",
+    "edge": "generic terminal invokes inherited V2 table account release"
+  }
+]

@@ -1,0 +1,6 @@
+=== RUN   TestV5CausalExact32MiB
+    directional_v5_four_causal_private_test.go:353: ASSERT_C4_EXACT32_RESERVATION: live=33554242 cumulative=33554432 allocations=2
+--- FAIL: TestV5CausalExact32MiB (0.29s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.589s
+FAIL

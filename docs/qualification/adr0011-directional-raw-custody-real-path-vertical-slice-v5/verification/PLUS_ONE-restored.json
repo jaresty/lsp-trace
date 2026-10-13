@@ -1,0 +1,128 @@
+{
+  "entry": "incomingops.SessionClient.call -\u003e private Runtime -\u003e actual Manager -\u003e shared transport",
+  "facts": {
+    "attempted_bytes": 33554433,
+    "measurement_scope": "directional raw-frame custody; general bookkeeping is separately reported",
+    "proposed_not_acquired": true,
+    "refusal": {
+      "failure": "RESOURCE_EXHAUSTED",
+      "proposed_length": 33554433,
+      "proposed_sha256": "c57c59ad970c30c93716a1b0a0965f946d257d085e62cf471eebb9766a274966"
+    },
+    "reservation": {
+      "cumulative": 0,
+      "live": 0,
+      "occupied": false,
+      "retained_allocations": 0
+    },
+    "reuse": {
+      "decoded_request_sha256": "6a97f7b78fcf3c4237711e22ef7224ea06706bc7545fe04910de5f74e2cbdf66",
+      "generation_after": 1,
+      "generation_before": 1,
+      "null": true,
+      "raw_bytes": 323,
+      "raw_sha256": "6a97f7b78fcf3c4237711e22ef7224ea06706bc7545fe04910de5f74e2cbdf66",
+      "ready_after": true,
+      "ready_before": true,
+      "request_id": 3,
+      "same_client": true,
+      "same_manager": true,
+      "session_id_after": "sk1:69ef64439190883925e92e677b1ce41dcb374ae94880531d3482c12ff86fc614",
+      "session_id_before": "sk1:69ef64439190883925e92e677b1ce41dcb374ae94880531d3482c12ff86fc614",
+      "success": true,
+      "write_calls": 2,
+      "written_bytes": 323
+    },
+    "source_ordinal": 1,
+    "source_release": {
+      "cumulative": 5593108,
+      "general_table_live_before": 24600,
+      "generic_released": true,
+      "live_after": 0,
+      "live_before": 5593108,
+      "object_creations": {
+        "c15-object-1": 1,
+        "c15-object-2": 1,
+        "c15-object-3": 1
+      },
+      "object_terminal_releases": {
+        "c15-object-1": 1,
+        "c15-object-2": 1,
+        "c15-object-3": 1
+      },
+      "partition_releases": 1,
+      "retained_allocations": 2,
+      "terminal_wins": 1
+    },
+    "wire_effect_delta": 0,
+    "zero_wire": {
+      "decoded_packet_delta": 0,
+      "measurement": "Manager stdin Write calls and raw bytes before provider frame decoding",
+      "raw_bytes": 0,
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "write_calls": 0,
+      "written_bytes": 0
+    }
+  },
+  "observations": [
+    {
+      "component": "request-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 190,
+      "request_id": 1,
+      "selected": false,
+      "sha256": "c079029c2ef8676d3e900c03f805945314eccdbefc722261ff5d37be6573f895",
+      "source_ordinal": null
+    },
+    {
+      "component": "response-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 5592918,
+      "request_id": 1,
+      "selected": false,
+      "sha256": "b907fc557f3404ecd711735e91577e1ba8a019cc7649cd7ffd4bc7e3f3f83ec1",
+      "source_ordinal": null
+    },
+    {
+      "component": "element",
+      "failure": "",
+      "generation": 1,
+      "length": 5592620,
+      "request_id": 1,
+      "selected": true,
+      "sha256": "7dacb7e68495ddb2eff1c73f25144dd484100711963c497dd7921cbe8b561f36",
+      "source_ordinal": 1
+    },
+    {
+      "component": "request-frame-reservation-refusal",
+      "failure": "RESOURCE_EXHAUSTED",
+      "generation": 1,
+      "length": 33554433,
+      "request_id": 2,
+      "selected": false,
+      "sha256": "c57c59ad970c30c93716a1b0a0965f946d257d085e62cf471eebb9766a274966",
+      "source_ordinal": null
+    }
+  ],
+  "pid": 95070,
+  "production_go": false,
+  "release": {
+    "cumulative": 0,
+    "general_table_live_before": 24600,
+    "generic_released": true,
+    "live_after": 0,
+    "live_before": 0,
+    "object_creations": {
+      "c15-object-1": 1
+    },
+    "object_terminal_releases": {
+      "c15-object-1": 1
+    },
+    "partition_releases": 0,
+    "retained_allocations": 0,
+    "terminal_wins": 1
+  },
+  "witness": "PLUS_ONE"
+}

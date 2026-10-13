@@ -1,0 +1,105 @@
+{
+  "binding": "ADR0011_V5_REFRAME",
+  "base": "04a4ca85ffbfd3916010897fb6fcc193ba47252d",
+  "production_go": false,
+  "paths": [
+    {
+      "path": "incomingops/directional_private.go",
+      "family": "invocation",
+      "role": "preserved private executor ingress and Runtime adapter",
+      "base_sha256": null,
+      "sha256": "8b3ab3c311b63222c931ce563222f8c8b0cf3ecb082cbdd9a63997761c2f6146"
+    },
+    {
+      "path": "incomingops/executor.go",
+      "family": "invocation",
+      "role": "preserved production SessionClient.call opt-in dispatch",
+      "base_sha256": "040622acaf54ea77fe79f3333b10857cfce0bef09bce81f448bd4ee0a619b884",
+      "sha256": "5072497936582af447113b28e64d499b7d6b905150182b6e99cf429f0496f7bb"
+    },
+    {
+      "path": "internal/acquisition/sessionclient/client.go",
+      "family": "acquisition",
+      "role": "preserved neutral acquisition Runtime adapter",
+      "base_sha256": "7ba0264d567b714485f56f7303e854f9546faae9800086bde1f9987a067aa1fb",
+      "sha256": "95f436dcb9afa47876accc10a7b51079cab98b67d40125e52e6ae9cb9982b222"
+    },
+    {
+      "path": "internal/acquisition/wire.go",
+      "family": "acquisition",
+      "role": "preserved lexical binding before strict typed decode",
+      "base_sha256": "4214844c797bd99a6dc0a48a12af1ab75b29ba78b30c360446b3873e40ed329d",
+      "sha256": "b4d87f57a1ac8834fb2f1b58a3c3d4424822dec7a8aa3a1c92033b581ee06092"
+    },
+    {
+      "path": "internal/directionalraw/carrier.go",
+      "family": "acquisition",
+      "role": "six carriers; immutable exact aliases; proposed refusal commitment",
+      "base_sha256": null,
+      "sha256": "d4a5740dcd533519d0f0d4cf77820c1af4210a469a49837e3663cdd98b2c7784"
+    },
+    {
+      "path": "internal/lspwire/read_frame.go",
+      "family": "transport",
+      "role": "preserved reserved original request/response frames and partial prefixes; proposed refusal digest",
+      "base_sha256": "9e58a1ae4a79171799134d8640c99731842589125f229088f39196d3d7b9fa58",
+      "sha256": "c189b521ef26d8ab98b5c758914c7b03b9015a9c487d12f21ee30ab4fa1274c1"
+    },
+    {
+      "path": "internal/slicer/discover.go",
+      "family": "invocation",
+      "role": "preserved outgoing provider ordinals before canonical sorting",
+      "base_sha256": "ccd35ac3e9984cb20c753f67623997c7c528158ec2aeb36f06a11ef9f2e4781c",
+      "sha256": "f7606ead6565ae3264e1c14f7b005b9f4561167d2458263fd29b46f19efa851e"
+    },
+    {
+      "path": "internal/traverse/traverse.go",
+      "family": "invocation",
+      "role": "preserved prepare/incoming provider-ordinal selection",
+      "base_sha256": "341a293cddebdaf62546229cdc38af1d5d4369661c7808c4265fa273213b0c07",
+      "sha256": "894d6bf7e98a59ae4e9b3a75d9c022f46065bc01c5bec503475a12b64837e185"
+    },
+    {
+      "path": "sessionruntime/b4_definition_private.go",
+      "family": "session",
+      "role": "preserved shared-transaction private marker",
+      "base_sha256": "ba4d40171650eddc64b7ce0617e14876ab37c4d05defb932e0ada2aee9db6549",
+      "sha256": "119968fcabec3298f9a2af5602c6a3a68dbc1e223c8518b159371e1581e1a156"
+    },
+    {
+      "path": "sessionruntime/b4_explicit_bytes_c15_private.go",
+      "family": "session",
+      "role": "preserved separate 32 MiB directional partition on V2 account",
+      "base_sha256": "debf86b8b4568d49abd538da14f9a93fb34990936dd13b1156bdbf6de93d21cd",
+      "sha256": "f78ac007ec35e7cd304708e7c0d8a31499e06583b5dac5180af246f1dad195e6"
+    },
+    {
+      "path": "sessionruntime/b4_owned_method_pair_lease.go",
+      "family": "session",
+      "role": "preserved existing generic-owner terminal -> reservation clearing",
+      "base_sha256": "b53e51b89effa526337b96fcf883078da332b9b1a1457fcd1fc44a3db2e585e9",
+      "sha256": "fca027216fccf430b4664aba893e2a1a4f92ce4e911575a7621a510c622bd5da"
+    },
+    {
+      "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+      "family": "session",
+      "role": "preserved actual Manager admission, byte authority, observations, generic/C15 terminal",
+      "base_sha256": null,
+      "sha256": "b7d7d2c835bd9148d94552d4192724b26d2da14571b513211564b109a122131a"
+    },
+    {
+      "path": "sessionruntime/directional_v5_four_causal_private_test.go",
+      "family": "test",
+      "role": "ONLY four independent fresh-process causal witnesses",
+      "base_sha256": null,
+      "sha256": "e12df90cf8c0be77a90c2cc0830dd2e30b64b0c7d7c8b7e26ab4b08e566f25f1"
+    },
+    {
+      "path": "sessionruntime/sessionruntime.go",
+      "family": "session",
+      "role": "preserved actual shared preflight/pending/transport/finish; required non-poisoning byte-refusal classification",
+      "base_sha256": "ad06c64bf3e267587dc94197a80ece1a03bc7933bd9263b4bb1ac78cad69fb8d",
+      "sha256": "2f80f971134bd59058421e554e1e382afb229fcc19fe2ec6a1aca06cd506c065"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "binding": "ADR0011_V5_REFRAME",
+  "witnesses": {
+    "EXACT32": "TestV5CausalExact32MiB",
+    "PLUS_ONE": "TestV5CausalOver32MiBPreEffect",
+    "PARTIAL_EXTERNAL": "TestV5CausalPartialExternalFailure",
+    "EARLY_TERMINAL": "TestV5CausalEarlyTerminalOnce"
+  },
+  "fresh_process_per_witness": true,
+  "broader_scenarios_deferred": true,
+  "plus_one_transport_probe": {
+    "before_frame_decoding": true,
+    "write_calls": 0,
+    "raw_bytes": 0,
+    "written_bytes": 0,
+    "same_ready_session_reuse_required": true
+  },
+  "production_go": false,
+  "entry": "production incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+  "source_ordinal": 1,
+  "measurement_scope": "retained directional raw-frame capacity, acquired/emitted spans, and generic terminal; general table bookkeeping separately recorded",
+  "limits": {
+    "directional": 33554432,
+    "general": 33554432,
+    "combined": 67108864
+  },
+  "cases": {
+    "EXACT32": "one accepted prepare acquisition; reserved request + original response capacity exactly 32 MiB; source array ordinal 1; exact frame/element hashes; release",
+    "PLUS_ONE": "acquire/select and release an ordinal-1 source, then prospective incoming request frame exactly 32 MiB+1; zero new retained raw allocations; independent Manager stdin probe BEFORE frame decoding observes exactly zero Write calls, zero offered raw bytes and zero emitted bytes across refusal; proposed-not-acquired commitment and release; a valid subsequent incoming request succeeds on the SAME READY Manager/session/client/generation with positive raw transport receipt",
+    "PARTIAL_EXTERNAL": "real incoming transaction consumes notification + unmatched response + truncated response; acquired prefixes independently hashed; failed transaction; release",
+    "EARLY_TERMINAL": "real incoming null response takes SessionClient early return; generic release wins exactly once, invalidates view, releases every created object"
+  }
+}

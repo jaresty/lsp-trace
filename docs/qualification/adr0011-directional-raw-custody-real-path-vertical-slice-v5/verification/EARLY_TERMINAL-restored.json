@@ -1,0 +1,87 @@
+{
+  "entry": "incomingops.SessionClient.call -\u003e private Runtime -\u003e actual Manager -\u003e shared transport",
+  "facts": {
+    "measurement_scope": "directional raw-frame custody; general bookkeeping is separately reported",
+    "null_early_return": true,
+    "source_ordinal": 1
+  },
+  "observations": [
+    {
+      "component": "request-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 190,
+      "request_id": 1,
+      "selected": false,
+      "sha256": "c079029c2ef8676d3e900c03f805945314eccdbefc722261ff5d37be6573f895",
+      "source_ordinal": null
+    },
+    {
+      "component": "response-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 526,
+      "request_id": 1,
+      "selected": false,
+      "sha256": "c73fe3bb55df35b4d04bfd717ae54465055569d6aeb3d833216a601fda323393",
+      "source_ordinal": null
+    },
+    {
+      "component": "element",
+      "failure": "",
+      "generation": 1,
+      "length": 232,
+      "request_id": 1,
+      "selected": true,
+      "sha256": "d2aaa0642747120e9b30b418941fbc4106ba77e48983d474492bbf4f7ca44c28",
+      "source_ordinal": 1
+    },
+    {
+      "component": "request-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 323,
+      "request_id": 2,
+      "selected": false,
+      "sha256": "5dfeda7dfeb17d35017066d31dc6c13f298b6814561c2d3f36c337d7e1cc3c7e",
+      "source_ordinal": null
+    },
+    {
+      "component": "response-frame",
+      "failure": "",
+      "generation": 1,
+      "length": 60,
+      "request_id": 2,
+      "selected": false,
+      "sha256": "b9331439d2d971a1f550d27c4f2c51a96983ef417dcc359de77f441c93161ef3",
+      "source_ordinal": null
+    }
+  ],
+  "pid": 95084,
+  "production_go": false,
+  "release": {
+    "cumulative": 1099,
+    "general_table_live_before": 24600,
+    "generic_released": true,
+    "live_after": 0,
+    "live_before": 1099,
+    "object_creations": {
+      "c15-object-1": 1,
+      "c15-object-2": 1,
+      "c15-object-3": 1,
+      "c15-object-4": 1,
+      "c15-object-5": 1
+    },
+    "object_terminal_releases": {
+      "c15-object-1": 1,
+      "c15-object-2": 1,
+      "c15-object-3": 1,
+      "c15-object-4": 1,
+      "c15-object-5": 1
+    },
+    "partition_releases": 1,
+    "retained_allocations": 4,
+    "terminal_wins": 1
+  },
+  "witness": "EARLY_TERMINAL"
+}

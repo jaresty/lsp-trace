@@ -1,0 +1,6 @@
+=== RUN   TestV5CausalExact32MiB
+    directional_v5_four_causal_private_test.go:350: ASSERT_C4_SOURCE_ORDINAL_SPAN
+--- FAIL: TestV5CausalExact32MiB (0.28s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.580s
+FAIL

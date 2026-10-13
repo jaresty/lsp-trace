@@ -1,0 +1,5 @@
+=== RUN   TestV5CausalPartialExternalFailure
+    directional_v5_four_causal_private_test.go:442: ASSERT_C4_PARTIAL_EXTERNAL PASS
+--- PASS: TestV5CausalPartialExternalFailure (0.00s)
+PASS
+ok  	lsp-trace/sessionruntime	0.233s

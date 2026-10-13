@@ -1,0 +1,5 @@
+=== RUN   TestV5CausalExact32MiB
+    directional_v5_four_causal_private_test.go:357: ASSERT_C4_EXACT32 PASS
+--- PASS: TestV5CausalExact32MiB (0.32s)
+PASS
+ok  	lsp-trace/sessionruntime	0.566s
