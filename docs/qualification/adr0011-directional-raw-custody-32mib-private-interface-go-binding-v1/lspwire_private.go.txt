@@ -1,0 +1,41 @@
+package lspwire
+
+import (
+	"context"
+	"crypto/sha256"
+	"io"
+)
+
+const privateDirectionalRawMaxBytesV3 uint64 = 32 << 20
+
+type privateDirectionalRawLeaseSourceV3 interface {
+	ReserveDirectionalRawV3(component uint8, bytes uint64) (privateDirectionalRawLeaseV3, error)
+}
+type privateDirectionalRawLeaseV3 struct {
+	ID       uint64
+	Capacity uint64
+	Active   bool
+}
+type privateDirectionalRawOwnedFrameV3 struct {
+	Bytes    []byte
+	Capacity uint64
+	SHA256   [sha256.Size]byte
+	Lease    privateDirectionalRawLeaseV3
+	Complete bool
+	Present  bool
+	Err      error
+}
+type Reader struct{ R io.Reader }
+
+func (r *Reader) readDirectionalRawOwnedFrameV3(ctx context.Context, source privateDirectionalRawLeaseSourceV3, component uint8, limit uint64) (privateDirectionalRawOwnedFrameV3, error) {
+	return privateDirectionalRawOwnedFrameV3{}, nil
+}
+
+func compileDirectionalRawOwnedFrameV3(r *Reader, ctx context.Context, source privateDirectionalRawLeaseSourceV3) {
+	frame, err := r.readDirectionalRawOwnedFrameV3(ctx, source, 1, privateDirectionalRawMaxBytesV3)
+	_, _ = frame, err
+	frame, err = r.readDirectionalRawOwnedFrameV3(ctx, source, 1, privateDirectionalRawMaxBytesV3+1)
+	_, _ = frame, err
+	frame, err = r.readDirectionalRawOwnedFrameV3(ctx, nil, 0, 0)
+	_, _ = frame, err
+}
