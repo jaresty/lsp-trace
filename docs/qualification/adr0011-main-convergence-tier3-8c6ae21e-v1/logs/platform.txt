@@ -1,0 +1,4 @@
+Darwin Schwas-MacBook-Pro.local 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:28:34 PDT 2026; root:xnu-12377.121.10~1/RELEASE_ARM64_T6050 arm64
+go version go1.26.5 darwin/arm64
+Python 3.14.6
+git version 2.50.1 (Apple Git-155)

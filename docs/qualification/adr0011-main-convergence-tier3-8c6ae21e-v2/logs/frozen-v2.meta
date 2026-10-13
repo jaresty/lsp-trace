@@ -1,0 +1,5 @@
+command=go test ./sessionruntime -run \^TestPrivateB4C15V2SuccessorCatalog\$ -count=1 -v 
+started_utc=2026-10-12T23:59:37Z
+finished_utc=2026-10-12T23:59:39Z
+elapsed_ns=1726513875
+exit_code=1

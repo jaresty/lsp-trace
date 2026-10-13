@@ -1,0 +1,9 @@
+head=8c6ae21e3709b80f6abae0ca8b1df185d81d99d9
+tree=712a950f7f6c0b1c6a09f6d8178808dca88dbc0d
+parents=320edd24aa02cceb0a88d3d5284728ee026da59e
+subject=test(adr0011): remove unreachable C07-C12 bodies
+merge=2e38a92084073a676803465eee6177ec5c72abae
+tree=c23f7d49d4d2ec0c07c6a7d6486d3f1940a44cca
+parents=6fd25ba4dddb43b191316e3d01dc8c96b5e3b066 57225a1e9e7282ed7f58a7a19f8ca538c3d6105e
+subject=merge: converge ADR0011 integration history
+merge_base=6e3e006e3569320989128cff649150106dd429b9

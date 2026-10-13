@@ -1,0 +1,14 @@
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/.pi/evidence/adr0007-v4-red.txt
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/cmd/lsp-trace-mcp/.pi/evidence/private-runtime.trace
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/README.md
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/governance-authorization-proposal.md
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/censuscontinuation.test
+--- PASS: TestADR0007OwnershipExclusionsRemainUnowned (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/.pi/evidence/adr0007-v4-red.txt (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/cmd/lsp-trace-mcp/.pi/evidence/private-runtime.trace (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/README.md (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/governance-authorization-proposal.md (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/censuscontinuation.test (0.00s)
+PASS
+ok  	lsp-trace/internal/integratedconformance	0.202s

@@ -1,0 +1,6 @@
+=== RUN   TestPrivateB4C15V2SuccessorCatalog
+    b4_c15_census_v2_successor_private_test.go:45: ASSERT_C15_V2_FINAL_CANDIDATES got=4155 want=3847
+--- FAIL: TestPrivateB4C15V2SuccessorCatalog (1.04s)
+FAIL
+FAIL	lsp-trace/sessionruntime	1.406s
+FAIL

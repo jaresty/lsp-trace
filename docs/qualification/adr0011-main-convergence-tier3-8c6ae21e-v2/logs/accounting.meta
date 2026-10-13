@@ -1,0 +1,5 @@
+command=python3 docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v2/verify_accounting.py 
+started_utc=2026-10-12T23:57:42Z
+finished_utc=2026-10-12T23:57:42Z
+elapsed_ns=71277875
+exit_code=0

@@ -1,0 +1,3 @@
+command=go test ./internal/censuscontinuation -count=1 -v
+exit=0
+duration_seconds=111

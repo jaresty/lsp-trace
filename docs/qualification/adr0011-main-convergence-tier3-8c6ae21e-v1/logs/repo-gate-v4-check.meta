@@ -1,0 +1,3 @@
+exit=0
+duration_seconds=0
+command=python3 scripts/check-program-c-gate-ii-v4.py --root . --outcomes qualification/program-c/gate-ii-current-outcomes.v4.tsv --receipt qualification/program-c/gate-ii-current-outcomes.v4.4403719.receipt.json 

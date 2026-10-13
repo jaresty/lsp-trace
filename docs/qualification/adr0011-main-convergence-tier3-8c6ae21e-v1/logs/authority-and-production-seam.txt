@@ -1,0 +1,75 @@
+No production directional CALLS activation proof:
+docs/pilot/adr0007/README.md:4:- **Pilot status:** `PILOT_DISABLED`
+docs/pilot/adr0007/README.md:15:This directory remains the standalone worker/pilot scaffold. Its `PILOT_DISABLED` state remains unchanged, and prior records are not reclassified. Its worker-specific prerequisites do not block ordinary host-assisted explanation through existing tools. Local-model support remains optional and deferred; do not restart local calibration to deliver the host-assisted example.
+docs/pilot/adr0007/README.md:21:The drafts and digest manifest indexed below have **not** been migrated or approved by that amendment. Local-model verification, staged provisioning, network-denied inference, and containment remain applicable to the local backend. Optional GPT uses separate provider, disclosure, and controlled-egress requirements. TARGET Describe evaluation and single-user approval are scoped by the amendment; no backend is qualified by another's results. Prepare separately identified backend-profile bundles and preserve historical draft identities. `PREREQUISITES_DRAFT` and `PILOT_DISABLED` remain unchanged. No new model execution or source transmission is enabled here.
+internal/integratedconformance/harness_test.go:1:// Package integratedconformance contains disabled, hermetic reference tests only.
+internal/integratedconformance/harness_test.go:2:// It owns no production registration, advertisement, containment, or Stage 2 authority.
+ADR authority ceiling:
+docs/adr/0011-versioned-definition-reference-grouping-evidence.md:13:ADR 0007 permits immutable, bounded structural evidence to nominate reversible provisional groups. Those groups and every generated derivative remain `authority=0`, `accepted=false`, and `completeness=UNKNOWN`. Grouping does not establish feature identity, ownership, purpose, runtime use, or completeness.
+docs/adr/0011-versioned-definition-reference-grouping-evidence.md:41:authority = 0
+docs/adr/0011-versioned-definition-reference-grouping-evidence.md:42:accepted = false
+docs/adr/0011-versioned-definition-reference-grouping-evidence.md:43:completeness = UNKNOWN
+docs/adr/0011-versioned-definition-reference-grouping-evidence.md:46:Definition/reference evidence means only that a named language-server method returned a bounded result under the recorded request, provider, session or retained custody, and limits. It does not establish:
+docs/adr/0011-versioned-definition-reference-grouping-evidence.md:257:A result also records canonical input and output byte lengths, schema identities, executable/library identities where applicable, replay environment, terminal accounting, and immutable predecessor/supersession references. Digest equality establishes byte/identity equality under the canonical contract only; it does not establish truth, completeness, or acceptance.
+Test-only grouping qualification seam:
+internal/referencegrouping/qualification_red_test.go:19:// the explicit test-only verification seam.
+internal/referencegrouping/qualification_red_test.go:180:		testGoCorpus    = "test-only://adr0011-stage4/go-corpus@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+internal/referencegrouping/qualification_red_test.go:181:		testCueCorpus   = "test-only://adr0011-stage4/cue-corpus@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+internal/referencegrouping/qualification_red_test.go:182:		testGoProvider  = "test-only://provider/gopls@sha256:3333333333333333333333333333333333333333333333333333333333333333"
+internal/referencegrouping/qualification_red_test.go:183:		testCueProvider = "test-only://provider/cue-lsp@sha256:4444444444444444444444444444444444444444444444444444444444444444"
+internal/referencegrouping/qualification_red_test.go:273:	receipt, err := parseTestOnlyQualificationReceipt(raw, QualificationParseLimits{MaxRawBytes: 1 << 20, MaxCases: 32, MaxMetrics: 32, MaxCriteria: 32, MaxReviewers: 8, MaxStringBytes: 256})
+internal/referencegrouping/qualification_red_test.go:277:	verified, err := verifyTestOnlyQualification(receipt, policy, input, 8)
+internal/referencegrouping/qualification_red_test.go:312:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:330:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:401:					receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:467:				if receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits()); err == nil && receipt.Outcome() == "QUALIFIED" {
+internal/referencegrouping/qualification_red_test.go:492:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:494:				_, err = verifyTestOnlyQualification(receipt, policy, input, 8)
+internal/referencegrouping/qualification_red_test.go:501:	receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, base), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:505:	if got, err := verifyTestOnlyQualification(receipt, policy, input, 10); err == nil || !reflect.DeepEqual(got, VerifiedQualification{}) {
+internal/referencegrouping/qualification_red_test.go:508:	recomputed, err := recomputeTestOnlyQualification(receipt)
+internal/referencegrouping/qualification_red_test.go:518:	if _, err := admitTestOnlyQualificationReceipt(replayed, len(original), expectedDigest, generousQualificationParseLimits()); err == nil {
+internal/referencegrouping/qualification_red_test.go:528:		receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:545:					r.Cases[i].Corpus = "test-only://substituted@sha256:" + strings.Repeat("a", 64)
+internal/referencegrouping/qualification_red_test.go:549:					r.Cases[i].Provider = "test-only://substituted-provider@sha256:" + strings.Repeat("b", 64)
+internal/referencegrouping/qualification_red_test.go:680:				receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:682:					_, err = verifyTestOnlyQualification(receipt, policy, input, 8)
+internal/referencegrouping/qualification_red_test.go:702:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:704:				_, err = verifyTestOnlyQualification(receipt, policy, input, 8)
+internal/referencegrouping/qualification_red_test.go:725:func TestSyntheticPackageIsTestOnlyAndCannotCreateProductionQualification(t *testing.T) {
+internal/referencegrouping/qualification_red_test.go:728:	testReceipt, err := parseTestOnlyQualificationReceipt(raw, generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:732:	if got, err := verifyTestOnlyQualificationWithEvidence(testReceipt, independentTestQualificationEvidence(), independentTestQualificationTrustAnchors(t, completeTestQualification(policy, input)), policy, input, 8); err != nil || !got.Matches(policy, input, 8) {
+internal/referencegrouping/qualification_red_test.go:761:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:791:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:818:func TestProductionVerifierCannotAcceptTestOnlyReceiptFamily(t *testing.T) {
+internal/referencegrouping/qualification_red_test.go:826:func TestTestOnlyQualificationRequiresIndependentEvidenceAndReviewerTrust(t *testing.T) {
+internal/referencegrouping/qualification_red_test.go:830:	receipt, err := parseTestOnlyQualificationReceipt(raw, generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:839:	verified, err := verifyTestOnlyQualificationWithEvidence(receipt, evidence, anchors, policy, input, 8)
+internal/referencegrouping/qualification_red_test.go:888:			if got, err := verifyTestOnlyQualificationWithEvidence(receipt, e, a, policy, input, 8); err == nil || !reflect.DeepEqual(got, VerifiedQualification{}) {
+internal/referencegrouping/qualification_red_test.go:893:	if got, err := verifyTestOnlyQualificationWithEvidence(receipt, evidence, anchors, policy, input, 10); err == nil || !reflect.DeepEqual(got, VerifiedQualification{}) {
+internal/referencegrouping/qualification_red_test.go:897:	if got, err := admitTestOnlyQualificationWithEvidence(raw, len(raw), fmt.Sprintf("sha256:%x", sum), evidence, anchors, policy, input, 8, generousQualificationParseLimits()); err != nil || !got.Matches(policy, input, 8) {
+internal/referencegrouping/qualification_red_test.go:900:	if got, err := admitTestOnlyQualificationWithEvidence(raw, len(raw)+1, fmt.Sprintf("sha256:%x", sum), evidence, anchors, policy, input, 8, generousQualificationParseLimits()); err == nil || !reflect.DeepEqual(got, VerifiedQualification{}) {
+internal/referencegrouping/qualification_red_test.go:903:	if got, err := admitTestOnlyQualificationWithEvidence(raw, len(raw), "sha256:"+strings.Repeat("f", 64), evidence, anchors, policy, input, 8, generousQualificationParseLimits()); err == nil || !reflect.DeepEqual(got, VerifiedQualification{}) {
+internal/referencegrouping/qualification_red_test.go:913:		receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:918:			_, err = verifyTestOnlyQualificationWithEvidence(receipt, independentTestQualificationEvidence(), anchors, policy, input, 8)
+internal/referencegrouping/qualification_red_test.go:965:		receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:973:		if got, err := verifyTestOnlyQualificationWithEvidence(receipt, independentTestQualificationEvidence(), anchors, policy, input, 8); err == nil || !reflect.DeepEqual(got, VerifiedQualification{}) {
+internal/referencegrouping/qualification_red_test.go:1009:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:1020:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_red_test.go:1053:			receipt, err := parseTestOnlyQualificationReceipt(canonicalExternalTestReceipt(t, r), generousQualificationParseLimits())
+internal/referencegrouping/qualification_testonly_test.go:13:func parseTestOnlyQualificationReceipt(raw []byte, l QualificationParseLimits) (GroupingPolicyQualificationReceipt, error) {
+internal/referencegrouping/qualification_testonly_test.go:16:func verifyTestOnlyQualification(r GroupingPolicyQualificationReceipt, p GroupingPolicy, in AdmittedInput, epoch uint64) (VerifiedQualification, error) {
+internal/referencegrouping/qualification_testonly_test.go:25:	baselineReceipt, err := parseTestOnlyQualificationReceipt(append(raw, '\n'), generousQualificationParseLimits())
+internal/referencegrouping/qualification_testonly_test.go:29:	return verifyTestOnlyQualificationWithEvidence(r, independentTestQualificationEvidence(), independentTestQualificationTrustAnchorsForParsed(baselineReceipt), p, in, epoch)
+internal/referencegrouping/qualification_testonly_test.go:74:func verifyTestOnlyQualificationWithEvidence(r GroupingPolicyQualificationReceipt, evidence, trust map[string][]byte, p GroupingPolicy, in AdmittedInput, epoch uint64) (VerifiedQualification, error) {
+internal/referencegrouping/qualification_testonly_test.go:75:	// verifyQualificationEvidence is the intended production API. This test-only
+internal/referencegrouping/qualification_testonly_test.go:79:func admitTestOnlyQualificationWithEvidence(raw []byte, wantLength int, wantDigest string, evidence, trust map[string][]byte, p GroupingPolicy, in AdmittedInput, epoch uint64, l QualificationParseLimits) (VerifiedQualification, error) {
+internal/referencegrouping/qualification_testonly_test.go:83:	r, err := parseTestOnlyQualificationReceipt(raw, l)
+internal/referencegrouping/qualification_testonly_test.go:87:	return verifyTestOnlyQualificationWithEvidence(r, evidence, trust, p, in, epoch)
+internal/referencegrouping/qualification_testonly_test.go:89:func recomputeTestOnlyQualification(r GroupingPolicyQualificationReceipt) (GroupingPolicyQualificationReceipt, error) {
+internal/referencegrouping/qualification_testonly_test.go:93:	out, err := parseTestOnlyQualificationReceipt(r.canonical, generousQualificationParseLimits())
+internal/referencegrouping/qualification_testonly_test.go:102:func admitTestOnlyQualificationReceipt(raw []byte, wantLength int, wantDigest string, l QualificationParseLimits) (GroupingPolicyQualificationReceipt, error) {
+internal/referencegrouping/qualification_testonly_test.go:106:	return parseTestOnlyQualificationReceipt(raw, l)
+internal/referencegrouping/stage5_composition_red_test.go:16:// Stage5 tests use only Stage4's structurally test-only receipt, independent
+internal/referencegrouping/stage5_composition_red_test.go:31:	receipt, err := parseTestOnlyQualificationReceipt(raw, generousQualificationParseLimits())
+internal/referencegrouping/stage5_composition_red_test.go:35:	verified, err := verifyTestOnlyQualificationWithEvidence(receipt, independentTestQualificationEvidence(), independentTestQualificationTrustAnchors(t, r), policy, input, 8)

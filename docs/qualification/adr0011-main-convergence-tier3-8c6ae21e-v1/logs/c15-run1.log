@@ -1,0 +1,5 @@
+=== RUN   TestADR0011C15MainConvergenceSuccessorEnumerate
+    adr0011_c15_main_convergence_successor_enumerator_private_test.go:55: SUCCESS rows=4155 duplicates=0 mapping=44 locations=4155
+--- PASS: TestADR0011C15MainConvergenceSuccessorEnumerate (2.15s)
+PASS
+ok  	lsp-trace/sessionruntime	2.504s

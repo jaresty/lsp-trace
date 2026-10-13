@@ -1,0 +1,34 @@
+# Identity and status
+git rev-parse HEAD HEAD^{tree} HEAD^
+git show -s --format='commit=%H%ntree=%T%nparents=%P%nauthor_date=%aI%ncommitter_date=%cI%nsubject=%s' HEAD
+git status --short
+
+# Immutable blocked-v1 before/after verification
+(cd docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v1 && shasum -a 256 -c MANIFEST.sha256)
+find docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v1 -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256
+
+# Strict accounting and deterministic repeat
+python3 docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v2/verify_accounting.py
+python3 docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v2/verify_accounting.py
+diff -u logs/accounting.log logs/accounting-repeat.log
+
+# Affected-scope qualification
+go test ./internal/integratedconformance -run '^TestADR0007ProductionOwnershipRegistration$' -count=1 -v
+go test ./internal/integratedconformance -run '^TestADR0007OwnershipExclusionsRemainUnowned$' -count=1 -v
+go test ./internal/integratedconformance -run '^TestADR0007OwnershipRejectsAdjacentPaths$' -count=1 -v
+go test ./internal/integratedconformance -count=1 -v
+go test ./internal/censuscontinuation -count=1 -v
+go test ./sessionruntime -run '^TestPrivateB4C15V2SuccessorCatalog$' -count=1 -v
+./scripts/check-ci.sh
+
+# Parent and overlap differential
+git merge-base 6fd25ba4dddb43b191316e3d01dc8c96b5e3b066 57225a1e9e7282ed7f58a7a19f8ca538c3d6105e
+git diff --name-status 320edd24aa02cceb0a88d3d5284728ee026da59e HEAD
+git diff --stat 6fd25ba4dddb43b191316e3d01dc8c96b5e3b066 HEAD
+git diff --stat 57225a1e9e7282ed7f58a7a19f8ca538c3d6105e HEAD
+git rev-parse <revision>:<each-of-six-overlap-paths>
+
+# Package integrity
+find . -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 > MANIFEST.sha256
+shasum -a 256 -c MANIFEST.sha256
+git status --short

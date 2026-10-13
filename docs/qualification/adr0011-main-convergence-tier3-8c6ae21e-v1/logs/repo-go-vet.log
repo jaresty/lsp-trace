@@ -1,0 +1,9 @@
+# lsp-trace/docs/qualification/adr0011-callhierarchy-layer1-generic-v3-production-admission-v1/evidence/enumeration
+vet: docs/qualification/adr0011-callhierarchy-layer1-generic-v3-production-admission-v1/evidence/enumeration/enumerator.go:235:74: undefined: privateB4C15Candidate
+# lsp-trace/docs/qualification/adr0011-c15-main-convergence-successor-v1
+# [lsp-trace/docs/qualification/adr0011-c15-main-convergence-successor-v1]
+vet: docs/qualification/adr0011-c15-main-convergence-successor-v1/enumerator_test.go:59:71: undefined: privateB4C15Candidate
+# lsp-trace/docs/qualification/adr0011-callhierarchy-layer1-generic-v3-production-admission-v2/evidence/c15
+vet: docs/qualification/adr0011-callhierarchy-layer1-generic-v3-production-admission-v2/evidence/c15/derived-enumerator.go:235:74: undefined: privateB4C15Candidate
+# lsp-trace/docs/qualification/adr0011-callhierarchy-layer1-generic-v3-production-admission-v2/evidence/c15/output
+vet: docs/qualification/adr0011-callhierarchy-layer1-generic-v3-production-admission-v2/evidence/c15/output/enumerator.go:235:74: undefined: privateB4C15Candidate

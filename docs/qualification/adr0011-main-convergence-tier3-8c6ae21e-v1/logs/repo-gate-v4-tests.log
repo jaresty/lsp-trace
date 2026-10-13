@@ -1,0 +1,28 @@
+test_a03_semantic_mutations (__main__.GateIIV4Tests.test_a03_semantic_mutations) ... ok
+test_a06_inventory_mutations (__main__.GateIIV4Tests.test_a06_inventory_mutations) ... ok
+test_a06_receipt_mutations (__main__.GateIIV4Tests.test_a06_receipt_mutations) ... ok
+test_qualification_root_module_identity_is_receipt_bound (__main__.GateIIV4Tests.test_qualification_root_module_identity_is_receipt_bound) ... ok
+test_valid_baseline (__main__.GateIIV4Tests.test_valid_baseline) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.303s
+
+OK
+ASSERT_A_03_AUTHORITY_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_03
+ASSERT_A_03_SCOPE_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_03
+ASSERT_A_03_BINDING_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_03
+ASSERT_A_03_EXCLUSION_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_03
+ASSERT_A_06_CLASSES_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_GRAPH_DIGEST_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_LIMIT_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_SEED_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_MATRIX_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_COUNT_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_RAW_PARTITION_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_DIGEST_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_CANONICALIZATION_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_RESOURCE_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_FAILURE_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_A_06_NO_FALLBACK_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_GATE_II_V4_ROOT_MODULE_RECEIPT_BOUND result=PASS
+ASSERT_GATE_II_V4_VALID_BASELINE result=PASS

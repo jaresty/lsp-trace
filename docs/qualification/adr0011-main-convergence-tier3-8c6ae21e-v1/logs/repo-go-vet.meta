@@ -1,0 +1,3 @@
+exit=1
+duration_seconds=1
+command=go vet ./... 

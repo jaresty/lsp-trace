@@ -1,0 +1,1101 @@
+### internal/integratedconformance/harness_test.go
+diff --git a/internal/integratedconformance/harness_test.go b/internal/integratedconformance/harness_test.go
+index 4a40d639..dfcc5ef5 100644
+--- a/internal/integratedconformance/harness_test.go
++++ b/internal/integratedconformance/harness_test.go
+@@ -731,7 +731,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
+ 				strings.HasPrefix(path, "internal/targetpacket/") || strings.HasPrefix(path, "internal/retainedprojectiontestfixture/") || strings.HasPrefix(path, "internal/retainedrelations/") || strings.HasPrefix(path, "internal/vcssymbolsidecar/") || strings.HasPrefix(path, "internal/v5sourcesnapshot/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv2/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv3/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv4/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv5/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv6/") || strings.HasPrefix(path, "internal/hydratedevidence/") || strings.HasPrefix(path, "internal/hydratedinspection/") || strings.HasPrefix(path, "internal/retainedinspection/") || strings.HasPrefix(path, "internal/retainedoperation/") || strings.HasPrefix(path, "internal/retainedreplay/") || strings.HasPrefix(path, "internal/retainedmanifest/") || strings.HasPrefix(path, "internal/retainedlifecycle/") || strings.HasPrefix(path, "internal/retainedresolver/") || strings.HasPrefix(path, "internal/passageverification/") || path == "qualification/retained-passage-verification-core-4b98a4e.md" || path == "cmd/lsp-trace/verify_passage.go" || path == "cmd/lsp-trace/verify_passage_test.go" || path == "cmd/lsp-trace/schema_commands.go" || path == "schema/schemas/lsp-trace.passage-verification.v1.schema.json" || path == "docs/SEMANTICS.md" || path == "docs/mcp-advertisement-profiles.md" || path == "docs/adr/0007-append-only-transient-structural-delta.md" ||
+ 				path == "internal/seedformat/QUALIFICATION.md" || path == "internal/seedformat/schema.go" || path == "internal/seedformat/schema.json" || path == "internal/seedformat/seedformat.go" || path == "internal/seedformat/seedformat_test.go" || path == "cmd/lsp-trace/production_discovery.go" ||
+ 				path == "internal/mcp/adr0004_profile_contract_test.go" || path == "internal/mcp/retained_calls_test.go" || path == "internal/operation/retained_calls.go" || path == "internal/operation/schema_handlers.go" || path == "internal/operation/retained_calls_version_test.go" || path == "internal/schema/schemas/lsp-trace.retained-relations.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" || path == "schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" ||
+-				strings.HasPrefix(path, "traceops/") || strings.HasPrefix(path, "structuralcontextsymbolops/") || path == "cmd/lsp-trace/references/live-tracing.md" || path == "cmd/lsp-trace-mcp/trace_executor.go" || path == "cmd/lsp-trace-mcp/trace_executor_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_negative_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_matrix_test.go" || strings.HasPrefix(path, "internal/captureset/") || strings.HasPrefix(path, "internal/capturesetinspection/") || path == "docs/adr/0005-internal-capture-set-publication-custody.md" || strings.HasPrefix(path, "internal/programc/") || strings.HasPrefix(path, "internal/programcadmission/") || strings.HasPrefix(path, "internal/programcrepresentative/") || strings.HasPrefix(path, "internal/programcpresentation/") || strings.HasPrefix(path, "internal/programctestfixture/") || path == "internal/mcp/program_c_instability_test.go" || path == "internal/mcpcontract/program_c_instability.go" || path == "internal/operation/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability_test.go" || strings.HasPrefix(path, "internal/communityregister/") || path == "cmd/lsp-trace/aggregate_communities.go" || path == "cmd/lsp-trace/community_register_test.go" || path == "docs/technical-community-register.md" || path == "schema/schemas/lsp-trace.technical-community-register.v1.schema.json" || path == "internal/mcp/program_c_leiden_test.go" || path == "internal/mcpcontract/program_c_leiden.go" || path == "internal/operation/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden_test.go" || strings.HasPrefix(path, "internal/programccompose/") || path == "internal/mcp/program_c_compose_test.go" || path == "internal/mcpcontract/program_c_compose.go" || path == "internal/operation/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose_test.go" || path == "schema/schemas/lsp-trace.community-presentation.v1.schema.json" || path == "scripts/check-program-c-profiles.py" || path == "scripts/test-program-c-profiles.py" || path == "scripts/check-composite-leiden-admission.sh" || path == "qualification/program-c/composite-leiden-admission-v1.md" || path == "scripts/qualify-program-c-ember-callback-flow.py" || path == "scripts/test-program-c-ember-callback-flow.py" || path == "scripts/qualify-program-c-ember-state-flow.py" || path == "scripts/test-program-c-ember-state-flow.py" || path == "scripts/qualify-program-c-ui-lifecycle.mjs" || path == "scripts/test-program-c-ui-lifecycle.mjs" || path == "qualification/program-c/profile-qualification-receipt.v1.schema.json" || path == "qualification/program-c/profile-qualification.tsv" || path == "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/gate-i-receipts.tsv" || path == "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt" || path == "schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "schema/schemas/lsp-trace.community-boundary.v1.schema.json"
++				strings.HasPrefix(path, "cmd/adr0007-source-text-search-v4-contract-validate/") || strings.HasPrefix(path, "internal/adr0007v4contractvalidator/") || strings.HasPrefix(path, "traceops/") || strings.HasPrefix(path, "structuralcontextsymbolops/") || path == "cmd/lsp-trace/references/live-tracing.md" || path == "cmd/lsp-trace-mcp/trace_executor.go" || path == "cmd/lsp-trace-mcp/trace_executor_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_negative_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_matrix_test.go" || strings.HasPrefix(path, "internal/captureset/") || strings.HasPrefix(path, "internal/capturesetinspection/") || path == "docs/adr/0005-internal-capture-set-publication-custody.md" || strings.HasPrefix(path, "internal/programc/") || strings.HasPrefix(path, "internal/programcadmission/") || strings.HasPrefix(path, "internal/programcrepresentative/") || strings.HasPrefix(path, "internal/programcpresentation/") || strings.HasPrefix(path, "internal/programctestfixture/") || path == "internal/mcp/program_c_instability_test.go" || path == "internal/mcpcontract/program_c_instability.go" || path == "internal/operation/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability_test.go" || strings.HasPrefix(path, "internal/communityregister/") || path == "cmd/lsp-trace/aggregate_communities.go" || path == "cmd/lsp-trace/community_register_test.go" || path == "docs/technical-community-register.md" || path == "schema/schemas/lsp-trace.technical-community-register.v1.schema.json" || path == "internal/mcp/program_c_leiden_test.go" || path == "internal/mcpcontract/program_c_leiden.go" || path == "internal/operation/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden_test.go" || strings.HasPrefix(path, "internal/programccompose/") || path == "internal/mcp/program_c_compose_test.go" || path == "internal/mcpcontract/program_c_compose.go" || path == "internal/operation/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose_test.go" || path == "schema/schemas/lsp-trace.community-presentation.v1.schema.json" || path == "scripts/check-program-c-profiles.py" || path == "scripts/test-program-c-profiles.py" || path == "scripts/check-composite-leiden-admission.sh" || path == "qualification/program-c/composite-leiden-admission-v1.md" || path == "scripts/qualify-program-c-ember-callback-flow.py" || path == "scripts/test-program-c-ember-callback-flow.py" || path == "scripts/qualify-program-c-ember-state-flow.py" || path == "scripts/test-program-c-ember-state-flow.py" || path == "scripts/qualify-program-c-ui-lifecycle.mjs" || path == "scripts/test-program-c-ui-lifecycle.mjs" || path == "qualification/program-c/profile-qualification-receipt.v1.schema.json" || path == "qualification/program-c/profile-qualification.tsv" || path == "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/gate-i-receipts.tsv" || path == "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt" || path == "schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "schema/schemas/lsp-trace.community-boundary.v1.schema.json"
+ 			if !owned {
+ 				t.Errorf("unowned path %q", path)
+ 			}
+--- OTHER PARENT ---
+diff --git a/internal/integratedconformance/harness_test.go b/internal/integratedconformance/harness_test.go
+index 4a40d639..4d5a7d05 100644
+--- a/internal/integratedconformance/harness_test.go
++++ b/internal/integratedconformance/harness_test.go
+@@ -257,6 +257,36 @@ func (r historicalRegistryAdapter) Resolve(name string) (mcp.Tool, bool) {
+ 	return tool, ok
+ }
+ 
++func ownsC15CurrentPath(path string) bool {
++	if strings.HasPrefix(path, "sessionruntime/testdata/c15-census-v1/") {
++		return true
++	}
++	for _, owned := range []string{
++		"internal/lspwire/successor_ingress.go", "internal/lspwire/c15_site_bindings.go",
++		"sessionruntime/b4_definition_private.go", "sessionruntime/b4_explicit_bytes_c15_integration_private_test.go",
++		"sessionruntime/b4_explicit_bytes_c15_private.go", "sessionruntime/b4_owned_method_pair_lease.go",
++		"sessionruntime/b4_result_lease_test.go", "sessionruntime/b4_retained_notification_c15_private.go",
++		"sessionruntime/b4_retained_response_c15_private.go", "sessionruntime/b4_server_error_lease_c15_private.go",
++		"sessionruntime/b4_server_request_c15_private.go", "sessionruntime/b4_source_acquisition_private_test.go",
++		"sessionruntime/b4_source_ingress_c15_private_test.go", "sessionruntime/diagnostic_backing_c15_private.go",
++		"sessionruntime/diagnostic_runtime.go", "sessionruntime/private_encoded_request.go",
++		"sessionruntime/b4_c15_candidate_discovery_private_test.go", "sessionruntime/b4_c15_mapping_refresh_private_test.go",
++		"sessionruntime/b4_c15_canonical_mapping_generator_private_test.go", "sessionruntime/b4_c15_ownership_registry_private.go",
++		"sessionruntime/b4_c15_ownership_registry_red_private_test.go", "sessionruntime/b4_owned_method_pair_lease_test.go",
++		"sessionruntime/b4_private_selected_read_lease_v10_test.go",
++		"sessionruntime/b4_c15_site_bindings_private.go", "sessionruntime/b4_event_account_c17_private.go",
++		"sessionruntime/b4_private_lifecycle_packet_test.go", "sessionruntime/diagnostic_history_storage_c15_private.go",
++		"sessionruntime/diagnostic_history_storage_c15_private_test.go", "sessionruntime/adr0011_c17_c15_custody_observer_red_private_test.go",
++		"sessionruntime/adr0011_c17_c15_atomic_batch_observer_red_private_test.go", "sessionruntime/adr0011_c17_c15_observer_contract_private.go",
++		"sessionruntime/adr0011_c18_real_owner_collision_red_private_test.go", "sessionruntime/c18_pair_coordinator_private.go",
++	} {
++		if path == owned {
++			return true
++		}
++	}
++	return false
++}
++
+ func TestDisabledIntegratedConformance(t *testing.T) {
+ 	fake := buildFake(t)
+ 
+@@ -710,8 +740,8 @@ func TestDisabledIntegratedConformance(t *testing.T) {
+ 			if excludesADR0007OwnershipPath(path) {
+ 				continue
+ 			}
+-			owned := ownsADR0007ProductionPath(path) || ownsFR20FR21Path(path) || path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/transient_identity_test.go" || path == "sessionruntime/document_supply_behavior_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
+-				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" || strings.HasPrefix(path, "internal/runtimeprofile/") || path == "sessionruntime/derive_workspace_test.go" ||
++			owned := ownsADR0007ProductionPath(path) || ownsFR20FR21Path(path) || ownsC15CurrentPath(path) || path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/transient_identity_test.go" || path == "sessionruntime/document_supply_behavior_test.go" || path == "sessionruntime/adr0011_c17_documents_acquired_red_private_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
++				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" || path == "internal/adr0011acquisition/synthetic_source_pin_review_test.go" || strings.HasPrefix(path, "internal/runtimeprofile/") || path == "sessionruntime/derive_workspace_test.go" ||
+ 				path == "cmd/fake-lsp/main.go" || path == "cmd/fake-lsp/main_test.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" || path == "lifecycleops/lifecycleops.go" || path == "lifecycleops/lifecycleops_test.go" ||
+ 				path == "README.md" || path == "GRAPH-V5-MANAGED-REPAIR.md" || path == "docs/PROVIDERS.md" || path == "docs/RELEASING.md" || path == "docs/cli-migration-diagnostics.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" || path == "docs/adr/0006-transient-live-structural-analysis.md" || path == "docs/adr/0007-optional-local-semantic-feature-index.md" || path == "docs/adr/0008-dehydrated-structural-evidence-and-deterministic-source-projection.md" || path == "docs/qualification/adr0007-adr0008-source-projection-plan.md" || path == "docs/qualification/adr0008-cross-mode-fixture-plan.md" || path == "qualification/adr0008-source-projection-matrix.v1.json" || strings.HasPrefix(path, "internal/sourceprojection/") || strings.HasPrefix(path, "internal/sourceprojectionv2/") || strings.HasPrefix(path, "internal/sourceprojectionv3/") || strings.HasPrefix(path, "internal/sourceposition/") || strings.HasPrefix(path, "internal/regexlocator/") ||
+ 				path == "cmd/lsp-trace/main.go" || path == "cmd/lsp-trace/main_test.go" || strings.HasPrefix(path, "cmd/lsp-trace/context_command") || strings.HasPrefix(path, "cmd/lsp-trace/context_delta_command") || strings.HasPrefix(path, "cmd/lsp-trace/context_churn") || path == "cmd/lsp-trace/cli_diagnostic.go" || path == "cmd/lsp-trace/cli_diagnostic_test.go" || path == "cmd/lsp-trace/census_command.go" || path == "cmd/lsp-trace/census_command_test.go" || path == "cmd/lsp-trace/census_runner.go" || path == "cmd/lsp-trace/census_runner_test.go" || path == "cmd/lsp-trace/census_assembly.go" || path == "cmd/lsp-trace/census_assembly_test.go" || path == "cmd/lsp-trace/census_core.go" || path == "cmd/lsp-trace/census_core_test.go" || path == "cmd/lsp-trace/census_discovery_adapter.go" || path == "cmd/lsp-trace/census_discovery_adapter_test.go" || path == "cmd/lsp-trace/discovery_filter.go" || strings.HasPrefix(path, "internal/census/") || strings.HasPrefix(path, "internal/censusacquisition/") || strings.HasPrefix(path, "internal/discoveryfilter/") || path == "cmd/lsp-trace/fake_server_test.go" || path == "cmd/lsp-trace/graph_provenance_test.go" || path == "cmd/lsp-trace/trace_command.go" || path == "cmd/lsp-trace/trace_command_test.go" || path == "cmd/lsp-trace/trace_process_test.go" || path == "cmd/lsp-trace/slice_command.go" || path == "fr1-typescript-call-hierarchy.claim.md" || path == "fr1.1-managed-language-id.claim.md" || strings.HasPrefix(path, "qualification/retained/fr1.1-managed-language-id/") || path == "cmd/lsp-trace/execution_command.go" || path == "cmd/lsp-trace/execution_command_test.go" || path == "cmd/lsp-trace/render_command.go" || path == "cmd/lsp-trace/render_command_test.go" || path == "cmd/lsp-trace/custody_command.go" || path == "cmd/lsp-trace/custody_command_test.go" || strings.HasPrefix(path, "internal/presentation/") ||
+@@ -731,7 +761,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
+ 				strings.HasPrefix(path, "internal/targetpacket/") || strings.HasPrefix(path, "internal/retainedprojectiontestfixture/") || strings.HasPrefix(path, "internal/retainedrelations/") || strings.HasPrefix(path, "internal/vcssymbolsidecar/") || strings.HasPrefix(path, "internal/v5sourcesnapshot/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv2/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv3/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv4/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv5/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv6/") || strings.HasPrefix(path, "internal/hydratedevidence/") || strings.HasPrefix(path, "internal/hydratedinspection/") || strings.HasPrefix(path, "internal/retainedinspection/") || strings.HasPrefix(path, "internal/retainedoperation/") || strings.HasPrefix(path, "internal/retainedreplay/") || strings.HasPrefix(path, "internal/retainedmanifest/") || strings.HasPrefix(path, "internal/retainedlifecycle/") || strings.HasPrefix(path, "internal/retainedresolver/") || strings.HasPrefix(path, "internal/passageverification/") || path == "qualification/retained-passage-verification-core-4b98a4e.md" || path == "cmd/lsp-trace/verify_passage.go" || path == "cmd/lsp-trace/verify_passage_test.go" || path == "cmd/lsp-trace/schema_commands.go" || path == "schema/schemas/lsp-trace.passage-verification.v1.schema.json" || path == "docs/SEMANTICS.md" || path == "docs/mcp-advertisement-profiles.md" || path == "docs/adr/0007-append-only-transient-structural-delta.md" ||
+ 				path == "internal/seedformat/QUALIFICATION.md" || path == "internal/seedformat/schema.go" || path == "internal/seedformat/schema.json" || path == "internal/seedformat/seedformat.go" || path == "internal/seedformat/seedformat_test.go" || path == "cmd/lsp-trace/production_discovery.go" ||
+ 				path == "internal/mcp/adr0004_profile_contract_test.go" || path == "internal/mcp/retained_calls_test.go" || path == "internal/operation/retained_calls.go" || path == "internal/operation/schema_handlers.go" || path == "internal/operation/retained_calls_version_test.go" || path == "internal/schema/schemas/lsp-trace.retained-relations.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" || path == "schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" ||
+-				strings.HasPrefix(path, "traceops/") || strings.HasPrefix(path, "structuralcontextsymbolops/") || path == "cmd/lsp-trace/references/live-tracing.md" || path == "cmd/lsp-trace-mcp/trace_executor.go" || path == "cmd/lsp-trace-mcp/trace_executor_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_negative_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_matrix_test.go" || strings.HasPrefix(path, "internal/captureset/") || strings.HasPrefix(path, "internal/capturesetinspection/") || path == "docs/adr/0005-internal-capture-set-publication-custody.md" || strings.HasPrefix(path, "internal/programc/") || strings.HasPrefix(path, "internal/programcadmission/") || strings.HasPrefix(path, "internal/programcrepresentative/") || strings.HasPrefix(path, "internal/programcpresentation/") || strings.HasPrefix(path, "internal/programctestfixture/") || path == "internal/mcp/program_c_instability_test.go" || path == "internal/mcpcontract/program_c_instability.go" || path == "internal/operation/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability_test.go" || strings.HasPrefix(path, "internal/communityregister/") || path == "cmd/lsp-trace/aggregate_communities.go" || path == "cmd/lsp-trace/community_register_test.go" || path == "docs/technical-community-register.md" || path == "schema/schemas/lsp-trace.technical-community-register.v1.schema.json" || path == "internal/mcp/program_c_leiden_test.go" || path == "internal/mcpcontract/program_c_leiden.go" || path == "internal/operation/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden_test.go" || strings.HasPrefix(path, "internal/programccompose/") || path == "internal/mcp/program_c_compose_test.go" || path == "internal/mcpcontract/program_c_compose.go" || path == "internal/operation/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose_test.go" || path == "schema/schemas/lsp-trace.community-presentation.v1.schema.json" || path == "scripts/check-program-c-profiles.py" || path == "scripts/test-program-c-profiles.py" || path == "scripts/check-composite-leiden-admission.sh" || path == "qualification/program-c/composite-leiden-admission-v1.md" || path == "scripts/qualify-program-c-ember-callback-flow.py" || path == "scripts/test-program-c-ember-callback-flow.py" || path == "scripts/qualify-program-c-ember-state-flow.py" || path == "scripts/test-program-c-ember-state-flow.py" || path == "scripts/qualify-program-c-ui-lifecycle.mjs" || path == "scripts/test-program-c-ui-lifecycle.mjs" || path == "qualification/program-c/profile-qualification-receipt.v1.schema.json" || path == "qualification/program-c/profile-qualification.tsv" || path == "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/gate-i-receipts.tsv" || path == "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt" || path == "schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "schema/schemas/lsp-trace.community-boundary.v1.schema.json"
++				strings.HasPrefix(path, "traceops/") || strings.HasPrefix(path, "structuralcontextsymbolops/") || path == "cmd/lsp-trace/references/live-tracing.md" || path == "cmd/lsp-trace-mcp/trace_executor.go" || path == "cmd/lsp-trace-mcp/trace_executor_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_negative_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_matrix_test.go" || strings.HasPrefix(path, "internal/captureset/") || strings.HasPrefix(path, "internal/capturesetinspection/") || path == "docs/adr/0005-internal-capture-set-publication-custody.md" || strings.HasPrefix(path, "internal/programc/") || strings.HasPrefix(path, "internal/programcadmission/") || strings.HasPrefix(path, "internal/referencegrouping/") || strings.HasPrefix(path, "internal/programcrepresentative/") || strings.HasPrefix(path, "internal/programcpresentation/") || strings.HasPrefix(path, "internal/programctestfixture/") || path == "internal/mcp/program_c_instability_test.go" || path == "internal/mcpcontract/program_c_instability.go" || path == "internal/operation/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability_test.go" || strings.HasPrefix(path, "internal/communityregister/") || path == "cmd/lsp-trace/aggregate_communities.go" || path == "cmd/lsp-trace/community_register_test.go" || path == "docs/technical-community-register.md" || path == "schema/schemas/lsp-trace.technical-community-register.v1.schema.json" || path == "internal/mcp/program_c_leiden_test.go" || path == "internal/mcpcontract/program_c_leiden.go" || path == "internal/operation/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden_test.go" || strings.HasPrefix(path, "internal/programccompose/") || path == "internal/mcp/program_c_compose_test.go" || path == "internal/mcpcontract/program_c_compose.go" || path == "internal/operation/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose_test.go" || path == "schema/schemas/lsp-trace.community-presentation.v1.schema.json" || path == "scripts/check-program-c-profiles.py" || path == "scripts/test-program-c-profiles.py" || path == "scripts/check-composite-leiden-admission.sh" || path == "qualification/program-c/composite-leiden-admission-v1.md" || path == "scripts/qualify-program-c-ember-callback-flow.py" || path == "scripts/test-program-c-ember-callback-flow.py" || path == "scripts/qualify-program-c-ember-state-flow.py" || path == "scripts/test-program-c-ember-state-flow.py" || path == "scripts/qualify-program-c-ui-lifecycle.mjs" || path == "scripts/test-program-c-ui-lifecycle.mjs" || path == "qualification/program-c/profile-qualification-receipt.v1.schema.json" || path == "qualification/program-c/profile-qualification.tsv" || path == "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/gate-i-receipts.tsv" || path == "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt" || path == "schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "schema/schemas/lsp-trace.community-boundary.v1.schema.json"
+ 			if !owned {
+ 				t.Errorf("unowned path %q", path)
+ 			}
+--- MERGE RESULT ---
+// Package integratedconformance contains disabled, hermetic reference tests only.
+// It owns no production registration, advertisement, containment, or Stage 2 authority.
+package integratedconformance
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"lsp-trace/internal/containment"
+	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/mcp"
+	"lsp-trace/internal/mcpcontract"
+	"lsp-trace/internal/operation"
+	_ "lsp-trace/internal/retainedreplay"
+	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/session"
+	"lsp-trace/lifecycleops"
+	"lsp-trace/sessionruntime"
+)
+
+const (
+	evidenceCeiling       = "DISABLED_HERMETIC_REFERENCE_ONLY"
+	localDarwinEvidence   = "LOCAL_DARWIN_SUPERVISION_ONLY"
+	productionUnavailable = "UNAVAILABLE"
+)
+
+var exactGaps = []string{
+	"Production-equivalent fake-process startup is not composable: the sealed production containment gate is unavailable and the hermetic starter has no production authority.",
+}
+
+type processChild struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	stderr *bounded
+	done   chan struct{}
+	death  managedprocess.DeathObservation
+	once   sync.Once
+}
+
+type bounded struct {
+	mu        sync.Mutex
+	limit     int
+	bytes     []byte
+	truncated bool
+}
+
+func (b *bounded) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := len(p)
+	remaining := b.limit - len(b.bytes)
+	if remaining > 0 {
+		keep := n
+		if keep > remaining {
+			keep = remaining
+		}
+		b.bytes = append(b.bytes, p[:keep]...)
+	}
+	if n > remaining {
+		b.truncated = true
+	}
+	return n, nil
+}
+
+func (b *bounded) snapshot() managedprocess.StderrObservation {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return managedprocess.StderrObservation{Bytes: append([]byte(nil), b.bytes...), Truncated: b.truncated}
+}
+
+type execStarter struct {
+	path        string
+	stderrLimit int
+	mu          sync.Mutex
+	children    []*processChild
+}
+
+func (s *execStarter) Start(ctx context.Context, _ managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	cmd := exec.CommandContext(ctx, s.path)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, managedprocess.StartObservation{Kind: managedprocess.StartFailed, Err: err}
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = stdin.Close()
+		return nil, managedprocess.StartObservation{Kind: managedprocess.StartFailed, Err: err}
+	}
+	stderr := &bounded{limit: s.stderrLimit}
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		return nil, managedprocess.StartObservation{Kind: managedprocess.StartFailed, Err: err}
+	}
+	child := &processChild{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr, done: make(chan struct{})}
+	go func() {
+		err := cmd.Wait()
+		child.death = managedprocess.DeathObservation{Kind: managedprocess.DeathExited, ExitCode: cmd.ProcessState.ExitCode(), Err: err, Stderr: stderr.snapshot(), Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete, Evidence: evidenceCeiling}, Evidence: evidenceCeiling}
+		close(child.done)
+	}()
+	s.mu.Lock()
+	s.children = append(s.children, child)
+	s.mu.Unlock()
+	return child, managedprocess.StartObservation{Kind: managedprocess.StartStarted, Evidence: evidenceCeiling}
+}
+
+func (p *processChild) Stdin() io.WriteCloser { return p.stdin }
+func (p *processChild) Stdout() io.ReadCloser { return p.stdout }
+
+func (p *processChild) Teardown(ctx context.Context) managedprocess.TeardownObservation {
+	phases := []managedprocess.TeardownPhase{managedprocess.PhaseInterrupt}
+	select {
+	case <-p.done:
+		return managedprocess.TeardownObservation{Phases: append(phases, managedprocess.PhaseReap), Death: p.death}
+	default:
+	}
+	_ = p.cmd.Process.Signal(os.Interrupt)
+	phases = append(phases, managedprocess.PhaseWait)
+	select {
+	case <-p.done:
+	case <-ctx.Done():
+		phases = append(phases, managedprocess.PhaseKill)
+		_ = p.cmd.Process.Kill()
+		<-p.done
+	case <-time.After(300 * time.Millisecond):
+		phases = append(phases, managedprocess.PhaseKill)
+		_ = p.cmd.Process.Kill()
+		<-p.done
+	}
+	return managedprocess.TeardownObservation{Phases: append(phases, managedprocess.PhaseReap), Death: p.death}
+}
+
+func (p *processChild) Close() managedprocess.ResourceObservation {
+	p.once.Do(func() { _ = p.stdin.Close(); _ = p.stdout.Close() })
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed, Evidence: evidenceCeiling}
+}
+
+func (p *processChild) wait() managedprocess.DeathObservation { <-p.done; return p.death }
+
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("caller path unavailable")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+}
+
+func buildFake(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fake-lsp")
+	cmd := exec.Command("go", "build", "-o", path, "./cmd/fake-lsp")
+	cmd.Dir = repositoryRoot(t)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build fake LSP: %v: %s", err, out)
+	}
+	return path
+}
+
+func profile(t *testing.T, workspace string) runtimeprofile.Profile {
+	t.Helper()
+	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "integrated-test", Workspace: workspace, Profile: "fake-lsp", EnvironmentReference: "hermetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return runtimeprofile.Resolve(validated)
+}
+
+func limits(maxSessions, maxRequests, maxChildren int) sessionruntime.Limits {
+	return sessionruntime.Limits{MaxSessions: maxSessions, MaxRequests: maxRequests, MaxChildren: maxChildren, MaxCancels: 4, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 4}
+}
+
+func writeMessage(t *testing.T, w io.Writer, m lspwire.Message) {
+	t.Helper()
+	if err := lspwire.NewWriter(w, lspwire.DefaultLimits()).Write(m); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func rejectPerturbation(t *testing.T, assertion string, realWrongState ...bool) bool {
+	t.Helper()
+	matched := os.Getenv("LSP_TRACE_CONFORMANCE_PERTURB") == assertion
+	if matched && len(realWrongState) == 0 {
+		t.Fatalf("%s: FAIL injected minimal wrong state", assertion)
+	}
+	return matched
+}
+
+type historicalRegistryFixtureTool struct {
+	Name          string `json:"name"`
+	InputSchemaID string `json:"input_schema_id"`
+}
+
+type historicalRegistryAdapter struct {
+	tools  []mcp.Tool
+	byName map[string]mcp.Tool
+}
+
+func loadHistoricalRegistryFixture(t *testing.T) []historicalRegistryFixtureTool {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "historical-always-local-registry.v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture []historicalRegistryFixtureTool
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := mcpcontract.LoadManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contracts := make(map[string]mcpcontract.ToolContract, len(manifest.Tools))
+	for _, tool := range manifest.Tools {
+		contracts[tool.Name] = tool
+	}
+	for _, expected := range fixture {
+		contract, ok := contracts[expected.Name]
+		if !ok || contract.InputSchemaID != expected.InputSchemaID {
+			t.Fatalf("ASSERT_HISTORICAL_REGISTRY_FIXTURE_CONTRACT: expected=%+v contract=%+v ok=%v", expected, contract, ok)
+		}
+	}
+	return fixture
+}
+
+func newHistoricalRegistryAdapter(fixture []historicalRegistryFixtureTool) historicalRegistryAdapter {
+	adapter := historicalRegistryAdapter{tools: make([]mcp.Tool, 0, len(fixture)), byName: make(map[string]mcp.Tool, len(fixture))}
+	for _, expected := range fixture {
+		tool := mcp.Tool{Name: expected.Name, InputSchemaID: expected.InputSchemaID, Availability: mcp.Enabled}
+		adapter.tools = append(adapter.tools, tool)
+		adapter.byName[tool.Name] = tool
+	}
+	return adapter
+}
+
+func (r historicalRegistryAdapter) Advertised() []mcp.Tool {
+	return append([]mcp.Tool(nil), r.tools...)
+}
+
+func (r historicalRegistryAdapter) Resolve(name string) (mcp.Tool, bool) {
+	tool, ok := r.byName[name]
+	return tool, ok
+}
+
+func ownsC15CurrentPath(path string) bool {
+	for _, prefix := range []string{
+		"internal/adr0011acquisition/",
+		"internal/adr0011methodresult/",
+		"internal/adr0011work/",
+		"sessionruntime/testdata/adr0011-",
+		"sessionruntime/testdata/c15-census-v1/",
+		"sessionruntime/testdata/c15-census-v2/",
+		"sessionruntime/testdata/callhierarchy-layer1-red-v1/",
+		"sessionruntime/testdata/callhierarchy-layer1-red-v2/",
+		"sessionruntime/testdata/callhierarchy-layer1-red-v3/",
+	} {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	for _, owned := range []string{
+		"scripts/check-adr0011-c-closure.py",
+		"internal/lspwire/successor_ingress.go", "internal/lspwire/c15_site_bindings.go",
+		"internal/lspwire/successor_allocation_denominator_private_test.go",
+		"sessionruntime/b4_definition_private.go", "sessionruntime/b4_explicit_bytes_c15_integration_private_test.go",
+		"sessionruntime/b4_explicit_bytes_c15_private.go", "sessionruntime/b4_owned_method_pair_lease.go",
+		"sessionruntime/b4_result_lease_test.go", "sessionruntime/b4_retained_notification_c15_private.go",
+		"sessionruntime/b4_retained_response_c15_private.go", "sessionruntime/b4_server_error_lease_c15_private.go",
+		"sessionruntime/b4_server_request_c15_private.go", "sessionruntime/b4_source_acquisition_private_test.go",
+		"sessionruntime/b4_source_ingress_c15_private_test.go", "sessionruntime/diagnostic_backing_c15_private.go",
+		"sessionruntime/diagnostic_runtime.go", "sessionruntime/private_encoded_request.go",
+		"sessionruntime/b4_c15_candidate_discovery_private_test.go", "sessionruntime/b4_c15_mapping_refresh_private_test.go",
+		"sessionruntime/b4_c15_canonical_mapping_generator_private_test.go", "sessionruntime/b4_c15_ownership_registry_private.go",
+		"sessionruntime/b4_c15_ownership_registry_red_private_test.go", "sessionruntime/b4_owned_method_pair_lease_test.go",
+		"sessionruntime/b4_private_selected_read_lease_v10_test.go",
+		"sessionruntime/b4_c15_site_bindings_private.go", "sessionruntime/b4_event_account_c17_private.go",
+		"sessionruntime/b4_private_lifecycle_packet_test.go", "sessionruntime/diagnostic_history_storage_c15_private.go",
+		"sessionruntime/diagnostic_history_storage_c15_private_test.go", "sessionruntime/adr0011_c17_c15_custody_observer_red_private_test.go",
+		"sessionruntime/adr0011_c17_c15_atomic_batch_observer_red_private_test.go", "sessionruntime/adr0011_c17_c15_observer_contract_private.go",
+		"sessionruntime/adr0011_c18_real_owner_collision_red_private_test.go", "sessionruntime/c18_pair_coordinator_private.go",
+		"sessionruntime/adr0011_c07_integrated_private_test.go", "sessionruntime/adr0011_c07_packet_private_test.go",
+		"sessionruntime/adr0011_c08_lifecycle_private_test.go", "sessionruntime/adr0011_c08_packet_private_test.go",
+		"sessionruntime/adr0011_c08_preflight_red_private_test.go", "sessionruntime/adr0011_c09_integrated_private_test.go",
+		"sessionruntime/adr0011_c09_packet_private_test.go", "sessionruntime/adr0011_c10_integrated_private_test.go",
+		"sessionruntime/adr0011_c10_packet_private_test.go", "sessionruntime/adr0011_c11_integrated_private_test.go",
+		"sessionruntime/adr0011_c11_packet_private_test.go", "sessionruntime/adr0011_c12_integrated_private_test.go",
+		"sessionruntime/adr0011_c12_packet_private_test.go", "sessionruntime/adr0011_c17_capability_events_emitted_red_private_test.go",
+		"sessionruntime/adr0011_c17_logical_buffer_successor_red_private_test.go", "sessionruntime/adr0011_c17_messages_processed_red_private_test.go",
+		"sessionruntime/adr0011_c17_objects_materialized_red_private_test.go", "sessionruntime/adr0011_c17_targets_events_emitted_red_private_test.go",
+		"sessionruntime/adr0011_packet_authority_private_test.go", "sessionruntime/b4_acquisition_events_emitted_red_private_test.go",
+		"sessionruntime/b4_c15_census_v2_successor_private_test.go", "sessionruntime/b4_c16_activation_compile_test.go",
+		"sessionruntime/b4_callhierarchy_layer1_generic_v2_test.go", "sessionruntime/b4_callhierarchy_layer1_generic_v3_test.go",
+		"sessionruntime/b4_capability_activation_c17_private_test.go", "sessionruntime/b4_capability_event_c17_private.go",
+		"sessionruntime/b4_mixed_family_c17_qualification_private_test.go", "sessionruntime/owned_method_pair.go",
+		"sessionruntime/owned_method_pair_test.go", "sessionruntime/readiness_history_private.go",
+		"sessionruntime/readiness_history_private_test.go", "sessionruntime/startup_attempt.go",
+	} {
+		if path == owned {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDisabledIntegratedConformance(t *testing.T) {
+	fake := buildFake(t)
+
+	t.Run("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_LOCAL_DARWIN_START_CORRELATED_READY")
+		if runtime.GOOS != "darwin" {
+			t.Skip("LOCAL_DARWIN_SUPERVISION_ONLY")
+		}
+		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
+		if err != nil {
+			t.Fatal(err)
+		}
+		manager, err := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 2, 1), Starter: sessionruntime.ManagedStarter{Manager: supervisor}, ReadinessTimeout: 5 * time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir()), Process: managedprocess.Spec{Path: fake, Dir: repositoryRoot(t)}})
+		if started.Failure != "" || started.State != session.Initializing || started.Generation != 1 || started.Start.Evidence != localDarwinEvidence {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: start=%+v", started)
+		}
+		pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(5*time.Second))
+		if pending.State != sessionruntime.ReadinessPending || pending.SessionID != started.SessionID || pending.Generation != started.Generation {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: pending=%+v start=%+v", pending, started)
+		}
+		waitContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		ready, found := manager.WaitReadiness(waitContext, pending.ID)
+		if !found || ready.ID != pending.ID || ready.SessionID != started.SessionID || ready.Generation != started.Generation || ready.State != sessionruntime.ReadinessReady || ready.Failure != "" {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: found=%v ready=%+v pending=%+v", found, ready, pending)
+		}
+		if census := manager.Census(); census.Workers != 0 {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: census=%+v", census)
+		}
+		accepted := manager.Stop(context.Background(), started.SessionID, "darwin-readiness-cleanup")
+		if accepted.Failure != "" {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: cleanup=%+v", accepted)
+		}
+		shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		if err := manager.Shutdown(shutdownContext); err != nil {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: shutdown=%v", err)
+		}
+		t.Log("PASS ASSERT_LOCAL_DARWIN_START_CORRELATED_READY")
+	})
+
+	t.Run("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION")
+		starter := &cleanStarter{}
+		manager, err := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 2, 1), Starter: starter})
+		if err != nil {
+			t.Fatal(err)
+		}
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+		if started.Failure != "" {
+			t.Fatal(started.Failure)
+		}
+		manager.ObserveInitialization(started.SessionID, started.Generation, true)
+		executor := lifecycleops.NewExecutor(lifecycleops.New(manager))
+		status := executeLifecycle(t, executor, lifecycleops.OperationStatus, started.SessionID, 1, "")
+		statusJSON, err := json.Marshal(status.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var statusPublic struct {
+			SessionID        string        `json:"SessionID"`
+			Generation       uint64        `json:"Generation"`
+			State            session.State `json:"State"`
+			PositionEncoding string        `json:"position_encoding"`
+		}
+		if err := json.Unmarshal(statusJSON, &statusPublic); err != nil {
+			t.Fatal(err)
+		}
+		if statusPublic.SessionID != started.SessionID || statusPublic.State != session.Ready || statusPublic.Generation != 1 || statusPublic.PositionEncoding == "" || bytes.Contains(statusJSON, []byte(`"Profile"`)) {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: public status=%s", statusJSON)
+		}
+		restartResult := executeLifecycle(t, executor, lifecycleops.OperationRestart, started.SessionID, 1, "restart")
+		restartAcceptance, ok := restartResult.Value.(lifecycleops.Acceptance)
+		if !ok || !restartAcceptance.Pending {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: restart=%+v", restartResult.Value)
+		}
+		restartTerminal := waitLifecycleTerminal(t, lifecycleops.New(manager), restartAcceptance.OperationID)
+		if restartTerminal.State != lifecycleops.Complete || !restartTerminal.Restart || restartTerminal.Generation != 1 {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: restart terminal=%+v", restartTerminal)
+		}
+		current, failure := lifecycleops.New(manager).Status(started.SessionID, 2)
+		if failure != "" || current.Generation != 2 || current.State != session.Initializing {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: pending current=%+v failure=%s", current, failure)
+		}
+		initialized := manager.ObserveInitialization(started.SessionID, 2, true)
+		if initialized.Failure != "" || initialized.Generation != 2 || initialized.State != session.Ready {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: initialized=%+v", initialized)
+		}
+		_, staleFailure := executor.Execute(context.Background(), operation.Request{Name: lifecycleops.OperationStatus, RequestID: "status-stale", Input: json.RawMessage(`{"session_id":"` + started.SessionID + `","generation":1}`)})
+		if staleFailure == nil || staleFailure.Code != string(lifecycleops.FailureStaleGeneration) {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: stale=%+v", staleFailure)
+		}
+		stopResult := executeLifecycle(t, executor, lifecycleops.OperationStop, started.SessionID, 2, "stop")
+		stopAcceptance, ok := stopResult.Value.(lifecycleops.Acceptance)
+		if !ok || !stopAcceptance.Pending {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: stop=%+v", stopResult.Value)
+		}
+		stopTerminal := waitLifecycleTerminal(t, lifecycleops.New(manager), stopAcceptance.OperationID)
+		if stopTerminal.State != lifecycleops.Complete || stopTerminal.Restart || stopTerminal.Generation != 2 {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: stop terminal=%+v", stopTerminal)
+		}
+		if census := manager.Census(); census.Sessions != 0 || census.Children != 0 || census.Workers != 0 {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: census=%+v", census)
+		}
+		t.Log("PASS ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION")
+	})
+
+	t.Run("ASSERT_READINESS_FAULT_TERMINALS_CLEANUP", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_READINESS_FAULT_TERMINALS_CLEANUP")
+		for _, tc := range []readinessCase{
+			{name: "timeout", mode: "hang", fail: session.InitializationTimeout},
+			{name: "cancellation", mode: "hang", fail: session.RequestCancelled},
+			{name: "EOF", mode: "eof", fail: session.InitializationFailure},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				child := newReadinessFixture(tc.mode)
+				manager, err := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: &fixedStarter{child: child}, ReadinessTimeout: 20 * time.Millisecond})
+				if err != nil {
+					t.Fatal(err)
+				}
+				started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+				readinessContext := context.Background()
+				deadline := time.Time{}
+				if tc.name == "cancellation" {
+					var cancel context.CancelFunc
+					readinessContext, cancel = context.WithCancel(context.Background())
+					defer cancel()
+					pending := manager.BeginReadiness(readinessContext, started.SessionID, started.Generation, time.Now().Add(time.Second))
+					cancel()
+					terminal, _ := manager.WaitReadiness(context.Background(), pending.ID)
+					assertReadinessFaultCleanup(t, tc, terminal, manager, child)
+					return
+				}
+				if tc.name == "timeout" {
+					deadline = time.Now().Add(20 * time.Millisecond)
+				}
+				pending := manager.BeginReadiness(readinessContext, started.SessionID, started.Generation, deadline)
+				terminal, _ := manager.WaitReadiness(context.Background(), pending.ID)
+				assertReadinessFaultCleanup(t, tc, terminal, manager, child)
+			})
+		}
+
+		crashed := startDirect(t, fake, 32)
+		writeMessage(t, crashed.stdin, lspwire.Message{JSONRPC: lspwire.Version, Method: "fixture/crash", Params: json.RawMessage(`{}`)})
+		death := crashed.wait()
+		resources := crashed.Close()
+		if death.ExitCode != 86 || death.Reap.Kind != managedprocess.ReapComplete || resources.Kind != managedprocess.ResourcesClosed {
+			t.Fatalf("ASSERT_READINESS_FAULT_TERMINALS_CLEANUP: crash death=%+v resources=%+v", death, resources)
+		}
+		t.Log("PASS ASSERT_READINESS_FAULT_TERMINALS_CLEANUP")
+	})
+
+	t.Run("ASSERT_INTEGRATED_FAKE_LSP_FRAMING", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_INTEGRATED_FAKE_LSP_FRAMING")
+		starter := &execStarter{path: fake, stderrLimit: 64}
+		manager, err := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 2, 1), Starter: starter})
+		if err != nil {
+			t.Fatal(err)
+		}
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+		if started.State != session.Initializing || started.Generation != 1 {
+			t.Fatalf("start=%+v", started)
+		}
+		child := starter.children[0]
+		key, failure := manager.BeginRequest(started.SessionID, 1, time.Time{})
+		if failure != "" {
+			t.Fatal(failure)
+		}
+		request, _ := lspwire.InitializeRequest(key, lspwire.InitializeConfig{ProcessID: 42, RootURI: "file:///workspace", ClientName: "integrated-harness", ClientVersion: "1", Trace: "off"})
+		writeMessage(t, child.stdin, request)
+		response, err := lspwire.NewReader(child.stdout, lspwire.DefaultLimits()).Read()
+		if err != nil || response.Kind() != lspwire.KindSuccessResponse || string(response.ID) != "1" {
+			t.Fatalf("response=%+v err=%v", response, err)
+		}
+		if got := manager.CompleteResponse(started.SessionID, key); got != lspwire.ResponseAccepted {
+			t.Fatalf("disposition=%v", got)
+		}
+		if initialized := manager.ObserveInitialization(started.SessionID, 1, true); initialized.State != session.Ready {
+			t.Fatalf("initialized=%+v", initialized)
+		}
+		t.Log("PASS ASSERT_INTEGRATED_FAKE_LSP_FRAMING")
+	})
+
+	t.Run("ASSERT_DETERMINISTIC_INITIALIZATION_BYTES", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_DETERMINISTIC_INITIALIZATION_BYTES")
+		key := lspwire.RequestKey{Generation: 1, ID: 7}
+		cfg := lspwire.InitializeConfig{ProcessID: 42, RootURI: "file:///workspace", ClientName: "integrated-harness", ClientVersion: "1", Trace: "off"}
+		messageA, _ := lspwire.InitializeRequest(key, cfg)
+		messageB, _ := lspwire.InitializeRequest(key, cfg)
+		var a, b bytes.Buffer
+		writeMessage(t, &a, messageA)
+		writeMessage(t, &b, messageB)
+		if !bytes.Equal(a.Bytes(), b.Bytes()) {
+			t.Fatalf("frames differ:\n%x\n%x", a.Bytes(), b.Bytes())
+		}
+		const expected = `{"jsonrpc":"2.0","id":7,"method":"initialize","params":{"processId":42,"clientInfo":{"name":"integrated-harness","version":"1"},"rootUri":"file:///workspace","capabilities":{},"trace":"off"}}`
+		if !bytes.HasSuffix(a.Bytes(), []byte(expected)) {
+			t.Fatalf("unexpected frame %q", a.Bytes())
+		}
+		t.Log("PASS ASSERT_DETERMINISTIC_INITIALIZATION_BYTES")
+	})
+
+	t.Run("ASSERT_LIFECYCLE_PENDING_COMPLETE_FAILED", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_LIFECYCLE_PENDING_COMPLETE_FAILED")
+		starter := &execStarter{path: fake, stderrLimit: 64}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(2, 1, 2), Starter: starter})
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "complete"))})
+		manager.ObserveInitialization(started.SessionID, 1, true)
+		service := lifecycleops.New(manager)
+		accepted := service.Stop(context.Background(), lifecycleops.LifecycleRequest{SessionID: started.SessionID, Generation: 1, CallerID: "complete"})
+		pending, failure := service.OperationStatus(accepted.OperationID)
+		if failure != "" || pending.State != lifecycleops.Pending {
+			t.Fatalf("pending=%+v failure=%s", pending, failure)
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for pending.State == lifecycleops.Pending && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+			pending, _ = service.OperationStatus(accepted.OperationID)
+		}
+		if pending.State != lifecycleops.Complete {
+			t.Fatalf("complete=%+v", pending)
+		}
+
+		failedStarter := &fixedStarter{child: failingChild{}}
+		failedManager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: failedStarter})
+		failedStart := failedManager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "failed"))})
+		failedManager.ObserveInitialization(failedStart.SessionID, 1, true)
+		failedService := lifecycleops.New(failedManager)
+		failedAcceptance := failedService.Stop(context.Background(), lifecycleops.LifecycleRequest{SessionID: failedStart.SessionID, Generation: 1, CallerID: "failed"})
+		var failed lifecycleops.OperationSnapshot
+		for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+			failed, _ = failedService.OperationStatus(failedAcceptance.OperationID)
+			if failed.State != lifecycleops.Pending {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if failed.State != lifecycleops.Failed || failed.Failure != lifecycleops.FailureReapIncomplete {
+			t.Fatalf("failed=%+v", failed)
+		}
+		t.Log("PASS ASSERT_LIFECYCLE_PENDING_COMPLETE_FAILED")
+	})
+
+	t.Run("ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE")
+		starter := &execStarter{path: fake, stderrLimit: 32}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 2, 1), Starter: starter})
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+		child := starter.children[0]
+		key, failure := manager.BeginRequest(started.SessionID, started.Generation, time.Time{})
+		if failure != "" {
+			t.Fatal(failure)
+		}
+		writeMessage(t, child.stdin, lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`1`), Method: "fixture/hang", Params: json.RawMessage(`{}`)})
+		first, err := manager.CancelRequest(started.SessionID, key)
+		second, secondErr := manager.CancelRequest(started.SessionID, key)
+		if err != nil || secondErr != nil || first != lspwire.CancelWritten || second != lspwire.CancelAlreadyWritten {
+			t.Fatalf("ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE: first=%v second=%v err=%v secondErr=%v", first, second, err, secondErr)
+		}
+		observed, err := lspwire.NewReader(child.stdout, lspwire.DefaultLimits()).Read()
+		if err != nil || observed.Method != "fixture/cancelObserved" {
+			t.Fatalf("cancel observation=%+v err=%v", observed, err)
+		}
+		writeMessage(t, child.stdin, lspwire.Message{JSONRPC: lspwire.Version, Method: "fixture/lateReply", Params: json.RawMessage(`{"id":1,"result":{"late":true}}`)})
+		late, err := lspwire.NewReader(child.stdout, lspwire.DefaultLimits()).Read()
+		if err != nil || manager.CompleteResponse(started.SessionID, lspwire.ResponseKey{Generation: 1, ID: 1}) != lspwire.ResponseAccepted || manager.CompleteResponse(started.SessionID, lspwire.ResponseKey{Generation: 1, ID: 1}) != lspwire.ResponseDuplicate || string(late.ID) != "1" {
+			t.Fatalf("late=%+v err=%v", late, err)
+		}
+		child.Teardown(context.Background())
+		child.Close()
+
+		malformed := startDirect(t, fake, 32)
+		writeMessage(t, malformed.stdin, lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`2`), Method: "fixture/malformed", Params: json.RawMessage(`{}`)})
+		if _, err := lspwire.NewReader(malformed.stdout, lspwire.DefaultLimits()).Read(); !errors.Is(err, lspwire.ErrInvalidContentLength) {
+			t.Fatalf("malformed err=%v", err)
+		}
+		malformed.Teardown(context.Background())
+		malformed.Close()
+
+		crashed := startDirect(t, fake, 32)
+		writeMessage(t, crashed.stdin, lspwire.Message{JSONRPC: lspwire.Version, Method: "fixture/stderr", Params: json.RawMessage(`{"text":"abcdefghijklmnopqrstuvwxyz0123456789"}`)})
+		writeMessage(t, crashed.stdin, lspwire.Message{JSONRPC: lspwire.Version, Method: "fixture/crash", Params: json.RawMessage(`{}`)})
+		death := crashed.wait()
+		if death.ExitCode != 86 || len(death.Stderr.Bytes) != 32 || !death.Stderr.Truncated {
+			t.Fatalf("death=%+v", death)
+		}
+		crashed.Close()
+		t.Log("PASS ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE")
+	})
+
+	t.Run("ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER")
+		starter := &execStarter{path: fake, stderrLimit: 64}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: starter})
+		first := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "one"))})
+		manager.ObserveInitialization(first.SessionID, 1, true)
+		pressure := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "two"))})
+		if pressure.Failure != session.ResourceExhausted {
+			t.Fatalf("pressure=%+v", pressure)
+		}
+		restart := lifecycleops.New(manager).Restart(context.Background(), lifecycleops.LifecycleRequest{SessionID: first.SessionID, Generation: 1, CallerID: "restart"})
+		var terminal lifecycleops.OperationSnapshot
+		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+			terminal, _ = lifecycleops.New(manager).OperationStatus(restart.OperationID)
+			if terminal.State != lifecycleops.Pending {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if terminal.State != lifecycleops.Complete || terminal.Generation != 1 {
+			t.Fatalf("restart terminal=%+v", terminal)
+		}
+		observations := manager.Observations()
+		teardown, startup := -1, -1
+		for i, observation := range observations {
+			if observation.Kind == "teardown" {
+				teardown = i
+			}
+			if observation.Kind == "startup" && observation.Generation == 2 {
+				startup = i
+			}
+		}
+		if teardown < 0 || startup <= teardown {
+			t.Fatalf("restart ordering=%+v", observations)
+		}
+		stop := lifecycleops.New(manager).Stop(context.Background(), lifecycleops.LifecycleRequest{SessionID: first.SessionID, Generation: 2, CallerID: "stop"})
+		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+			terminal, _ = lifecycleops.New(manager).OperationStatus(stop.OperationID)
+			if terminal.State != lifecycleops.Pending {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		if terminal.State != lifecycleops.Complete {
+			t.Fatalf("stop terminal=%+v", terminal)
+		}
+		if err := manager.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("PASS ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER")
+	})
+
+	t.Run("ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE")
+		starter := &execStarter{path: fake, stderrLimit: 64}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: starter})
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+		accepted := manager.Stop(context.Background(), started.SessionID, "graceful")
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if terminal, ok := manager.Operation(accepted.IntentID); ok && terminal.State != sessionruntime.OperationPending {
+				if terminal.State != sessionruntime.OperationComplete {
+					t.Fatalf("ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE: terminal=%+v", terminal)
+				}
+				t.Log("PASS ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE")
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Fatal("ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE: timeout")
+	})
+
+	t.Run("ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY")
+		starter := &execStarter{path: fake, stderrLimit: 64}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: starter})
+		first := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "one"))})
+		accepted := manager.Stop(context.Background(), first.SessionID, "stop")
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if terminal, ok := manager.Operation(accepted.IntentID); ok && terminal.State != sessionruntime.OperationPending {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		second := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "two"))})
+		if second.Failure != "" {
+			t.Fatalf("ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY: result=%+v", second)
+		}
+		t.Log("PASS ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY")
+	})
+
+	t.Run("ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH")
+		for _, gap := range exactGaps {
+			if strings.Contains(gap, "MCP lifecycle dispatch") {
+				t.Fatalf("disabled direct lifecycle dispatch remains recorded as a gap: %s", gap)
+			}
+		}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: &fixedStarter{child: failingChild{}}})
+		executor := lifecycleops.NewExecutor(lifecycleops.New(manager))
+		result, failure := executor.Execute(context.Background(), operation.Request{Name: lifecycleops.OperationList, RequestID: "disabled-direct-1", Input: json.RawMessage(`{"detail":"full"}`)})
+		if failure != nil {
+			t.Fatalf("direct dispatch failure=%v", failure)
+		}
+		raw, err := json.Marshal(result.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var full map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &full); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"Sessions", "Observations", "Census"} {
+			if _, ok := full[field]; !ok {
+				t.Fatalf("ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH: missing public full-list field %s: %s", field, raw)
+			}
+		}
+		var census sessionruntime.Census
+		if err := json.Unmarshal(full["Census"], &census); err != nil || census.Sessions != 0 {
+			t.Fatalf("ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH: public census=%+v err=%v", census, err)
+		}
+		t.Log("PASS ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH")
+	})
+
+	t.Run("ASSERT_EXACT_CROSS_SEAM_GAPS", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_EXACT_CROSS_SEAM_GAPS")
+		if len(exactGaps) != 1 {
+			t.Fatalf("gaps=%v", exactGaps)
+		}
+		for _, required := range []string{"Production-equivalent fake-process startup"} {
+			found := false
+			for _, gap := range exactGaps {
+				found = found || strings.Contains(gap, required)
+			}
+			if !found {
+				t.Fatalf("missing exact gap %q", required)
+			}
+		}
+		t.Log("PASS ASSERT_EXACT_CROSS_SEAM_GAPS")
+	})
+
+	t.Run("ASSERT_PACKAGE_OWNERSHIP_ONLY", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_PACKAGE_OWNERSHIP_ONLY")
+		root := repositoryRoot(t)
+		cmd := exec.Command("git", "status", "--porcelain=v1", "--untracked-files=all")
+		cmd.Dir = root
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line == "" {
+				continue
+			}
+			path := strings.TrimSpace(line[2:])
+			if excludesADR0007OwnershipPath(path) {
+				continue
+			}
+			owned := ownsADR0007ProductionPath(path) || ownsFR20FR21Path(path) || ownsC15CurrentPath(path) || path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/transient_identity_test.go" || path == "sessionruntime/document_supply_behavior_test.go" || path == "sessionruntime/adr0011_c17_documents_acquired_red_private_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
+				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" || path == "internal/adr0011acquisition/synthetic_source_pin_review_test.go" || strings.HasPrefix(path, "internal/runtimeprofile/") || path == "sessionruntime/derive_workspace_test.go" ||
+				path == "cmd/fake-lsp/main.go" || path == "cmd/fake-lsp/main_test.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" || path == "lifecycleops/lifecycleops.go" || path == "lifecycleops/lifecycleops_test.go" ||
+				path == "README.md" || path == "GRAPH-V5-MANAGED-REPAIR.md" || path == "docs/PROVIDERS.md" || path == "docs/RELEASING.md" || path == "docs/cli-migration-diagnostics.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" || path == "docs/adr/0006-transient-live-structural-analysis.md" || path == "docs/adr/0007-optional-local-semantic-feature-index.md" || path == "docs/adr/0008-dehydrated-structural-evidence-and-deterministic-source-projection.md" || path == "docs/qualification/adr0007-adr0008-source-projection-plan.md" || path == "docs/qualification/adr0008-cross-mode-fixture-plan.md" || path == "qualification/adr0008-source-projection-matrix.v1.json" || strings.HasPrefix(path, "internal/sourceprojection/") || strings.HasPrefix(path, "internal/sourceprojectionv2/") || strings.HasPrefix(path, "internal/sourceprojectionv3/") || strings.HasPrefix(path, "internal/sourceposition/") || strings.HasPrefix(path, "internal/regexlocator/") ||
+				path == "cmd/lsp-trace/main.go" || path == "cmd/lsp-trace/main_test.go" || strings.HasPrefix(path, "cmd/lsp-trace/context_command") || strings.HasPrefix(path, "cmd/lsp-trace/context_delta_command") || strings.HasPrefix(path, "cmd/lsp-trace/context_churn") || path == "cmd/lsp-trace/cli_diagnostic.go" || path == "cmd/lsp-trace/cli_diagnostic_test.go" || path == "cmd/lsp-trace/census_command.go" || path == "cmd/lsp-trace/census_command_test.go" || path == "cmd/lsp-trace/census_runner.go" || path == "cmd/lsp-trace/census_runner_test.go" || path == "cmd/lsp-trace/census_assembly.go" || path == "cmd/lsp-trace/census_assembly_test.go" || path == "cmd/lsp-trace/census_core.go" || path == "cmd/lsp-trace/census_core_test.go" || path == "cmd/lsp-trace/census_discovery_adapter.go" || path == "cmd/lsp-trace/census_discovery_adapter_test.go" || path == "cmd/lsp-trace/discovery_filter.go" || strings.HasPrefix(path, "internal/census/") || strings.HasPrefix(path, "internal/censusacquisition/") || strings.HasPrefix(path, "internal/discoveryfilter/") || path == "cmd/lsp-trace/fake_server_test.go" || path == "cmd/lsp-trace/graph_provenance_test.go" || path == "cmd/lsp-trace/trace_command.go" || path == "cmd/lsp-trace/trace_command_test.go" || path == "cmd/lsp-trace/trace_process_test.go" || path == "cmd/lsp-trace/slice_command.go" || path == "fr1-typescript-call-hierarchy.claim.md" || path == "fr1.1-managed-language-id.claim.md" || strings.HasPrefix(path, "qualification/retained/fr1.1-managed-language-id/") || path == "cmd/lsp-trace/execution_command.go" || path == "cmd/lsp-trace/execution_command_test.go" || path == "cmd/lsp-trace/render_command.go" || path == "cmd/lsp-trace/render_command_test.go" || path == "cmd/lsp-trace/custody_command.go" || path == "cmd/lsp-trace/custody_command_test.go" || strings.HasPrefix(path, "internal/presentation/") ||
+				path == "cmd/lsp-trace/SKILL.md" || path == "cmd/lsp-trace/references/transport-routing.md" || path == "cmd/lsp-trace-mcp/census_candidate_qualification_test.go" || strings.HasPrefix(path, "cmd/lsp-trace-mcp/context_symbol_churn_") || path == "cmd/lsp-trace-mcp/live_real_census_smoke_harness_test.go" || path == "cmd/lsp-trace-mcp/live_real_census_smoke_test.go" || path == "cmd/lsp-trace-mcp/census_executor.go" || path == "cmd/lsp-trace-mcp/census_executor_test.go" || path == "cmd/lsp-trace-mcp/census_runtime.go" || path == "cmd/lsp-trace-mcp/census_runtime_test.go" || path == "cmd/lsp-trace-mcp/census_publication.go" || path == "cmd/lsp-trace-mcp/census_publication_test.go" || path == "cmd/lsp-trace-mcp/census_completion.go" || path == "cmd/lsp-trace-mcp/census_completion_test.go" || path == "cmd/lsp-trace-mcp/census_mcp_binding.go" || path == "cmd/lsp-trace-mcp/census_mcp_binding_test.go" || strings.HasPrefix(path, "internal/censusresult/") || path == "internal/graphkernel/analytics.go" || path == "internal/graphkernel/analytics_test.go" || path == "cmd/lsp-trace-mcp/main.go" || path == "cmd/lsp-trace-mcp/main_test.go" || path == "cmd/lsp-trace-mcp/runtime_trace.go" || path == "cmd/lsp-trace-mcp/bootstrap.example.v1.json" || path == "cmd/lsp-trace-mcp/bootstrap_discovery_test.go" || path == "cmd/lsp-trace-mcp/provider_collector.go" || path == "cmd/lsp-trace-mcp/provider_lifecycle_composition.go" || path == "cmd/lsp-trace-mcp/provider_lifecycle_composition_test.go" || path == "cmd/lsp-trace-mcp/process_integration_test.go" || path == "cmd/lsp-trace-mcp/public_analytics_v2_schema_process_test.go" || path == "cmd/lsp-trace-mcp/slice_selector_contract_process_test.go" || path == "cmd/lsp-trace-mcp/real_process_conformance_test.go" || path == "cmd/lsp-trace-mcp/testdata/fake-relation-provider/main.go" || path == "cmd/lsp-trace-mcp/bootstrap.go" || path == "cmd/lsp-trace-mcp/bootstrap_test.go" || path == "cmd/lsp-trace-mcp/bootstrap_process_test.go" || path == "cmd/lsp-trace-mcp/bootstrap_provider.go" || path == "cmd/lsp-trace-mcp/bootstrap_provider_test.go" || path == "bootstrap-provider-declarations.claim.md" ||
+				strings.HasPrefix(path, "internal/liveprojection/") || strings.HasPrefix(path, "internal/utf16position/") || strings.HasPrefix(path, "internal/mcp/adr0008_") || path == "internal/mcp/registry.go" || path == "internal/mcp/registry_test.go" || strings.HasPrefix(path, "internal/mcp/advertised_schema") || path == "internal/mcp/operation42_red_test.go" || path == "internal/mcp/census_operation34_test.go" || path == "internal/mcp/trace_operation33_test.go" || strings.HasPrefix(path, "internal/mcp/structural_context") || strings.HasPrefix(path, "internal/mcp/structural_delta_") || strings.HasPrefix(path, "internal/mcp/context_churn_") || strings.HasPrefix(path, "internal/mcp/context_symbol_churn_") || strings.HasPrefix(path, "cmd/lsp-trace-mcp/structural_context_executor") || path == "internal/mcp/compact_profile_test.go" || path == "internal/mcp/feedback_stage1_test.go" || path == "internal/mcp/fr23_public_v3_red_test.go" || path == "internal/mcp/public_analytics_v2_test.go" || path == "internal/mcp/retained_calls_v2_test.go" || path == "internal/mcp/bootstrap_discovery_test.go" || path == "internal/mcp/normalized_provider_contract_test.go" || path == "internal/mcp/transport.go" || path == "internal/mcp/transport_test.go" || path == "internal/mcp/slice_selector_contract_test.go" || path == "internal/mcp/execution_transport_test.go" || path == "internal/mcp/execute_gateway_test.go" ||
+				path == "internal/stage2scenario/testdata/schemas/stage2-ledger-v1.schema.json" || path == "internal/operation/types.go" || path == "internal/operation/custody_test.go" || path == "internal/operation/verify.go" || path == "internal/operation/verify_test.go" || path == "internal/operation/normalized_provider_schema_test.go" || path == "mcp-transport.claim.md" ||
+				path == "internal/schema/denominator.go" || path == "internal/schema/denominator_test.go" || path == "internal/schema/family_test.go" || path == "internal/schema/schema.go" || path == "internal/schema/validation_core.go" || path == "internal/schema/compiled_cache.go" || path == "internal/schema/schemas/lsp-trace.source-denominator.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.inspect-ancillary.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.graph.v4.schema.json" || path == "schema/schemas/lsp-trace.execution.v1.schema.json" ||
+				path == "internal/lsp/types.go" || path == "internal/graph/reconcile.go" || path == "internal/graph/reconcile_test.go" || path == "internal/graph/relations.go" || path == "internal/graph/relations_test.go" || path == "internal/graph/result.go" || path == "internal/graph/v3.go" || path == "internal/graph/preflight_native_v3.go" || path == "internal/graph/evidence_bundle_test.go" || path == "internal/graph/v5_multiple_sibling_test.go" || path == "internal/graphprovenance/v2.go" || path == "internal/graph/snapshot_identity.go" || path == "internal/graph/snapshot_identity_test.go" || path == "internal/graph/schemas/normalized-relations.v1.schema.json" ||
+				path == "internal/source/receipt.go" || path == "internal/source/receipt_test.go" || path == "internal/source/discovery.go" || path == "internal/source/discovery_test.go" || path == "internal/source/discovery_receipt_bridge.go" || path == "internal/source/discovery_receipt_bridge_test.go" || path == "internal/source/snapshot_trust_bridge.go" || path == "internal/source/snapshot_trust_bridge_test.go" ||
+				path == "internal/execution/manifest_decision_bridge.go" || path == "internal/execution/manifest_decision_bridge_test.go" || strings.HasPrefix(path, "internal/publication/") ||
+				path == "internal/provider/runtime.go" || path == "internal/provider/collector.go" || path == "internal/provider/collector_test.go" || path == "internal/provider/semantic_binding.go" || path == "internal/provider/semantic_binding_test.go" || path == "internal/provider/revision_verifier.go" || path == "internal/provider/revision_bound_custody_test.go" || path == "internal/provider/provisioning.go" || path == "internal/provider/admission.go" || path == "internal/provider/admission_test.go" || path == "internal/provider/inventory.go" || path == "internal/provider/inventory_test.go" || path == "internal/mcp/provider_inventory_test.go" || path == "configured-provider-inventory.claim.md" || path == "generic-provider-conformance.claim.md" || strings.HasPrefix(path, "internal/providerconformance/") || path == "cmd/lsp-trace/provider_conformance_command.go" || path == "cmd/lsp-trace/provider_conformance_command_test.go" || path == "schema/schemas/lsp-trace.provider-conformance-request.v1.schema.json" || path == "schema/schemas/lsp-trace.provider-conformance-report.v1.schema.json" || path == "schema/schemas/lsp-trace.provider-collector-request.v1.schema.json" || path == "schema/schemas/lsp-trace.provider-observations.v1.schema.json" || strings.HasPrefix(path, "internal/mcpcontract/") || strings.HasPrefix(path, "incomingops/") || strings.HasPrefix(path, "sliceops/") || strings.HasPrefix(path, "internal/slicer/") || strings.HasPrefix(path, "internal/traverse/") || path == "dangling-seed-membership-normalization.claim.md" || strings.HasPrefix(path, "internal/execution/") || strings.HasPrefix(path, "internal/observationadapter/") || path == "observation-adaptation.claim.md" || path == "frozen-glint-qualification.claim.md" || strings.HasPrefix(path, "qualification/provider-qualification/") || strings.HasPrefix(path, "qualification/retained/provider-qualification/") || strings.HasPrefix(path, "qualification/retained/b05/") || strings.HasPrefix(path, "internal/integratedconformance/") || strings.HasPrefix(path, "internal/transientstructural/") || strings.HasPrefix(path, "internal/transientstructuraldelta/") || strings.HasPrefix(path, "internal/transientstructuralresult/") ||
+				path == ".gitignore" || path == ".goreleaser.yaml" || path == "go.mod" || path == "go.sum" || path == "THIRD_PARTY_NOTICES" || strings.HasPrefix(path, "internal/schema/") || path == "scripts/assert-core-archive-boundary.sh" || path == "scripts/prepare-representative-qualification.py" || path == "scripts/test-representative-qualification-preflight.py" || path == ".github/workflows/ci.yml" || path == "external-package-boundary.claim.md" || strings.HasPrefix(path, "providers/ember-glint/") || strings.HasPrefix(path, "providers/source-constrained-synthetic/") || strings.HasPrefix(path, "qualification/source-constrained-synthetic/") || strings.HasPrefix(path, "qualification/retained/source-constrained-synthetic/") || strings.HasPrefix(path, "qualification/retained/target-b05-synthetic/") ||
+				path == "cmd/lsp-trace-mcp/b05_frame6_qualification_test.go" || path == "scripts/qualify-external-provider.sh" || path == "scripts/qualify-b05-frame6.sh" || path == "scripts/build-b05-frame6-matrix.py" || path == "scripts/build-b05-qualification-evidence-v3.py" || path == "scripts/test-b05-qualification.sh" || path == "schema/schemas/lsp-trace.immutable-evidence-manifest.v1.schema.json" || path == "schema/schemas/lsp-trace.b05-qualification-evidence.v3.schema.json" || path == "schema/schemas/lsp-trace.b05-release-selection.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.immutable-evidence-manifest.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.b05-qualification-evidence.v3.schema.json" || path == "internal/schema/schemas/lsp-trace.b05-release-selection.v1.schema.json" || path == "scripts/release-check.sh" || path == "scripts/check-ci.sh" || path == "scripts/check-installed-pi-mcp-adapter-canary.sh" || path == "scripts/installed-pi-direct-tools-slice-selector-canary.ts" || path == "qualification/B05.md" || strings.HasPrefix(path, "internal/b05qualification/") || strings.HasPrefix(path, "qualification/external-provider/") || strings.HasPrefix(path, "qualification/retained/external-provider/") || path == "internal/provider/external_provider_production_test.go" || path == "internal/qualificationpolicy/production_release_policy_test.go" ||
+				path == "caller-mcp-ledger.md" || path == "caller-omitted-module-resolution.claim.md" || path == "docs/PROVIDERS.md" || path == "docs/RELEASING.md" || path == "scripts/qualify-caller-project-javascript.sh" || path == "scripts/test-caller-project-javascript-qualification.sh" || strings.HasPrefix(path, "qualification/caller-project-javascript/") || strings.HasPrefix(path, "qualification/retained/caller-project-javascript/") ||
+				path == "internal/retainedcalls/preflight_v2.go" || path == "internal/retainedcalls/v2_admission_test.go" || path == "internal/retainedcalls/v2_contract_test.go" || path == "internal/retainedcalls/v2_test.go" ||
+				path == "cmd/lsp-trace/retained_calls.go" || path == "cmd/lsp-trace/inspect_command.go" || path == "cmd/lsp-trace/inspect_command_test.go" || path == "cmd/lsp-trace/inspect_capture_set.go" || path == "cmd/lsp-trace/inspect_hydrated.go" || path == "cmd/lsp-trace/inspect_hydrated_test.go" || path == "cmd/lsp-trace-mcp/hydrated_public_test.go" || strings.HasPrefix(path, "internal/operation/inspect_hydrated") || path == "docs/retained-calls.md" || path == "docs/hydrated-evidence.md" ||
+				strings.HasPrefix(path, "internal/targetpacket/") || strings.HasPrefix(path, "internal/retainedprojectiontestfixture/") || strings.HasPrefix(path, "internal/retainedrelations/") || strings.HasPrefix(path, "internal/vcssymbolsidecar/") || strings.HasPrefix(path, "internal/v5sourcesnapshot/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv2/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv3/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv4/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv5/") || strings.HasPrefix(path, "internal/v5sourcesnapshotv6/") || strings.HasPrefix(path, "internal/hydratedevidence/") || strings.HasPrefix(path, "internal/hydratedinspection/") || strings.HasPrefix(path, "internal/retainedinspection/") || strings.HasPrefix(path, "internal/retainedoperation/") || strings.HasPrefix(path, "internal/retainedreplay/") || strings.HasPrefix(path, "internal/retainedmanifest/") || strings.HasPrefix(path, "internal/retainedlifecycle/") || strings.HasPrefix(path, "internal/retainedresolver/") || strings.HasPrefix(path, "internal/passageverification/") || path == "qualification/retained-passage-verification-core-4b98a4e.md" || path == "cmd/lsp-trace/verify_passage.go" || path == "cmd/lsp-trace/verify_passage_test.go" || path == "cmd/lsp-trace/schema_commands.go" || path == "schema/schemas/lsp-trace.passage-verification.v1.schema.json" || path == "docs/SEMANTICS.md" || path == "docs/mcp-advertisement-profiles.md" || path == "docs/adr/0007-append-only-transient-structural-delta.md" ||
+				path == "internal/seedformat/QUALIFICATION.md" || path == "internal/seedformat/schema.go" || path == "internal/seedformat/schema.json" || path == "internal/seedformat/seedformat.go" || path == "internal/seedformat/seedformat_test.go" || path == "cmd/lsp-trace/production_discovery.go" ||
+				path == "internal/mcp/adr0004_profile_contract_test.go" || path == "internal/mcp/retained_calls_test.go" || path == "internal/operation/retained_calls.go" || path == "internal/operation/schema_handlers.go" || path == "internal/operation/retained_calls_version_test.go" || path == "internal/schema/schemas/lsp-trace.retained-relations.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" || path == "schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" ||
+				strings.HasPrefix(path, "cmd/adr0007-source-text-search-v4-contract-validate/") || strings.HasPrefix(path, "internal/adr0007v4contractvalidator/") || strings.HasPrefix(path, "traceops/") || strings.HasPrefix(path, "structuralcontextsymbolops/") || path == "cmd/lsp-trace/references/live-tracing.md" || path == "cmd/lsp-trace-mcp/trace_executor.go" || path == "cmd/lsp-trace-mcp/trace_executor_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_negative_transport_parity_test.go" || path == "cmd/lsp-trace-mcp/trace_transport_parity_matrix_test.go" || strings.HasPrefix(path, "internal/captureset/") || strings.HasPrefix(path, "internal/capturesetinspection/") || path == "docs/adr/0005-internal-capture-set-publication-custody.md" || strings.HasPrefix(path, "internal/programc/") || strings.HasPrefix(path, "internal/programcadmission/") || strings.HasPrefix(path, "internal/referencegrouping/") || strings.HasPrefix(path, "internal/programcrepresentative/") || strings.HasPrefix(path, "internal/programcpresentation/") || strings.HasPrefix(path, "internal/programctestfixture/") || path == "internal/mcp/program_c_instability_test.go" || path == "internal/mcpcontract/program_c_instability.go" || path == "internal/operation/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability.go" || path == "cmd/lsp-trace/program_c_instability_test.go" || strings.HasPrefix(path, "internal/communityregister/") || path == "cmd/lsp-trace/aggregate_communities.go" || path == "cmd/lsp-trace/community_register_test.go" || path == "docs/technical-community-register.md" || path == "schema/schemas/lsp-trace.technical-community-register.v1.schema.json" || path == "internal/mcp/program_c_leiden_test.go" || path == "internal/mcpcontract/program_c_leiden.go" || path == "internal/operation/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden_test.go" || strings.HasPrefix(path, "internal/programccompose/") || path == "internal/mcp/program_c_compose_test.go" || path == "internal/mcpcontract/program_c_compose.go" || path == "internal/operation/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose_test.go" || path == "schema/schemas/lsp-trace.community-presentation.v1.schema.json" || path == "scripts/check-program-c-profiles.py" || path == "scripts/test-program-c-profiles.py" || path == "scripts/check-composite-leiden-admission.sh" || path == "qualification/program-c/composite-leiden-admission-v1.md" || path == "scripts/qualify-program-c-ember-callback-flow.py" || path == "scripts/test-program-c-ember-callback-flow.py" || path == "scripts/qualify-program-c-ember-state-flow.py" || path == "scripts/test-program-c-ember-state-flow.py" || path == "scripts/qualify-program-c-ui-lifecycle.mjs" || path == "scripts/test-program-c-ui-lifecycle.mjs" || path == "qualification/program-c/profile-qualification-receipt.v1.schema.json" || path == "qualification/program-c/profile-qualification.tsv" || path == "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/gate-i-receipts.tsv" || path == "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt" || path == "schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "schema/schemas/lsp-trace.community-boundary.v1.schema.json"
+			if !owned {
+				t.Errorf("unowned path %q", path)
+			}
+		}
+		if t.Failed() {
+			return
+		}
+		t.Log("PASS ASSERT_PACKAGE_OWNERSHIP_ONLY")
+	})
+
+	t.Run("ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY")
+		if evidenceCeiling != "DISABLED_HERMETIC_REFERENCE_ONLY" || localDarwinEvidence != "LOCAL_DARWIN_SUPERVISION_ONLY" || productionUnavailable != "UNAVAILABLE" {
+			t.Fatalf("evidence labels: reference=%q darwin=%q production=%q", evidenceCeiling, localDarwinEvidence, productionUnavailable)
+		}
+		if reflect.TypeOf(execStarter{}).AssignableTo(reflect.TypeOf(containment.RuntimeGate{})) {
+			t.Fatal("hermetic starter acquired production authority")
+		}
+		t.Log("PASS ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY")
+	})
+
+	t.Run("ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
+		const assertion = "ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS"
+		fixture := loadHistoricalRegistryFixture(t)
+		if rejectPerturbation(t, assertion, true) {
+			fixture = fixture[:len(fixture)-1]
+		}
+		registry := newHistoricalRegistryAdapter(fixture)
+		if got := len(registry.Advertised()); got != 12 {
+			t.Fatalf("%s: advertised=%d want=12", assertion, got)
+		}
+		for _, name := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_restart", "lsp_session_v1_stop"} {
+			tool, ok := registry.Resolve(name)
+			if !ok || tool.Availability != mcp.Enabled {
+				t.Fatalf("%s: enabled lifecycle %s=%+v ok=%v", assertion, name, tool, ok)
+			}
+		}
+		starter := sessionruntime.ManagedStarter{Manager: managedprocess.New(containment.NewRuntimeGate(), managedprocess.Options{})}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: starter})
+		before := manager.Census()
+		result := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir()), Process: managedprocess.Spec{Path: fake}})
+		after := manager.Census()
+		if result.Failure != session.ProcessContainmentUnavailable || before != after || after != (sessionruntime.Census{}) {
+			t.Fatalf("%s: result=%+v before=%+v after=%+v", assertion, result, before, after)
+		}
+		t.Log("PASS " + assertion)
+	})
+
+	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_FORTY", func(t *testing.T) {
+		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_FORTY"
+		tools := mcp.NewRegistry(true).Advertised()
+		if rejectPerturbation(t, assertion, true) {
+			tools = tools[:len(tools)-1]
+		}
+		if got := len(tools); got != 41 {
+			t.Fatalf("%s: advertised=%d want=41", assertion, got)
+		}
+		t.Log("PASS " + assertion)
+	})
+
+	t.Run("ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED", func(t *testing.T) {
+		const assertion = "ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED"
+		historical := newHistoricalRegistryAdapter(loadHistoricalRegistryFixture(t)).Advertised()
+		current := mcp.NewRegistry(true).Advertised()
+		if rejectPerturbation(t, assertion, true) {
+			current = append([]mcp.Tool(nil), historical...)
+		}
+		currentNames := make(map[string]bool, len(current))
+		for _, tool := range current {
+			currentNames[tool.Name] = true
+		}
+		currentOnly := 0
+		for _, tool := range current {
+			found := false
+			for _, old := range historical {
+				found = found || old.Name == tool.Name
+			}
+			if !found {
+				currentOnly++
+			}
+		}
+		for _, tool := range historical {
+			if !currentNames[tool.Name] {
+				t.Fatalf("%s: historical tool missing from current registry: %s", assertion, tool.Name)
+			}
+		}
+		if len(historical) != 12 || len(current) != 41 || currentOnly == 0 {
+			t.Fatalf("%s: historical=%d current=%d current_only=%d", assertion, len(historical), len(current), currentOnly)
+		}
+		t.Log("PASS " + assertion)
+	})
+}
+
+func executeLifecycle(t *testing.T, executor *lifecycleops.Executor, name operation.Name, sessionID string, generation uint64, callerID string) operation.Result {
+	t.Helper()
+	input := map[string]any{"session_id": sessionID, "generation": generation}
+	if name == lifecycleops.OperationStatus {
+		input["detail"] = "full"
+	}
+	if callerID != "" {
+		input["caller_id"] = callerID
+	}
+	raw, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, failure := executor.Execute(context.Background(), operation.Request{Name: name, RequestID: string(name), Input: raw})
+	if failure != nil {
+		t.Fatalf("%s direct dispatch: %+v", name, failure)
+	}
+	return result
+}
+
+func waitLifecycleTerminal(t *testing.T, service *lifecycleops.Service, operationID string) lifecycleops.OperationSnapshot {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshot, failure := service.OperationStatus(operationID)
+		if failure != "" {
+			t.Fatalf("operation %s: %s", operationID, failure)
+		}
+		if snapshot.State != lifecycleops.Pending {
+			return snapshot
+		}
+		runtime.Gosched()
+	}
+	t.Fatalf("operation %s remained pending", operationID)
+	return lifecycleops.OperationSnapshot{}
+}
+
+type readinessCase struct {
+	name string
+	mode string
+	fail session.Failure
+}
+
+func assertReadinessFaultCleanup(t *testing.T, tc readinessCase, terminal sessionruntime.ReadinessSnapshot, manager *sessionruntime.Manager, child *readinessFixture) {
+	t.Helper()
+	child.mu.Lock()
+	teardowns, closes := child.teardowns, child.closes
+	child.mu.Unlock()
+	if terminal.State != sessionruntime.ReadinessFailed || terminal.Failure != tc.fail || manager.Census().Workers != 0 || teardowns != 1 || closes != 1 {
+		t.Fatalf("ASSERT_READINESS_FAULT_TERMINALS_CLEANUP: case=%s terminal=%+v census=%+v teardown=%d close=%d", tc.name, terminal, manager.Census(), teardowns, closes)
+	}
+}
+
+type readinessFixture struct {
+	input             *io.PipeReader
+	stdin             *io.PipeWriter
+	output            *io.PipeWriter
+	stdout            *io.PipeReader
+	mode              string
+	mu                sync.Mutex
+	teardowns, closes int
+}
+
+func newReadinessFixture(mode string) *readinessFixture {
+	input, stdin := io.Pipe()
+	stdout, output := io.Pipe()
+	child := &readinessFixture{input: input, stdin: stdin, output: output, stdout: stdout, mode: mode}
+	go func() {
+		message, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
+		if err != nil || message.Method != "initialize" {
+			return
+		}
+		if mode == "eof" {
+			_ = output.Close()
+		}
+	}()
+	return child
+}
+
+func (c *readinessFixture) Stdin() io.WriteCloser { return c.stdin }
+func (c *readinessFixture) Stdout() io.ReadCloser { return c.stdout }
+func (c *readinessFixture) Teardown(context.Context) managedprocess.TeardownObservation {
+	c.mu.Lock()
+	c.teardowns++
+	c.mu.Unlock()
+	_ = c.stdin.Close()
+	_ = c.input.Close()
+	_ = c.output.Close()
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete, Evidence: evidenceCeiling}}}
+}
+func (c *readinessFixture) Close() managedprocess.ResourceObservation {
+	c.mu.Lock()
+	c.closes++
+	c.mu.Unlock()
+	_ = c.stdout.Close()
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed, Evidence: evidenceCeiling}
+}
+
+type cleanStarter struct{}
+
+func (*cleanStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	return cleanChild{}, managedprocess.StartObservation{Kind: managedprocess.StartStarted, Evidence: evidenceCeiling}
+}
+
+type cleanChild struct{}
+
+func (cleanChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete, Evidence: evidenceCeiling}}}
+}
+func (cleanChild) Close() managedprocess.ResourceObservation {
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed, Evidence: evidenceCeiling}
+}
+
+type fixedStarter struct{ child sessionruntime.Child }
+
+func (s *fixedStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted, Evidence: evidenceCeiling}
+}
+
+type failingChild struct{}
+
+func (failingChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapFailed}}}
+}
+func (failingChild) Close() managedprocess.ResourceObservation {
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
+}
+
+func startDirect(t *testing.T, path string, stderrLimit int) *processChild {
+	t.Helper()
+	starter := &execStarter{path: path, stderrLimit: stderrLimit}
+	child, observation := starter.Start(context.Background(), managedprocess.Spec{})
+	if observation.Kind != managedprocess.StartStarted {
+		t.Fatalf("start=%+v", observation)
+	}
+	return child.(*processChild)
+}

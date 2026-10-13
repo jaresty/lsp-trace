@@ -1,0 +1,52 @@
+=== RUN   TestADR0007ProductionOwnershipRegistration
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/censuscontinuation/capture.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/censusprogramc/adapter.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/continuationhost/factory.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/describerequest/request.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/describeworker/runner.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/provisionalfeaturecatalog/catalog.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv4/v4.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv5/v5.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv6/v6.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_batch_acquirer_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_catalog.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_continuation_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_host.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_binding_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/census_continuation_v2.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/testdata/schemas/input-census.v2.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.census-feature-catalog-result.v2.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v4.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v4assertions/v4_red_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5assertions/v5_red_test.go
+--- PASS: TestADR0007ProductionOwnershipRegistration (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/censuscontinuation/capture.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/censusprogramc/adapter.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/continuationhost/factory.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/describerequest/request.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/describeworker/runner.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/provisionalfeaturecatalog/catalog.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv4/v4.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv5/v5.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv6/v6.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_batch_acquirer_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_catalog.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_continuation_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_host.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_binding_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/census_continuation_v2.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/testdata/schemas/input-census.v2.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.census-feature-catalog-result.v2.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v4.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v4assertions/v4_red_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5assertions/v5_red_test.go (0.00s)
+PASS
+ok  	lsp-trace/internal/integratedconformance	0.327s

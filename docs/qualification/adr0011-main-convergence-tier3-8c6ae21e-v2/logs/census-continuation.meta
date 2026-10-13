@@ -1,0 +1,5 @@
+command=go test ./internal/censuscontinuation -count=1 -v 
+started_utc=2026-10-12T23:57:54Z
+finished_utc=2026-10-12T23:59:37Z
+elapsed_ns=103415622708
+exit_code=0

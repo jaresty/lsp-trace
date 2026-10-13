@@ -1,0 +1,710 @@
+=== RUN   TestADR0007ProductionOwnershipRegistration
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/censuscontinuation/capture.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/censusprogramc/adapter.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/continuationhost/factory.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/describerequest/request.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/describeworker/runner.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/provisionalfeaturecatalog/catalog.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv4/v4.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv5/v5.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv6/v6.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_batch_acquirer_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_catalog.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_continuation_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_host.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_binding_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/census_continuation_v2.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/testdata/schemas/input-census.v2.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.census-feature-catalog-result.v2.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v4.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v4assertions/v4_red_test.go
+=== RUN   TestADR0007ProductionOwnershipRegistration/internal/v5assertions/v5_red_test.go
+--- PASS: TestADR0007ProductionOwnershipRegistration (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/censuscontinuation/capture.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/censusprogramc/adapter.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/continuationhost/factory.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/describerequest/request.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/describeworker/runner.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/provisionalfeaturecatalog/catalog.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv4/v4.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv5/v5.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5sourcesnapshotv6/v6.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_batch_acquirer_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_catalog.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace/census_continuation_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_host.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/cmd/lsp-trace-mcp/census_continuation_binding_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/census_continuation_v2.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/mcpcontract/testdata/schemas/input-census.v2.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.census-feature-catalog-result.v2.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v4.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/schema/schemas/lsp-trace.graph-v5-source-snapshot.v6.schema.json (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v4assertions/v4_red_test.go (0.00s)
+    --- PASS: TestADR0007ProductionOwnershipRegistration/internal/v5assertions/v5_red_test.go (0.00s)
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/.pi/evidence/adr0007-v4-red.txt
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/cmd/lsp-trace-mcp/.pi/evidence/private-runtime.trace
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/README.md
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/governance-authorization-proposal.md
+=== RUN   TestADR0007OwnershipExclusionsRemainUnowned/censuscontinuation.test
+--- PASS: TestADR0007OwnershipExclusionsRemainUnowned (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/.pi/evidence/adr0007-v4-red.txt (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/cmd/lsp-trace-mcp/.pi/evidence/private-runtime.trace (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/README.md (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/docs/pilot/adr0007/governance-authorization-proposal.md (0.00s)
+    --- PASS: TestADR0007OwnershipExclusionsRemainUnowned/censuscontinuation.test (0.00s)
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/internal/censuscontinuation-other/capture.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/internal/v5sourcesnapshotv40/v4.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace/census_unrelated.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace-mcp/census_unrelated.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/internal/schema/schemas/unrelated.schema.json
+--- PASS: TestADR0007OwnershipRejectsAdjacentPaths (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/internal/censuscontinuation-other/capture.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/internal/v5sourcesnapshotv40/v4.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace/census_unrelated.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace-mcp/census_unrelated.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/internal/schema/schemas/unrelated.schema.json (0.00s)
+=== RUN   TestADR0007ResponseV2SchemaOwnershipIsAdditive
+--- PASS: TestADR0007ResponseV2SchemaOwnershipIsAdditive (0.00s)
+=== RUN   TestCustodyRepairFIFODeadline
+--- PASS: TestCustodyRepairFIFODeadline (0.01s)
+=== RUN   TestCustodyRepairRawInput
+=== RUN   TestCustodyRepairRawInput/direct
+=== RUN   TestCustodyRepairRawInput/direct/{"operational":{"require_authenticated":true},"operational":OP}
+=== RUN   TestCustodyRepairRawInput/direct/{"operational":{"require_authenticated":true,"require_authenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/direct/{"operational":{"source_root":SRC,"inputs":[{"path":"missing","path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/direct/{"operational":{"require_authenticated":true,"require_\u0061uthenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/direct/{"Source":"ignored","operational":OP}
+=== RUN   TestCustodyRepairRawInput/direct/{"Source":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/direct/{"SOURCE":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/direct/{"source":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/direct/{"Operational":OP}
+=== RUN   TestCustodyRepairRawInput/direct/{"operational":{"Source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/direct/{"operational":{"source_root":SRC,"inputs":[{"Path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/cli
+=== RUN   TestCustodyRepairRawInput/cli/{"operational":{"require_authenticated":true},"operational":OP}
+=== RUN   TestCustodyRepairRawInput/cli/{"operational":{"require_authenticated":true,"require_authenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/cli/{"operational":{"source_root":SRC,"inputs":[{"path":"missing","path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/cli/{"operational":{"require_authenticated":true,"require_\u0061uthenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/cli/{"Source":"ignored","operational":OP}
+=== RUN   TestCustodyRepairRawInput/cli/{"Source":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/cli/{"SOURCE":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/cli/{"source":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/cli/{"Operational":OP}
+=== RUN   TestCustodyRepairRawInput/cli/{"operational":{"Source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/cli/{"operational":{"source_root":SRC,"inputs":[{"Path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/mcp
+=== RUN   TestCustodyRepairRawInput/mcp/{"operational":{"require_authenticated":true},"operational":OP}
+=== RUN   TestCustodyRepairRawInput/mcp/{"operational":{"require_authenticated":true,"require_authenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/mcp/{"operational":{"source_root":SRC,"inputs":[{"path":"missing","path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/mcp/{"operational":{"require_authenticated":true,"require_\u0061uthenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/mcp/{"Source":"ignored","operational":OP}
+=== RUN   TestCustodyRepairRawInput/mcp/{"Source":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/mcp/{"SOURCE":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/mcp/{"source":"","operational":OP}
+=== RUN   TestCustodyRepairRawInput/mcp/{"Operational":OP}
+=== RUN   TestCustodyRepairRawInput/mcp/{"operational":{"Source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}}
+=== RUN   TestCustodyRepairRawInput/mcp/{"operational":{"source_root":SRC,"inputs":[{"Path":"input.go","class":"SOURCE"}]}}
+--- PASS: TestCustodyRepairRawInput (2.15s)
+    --- PASS: TestCustodyRepairRawInput/direct (0.06s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"operational":{"require_authenticated":true},"operational":OP} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"operational":{"require_authenticated":true,"require_authenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"operational":{"source_root":SRC,"inputs":[{"path":"missing","path":"input.go","class":"SOURCE"}]}} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"operational":{"require_authenticated":true,"require_\u0061uthenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"Source":"ignored","operational":OP} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"Source":"","operational":OP} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"SOURCE":"","operational":OP} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"source":"","operational":OP} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"Operational":OP} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"operational":{"Source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.00s)
+        --- PASS: TestCustodyRepairRawInput/direct/{"operational":{"source_root":SRC,"inputs":[{"Path":"input.go","class":"SOURCE"}]}} (0.00s)
+    --- PASS: TestCustodyRepairRawInput/cli (0.46s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"operational":{"require_authenticated":true},"operational":OP} (0.31s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"operational":{"require_authenticated":true,"require_authenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"operational":{"source_root":SRC,"inputs":[{"path":"missing","path":"input.go","class":"SOURCE"}]}} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"operational":{"require_authenticated":true,"require_\u0061uthenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"Source":"ignored","operational":OP} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"Source":"","operational":OP} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"SOURCE":"","operational":OP} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"source":"","operational":OP} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"Operational":OP} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"operational":{"Source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.01s)
+        --- PASS: TestCustodyRepairRawInput/cli/{"operational":{"source_root":SRC,"inputs":[{"Path":"input.go","class":"SOURCE"}]}} (0.01s)
+    --- PASS: TestCustodyRepairRawInput/mcp (0.99s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"operational":{"require_authenticated":true},"operational":OP} (0.34s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"operational":{"require_authenticated":true,"require_authenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.03s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"operational":{"source_root":SRC,"inputs":[{"path":"missing","path":"input.go","class":"SOURCE"}]}} (0.03s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"operational":{"require_authenticated":true,"require_\u0061uthenticated":false,"source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.03s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"Source":"ignored","operational":OP} (0.05s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"Source":"","operational":OP} (0.05s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"SOURCE":"","operational":OP} (0.05s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"source":"","operational":OP} (0.05s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"Operational":OP} (0.05s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"operational":{"Source_root":SRC,"inputs":[{"path":"input.go","class":"SOURCE"}]}} (0.05s)
+        --- PASS: TestCustodyRepairRawInput/mcp/{"operational":{"source_root":SRC,"inputs":[{"Path":"input.go","class":"SOURCE"}]}} (0.05s)
+=== RUN   TestIntegratedCustodyConformance
+    custody_test.go:57: PASS ASSERT_CUSTODY_FROZEN_V2_V3_BASELINE
+    custody_test.go:75: PASS ASSERT_CUSTODY_DIRECT_CLI_PARITY
+    custody_test.go:84: PASS ASSERT_CUSTODY_CLI_MCP_PARITY
+    custody_test.go:93: PASS ASSERT_CUSTODY_OFFLINE_PUBLICATION_VERIFY
+    custody_test.go:104: PASS ASSERT_CUSTODY_DETERMINISTIC_REPLAY
+=== RUN   TestIntegratedCustodyConformance/selector
+=== RUN   TestIntegratedCustodyConformance/artifact
+=== RUN   TestIntegratedCustodyConformance/receipt
+=== RUN   TestIntegratedCustodyConformance/semantic
+=== NAME  TestIntegratedCustodyConformance
+    custody_test.go:107: PASS ASSERT_CUSTODY_ACQUISITION_STAGE_ATTRIBUTION
+    custody_test.go:108: PASS ASSERT_CUSTODY_VALIDATION_STAGE_ATTRIBUTION
+    custody_test.go:119: PASS ASSERT_CUSTODY_FROZEN_V2_V3_AFTER
+--- PASS: TestIntegratedCustodyConformance (1.15s)
+    --- PASS: TestIntegratedCustodyConformance/selector (0.01s)
+    --- PASS: TestIntegratedCustodyConformance/artifact (0.01s)
+    --- PASS: TestIntegratedCustodyConformance/receipt (0.01s)
+    --- PASS: TestIntegratedCustodyConformance/semantic (0.01s)
+=== RUN   TestEndToEndExecutionConformance
+    execution_test.go:162: PASS ASSERT_EXECUTION_PATH_SUCCESS
+    execution_test.go:162: PASS ASSERT_EXECUTION_SOURCE_ORIGIN
+    execution_test.go:162: PASS ASSERT_EXECUTION_LOGICAL_PARITY
+    execution_test.go:162: PASS ASSERT_EXECUTION_OFFLINE_VERIFY
+    execution_test.go:162: PASS ASSERT_EXECUTION_REPLAY_LOGICAL
+    execution_test.go:162: PASS ASSERT_EXECUTION_REPLAY_BYTES
+    execution_test.go:162: PASS ASSERT_EXECUTION_FAILURE_STAGE
+    execution_test.go:162: PASS ASSERT_EXECUTION_FAILURE_STOPS
+    execution_test.go:162: PASS ASSERT_EXECUTION_FROZEN_V2
+    execution_test.go:162: PASS ASSERT_EXECUTION_FROZEN_V3
+--- PASS: TestEndToEndExecutionConformance (0.12s)
+=== RUN   TestEndToEndExecutionHelper
+--- PASS: TestEndToEndExecutionHelper (0.00s)
+=== RUN   TestExternalPackageBoundary
+=== RUN   TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_EMBER_GLINT_IMPORTS
+=== RUN   TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_SEMANTIC_MATCHERS
+=== RUN   TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_PROVIDER_PACKAGE_INSTALLABLE_VERSIONED
+=== RUN   TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_CORE_ARCHIVES_EXCLUDE_PROVIDER
+--- PASS: TestExternalPackageBoundary (0.18s)
+    --- PASS: TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_EMBER_GLINT_IMPORTS (0.09s)
+    --- PASS: TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_SEMANTIC_MATCHERS (0.09s)
+    --- PASS: TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_PROVIDER_PACKAGE_INSTALLABLE_VERSIONED (0.00s)
+    --- PASS: TestExternalPackageBoundary/ASSERT_EXTERNAL_BOUNDARY_CORE_ARCHIVES_EXCLUDE_PROVIDER (0.00s)
+=== RUN   TestFR20FR21OwnershipRegistration
+=== RUN   TestFR20FR21OwnershipRegistration/focused-final-tests.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-mutation.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-red.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-hydration.claim.md
+=== RUN   TestFR20FR21OwnershipRegistration/focused-vet.log
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor.go
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/trace_executor.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/trace_executor_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisitionauthority/authority.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisitionengine/executor.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisitionorchestration/orchestration.go
+=== RUN   TestFR20FR21OwnershipRegistration/sessionruntime/prepared_capability.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/integratedconformance/trace_custody_boundary_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json
+=== RUN   TestFR20FR21OwnershipRegistration/internal/retainedprojection/select.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/retainedprojection/select_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md
+=== RUN   TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/discovery_filter.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/slice_source_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr23_v3_process_parity_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json
+--- PASS: TestFR20FR21OwnershipRegistration (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-final-tests.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-mutation.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-red.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-hydration.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-vet.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/trace_executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/trace_executor_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisitionauthority/authority.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisitionengine/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisitionorchestration/orchestration.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/sessionruntime/prepared_capability.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/integratedconformance/trace_custody_boundary_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/retainedprojection/select.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/retainedprojection/select_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/discovery_filter.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/slice_source_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr23_v3_process_parity_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json (0.00s)
+=== RUN   TestFR20FR21OwnershipRejectsUnowned
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/unowned.log
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/focused-other.log
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/unowned.claim.md
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/unregistered/new.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/docs/unregistered.md
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/hydratedevidence-other/schema.json
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/acquisitionops-other/executor.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/acquisition-other/acquisition.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/testdata/unknown-server/main.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/public_hydration.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/lsp-trace.hydrated-evidence.v1.schema.json
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/unowned.json
+--- PASS: TestFR20FR21OwnershipRejectsUnowned (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/unowned.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/focused-other.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/unowned.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/unregistered/new.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/docs/unregistered.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/hydratedevidence-other/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/acquisitionops-other/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/acquisition-other/acquisition.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/testdata/unknown-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/public_hydration.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/lsp-trace.hydrated-evidence.v1.schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/unowned.json (0.00s)
+=== RUN   TestDisabledIntegratedConformance
+=== RUN   TestDisabledIntegratedConformance/ASSERT_LOCAL_DARWIN_START_CORRELATED_READY
+    harness_test.go:362: PASS ASSERT_LOCAL_DARWIN_START_CORRELATED_READY
+=== RUN   TestDisabledIntegratedConformance/ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION
+    harness_test.go:428: PASS ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION
+=== RUN   TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP
+=== RUN   TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP/timeout
+=== RUN   TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP/cancellation
+=== RUN   TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP/EOF
+=== NAME  TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP
+    harness_test.go:473: PASS ASSERT_READINESS_FAULT_TERMINALS_CLEANUP
+=== RUN   TestDisabledIntegratedConformance/ASSERT_INTEGRATED_FAKE_LSP_FRAMING
+    harness_test.go:504: PASS ASSERT_INTEGRATED_FAKE_LSP_FRAMING
+=== RUN   TestDisabledIntegratedConformance/ASSERT_DETERMINISTIC_INITIALIZATION_BYTES
+    harness_test.go:523: PASS ASSERT_DETERMINISTIC_INITIALIZATION_BYTES
+=== RUN   TestDisabledIntegratedConformance/ASSERT_LIFECYCLE_PENDING_COMPLETE_FAILED
+    harness_test.go:564: PASS ASSERT_LIFECYCLE_PENDING_COMPLETE_FAILED
+=== RUN   TestDisabledIntegratedConformance/ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE
+    harness_test.go:611: PASS ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE
+=== RUN   TestDisabledIntegratedConformance/ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER
+    harness_test.go:663: PASS ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER
+=== RUN   TestDisabledIntegratedConformance/ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE
+    harness_test.go:678: PASS ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE
+=== RUN   TestDisabledIntegratedConformance/ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY
+    harness_test.go:703: PASS ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY
+=== RUN   TestDisabledIntegratedConformance/ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH
+    harness_test.go:736: PASS ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH
+=== RUN   TestDisabledIntegratedConformance/ASSERT_EXACT_CROSS_SEAM_GAPS
+    harness_test.go:753: PASS ASSERT_EXACT_CROSS_SEAM_GAPS
+=== RUN   TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY
+    harness_test.go:802: PASS ASSERT_PACKAGE_OWNERSHIP_ONLY
+=== RUN   TestDisabledIntegratedConformance/ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY
+    harness_test.go:813: PASS ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY
+=== RUN   TestDisabledIntegratedConformance/ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS
+    harness_test.go:840: PASS ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS
+=== RUN   TestDisabledIntegratedConformance/ASSERT_CURRENT_REGISTRY_ADVERTISES_FORTY
+    harness_test.go:852: PASS ASSERT_CURRENT_REGISTRY_ADVERTISES_FORTY
+=== RUN   TestDisabledIntegratedConformance/ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED
+    harness_test.go:884: PASS ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED
+--- PASS: TestDisabledIntegratedConformance (0.50s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_LOCAL_DARWIN_START_CORRELATED_READY (0.23s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION (0.00s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP (0.03s)
+        --- PASS: TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP/timeout (0.02s)
+        --- PASS: TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP/cancellation (0.00s)
+        --- PASS: TestDisabledIntegratedConformance/ASSERT_READINESS_FAULT_TERMINALS_CLEANUP/EOF (0.00s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_INTEGRATED_FAKE_LSP_FRAMING (0.01s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_DETERMINISTIC_INITIALIZATION_BYTES (0.00s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_LIFECYCLE_PENDING_COMPLETE_FAILED (0.01s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE (0.01s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER (0.01s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE (0.01s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY (0.01s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH (0.00s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_EXACT_CROSS_SEAM_GAPS (0.00s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY (0.06s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY (0.00s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS (0.00s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_CURRENT_REGISTRY_ADVERTISES_FORTY (0.01s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED (0.01s)
+=== RUN   TestOperationalHarnessBuildsEachProductionBinaryOnce
+    operational_binary_cache_test.go:84: ASSERTION: ASSERT_OPERATIONAL_HARNESS_BUILDS_EACH_PRODUCTION_BINARY_ONCE
+    operational_binary_cache_test.go:122: PASS ASSERT_OPERATIONAL_HARNESS_BUILDS_EACH_PRODUCTION_BINARY_ONCE build_counts=map[./cmd/lsp-trace:1 ./cmd/lsp-trace-mcp:1] cli="/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/TestOperationalHarnessBuildsEachProductionBinaryOnce86567269/003/binary-2728656641/binary" mcp="/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/TestOperationalHarnessBuildsEachProductionBinaryOnce86567269/003/binary-3887099819/binary"
+--- PASS: TestOperationalHarnessBuildsEachProductionBinaryOnce (0.22s)
+=== RUN   TestProductionBinaryCacheSeparatesEqualBasenames
+    operational_binary_cache_test.go:127: ASSERTION: ASSERT_PRODUCTION_BINARY_CACHE_SEPARATES_EQUAL_BASENAMES
+    operational_binary_cache_test.go:191: PASS ASSERT_PRODUCTION_BINARY_CACHE_SEPARATES_EQUAL_BASENAMES calls=map[repository-a ./first/tool:1 repository-b ./second/tool:1] paths=("/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/TestProductionBinaryCacheSeparatesEqualBasenames1420701660/001/binary-2820230674/binary","/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/TestProductionBinaryCacheSeparatesEqualBasenames1420701660/001/binary-4250395260/binary")
+--- PASS: TestProductionBinaryCacheSeparatesEqualBasenames (0.00s)
+=== RUN   TestProductionBinaryCacheRetainsFailure
+    operational_binary_cache_test.go:207: PASS ASSERT_PRODUCTION_BINARY_CACHE_RETAINS_FAILURE calls=1 error="build failed with stderr"
+--- PASS: TestProductionBinaryCacheRetainsFailure (0.00s)
+=== RUN   TestOperationalActualCommands
+=== RUN   TestOperationalActualCommands/direct
+=== RUN   TestOperationalActualCommands/cli
+=== RUN   TestOperationalActualCommands/mcp
+--- PASS: TestOperationalActualCommands (0.25s)
+    --- PASS: TestOperationalActualCommands/direct (0.04s)
+    --- PASS: TestOperationalActualCommands/cli (0.05s)
+    --- PASS: TestOperationalActualCommands/mcp (0.15s)
+=== RUN   TestOperationalHostBindingAndFreeze
+--- PASS: TestOperationalHostBindingAndFreeze (0.00s)
+=== RUN   TestOperationalApprovedGitParity
+=== RUN   TestOperationalApprovedGitParity/direct
+=== RUN   TestOperationalApprovedGitParity/cli
+=== RUN   TestOperationalApprovedGitParity/mcp
+--- PASS: TestOperationalApprovedGitParity (0.11s)
+    --- PASS: TestOperationalApprovedGitParity/direct (0.02s)
+    --- PASS: TestOperationalApprovedGitParity/cli (0.02s)
+    --- PASS: TestOperationalApprovedGitParity/mcp (0.07s)
+=== RUN   TestOperationalReceiptPublicationFailure
+=== RUN   TestOperationalReceiptPublicationFailure/direct
+=== RUN   TestOperationalReceiptPublicationFailure/cli
+=== RUN   TestOperationalReceiptPublicationFailure/mcp
+--- PASS: TestOperationalReceiptPublicationFailure (0.09s)
+    --- PASS: TestOperationalReceiptPublicationFailure/direct (0.01s)
+    --- PASS: TestOperationalReceiptPublicationFailure/cli (0.02s)
+    --- PASS: TestOperationalReceiptPublicationFailure/mcp (0.06s)
+=== RUN   TestOperationalIndependentHostCommands
+=== RUN   TestOperationalIndependentHostCommands/direct
+=== RUN   TestOperationalIndependentHostCommands/cli
+=== RUN   TestOperationalIndependentHostCommands/mcp
+--- PASS: TestOperationalIndependentHostCommands (0.11s)
+    --- PASS: TestOperationalIndependentHostCommands/direct (0.02s)
+    --- PASS: TestOperationalIndependentHostCommands/cli (0.02s)
+    --- PASS: TestOperationalIndependentHostCommands/mcp (0.07s)
+=== RUN   TestOperationalHostPolicyEnvelope
+=== RUN   TestOperationalHostPolicyEnvelope/policy-
+=== RUN   TestOperationalHostPolicyEnvelope/policy-lsp-trace.operational-identity.v1
+=== RUN   TestOperationalHostPolicyEnvelope/policy-invented-policy
+--- PASS: TestOperationalHostPolicyEnvelope (0.00s)
+    --- PASS: TestOperationalHostPolicyEnvelope/policy- (0.00s)
+    --- PASS: TestOperationalHostPolicyEnvelope/policy-lsp-trace.operational-identity.v1 (0.00s)
+    --- PASS: TestOperationalHostPolicyEnvelope/policy-invented-policy (0.00s)
+=== RUN   TestOperationalTrustNegativeParity
+=== RUN   TestOperationalTrustNegativeParity/no-grant
+=== RUN   TestOperationalTrustNegativeParity/no-grant/direct
+=== RUN   TestOperationalTrustNegativeParity/no-grant/cli
+=== RUN   TestOperationalTrustNegativeParity/no-grant/mcp
+=== RUN   TestOperationalTrustNegativeParity/no-receipt
+=== RUN   TestOperationalTrustNegativeParity/no-receipt/direct
+=== RUN   TestOperationalTrustNegativeParity/no-receipt/cli
+=== RUN   TestOperationalTrustNegativeParity/no-receipt/mcp
+=== RUN   TestOperationalTrustNegativeParity/changed-bytes
+=== RUN   TestOperationalTrustNegativeParity/changed-bytes/direct
+=== RUN   TestOperationalTrustNegativeParity/changed-bytes/cli
+=== RUN   TestOperationalTrustNegativeParity/changed-bytes/mcp
+=== RUN   TestOperationalTrustNegativeParity/source-id
+=== RUN   TestOperationalTrustNegativeParity/source-id/direct
+=== RUN   TestOperationalTrustNegativeParity/source-id/cli
+=== RUN   TestOperationalTrustNegativeParity/source-id/mcp
+=== RUN   TestOperationalTrustNegativeParity/collection-id
+=== RUN   TestOperationalTrustNegativeParity/collection-id/direct
+=== RUN   TestOperationalTrustNegativeParity/collection-id/cli
+=== RUN   TestOperationalTrustNegativeParity/collection-id/mcp
+=== RUN   TestOperationalTrustNegativeParity/wrong-snapshot
+=== RUN   TestOperationalTrustNegativeParity/wrong-snapshot/direct
+=== RUN   TestOperationalTrustNegativeParity/wrong-snapshot/cli
+=== RUN   TestOperationalTrustNegativeParity/wrong-snapshot/mcp
+=== RUN   TestOperationalTrustNegativeParity/receipt-replay
+=== RUN   TestOperationalTrustNegativeParity/receipt-replay/direct
+=== RUN   TestOperationalTrustNegativeParity/receipt-replay/cli
+=== RUN   TestOperationalTrustNegativeParity/receipt-replay/mcp
+=== RUN   TestOperationalTrustNegativeParity/git-injection
+=== RUN   TestOperationalTrustNegativeParity/git-injection/direct
+=== RUN   TestOperationalTrustNegativeParity/git-injection/cli
+=== RUN   TestOperationalTrustNegativeParity/git-injection/mcp
+--- PASS: TestOperationalTrustNegativeParity (0.50s)
+    --- PASS: TestOperationalTrustNegativeParity/no-grant (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/no-grant/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/no-grant/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/no-grant/mcp (0.05s)
+    --- PASS: TestOperationalTrustNegativeParity/no-receipt (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/no-receipt/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/no-receipt/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/no-receipt/mcp (0.05s)
+    --- PASS: TestOperationalTrustNegativeParity/changed-bytes (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/changed-bytes/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/changed-bytes/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/changed-bytes/mcp (0.05s)
+    --- PASS: TestOperationalTrustNegativeParity/source-id (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/source-id/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/source-id/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/source-id/mcp (0.05s)
+    --- PASS: TestOperationalTrustNegativeParity/collection-id (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/collection-id/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/collection-id/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/collection-id/mcp (0.05s)
+    --- PASS: TestOperationalTrustNegativeParity/wrong-snapshot (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/wrong-snapshot/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/wrong-snapshot/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/wrong-snapshot/mcp (0.05s)
+    --- PASS: TestOperationalTrustNegativeParity/receipt-replay (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/receipt-replay/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/receipt-replay/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/receipt-replay/mcp (0.05s)
+    --- PASS: TestOperationalTrustNegativeParity/git-injection (0.06s)
+        --- PASS: TestOperationalTrustNegativeParity/git-injection/direct (0.00s)
+        --- PASS: TestOperationalTrustNegativeParity/git-injection/cli (0.01s)
+        --- PASS: TestOperationalTrustNegativeParity/git-injection/mcp (0.05s)
+=== RUN   TestOperationalPartialParity
+=== RUN   TestOperationalPartialParity/mixed
+=== RUN   TestOperationalPartialParity/mixed/direct
+=== RUN   TestOperationalPartialParity/mixed/cli
+=== RUN   TestOperationalPartialParity/mixed/mcp
+=== RUN   TestOperationalPartialParity/all-failed
+=== RUN   TestOperationalPartialParity/all-failed/direct
+=== RUN   TestOperationalPartialParity/all-failed/cli
+=== RUN   TestOperationalPartialParity/all-failed/mcp
+--- PASS: TestOperationalPartialParity (0.34s)
+    --- PASS: TestOperationalPartialParity/mixed (0.17s)
+        --- PASS: TestOperationalPartialParity/mixed/direct (0.02s)
+        --- PASS: TestOperationalPartialParity/mixed/cli (0.03s)
+        --- PASS: TestOperationalPartialParity/mixed/mcp (0.12s)
+    --- PASS: TestOperationalPartialParity/all-failed (0.17s)
+        --- PASS: TestOperationalPartialParity/all-failed/direct (0.02s)
+        --- PASS: TestOperationalPartialParity/all-failed/cli (0.03s)
+        --- PASS: TestOperationalPartialParity/all-failed/mcp (0.12s)
+=== RUN   TestOperationalInputNegativeParity
+=== RUN   TestOperationalInputNegativeParity/grant
+=== RUN   TestOperationalInputNegativeParity/grant/direct
+=== RUN   TestOperationalInputNegativeParity/grant/cli
+=== RUN   TestOperationalInputNegativeParity/grant/mcp
+=== RUN   TestOperationalInputNegativeParity/context
+=== RUN   TestOperationalInputNegativeParity/context/direct
+=== RUN   TestOperationalInputNegativeParity/context/cli
+=== RUN   TestOperationalInputNegativeParity/context/mcp
+=== RUN   TestOperationalInputNegativeParity/config-path
+=== RUN   TestOperationalInputNegativeParity/config-path/direct
+=== RUN   TestOperationalInputNegativeParity/config-path/cli
+=== RUN   TestOperationalInputNegativeParity/config-path/mcp
+=== RUN   TestOperationalInputNegativeParity/nested-config
+=== RUN   TestOperationalInputNegativeParity/nested-config/direct
+=== RUN   TestOperationalInputNegativeParity/nested-config/cli
+=== RUN   TestOperationalInputNegativeParity/nested-config/mcp
+=== RUN   TestOperationalInputNegativeParity/mixed-source
+=== RUN   TestOperationalInputNegativeParity/mixed-source/direct
+=== RUN   TestOperationalInputNegativeParity/mixed-source/cli
+=== RUN   TestOperationalInputNegativeParity/mixed-source/mcp
+=== RUN   TestOperationalInputNegativeParity/empty-source
+=== RUN   TestOperationalInputNegativeParity/empty-source/direct
+=== RUN   TestOperationalInputNegativeParity/empty-source/cli
+=== RUN   TestOperationalInputNegativeParity/empty-source/mcp
+=== RUN   TestOperationalInputNegativeParity/uri
+=== RUN   TestOperationalInputNegativeParity/uri/direct
+=== RUN   TestOperationalInputNegativeParity/uri/cli
+=== RUN   TestOperationalInputNegativeParity/uri/mcp
+=== RUN   TestOperationalInputNegativeParity/escape
+=== RUN   TestOperationalInputNegativeParity/escape/direct
+=== RUN   TestOperationalInputNegativeParity/escape/cli
+=== RUN   TestOperationalInputNegativeParity/escape/mcp
+=== RUN   TestOperationalInputNegativeParity/duplicate-class
+=== RUN   TestOperationalInputNegativeParity/duplicate-class/direct
+=== RUN   TestOperationalInputNegativeParity/duplicate-class/cli
+=== RUN   TestOperationalInputNegativeParity/duplicate-class/mcp
+=== RUN   TestOperationalInputNegativeParity/unknown-class
+=== RUN   TestOperationalInputNegativeParity/unknown-class/direct
+=== RUN   TestOperationalInputNegativeParity/unknown-class/cli
+=== RUN   TestOperationalInputNegativeParity/unknown-class/mcp
+--- PASS: TestOperationalInputNegativeParity (0.58s)
+    --- PASS: TestOperationalInputNegativeParity/grant (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/grant/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/grant/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/grant/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/context (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/context/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/context/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/context/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/config-path (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/config-path/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/config-path/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/config-path/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/nested-config (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/nested-config/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/nested-config/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/nested-config/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/mixed-source (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/mixed-source/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/mixed-source/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/mixed-source/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/empty-source (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/empty-source/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/empty-source/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/empty-source/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/uri (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/uri/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/uri/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/uri/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/escape (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/escape/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/escape/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/escape/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/duplicate-class (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/duplicate-class/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/duplicate-class/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/duplicate-class/mcp (0.05s)
+    --- PASS: TestOperationalInputNegativeParity/unknown-class (0.06s)
+        --- PASS: TestOperationalInputNegativeParity/unknown-class/direct (0.00s)
+        --- PASS: TestOperationalInputNegativeParity/unknown-class/cli (0.01s)
+        --- PASS: TestOperationalInputNegativeParity/unknown-class/mcp (0.05s)
+=== RUN   TestOperationalPolicyStartupParity
+=== RUN   TestOperationalPolicyStartupParity/policy-
+=== RUN   TestOperationalPolicyStartupParity/policy-/direct
+=== RUN   TestOperationalPolicyStartupParity/policy-/cli
+=== RUN   TestOperationalPolicyStartupParity/policy-/mcp
+=== RUN   TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1
+=== RUN   TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1/direct
+=== RUN   TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1/cli
+=== RUN   TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1/mcp
+--- PASS: TestOperationalPolicyStartupParity (0.02s)
+    --- PASS: TestOperationalPolicyStartupParity/policy- (0.01s)
+        --- PASS: TestOperationalPolicyStartupParity/policy-/direct (0.00s)
+        --- PASS: TestOperationalPolicyStartupParity/policy-/cli (0.01s)
+        --- PASS: TestOperationalPolicyStartupParity/policy-/mcp (0.00s)
+    --- PASS: TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1 (0.01s)
+        --- PASS: TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1/direct (0.00s)
+        --- PASS: TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1/cli (0.01s)
+        --- PASS: TestOperationalPolicyStartupParity/policy-lsp-trace.operational-identity.v1/mcp (0.01s)
+=== RUN   TestOperationalOptionalGitAndScope
+=== RUN   TestOperationalOptionalGitAndScope/direct
+=== RUN   TestOperationalOptionalGitAndScope/cli
+=== RUN   TestOperationalOptionalGitAndScope/mcp
+=== RUN   TestOperationalOptionalGitAndScope/symlink-direct
+=== RUN   TestOperationalOptionalGitAndScope/symlink-cli
+=== RUN   TestOperationalOptionalGitAndScope/symlink-mcp
+--- PASS: TestOperationalOptionalGitAndScope (0.22s)
+    --- PASS: TestOperationalOptionalGitAndScope/direct (0.02s)
+    --- PASS: TestOperationalOptionalGitAndScope/cli (0.02s)
+    --- PASS: TestOperationalOptionalGitAndScope/mcp (0.07s)
+    --- PASS: TestOperationalOptionalGitAndScope/symlink-direct (0.02s)
+    --- PASS: TestOperationalOptionalGitAndScope/symlink-cli (0.02s)
+    --- PASS: TestOperationalOptionalGitAndScope/symlink-mcp (0.07s)
+=== RUN   TestOperationalNativeRoot
+=== RUN   TestOperationalNativeRoot/direct
+=== RUN   TestOperationalNativeRoot/cli
+=== RUN   TestOperationalNativeRoot/mcp
+--- PASS: TestOperationalNativeRoot (0.11s)
+    --- PASS: TestOperationalNativeRoot/direct (0.02s)
+    --- PASS: TestOperationalNativeRoot/cli (0.02s)
+    --- PASS: TestOperationalNativeRoot/mcp (0.07s)
+=== RUN   TestOperationalSchemaTransport
+--- PASS: TestOperationalSchemaTransport (0.06s)
+=== RUN   TestOperationalValidatedMCPPublication
+--- PASS: TestOperationalValidatedMCPPublication (0.07s)
+=== RUN   TestOperationalLegacyMissingRoot
+--- PASS: TestOperationalLegacyMissingRoot (0.00s)
+=== RUN   TestOperationalTypedInput
+--- PASS: TestOperationalTypedInput (0.02s)
+=== RUN   TestOperationalSemanticValidationParity
+=== RUN   TestOperationalSemanticValidationParity/permission
+=== RUN   TestOperationalSemanticValidationParity/acquisition-status
+=== RUN   TestOperationalSemanticValidationParity/source-id
+=== RUN   TestOperationalSemanticValidationParity/missing-output
+=== RUN   TestOperationalSemanticValidationParity/incompleteness
+=== RUN   TestOperationalSemanticValidationParity/valid
+=== RUN   TestOperationalSemanticValidationParity/manifest
+=== RUN   TestOperationalSemanticValidationParity/missing-input
+=== RUN   TestOperationalSemanticValidationParity/output-path
+=== RUN   TestOperationalSemanticValidationParity/forged-authentication
+=== RUN   TestOperationalSemanticValidationParity/snapshot-id
+=== RUN   TestOperationalSemanticValidationParity/collection-id
+=== RUN   TestOperationalSemanticValidationParity/identity-policy
+=== RUN   TestOperationalSemanticValidationParity/canonical-receipt
+=== RUN   TestOperationalSemanticValidationParity/receipt-id
+=== RUN   TestOperationalSemanticValidationParity/output-content
+=== RUN   TestOperationalSemanticValidationParity/contribution
+=== RUN   TestOperationalSemanticValidationParity/admission-policy
+=== RUN   TestOperationalSemanticValidationParity/content
+=== RUN   TestOperationalSemanticValidationParity/admission-snapshot
+=== RUN   TestOperationalSemanticValidationParity/omit-admission
+=== RUN   TestOperationalSemanticValidationParity/omit-acquisition_status
+=== RUN   TestOperationalSemanticValidationParity/omit-require_authenticated
+=== RUN   TestOperationalSemanticValidationParity/omit-publication_permitted
+=== RUN   TestOperationalSemanticValidationParity/omit-schema_version
+=== RUN   TestOperationalSemanticValidationParity/omit-input_evidence
+=== RUN   TestOperationalSemanticValidationParity/omit-outputs
+=== RUN   TestOperationalSemanticValidationParity/omit-identity
+--- PASS: TestOperationalSemanticValidationParity (1.22s)
+    --- PASS: TestOperationalSemanticValidationParity/permission (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/acquisition-status (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/source-id (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/missing-output (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/incompleteness (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/valid (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/manifest (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/missing-input (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/output-path (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/forged-authentication (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/snapshot-id (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/collection-id (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/identity-policy (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/canonical-receipt (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/receipt-id (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/output-content (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/contribution (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/admission-policy (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/content (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/admission-snapshot (0.06s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-admission (0.00s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-acquisition_status (0.00s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-require_authenticated (0.00s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-publication_permitted (0.00s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-schema_version (0.00s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-input_evidence (0.00s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-outputs (0.00s)
+    --- PASS: TestOperationalSemanticValidationParity/omit-identity (0.00s)
+=== RUN   TestOperationalPublicationIntegrity
+--- PASS: TestOperationalPublicationIntegrity (0.02s)
+=== RUN   TestOperationalInterruptedReadRetention
+--- PASS: TestOperationalInterruptedReadRetention (0.00s)
+=== RUN   TestProductionExecutionTransportParity
+    production_wiring_test.go:23: ASSERTION: ASSERT_PRODUCTION_TRANSPORT_SEMANTIC_PARITY
+    production_wiring_test.go:120: PASS ASSERT_PRODUCTION_TRANSPORT_SEMANTIC_PARITY
+--- PASS: TestProductionExecutionTransportParity (0.11s)
+=== RUN   TestProductionExecutionWiring
+=== RUN   TestProductionExecutionWiring/ASSERT_PRODUCTION_CLI_CANONICAL_CUSTODY
+=== RUN   TestProductionExecutionWiring/ASSERT_PRODUCTION_MCP_CANONICAL_CUSTODY
+=== RUN   TestProductionExecutionWiring/ASSERT_PRODUCTION_FAILS_CLOSED
+--- PASS: TestProductionExecutionWiring (0.45s)
+    --- PASS: TestProductionExecutionWiring/ASSERT_PRODUCTION_CLI_CANONICAL_CUSTODY (0.16s)
+    --- PASS: TestProductionExecutionWiring/ASSERT_PRODUCTION_MCP_CANONICAL_CUSTODY (0.19s)
+    --- PASS: TestProductionExecutionWiring/ASSERT_PRODUCTION_FAILS_CLOSED (0.10s)
+=== RUN   TestTraceAuthorityProductionAPIIsConcreteAndPrivate
+--- PASS: TestTraceAuthorityProductionAPIIsConcreteAndPrivate (0.00s)
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/trace-runtime
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/trace-constructor
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/trace-executor
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/explicit-admission
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/explicit-execute
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/prepared-mint
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/prepared-capability
+=== RUN   TestExternalModuleCannotReachTraceCustodyAuthority/authority-internal
+--- PASS: TestExternalModuleCannotReachTraceCustodyAuthority (0.51s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/trace-runtime (0.01s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/trace-constructor (0.01s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/trace-executor (0.01s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/explicit-admission (0.08s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/explicit-execute (0.08s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/prepared-mint (0.06s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/prepared-capability (0.06s)
+    --- PASS: TestExternalModuleCannotReachTraceCustodyAuthority/authority-internal (0.02s)
+=== RUN   TestAuthorityMintCallsAreOwnedByPrivateOrchestrationRoutes
+--- PASS: TestAuthorityMintCallsAreOwnedByPrivateOrchestrationRoutes (0.17s)
+=== RUN   TestAuthorityScanExcludesEvidenceButRejectsProductionCalls
+--- PASS: TestAuthorityScanExcludesEvidenceButRejectsProductionCalls (0.00s)
+PASS
+ok  	lsp-trace/internal/integratedconformance	9.496s

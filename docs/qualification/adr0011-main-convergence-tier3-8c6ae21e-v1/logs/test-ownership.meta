@@ -1,0 +1,3 @@
+command=go test ./internal/integratedconformance -run ^TestADR0007ProductionOwnershipRegistration$ -count=1 -v
+exit=0
+duration_seconds=1

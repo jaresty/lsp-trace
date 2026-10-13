@@ -1,0 +1,5 @@
+command=go test ./internal/integratedconformance -count=1 -v 
+started_utc=2026-10-12T23:57:44Z
+finished_utc=2026-10-12T23:57:54Z
+elapsed_ns=9722076666
+exit_code=0

@@ -1,0 +1,3 @@
+exit=0
+duration_seconds=0
+command=python3 scripts/test-program-c-gate-ii-v4.py 

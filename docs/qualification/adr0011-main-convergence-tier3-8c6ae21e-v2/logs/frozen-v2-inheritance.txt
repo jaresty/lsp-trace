@@ -1,0 +1,6 @@
+test_path_diff_vs_immediate_parent
+exit=0
+test_path_blob_HEAD=ab876fe769b8d547be2a7dfd86d69cf6c9a9bdfa
+test_path_blob_parent=ab876fe769b8d547be2a7dfd86d69cf6c9a9bdfa
+catalog_paths_diff_vs_immediate_parent
+exit=0

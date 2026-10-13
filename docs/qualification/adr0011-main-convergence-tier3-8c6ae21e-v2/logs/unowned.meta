@@ -1,0 +1,5 @@
+command=go test ./internal/integratedconformance -run \^TestADR0007OwnershipExclusionsRemainUnowned\$ -count=1 -v 
+started_utc=2026-10-12T23:57:43Z
+finished_utc=2026-10-12T23:57:43Z
+elapsed_ns=438460875
+exit_code=0

@@ -1,0 +1,6 @@
+docs/adr/0011-versioned-definition-reference-grouping-evidence.md
+internal/censuscontinuation/continuation_test.go
+internal/censuscontinuation/stage_matrix_test.go
+internal/integratedconformance/harness_test.go
+sessionruntime/b4_explicit_bytes_c15_private.go
+sessionruntime/diagnostic_backing_c15_private.go

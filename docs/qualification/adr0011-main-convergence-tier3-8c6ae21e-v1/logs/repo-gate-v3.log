@@ -1,0 +1,22 @@
+test_one_mutation_semantic_rejections (__main__.GateIITests.test_one_mutation_semantic_rejections) ... ok
+test_unsafe_evidence_paths_rejected (__main__.GateIITests.test_unsafe_evidence_paths_rejected) ... ok
+test_valid_baseline (__main__.GateIITests.test_valid_baseline) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.971s
+
+OK
+ASSERT_GATE_II_A_01_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_01
+ASSERT_GATE_II_A_02_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_02
+ASSERT_GATE_II_A_03_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_03
+ASSERT_GATE_II_A_04_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_04
+ASSERT_GATE_II_A_05_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_05
+ASSERT_GATE_II_A_06_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_06
+ASSERT_GATE_II_A_07_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_07
+ASSERT_GATE_II_A_08_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_08
+ASSERT_GATE_II_A_09_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_09
+ASSERT_GATE_II_A_10_MUTATION result=FAIL expected=true witness=ASSERT_GATE_II_A_10
+ASSERT_GATE_II_ABSOLUTE_PATH result=FAIL expected=true witness=invalid Gate II evidence path
+ASSERT_GATE_II_ESCAPE_PATH result=FAIL expected=true witness=invalid Gate II evidence path
+ASSERT_GATE_II_SYMLINK_PATH result=FAIL expected=true witness=symlink
+ASSERT_GATE_II_VALID_BASELINE result=PASS

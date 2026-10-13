@@ -1,0 +1,5 @@
+command=./scripts/check-ci.sh 
+started_utc=2026-10-12T23:59:39Z
+finished_utc=2026-10-12T23:59:39Z
+elapsed_ns=53430458
+exit_code=0

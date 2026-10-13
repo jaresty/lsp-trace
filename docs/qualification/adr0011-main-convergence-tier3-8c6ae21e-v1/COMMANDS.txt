@@ -1,0 +1,20 @@
+git status --porcelain
+git show/rev-parse/merge-base/diff for HEAD, merge 2e38a920, and six overlap paths
+env -i ... ADR0011_C15_SUCCESSOR_OUTPUT=<run1|run2> go test ./sessionruntime -run ^TestADR0011C15MainConvergenceSuccessorEnumerate$ -count=1 -v
+go test ./internal/integratedconformance -run ^TestADR0007ProductionOwnershipRegistration$ -count=1 -v
+go test ./internal/integratedconformance -run ^TestADR0007OwnershipExclusionsRemainUnowned$ -count=1 -v
+go test ./internal/integratedconformance -run ^TestADR0007OwnershipRejectsAdjacentPaths$ -count=1 -v
+go test ./internal/integratedconformance -count=1 -v
+go test ./internal/censuscontinuation -count=1 -v
+./scripts/check-ci.sh
+./scripts/check-go-format.sh
+go test ./...
+go vet ./...
+go build ./...
+python3 -m py_compile <CI selector files>
+python3 scripts/test-program-c-profiles.py
+python3 scripts/test-program-c-gate-ii.py
+python3 scripts/test-program-c-gate-ii-v4.py
+python3 scripts/check-program-c-gate-ii-v4.py --root . --outcomes qualification/program-c/gate-ii-current-outcomes.v4.tsv --receipt qualification/program-c/gate-ii-current-outcomes.v4.4403719.receipt.json
+sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh scripts/check-go-format.sh
+./scripts/release-check.sh

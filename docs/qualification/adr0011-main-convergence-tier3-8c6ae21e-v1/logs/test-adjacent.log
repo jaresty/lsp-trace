@@ -1,0 +1,14 @@
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/internal/censuscontinuation-other/capture.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/internal/v5sourcesnapshotv40/v4.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace/census_unrelated.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace-mcp/census_unrelated.go
+=== RUN   TestADR0007OwnershipRejectsAdjacentPaths/internal/schema/schemas/unrelated.schema.json
+--- PASS: TestADR0007OwnershipRejectsAdjacentPaths (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/internal/censuscontinuation-other/capture.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/internal/v5sourcesnapshotv40/v4.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace/census_unrelated.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/cmd/lsp-trace-mcp/census_unrelated.go (0.00s)
+    --- PASS: TestADR0007OwnershipRejectsAdjacentPaths/internal/schema/schemas/unrelated.schema.json (0.00s)
+PASS
+ok  	lsp-trace/internal/integratedconformance	0.187s

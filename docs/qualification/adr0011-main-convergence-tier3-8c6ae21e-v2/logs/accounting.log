@@ -1,0 +1,11 @@
+catalog	sessionruntime/testdata/c15-census-v1/candidates.tsv	headerless	fields=2	rows=3805	bytes=541478	sha256=13d45a61cb9ad2e5dad8d944458a9b7f459c9a2cd0336cb76700fa801599ca6e
+catalog	sessionruntime/testdata/c15-census-v1/classifications.tsv	headerless	fields=5	rows=3805	bytes=687057	sha256=cde6aa72034acf743c582cec56ff778470f8f258bde0ecdc4398653f3de10e04
+catalog	sessionruntime/testdata/c15-census-v2/candidates.tsv	headerless	fields=2	rows=3847	bytes=547527	sha256=536d11dcfa927d1ce5db24fbd8a956a5170a8f762ee53d8daa3664288172afb2
+catalog	sessionruntime/testdata/c15-census-v2/classifications.tsv	headerless	fields=5	rows=3847	bytes=694776	sha256=494d2f0045db3e34b7c03e2a959aaf21e2fee203bfd3768097df7930ddf6b730
+delta	added=42	removed=0	shared_candidate_changes=0	shared_classification_changes=0
+excluded_categories	ephemeral-runtime=18	external-library=24
+manifest	sessionruntime/testdata/c15-census-v2/manifest.json	sha256=548e6af3625b248ab7e8a99b29ac24bbb3f674b0ffdb14365d4dfaaf49c89daf
+current	docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v1/c15/run1/candidates.tsv	headerless	fields=2	rows=4155	sha256=aa54b17734ff8136bbe1df1b559cd5103a3b5a86c04547fc6b78e093928b4341
+current	docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v1/c15/run1/classifications.tsv	headerless	fields=5	rows=4155	sha256=bfbecdd3df47a415adfcfd36b3dd6db1cd45fcd64f1ead89596f8ac92f77989f
+current	docs/qualification/adr0011-main-convergence-tier3-8c6ae21e-v1/c15/run1/all-source-locations.tsv	header=1	data_rows=4155	sha256=53bab2230a4ccbc12992b5f9163a882deb3f31bac792c252749e0cab47020043
+ACCOUNTING_RESOLUTION=PASS

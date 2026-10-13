@@ -1,0 +1,405 @@
+PASS DOC-SKILL-TASK-FIRST: cmd/lsp-trace/SKILL.md has stable task-first top-level heading order
+PASS DOC-SKILL-NAME: cmd/lsp-trace/SKILL.md contains name: lsp-trace
+PASS DOC-SKILL-DESCRIPTION: cmd/lsp-trace/SKILL.md contains description: Structural code analysis with lsp-trace:
+PASS DOC-SKILL-ROUTER-INCOMING: cmd/lsp-trace/SKILL.md contains `incoming`: start from exact callee positions and trace callers upward.
+PASS DOC-SKILL-ROUTER-SLICE: cmd/lsp-trace/SKILL.md contains `slice`: discover bounded outgoing nodes, then trace incoming callers from the exact frontier and genuine server-reported empty outgoing leaves.
+PASS DOC-SKILL-ROUTER-INSPECT: cmd/lsp-trace/SKILL.md contains `inspect`: admit and project one seed or all retained seeds without changing evidence authority.
+PASS DOC-SKILL-ROUTER-FILTER: cmd/lsp-trace/SKILL.md contains `filter`: mechanically compare exactly two seeds from an admitted all-seeds inspection.
+PASS DOC-SKILL-REF-LIVE: cmd/lsp-trace/references/live-tracing.md contains # Live tracing and census
+PASS DOC-SKILL-REF-OFFLINE: cmd/lsp-trace/references/offline-evidence.md contains # Offline evidence operations
+PASS DOC-SKILL-REF-TRANSPORT: cmd/lsp-trace/references/transport-routing.md contains # Transport and routing
+PASS DOC-SKILL-REF-BOUNDARIES: cmd/lsp-trace/references/evidence-boundaries.md contains # Evidence boundaries
+PASS DOC-FEATURE-SKILL-NAME: .pi/skills/lsp-trace-feature-inventory/SKILL.md contains name: lsp-trace-feature-inventory
+PASS DOC-FEATURE-SKILL-DESCRIPTION: .pi/skills/lsp-trace-feature-inventory/SKILL.md contains description: Prepare and review correction-safe feature inventories
+PASS DOC-FEATURE-REF-PREP: .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md contains # Preparation and reversible grouping
+PASS DOC-FEATURE-REF-ADJUDICATION: .pi/skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md contains # Adjudication and acceptance
+PASS DOC-CALLS-SERVER-ONLY: cmd/lsp-trace/references/evidence-boundaries.md contains CALLS records are server-reported Call Hierarchy relations only.
+PASS DOC-CAPTURE-SET-BOUNDARY: cmd/lsp-trace/references/evidence-boundaries.md contains do not infer cross-capture CALLS
+PASS DOC-UNKNOWN-BOUNDARY: cmd/lsp-trace/references/evidence-boundaries.md contains `source_graph_complete` remains `UNKNOWN`.
+PASS DOC-MECHANICAL-NO-ACCEPT: .pi/skills/lsp-trace-feature-inventory/SKILL.md contains Mechanical preparation cannot accept feature identity.
+PASS DOC-COMMUNITY-INSTABILITY: .pi/skills/lsp-trace-feature-inventory/SKILL.md contains communities, centrality, instability
+PASS DOC-CENSUS-AVAILABLE-FEATURE-SKILL: .pi/skills/lsp-trace-feature-inventory/SKILL.md contains The documented CLI `census` command may be used
+PASS DOC-CONTEXT-AVAILABLE-FEATURE-SKILL: .pi/skills/lsp-trace-feature-inventory/SKILL.md contains `context` is AVAILABLE for bounded transient live structural analysis
+PASS DOC-LEIDEN-HEADLINE: .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md contains a community is a structurally notable set worth examining, never a feature
+PASS DOC-LEIDEN-INDEPENDENT-CENSUS: .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md contains independent entry-point census
+PASS DOC-LEIDEN-INSTABILITY: .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md contains A-08 instability campaigns
+PASS DOC-LEIDEN-RECAPTURE: .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md contains Recapture only bytes that are missing, mismatched, or unavailable
+PASS DOC-LIVE-AUTOMATIC-DERIVE: cmd/lsp-trace/references/live-tracing.md contains call `lsp_session_v1_derive_workspace` with only `session_id`, `generation`, and the target
+PASS DOC-SKILL-AUTOMATIC-DERIVE: cmd/lsp-trace/SKILL.md contains Before any live semantic code-relationship task, establish session readiness as a prerequisite.
+PASS DOC-LIVE-ORIENTATION: cmd/lsp-trace/references/live-tracing.md contains Graph Provenance and source capture are not prerequisites
+PASS DOC-LIVE-CLAIM-CEILING: cmd/lsp-trace/references/live-tracing.md contains it is not retained, replayable, or source-grounded evidence
+PASS DOC-LIVE-OPTIONAL-ESCALATION: cmd/lsp-trace/references/live-tracing.md contains That escalation is never the default prerequisite
+PASS DOC-LIVE-NO-CENTRALITY: cmd/lsp-trace/references/live-tracing.md contains They do not compute centrality, establish architectural boundaries
+PASS DOC-LIVE-CENSUS-AVAILABLE: cmd/lsp-trace/references/live-tracing.md contains Current CLI `census` is AVAILABLE
+PASS DOC-LIVE-CONTEXT-AVAILABLE: cmd/lsp-trace/references/live-tracing.md contains The `context` interface accepted in ADR 0006 is AVAILABLE for bounded transient live analysis
+PASS DOC-README-CENSUS-AVAILABLE: README.md contains ### Accountable source-symbol census
+PASS DOC-README-CENSUS-AUTHORITY: README.md contains `authority` is `0`, `source_graph_complete` is `UNKNOWN`
+PASS DOC-README-CONTEXT-AVAILABLE: README.md contains `context` is AVAILABLE for bounded transient live structural analysis
+PASS DOC-README-SYMBOL-CHURN: README.md contains context-churn-symbols
+PASS DOC-README-SYMBOL-CHURN-CEILING: README.md contains `cross_revision_identity=NOT_EVALUATED`
+PASS DOC-SEMANTICS-SYMBOL-CHURN: docs/SEMANTICS.md contains ## Historical symbol churn V2 operational contract
+PASS DOC-SEMANTICS-SYMBOL-NO-CALLS: docs/SEMANTICS.md contains cannot manufacture `CALLS`
+PASS DOC-README-LEGACY-UNSCHEDULED: README.md contains Legacy `slice` and `incoming` remain visible and callable; removal is `UNSCHEDULED`.
+PASS DOC-MIGRATION-CENSUS-AVAILABLE: docs/cli-migration-diagnostics.md contains The CLI `census` replacement is AVAILABLE
+PASS DOC-MIGRATION-CONTEXT-AVAILABLE: docs/cli-migration-diagnostics.md contains `context` is AVAILABLE with authority-zero, non-retained structural output
+PASS DOC-MIGRATION-LEGACY-UNSCHEDULED: docs/cli-migration-diagnostics.md contains removal remains `UNSCHEDULED`
+PASS DOC-NO-STALE-CENSUS-CONTEXT-MIGRATION: docs/cli-migration-diagnostics.md excludes stale `census` and `context` are unavailable proposals
+PASS DOC-NO-STALE-CENSUS-CONTEXT-LIVE: cmd/lsp-trace/references/live-tracing.md excludes stale The `context` and `census` interfaces accepted in ADR 0006 remain `FUTURE/PROPOSED`
+PASS DOC-SKILL-EXPORT-GRAMMAR: cmd/lsp-trace/SKILL.md contains `lsp-trace skill get (lsp-trace|lsp-trace-feature-inventory) DESTINATION`
+PASS DOC-SKILL-EXPORT-SAFETY: cmd/lsp-trace/SKILL.md contains atomic no-replace final rename descriptor-relatively beneath it
+PASS DOC-SKILL-EXPORT-VISIBILITY: cmd/lsp-trace/SKILL.md contains atomic for namespace visibility
+PASS DOC-SKILL-EXPORT-NO-DURABILITY: cmd/lsp-trace/SKILL.md contains does not promise crash durability
+PASS DOC-FEATURE-EMBEDDED-SKILL: .pi/skills/lsp-trace-feature-inventory/SKILL.md matches cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/SKILL.md byte-for-byte
+PASS DOC-FEATURE-EMBEDDED-PREP: .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md matches cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md byte-for-byte
+PASS DOC-FEATURE-EMBEDDED-ADJUDICATION: .pi/skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md matches cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md byte-for-byte
+PASS DOC-EMBEDDED-LSP-CENSUS: cmd/lsp-trace/SKILL.md contains `census`: use for accountable source-symbol enumeration
+PASS DOC-README: README.md contains ## Inspect retained seeds
+PASS DOC-SEMANTICS: docs/SEMANTICS.md contains ## Seed inspection operational contract
+PASS DOC-ADR: docs/adr/0001-technical-evidence-packet-projections.md contains # ADR 0001: Add versioned all-seed inspection projections
+PASS DOC-SEMANTIC-ADR-HEADING: docs/adr/0007-optional-local-semantic-feature-index.md contains # ADR 0007: Pilot an optional local engineering-context index
+PASS DOC-SEMANTIC-ADR-ACCEPTED: docs/adr/0007-optional-local-semantic-feature-index.md contains - **Status:** Accepted
+PASS DOC-SEMANTIC-ADR-PILOT-AUTHORIZATION: docs/adr/0007-optional-local-semantic-feature-index.md contains Acceptance authorizes prerequisite work and, only after every frozen gate in this ADR is satisfied, implementation and execution of the isolated pilot.
+PASS DOC-SEMANTIC-ADR-FEATURE-DOWNSTREAM: docs/adr/0007-optional-local-semantic-feature-index.md contains Feature inventory is one downstream workflow, not the primary product.
+PASS DOC-SEMANTIC-ADR-TYPED-CORPORA: docs/adr/0007-optional-local-semantic-feature-index.md contains ## Strictly typed corpora
+PASS DOC-SEMANTIC-ADR-CORPUS-CODE: docs/adr/0007-optional-local-semantic-feature-index.md contains **Revision-bound code and structural evidence**
+PASS DOC-SEMANTIC-ADR-CORPUS-DECISIONS: docs/adr/0007-optional-local-semantic-feature-index.md contains **Accepted decision and requirement evidence**
+PASS DOC-SEMANTIC-ADR-CORPUS-WORKING: docs/adr/0007-optional-local-semantic-feature-index.md contains **Working context**
+PASS DOC-SEMANTIC-ADR-TARGET: docs/adr/0007-optional-local-semantic-feature-index.md contains **TARGET** — admit one exact symbol, range, file, document, or passage. TARGET has no census prerequisite.
+PASS DOC-SEMANTIC-ADR-NEIGHBORHOOD: docs/adr/0007-optional-local-semantic-feature-index.md contains **NEIGHBORHOOD** — begin from explicit targets and perform only a declared, bounded structural or provenance expansion.
+PASS DOC-SEMANTIC-ADR-CENSUS: docs/adr/0007-optional-local-semantic-feature-index.md contains **CENSUS** — enumerate a declared closed repository or source scope
+PASS DOC-SEMANTIC-ADR-PARTIAL-NO-COMPLETE: docs/adr/0007-optional-local-semantic-feature-index.md contains Partial indexes and bounded zero results never imply absence outside the admitted index, completeness of a repository/source, or completeness of an engineering domain.
+PASS DOC-SEMANTIC-ADR-DESCRIBE-INDEPENDENT: docs/adr/0007-optional-local-semantic-feature-index.md contains Describe is independent of corpus size and acquisition mode.
+PASS DOC-SEMANTIC-ADR-CACHE-EXACT: docs/adr/0007-optional-local-semantic-feature-index.md contains A cache hit is permitted only for exact identity equality
+PASS DOC-SEMANTIC-ADR-CROSS-CORPUS-AUTHORITY: docs/adr/0007-optional-local-semantic-feature-index.md contains Similarity, rank, or grouping never equalizes authority
+PASS DOC-SEMANTIC-ADR-DESCRIBE-OP-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Describe operation outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-DESCRIBE-MEMBER-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Describe member outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-EMBED-OP-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Embed operation outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-EMBED-MEMBER-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Embed member outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-INDEX-BUILD-OP-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Index-build operation outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-INDEX-BUILD-MEMBER-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Index-build member outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-SEARCH-OP-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Search operation outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-SEARCH-MEMBER-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Search result-member outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-GROUP-OP-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Group operation outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-GROUP-MEMBER-V1: docs/adr/0007-optional-local-semantic-feature-index.md binds **Group member outcome v1:** to its exact exhaustive set
+PASS DOC-SEMANTIC-ADR-SEARCH-IFF: docs/adr/0007-optional-local-semantic-feature-index.md contains exactly one **Search is `COMPLETE` if and only if one closed query record exists, the `search_index_members` denominator equation balances, and every index member has exactly one terminal search-member outcome.**
+PASS DOC-SEMANTIC-ADR-GROUP-IFF: docs/adr/0007-optional-local-semantic-feature-index.md contains exactly one **Group is `COMPLETE` if and only if the `group_index_members` denominator equation balances and every index member has exactly one terminal group-member outcome, including `UNMATCHED`.**
+PASS DOC-SEMANTIC-ADR-NONCOMPLETE-ACCOUNTING: docs/adr/0007-optional-local-semantic-feature-index.md contains A non-`COMPLETE` Search or Group retains the complete index denominator, evaluated-member count, and exactly one terminal member outcome for each member whose evaluation began; it cannot imply complete evaluation, complete coverage, or absence.
+PASS DOC-SEMANTIC-ADR-CONTEXT-DELTA: docs/adr/0007-optional-local-semantic-feature-index.md contains the core engineering-context protocol uses neutral `context_state_delta`.
+PASS DOC-SEMANTIC-ADR-NO-SHIPMENT: docs/adr/0007-optional-local-semantic-feature-index.md contains It does not authorize shipment, a public CLI or MCP surface, registry changes, or integration into core binaries.
+PASS DOC-SEMANTIC-ADR-NO-OP-REGISTRATION: docs/adr/0007-optional-local-semantic-feature-index.md contains This ADR does not register or renumber operations 33–35
+PASS DOC-SEMANTIC-ADR-YZMA-NOT-INTEGRATED: docs/adr/0007-optional-local-semantic-feature-index.md contains Yzma is not integrated into `lsp-trace`, its CLI, or `lsp-trace-mcp`.
+PASS DOC-SEMANTIC-ADR-WHOLE-OPERATION-ALGEBRA: docs/adr/0007-optional-local-semantic-feature-index.md contains An Index-build whole-operation outcome is `COMPLETE` if and only if `index_build_admitted` balances
+PASS DOC-ADR0007-BUNDLE-LINK: docs/adr/0007-optional-local-semantic-feature-index.md contains [ADR 0007 prerequisite bundle scaffold](../pilot/adr0007/README.md)
+PASS DOC-ADR0007-BUNDLE-DRAFT: docs/pilot/adr0007/README.md contains **Bundle status:** `PREREQUISITES_DRAFT`
+PASS DOC-ADR0007-PILOT-DISABLED: docs/pilot/adr0007/README.md contains **Pilot status:** `PILOT_DISABLED`
+PASS DOC-ADR0007-SCHEMA-BOUNDARY: docs/pilot/adr0007/README.md contains docs/pilot/adr0007/schemas/
+PASS DOC-ADR0007-APPROVED-BOUNDARY: docs/pilot/adr0007/README.md contains qualification/adr0007/approved/
+PASS DOC-ADR0007-GATES: docs/pilot/adr0007/prerequisite-gates.md contains All gates are conjunctive and fail closed.
+PASS DOC-ADR0007-ARTIFACTS: docs/pilot/adr0007/artifact-inventory.md contains makes no secure-erasure claim
+PASS DOC-ADR0007-OWNERS-UNASSIGNED: docs/pilot/adr0007/ownership-and-approvals.md contains `UNASSIGNED`
+PASS DOC-ADR0007-NO-OWNER-ASSIGNED: docs/pilot/adr0007/ownership-and-approvals.md excludes stale OWNER_ASSIGNED
+PASS DOC-ADR0007-EVALUATION-FREEZES: docs/pilot/adr0007/evaluation-plan.md contains **F8 Report:**
+PASS DOC-ADR0007-PROTOCOL-AUTHORITY: docs/pilot/adr0007/protocol-outline.md contains `authority=0` and `accepted=false`
+PASS DOC-ADR0007-THREATS: docs/pilot/adr0007/threat-model.md contains Process separation limits blast radius; it does not confer authority
+PASS DOC-FILTER-ADR: docs/adr/0002-deterministic-seed-evidence-filtering.md contains # ADR 0002: Add deterministic pairwise seed-evidence comparison
+PASS DOC-FILTER-README: README.md contains ## Compare retained seed evidence
+PASS DOC-FILTER-SEMANTICS: docs/SEMANTICS.md contains ## Pairwise seed-evidence filter operational contract
+PASS DOC-FILTER-COMMAND: README.md contains lsp-trace filter evidence-inspection.json --compare-seeds LEFT_LABEL --compare-seeds RIGHT_LABEL --json
+PASS DOC-FILTER-TYPED: docs/SEMANTICS.md contains ReferenceKey = (namespace, value)
+PASS DOC-INPUT: README.md contains lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL --json
+PASS DOC-ALL-INPUT: README.md contains lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json
+PASS DOC-PRECEDENCE: docs/SEMANTICS.md contains custody verification precedes structural validation, structural validation precedes semantic validation, and inspection follows successful admission
+PASS DOC-AUTHORITY: docs/SEMANTICS.md contains `NON_AUTHORITATIVE_DERIVED_VIEW`
+PASS DOC-RELEASE: scripts/release-check.sh contains ./scripts/check-docs.sh
+PASS DOC-PROFILE-README: README.md contains ## Named server launch profiles
+PASS DOC-PROFILE-DISAMBIGUATION: README.md contains **MCP tool-advertisement profile** means only the set returned by `tools/list`
+PASS DOC-PROFILE-INDEPENDENCE: cmd/lsp-trace/references/transport-routing.md contains It is unrelated to CLI `--profile NAME`.
+PASS DOC-PROFILE-SEMANTICS: docs/SEMANTICS.md contains ## Named server profile resolution
+PASS DOC-PROFILE-SKILL: cmd/lsp-trace/references/live-tracing.md contains ## Profiles and coordinates
+PASS DOC-PROFILE-SECRET: README.md contains Graph invocation output records environment names/references, never values.
+PASS DOC-MCP-README: README.md contains ## MCP offline evidence server
+PASS DOC-MCP-SKILL: cmd/lsp-trace/references/transport-routing.md contains ## Choose CLI or MCP
+PASS DOC-MCP-STDIO: README.md contains lsp-trace-mcp --publication-root
+PASS DOC-MCP-CAPABILITIES: README.md contains lsp_trace_v1_capabilities
+PASS DOC-COORDINATES-CLI: README.md contains CLI `--at PATH:LINE:COLUMN` positions are one-based.
+PASS DOC-COORDINATES-MCP: README.md contains MCP `line` and `character` inputs, LSP requests and responses, and retained graph ranges are zero-based.
+PASS DOC-COORDINATES-ENCODING: README.md contains `utf-8` counts bytes, `utf-16` counts UTF-16 code units, and `utf-32` counts Unicode code points.
+PASS DOC-COORDINATES-OWNERSHIP: cmd/lsp-trace/references/live-tracing.md contains The server owns the encoding; omission defaults to `utf-16`.
+PASS DOC-MCP-ALWAYS-LOCAL: README.md contains local-development-only
+PASS DOC-MCP-COMPACT: README.md contains prefer `lsp-trace-mcp --tool-profile compact`
+PASS DOC-MCP-FULL-41: README.md contains The `--tool-profile full` profile publishes exactly 41 canonical tools
+PASS DOC-MCP-MACHINE-LOCAL: README.md contains This file is machine-local and ignored by this repository.
+PASS DOC-MCP-COMPACT-ADDITIVE: README.md contains add only `"--tool-profile", "compact"` to the server
+PASS DOC-MCP-ROOT-IGNORED: .gitignore contains /.mcp.json
+PASS DOC-MCP-PROVIDERS: README.md contains Host-provisioned relation providers
+PASS DOC-MCP-PROVIDER-CONTRACT: docs/PROVIDERS.md contains lsp-trace.provider-collector-request.v1
+PASS DOC-MCP-PROVIDER-DECLARATION-SCHEMA: schema/schemas/lsp-trace.bootstrap-provider.v1.schema.json contains lsp-trace.bootstrap-provider.v1
+PASS DOC-MCP-PROVIDER-REQUEST-SCHEMA: schema/schemas/lsp-trace.provider-collector-request.v1.schema.json contains lsp-trace.provider-collector-request.v1
+PASS DOC-MCP-PROVIDER-OBSERVATION-SCHEMA: schema/schemas/lsp-trace.provider-observations.v1.schema.json contains lsp-trace.provider-observations
+PASS DOC-MCP-INCOMING: cmd/lsp-trace/SKILL.md contains `incoming`: start from exact callee positions and trace callers upward.
+PASS DOC-MCP-SLICE-ENABLED: cmd/lsp-trace/SKILL.md contains `slice`: discover bounded outgoing nodes
+PASS DOC-MCP-WARNING: README.md contains developer's permissions
+PASS DOC-MCP-NO-SANDBOX: README.md contains not sandboxed
+PASS DOC-MCP-LOCAL-ACCESS: README.md contains local files and network
+PASS DOC-MCP-TRUST: README.md contains must be trusted
+PASS DOC-MCP-ADR: docs/adr/0003-always-local-stage2.md contains # ADR 0003: Activate always-local Stage 2 lifecycle tools
+PASS DOC-MCP-HISTORICAL-ADR: docs/adr/0003-persistent-mcp-language-server-sessions.md contains **Status:** Superseded by [ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)
+PASS DOC-PI-STANDARD-ADAPTER: README.md contains pi install npm:pi-mcp-adapter
+PASS DOC-PI-PROJECT-CONFIG: README.md contains Preferred project config: `.mcp.json`
+PASS DOC-PI-DIRECT-TOOLS: README.md contains "directTools": [
+PASS DOC-PI-COMPACT-TWELVE: README.md contains The recommended compact tool-advertisement profile advertises exactly twelve canonical MCP names
+PASS DOC-PI-EXECUTE: README.md contains "lsp_trace_v1_execute"
+PASS DOC-PI-SELF-CHECK: README.md contains /mcp reconnect lsp-trace
+PASS DOC-PI-NO-CUSTOM-EXTENSION: README.md contains Do not add a repository-local Pi extension or a second MCP bridge.
+PASS DOC-PI-HOST-AUTHORITY: README.md contains Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory.
+PASS DOC-PI-CANCELLATION: README.md contains Cancellation stops the caller observation; an already accepted lifecycle intent may continue.
+PASS DOC-PI-BOUNDED: README.md contains Partial or truncated traversal results remain honest bounded outcomes.
+PASS DOC-PI-SEARCH-KEYWORDS: README.md contains "searchKeywords": {
+PASS DOC-PI-SEARCH-INTENTS: README.md contains "who calls this callee"
+PASS DOC-MCP-TRAVERSAL-COMPACT: README.md contains "detail":"compact","output_selector":"traces/callers.json"
+PASS DOC-MCP-LIFECYCLE-SUCCESS: README.md contains Successful lifecycle guidance is categorical and comes only from the returned `result`
+PASS DOC-SKILL-TRAVERSAL-COMPACT: cmd/lsp-trace/references/offline-evidence.md contains Compact traversal requires both `detail: "compact"` and `output_selector`;
+PASS DOC-ADR-THIRTEEN: docs/adr/0003-always-local-stage2.md contains Unsupported platforms keep the same thirteen-tool discovery contract.
+PASS DOC-REPRESENTATIVE-MATRIX: qualification/representative-preflight/matrix.v1.json contains "source_state": "INTEGRATED"
+PASS DOC-REPRESENTATIVE-INSTALLED-EVIDENCE: qualification/representative-preflight/installed-state.7a6a.v1.json contains "custody": "OPERATOR_ASSERTED"
+PASS DOC-REPRESENTATIVE-SOURCE-INSTALLED: qualification/FINAL-REPLAY-QUALIFICATION.md contains The report distinguishes repository source state from installed production state.
+PASS DOC-REPRESENTATIVE-VERSION: qualification/FINAL-REPLAY-QUALIFICATION.md contains Executable presence is reported separately, and its version remains `VERSION_UNVERIFIED`
+PASS DOC-REPRESENTATIVE-SESSION: qualification/FINAL-REPLAY-QUALIFICATION.md contains Environment flags are only `OPERATOR_ASSERTED` prerequisites
+PASS DOC-REPRESENTATIVE-EMBER: qualification/FINAL-REPLAY-QUALIFICATION.md contains package version `1.0.3` is distinct from semantic protocol identity `ember-glint@1`
+PASS DOC-REPRESENTATIVE-SAFE-OUTPUT: qualification/FINAL-REPLAY-QUALIFICATION.md contains publishes atomically without replacement at mode `0600`
+DOCUMENTATION CHECK PASS
+PASS R-DOCUMENTATION-CONTRACT: operational documentation guard
+PASS ASSERT_B05_HISTORICAL_BLOB_IMMUTABLE
+ok  	lsp-trace/internal/b05qualification	0.268s
+PASS ASSERT_B05_CURRENT_LINEAGE_VALID
+PASS ASSERT_B05_ADMISSION_CEILING_ENFORCED
+PASS ASSERT_B05_LEDGER_AND_RED_VALIDATION
+PASS ASSERT_B05_MANAGED_INCOMING_AND_SLICE
+PASS ASSERT_B05_RETAINED_OUTCOME
+PASS ASSERT_B05_DOCUMENTED_NON_ENTAILMENTS
+PASS ASSERT_B05_FRAME6_RELEASE_CONSUMPTION
+PASS R-B05-QUALIFICATION: archived 10-seed historical baseline; release-selected 12-seed/24-attempt current native production evidence; explicit false admission ceiling
+✔ ASSERT_CALLER_JS_EVIDENCE_FAMILY_IDENTITY_AND_COUNTS (0.738416ms)
+✔ ASSERT_CALLER_JS_REQUIRED_VARIANTS_AND_EXACT_OUTCOMES (0.231584ms)
+✔ ASSERT_CALLER_JS_SCHEMAS_PARITY_REPLAY_PROVIDER_AND_CUSTODY (0.300791ms)
+✔ ASSERT_CALLER_JS_RETAINED_RECORD_HAS_TIME_AND_BINARY_DIGESTS (0.059041ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 40.443625
+PASS ASSERT_CALLER_JS_RELEASE_ADMISSION
+PASS R-CALLER-PROJECT-JAVASCRIPT-QUALIFICATION: retained caller-project JavaScript MCP evidence
+PASS Q-TYPESCRIPT: qualification/typescript/src/calls.ts
+PASS Q-TYPESCRIPT-LEAF: qualification/typescript/src/calls.ts contains export function leaf
+PASS Q-TYPESCRIPT-LEFT: qualification/typescript/src/calls.ts contains export function left
+PASS Q-TYPESCRIPT-RIGHT: qualification/typescript/src/calls.ts contains export function right
+PASS Q-TYPESCRIPT-RECURSION: qualification/typescript/src/calls.ts contains recursive(value - 1)
+PASS Q-TYPESCRIPT-STATIC: qualification/typescript/src/calls.ts contains staticButNotExecuted
+PASS Q-CSHARP: qualification/csharp/Calls.cs
+PASS Q-CSHARP-LEAF: qualification/csharp/Calls.cs contains int Leaf
+PASS Q-CSHARP-LEFT: qualification/csharp/Calls.cs contains int Left
+PASS Q-CSHARP-RIGHT: qualification/csharp/Calls.cs contains int Right
+PASS Q-CSHARP-RECURSION: qualification/csharp/Calls.cs contains Recursive(value - 1)
+PASS Q-CSHARP-STATIC: qualification/csharp/Calls.cs contains StaticButNotExecuted
+PASS Q-ELIXIR: qualification/elixir/lib/calls.ex
+PASS Q-ELIXIR-LEAF: qualification/elixir/lib/calls.ex contains def leaf
+PASS Q-ELIXIR-LEFT: qualification/elixir/lib/calls.ex contains def left
+PASS Q-ELIXIR-RIGHT: qualification/elixir/lib/calls.ex contains def right
+PASS Q-ELIXIR-RECURSION: qualification/elixir/lib/calls.ex contains recursive(value - 1)
+PASS Q-ELIXIR-STATIC: qualification/elixir/lib/calls.ex contains static_but_not_executed
+PASS Q-ELIXIR-PATH: scripts/qualify.sh contains elixir|elixir-companion)
+PASS Q-ELIXIR-CROSS-FILE: qualification/elixir/lib/cross_module_callers.ex
+PASS Q-ELIXIR-MULTI-CLAUSE: qualification/elixir/lib/calls.ex contains def leaf(value) when
+PASS Q-ELIXIR-ALIAS: qualification/elixir/lib/cross_module_callers.ex contains alias LspTraceQualification.Calls
+PASS Q-ELIXIR-QUALIFIED: qualification/elixir/lib/cross_module_callers.ex contains LspTraceQualification.Calls.leaf
+PASS Q-ELIXIR-BLOCKED: scripts/qualify.sh contains missing cross-module caller edge
+PASS Q-ELIXIR-EVIDENCE: qualification/README.md contains protocol support, same-module resolution, cross-module resolution, and multi-clause resolution
+PASS Q-ELIXIR-COMPANION-MODE: scripts/qualify.sh contains elixir-companion
+PASS Q-ELIXIR-COMPANION-ROOT: scripts/qualify.sh contains ELIXIR_CALL_HIERARCHY_ROOT
+PASS Q-ELIXIR-COMPANION-DEFAULT: scripts/qualify.sh contains ../elixir-call-hierarchy
+PASS Q-ELIXIR-COMPANION-REPOSITORY: qualification/README.md contains https://github.com/jaresty/elixir-call-hierarchy
+PASS Q-ELIXIR-COMPANION-EXTERNAL-CONTRACT: qualification/README.md contains external server's own README defines its profiling, trust, completeness, and clause-coalescing contracts
+PASS Q-ELIXIR-COMPANION-CI-REPOSITORY: .github/workflows/ci.yml contains repository: jaresty/elixir-call-hierarchy
+PASS Q-ELIXIR-COMPANION-CI-PIN: .github/workflows/ci.yml contains ref: aab27746f1ab03a3ce24fa3e636bbc252c0236ff
+PASS Q-ELIXIR-COMPANION-CI-PATH: .github/workflows/ci.yml contains path: elixir-call-hierarchy
+PASS Q-ELIXIR-LS-DISTINCT: qualification/README.md contains does not replace or rewrite the retained ElixirLS BLOCKED evidence
+PASS Q-TERMINAL-PROVENANCE: docs/SEMANTICS.md contains Terminal provenance
+PASS Q-SOURCE-COMPLETE: docs/SEMANTICS.md contains source completeness
+PASS Q-SCHEMA-V1: qualification/README.md contains lsp-trace.graph.v1
+PASS Q-STATE: qualification/README.md contains PASS, BLOCKED, or FAIL
+PASS Q-EVIDENCE: qualification/README.md contains A PASS requires server version
+PASS Q-RETAIN: qualification/README.md contains ./scripts/retain-qualification.py
+PASS Q-RETAINED-typescript-STATUS: qualification/retained/typescript/status.txt contains PASS
+PASS Q-RETAINED-typescript-ASSERTIONS: qualification/retained/typescript/assertions.txt contains all caller/callee edges retain exact non-empty call-site ranges
+PASS Q-RETAINED-typescript-GRAPH: qualification/retained/typescript/graph.json contains "schema_version": "lsp-trace.graph.v2"
+PASS Q-RETAINED-csharp-STATUS: qualification/retained/csharp/status.txt contains PASS
+PASS Q-RETAINED-csharp-ASSERTIONS: qualification/retained/csharp/assertions.txt contains all caller/callee edges retain exact non-empty call-site ranges
+PASS Q-RETAINED-csharp-GRAPH: qualification/retained/csharp/graph.json contains "schema_version": "lsp-trace.graph.v2"
+PASS Q-RETAINED-elixir-STATUS: qualification/retained/elixir/status.txt contains BLOCKED:
+PASS Q-RETAINED-elixir-GRAPH: qualification/retained/elixir/graph.json contains "schema_version": "lsp-trace.graph.v2"
+PASS Q-RETAINED-elixir-MISSING: qualification/retained/elixir/assertions.txt contains missing exact callers
+PASS R-CI: .github/workflows/ci.yml
+PASS R-ELIXIR-CI-JOB: .github/workflows/ci.yml contains elixir-companion:
+PASS R-ELIXIR-CI-SETUP: .github/workflows/ci.yml contains erlef/setup-beam@v1
+PASS R-ELIXIR-CI-OTP: .github/workflows/ci.yml contains otp-version: '25.3.2.7'
+PASS R-ELIXIR-CI-VERSION: .github/workflows/ci.yml contains elixir-version: '1.16.2'
+PASS R-ELIXIR-CI-DEPS: .github/workflows/ci.yml contains mix deps.get --only test
+PASS R-ELIXIR-CI-FORMAT: .github/workflows/ci.yml contains mix format --check-formatted
+PASS R-ELIXIR-CI-TEST: .github/workflows/ci.yml contains mix test
+PASS R-ELIXIR-CI-ESCRIPT: .github/workflows/ci.yml contains mix escript.build
+PASS R-SECURITY: docs/SECURITY.md
+PASS R-SEMANTICS: docs/SEMANTICS.md
+PASS R-SCHEMA: docs/SCHEMA_POLICY.md
+PASS R-RELEASE: docs/RELEASING.md
+PASS R-PLATFORM: .goreleaser.yaml
+PASS ASSERT_FOUNDATION_ROOT_MIT_PRESERVED: LICENSE
+PASS ASSERT_FOUNDATION_GONUM_NOTICE: THIRD_PARTY_NOTICES
+PASS ASSERT_FOUNDATION_GONUM_NO_ENDORSEMENT: THIRD_PARTY_NOTICES contains Neither the name of the Gonum project
+PASS ASSERT_FOUNDATION_GONUM_DISCLAIMER: THIRD_PARTY_NOTICES contains THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+PASS ASSERT_FOUNDATION_X_TEXT_COPYRIGHT: THIRD_PARTY_NOTICES contains Copyright 2009 The Go Authors.
+PASS ASSERT_FOUNDATION_X_TEXT_BINARY_NOTICE: THIRD_PARTY_NOTICES contains Redistributions in binary form must reproduce the above copyright
+PASS ASSERT_FOUNDATION_X_SYS_EXACT_VERSION: go.mod contains golang.org/x/sys v0.36.0
+PASS ASSERT_FOUNDATION_X_SYS_MODULE_SUM: go.sum contains golang.org/x/sys v0.36.0 h1:KVRy2GtZBrk1cBYA7MKu5bEZFxQk4NIDV6RLVcC8o0k=
+PASS ASSERT_FOUNDATION_X_SYS_GOMOD_SUM: go.sum contains golang.org/x/sys v0.36.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
+PASS ASSERT_FOUNDATION_X_SYS_NOTICE_HEADING: THIRD_PARTY_NOTICES contains golang.org/x/sys v0.36.0
+PASS ASSERT_FOUNDATION_X_SYS_COPYRIGHT: THIRD_PARTY_NOTICES contains Copyright 2009 The Go Authors.
+PASS ASSERT_FOUNDATION_X_SYS_BINARY_NOTICE: THIRD_PARTY_NOTICES contains Redistributions in binary form must reproduce the above copyright
+PASS ASSERT_FOUNDATION_ARCHIVE_LICENSE: .goreleaser.yaml contains - LICENSE
+PASS ASSERT_FOUNDATION_ARCHIVE_NOTICES: .goreleaser.yaml contains - THIRD_PARTY_NOTICES
+PASS ASSERT_FOUNDATION_SCHEMA-community: internal/schema/schemas/lsp-trace.community.v1.schema.json
+PASS ASSERT_FOUNDATION_SCHEMA-community-boundary: internal/schema/schemas/lsp-trace.community-boundary.v1.schema.json
+PASS ASSERT_FOUNDATION_SCHEMA-community-instability: internal/schema/schemas/lsp-trace.community-instability.v1.schema.json
+PASS R-SCHEMA-v1: internal/schema/schemas/lsp-trace.graph.v1.schema.json
+PASS R-SCHEMA-v2: internal/schema/schemas/lsp-trace.graph.v2.schema.json
+PASS R-SCHEMA-v3: internal/schema/schemas/lsp-trace.graph.v3.schema.json
+PASS R-INSPECTION-SCHEMA: internal/schema/schemas/lsp-trace.inspect.v1.schema.json
+PASS R-SCHEMA-GET-DOC: README.md contains lsp-trace schema get --schema v1|v2|v3
+PASS R-VALIDATE-DOC: README.md contains lsp-trace validate [--schema v1|v2|v3] PATH|-
+PASS R-INSPECT-DOC: README.md contains lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL
+PASS R-INSPECT-ALL-DOC: README.md contains lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json
+PASS R-INSPECT-AUTHORITY: docs/SEMANTICS.md contains `NON_AUTHORITATIVE_DERIVED_VIEW`
+PASS R-INSPECT-DIAGNOSTIC-CORRELATION: docs/SEMANTICS.md contains `TOOL_DERIVED_NODE_CORRELATION`
+PASS R-SKILL-INSPECT: cmd/lsp-trace/references/offline-evidence.md contains ## Inspect retained evidence
+PASS R-SKILL-INSPECT-ALL: cmd/lsp-trace/references/offline-evidence.md contains lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json
+PASS R-SLICE-DOC: README.md contains lsp-trace slice
+PASS R-SLICE-DOWN: README.md contains `--down-depth` and `--up-depth` count call edges
+PASS R-SLICE-START-MODES: README.md contains Choose exactly one starting mode
+PASS R-SLICE-AT: README.md contains repeatable `--at PATH:LINE:COLUMN`
+PASS R-SLICE-SEED-FILE: README.md contains `--seed-file FILE` uses the existing labeled seed JSON format
+PASS R-SLICE-SEMANTICS: docs/SEMANTICS.md contains Nodes at exactly `--down-depth` form the exact frontier.
+PASS R-SLICE-UPWARD-UNION: docs/SEMANTICS.md contains `upward_start_node_ids` must equal the sorted deduplicated union
+PASS R-SLICE-FAILURE-NOT-LEAF: docs/SEMANTICS.md contains A null or failed outgoing response is not a server-reported leaf
+PASS R-SLICE-SEED-CLOSURE: docs/SEMANTICS.md contains Each successful slice seed records its deterministic causal closure
+PASS R-SLICE-SEED-UNION: docs/SEMANTICS.md contains union of successful seed memberships to equal the deduplicated global node/relation sets
+PASS R-SLICE-POLICY: docs/SCHEMA_POLICY.md contains V3 may include an optional `slice` object
+PASS R-SLICE-SCHEMA: internal/schema/schemas/lsp-trace.graph.v3.schema.json contains "slice": {"$ref": "#/$defs/slice"}
+PASS R-SLICE-SCHEMA-UPWARD: internal/schema/schemas/lsp-trace.graph.v3.schema.json contains "upward_start_node_ids"
+PASS R-SKILL-VALIDATE-PRESERVES: cmd/lsp-trace/references/offline-evidence.md contains Validation does not canonicalize or rewrite input.
+PASS R-SKILL-VALIDATION-LAYERS: cmd/lsp-trace/references/offline-evidence.md contains Historical V1/V2 graph validation is structural; V3 performs structural validation before deeper semantic validation.
+PASS R-SKILL-NO-AUTH: cmd/lsp-trace/references/evidence-boundaries.md contains None authenticates hidden inputs or producer identity unless an external contract explicitly does so.
+PASS R-SKILL-AUTHORITY: cmd/lsp-trace/references/evidence-boundaries.md contains Caller-supplied: provenance
+PASS R-SKILL-SERVER-TRUST: cmd/lsp-trace/SKILL.md contains Use only trusted language-server binaries and workspaces.
+PASS R-SKILL-SERVER-STARTUP: cmd/lsp-trace/references/live-tracing.md contains `language-server` is a placeholder.
+PASS R-SKILL-SEED-GRAMMAR: cmd/lsp-trace/references/live-tracing.md contains Unknown fields fail.
+PASS R-SKILL-PUBLICATION: cmd/lsp-trace/references/offline-evidence.md contains Publication is exclusive, owner-only, no-replace beneath a caller-pinned root
+PASS R-SKILL-EXPORT-GRAMMAR: cmd/lsp-trace/SKILL.md contains `lsp-trace skill get (lsp-trace|lsp-trace-feature-inventory) DESTINATION`
+PASS R-SKILL-EXPORT-SAFETY: cmd/lsp-trace/SKILL.md contains atomic no-replace final rename descriptor-relatively beneath it
+PASS R-SKILL-EXPORT-NO-DURABILITY: cmd/lsp-trace/SKILL.md contains does not promise crash durability
+PASS R-SLICE-STDERR-RELAY: docs/SEMANTICS.md contains captured stderr is relayed before the transport/lifecycle error
+PASS R-SLICE-STDERR-DIAGNOSTIC: docs/SEMANTICS.md contains retained and printed as a sensitive `server-stderr` diagnostic
+PASS R-V3-CLOSED-RELATION-KINDS: docs/SEMANTICS.md contains Native relation kinds are closed to call relations, dispatch associations, and sibling candidates
+PASS R-V3-EXECUTION-BUNDLE: docs/SEMANTICS.md contains This common provenance does not make co-bundled relations independent observations and adds no confidence or support.
+PASS R-V3-LOCATOR-CEILING: docs/SEMANTICS.md contains they do not establish runtime behavior or feature correspondence
+PASS R-V3-AUTHORITY-SCOPE: docs/SEMANTICS.md contains Source identity is limited to successfully resolved seed URI/content-digest pairs
+PASS R-V3-HISTORICAL-ADDITIVE: docs/SCHEMA_POLICY.md contains historical v3 documents that omit them remain structurally and semantically valid
+PASS R-SLICE-RANGE-WARNING-RECOVERABLE: docs/SEMANTICS.md contains `SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE` is a recoverable server-quality diagnostic
+PASS R-SLICE-RANGE-WARNING-PUBLISH: docs/SEMANTICS.md contains this diagnostic alone does not make the slice incomplete or prevent selector publication
+PASS R-SLICE-INVALID-RELATION-CLOSED: docs/SEMANTICS.md contains malformed or unattributable callers, node-identity collisions, and dangling relation references remain fail-closed structural errors
+PASS R-GENERATION-NAME-NOT-IDENTITY: README.md contains Generation directory basenames are opaque publication coordinates, not content identities and not part of the determinism contract.
+PASS R-ARTIFACT-BYTE-DETERMINISM: docs/SEMANTICS.md contains With identical invocation inputs and server observations, canonical artifact bytes are deterministic; immutable generation directory basenames may differ between publications.
+PASS R-FLAGS: README.md contains ## Flags
+PASS R-FLAG-workspace: README.md contains `--workspace
+PASS R-FLAG-config: README.md contains `--config
+PASS R-FLAG-profile: README.md contains `--profile
+PASS R-FLAG-server: README.md contains `--server
+PASS R-FLAG-at: README.md contains `--at
+PASS R-FLAG-server-arg: README.md contains `--server-arg
+PASS R-FLAG-server-env: README.md contains `--server-env
+PASS R-FLAG-language-id: README.md contains `--language-id
+PASS R-FLAG-max-depth: README.md contains `--max-depth
+PASS R-FLAG-max-nodes: README.md contains `--max-nodes
+PASS R-FLAG-timeout: README.md contains `--timeout
+PASS R-FLAG-request-timeout: README.md contains `--request-timeout
+PASS R-FLAG-concurrency: README.md contains `--concurrency
+PASS R-FLAG-log-level: README.md contains `--log-level
+PASS R-FLAG-trace-lsp: README.md contains `--trace-lsp
+PASS R-FLAG-output: README.md contains `--output
+PASS R-FLAG-pretty: README.md contains `--pretty
+PASS R-COMPLETE: docs/SEMANTICS.md contains `summary.complete`
+PASS R-TRUNCATED: docs/SEMANTICS.md contains `summary.truncated`
+PASS R-REASONS: docs/SCHEMA_POLICY.md contains ## Reason enum
+PASS R-REASON-NO_INCOMING_CALLS: docs/SCHEMA_POLICY.md contains `NO_INCOMING_CALLS`
+PASS R-REASON-PREPARE_RETURNED_NO_ITEM: docs/SCHEMA_POLICY.md contains `PREPARE_RETURNED_NO_ITEM`
+PASS R-REASON-INCOMING_RETURNED_NULL: docs/SCHEMA_POLICY.md contains `INCOMING_RETURNED_NULL`
+PASS R-REASON-EXTERNAL_URI: docs/SCHEMA_POLICY.md contains `EXTERNAL_URI`
+PASS R-REASON-UNSUPPORTED_CALL_HIERARCHY: docs/SCHEMA_POLICY.md contains `UNSUPPORTED_CALL_HIERARCHY`
+PASS R-REASON-SERVER_ERROR: docs/SCHEMA_POLICY.md contains `SERVER_ERROR`
+PASS R-REASON-INVALID_SERVER_RESPONSE: docs/SCHEMA_POLICY.md contains `INVALID_SERVER_RESPONSE`
+PASS R-REASON-REQUEST_TIMEOUT: docs/SCHEMA_POLICY.md contains `REQUEST_TIMEOUT`
+PASS R-REASON-GLOBAL_TIMEOUT: docs/SCHEMA_POLICY.md contains `GLOBAL_TIMEOUT`
+PASS R-REASON-CANCELLED: docs/SCHEMA_POLICY.md contains `CANCELLED`
+PASS R-REASON-MAX_DEPTH: docs/SCHEMA_POLICY.md contains `MAX_DEPTH`
+PASS R-REASON-MAX_NODES: docs/SCHEMA_POLICY.md contains `MAX_NODES`
+PASS R-REASON-NODE_ID_COLLISION: docs/SCHEMA_POLICY.md contains `NODE_ID_COLLISION`
+PASS R-TRACE: docs/SECURITY.md contains `--trace-lsp PATH` writes an opt-in JSON Lines protocol transcript
+PASS R-TIMEOUT: docs/SEMANTICS.md contains `GLOBAL_TIMEOUT`
+PASS R-SUPPORT: README.md contains retained PASS evidence
+PASS R-DRY-RUN: docs/RELEASING.md contains ./scripts/release-check.sh
+PASS R-NO-SERVERS: docs/RELEASING.md contains does not start or install external language servers
+PASS R-GORELEASER: .goreleaser.yaml contains version: 2
+PASS R-RETAIN-STATUS: scripts/release-check.sh contains Q-RETAINED-$language-STATUS
+PASS R-MCP-ADR: docs/adr/0003-persistent-mcp-language-server-sessions.md
+PASS R-MCP-SERVER: cmd/lsp-trace-mcp/main.go
+PASS R-MCP-MANIFEST: internal/mcpcontract/testdata/stage1-manifest.v1.json
+PASS R-MCP-ENVELOPE-SCHEMA: internal/mcpcontract/testdata/schemas/envelope-result.v1.schema.json
+PASS R-MCP-PROTOCOL-PIN: internal/mcpcontract/testdata/stage1-manifest.v1.json contains "revision":"2025-06-18"
+PASS R-MCP-GORELEASER-MAIN: .goreleaser.yaml contains main: ./cmd/lsp-trace-mcp
+PASS R-MCP-GORELEASER-BINARY: .goreleaser.yaml contains binary: lsp-trace-mcp
+PASS R-MCP-ADR-SUPERSEDED: docs/adr/0003-persistent-mcp-language-server-sessions.md contains **Status:** Superseded by
+PASS R-MCP-ADR-SUCCESSOR: docs/adr/0003-persistent-mcp-language-server-sessions.md contains [ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)
+PASS R-MCP-RELEASE-DOC: docs/RELEASING.md contains lsp-trace-mcp
+PASS R-MCP-BOOTSTRAP-DOC: README.md contains lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json
+PASS R-MCP-BOOTSTRAP-PORTABLE: README.md contains Its paths are intentionally relative, use JSON forward slashes, and are portable placeholders rather than claims about an installed layout.
+PASS R-MCP-BOOTSTRAP-WINDOWS: README.md contains `C:/Tools/gopls.exe` on Windows
+PASS R-MCP-BOOTSTRAP-NO-PATH: README.md contains executables are never resolved through `PATH`
+PASS R-MCP-BOOTSTRAP-HOST-AUTHORITY: README.md contains The host—not the MCP caller—provisions trusted sessions
+PASS R-MCP-PRODUCTION-BOOTSTRAP-TEST: cmd/lsp-trace-mcp/bootstrap_process_test.go contains func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady
+PASS R-EXTERNAL-PROVIDER-QUALIFIER: scripts/qualify-external-provider.sh
+PASS ASSERT_RELEASE_REQUIRES_RETAINED_EXTERNAL_QUALIFICATION: qualification/retained/external-provider/ember-glint.json
+PASS ASSERT_RELEASE_REAL_EXTERNAL_PROVIDER_QUALIFICATION: qualification/retained/external-provider/ember-glint.json contains "installation_kind": "independent-external-package"
+PASS ASSERT_RELEASE_EXTERNAL_PROVIDER_REAL_PATH: qualification/retained/external-provider/ember-glint.json contains "provider_path_kind": "absolute-external"
+PASS ASSERT_RELEASE_EXTERNAL_PROVIDER_GRAPH_V4: qualification/retained/external-provider/ember-glint.json contains "schema_version": "lsp-trace.external-provider-production-qualification.v1"
+PASS ASSERT_RELEASE_EXTERNAL_PROVIDER_PASS: qualification/retained/external-provider/ember-glint.json contains "outcome": "PASS"
+PASS ASSERT_RELEASE_REQUIRES_RETAINED_EXTERNAL_MCP_QUALIFICATION: qualification/retained/external-provider/ember-glint-mcp.json
+PASS ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_TRANSPORT: qualification/retained/external-provider/ember-glint-mcp.json contains "transport": "real-lsp-trace-mcp-stdio"
+PASS ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_GRAPH_V4: qualification/retained/external-provider/ember-glint-mcp.json contains "schema_version": "lsp-trace.graph.v4"
+PASS ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_BINDS_ARGUMENT: qualification/retained/external-provider/ember-glint-mcp.json contains "kind": "BINDS_ARGUMENT"
+PASS ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_REPLAY: qualification/retained/external-provider/ember-glint-mcp.json contains "deterministic_replay": true
+PASS ASSERT_RELEASE_CORE_ARCHIVE_IDS: .goreleaser.yaml contains ids: [lsp-trace, lsp-trace-mcp]
+--- FAIL: TestExternalProviderQualifierRejectsRepositorySymlink (0.48s)
+    production_release_policy_test.go:30: ASSERT_EXTERNAL_PROVIDER_REAL_TARGET_PATH: err=exit status 1 output=PASS ASSERT_EXTERNAL_PROVIDER_ABSOLUTE_PATH: /private/tmp/adr0011-c07-c12-vet-cleanup-jnq6OQ/providers/ember-glint/bin/ember-glint.mjs
+        PASS ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH: independently installed executable
+        === RUN   TestProductionExternalProviderCompletesManagedLifecycle
+            external_provider_production_test.go:62: ASSERT_EXTERNAL_PROVIDER_PRODUCTION_LIFECYCLE: subprocess failure=&{ABNORMAL_EXIT provider exited abnormally exit status 1} replay_failure=&{ABNORMAL_EXIT provider exited abnormally exit status 1} deterministic=true stderr="node:internal/modules/package_json_reader:301\n  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);\n        ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find package '@glint/core' imported from /private/tmp/adr0011-c07-c12-vet-cleanup-jnq6OQ/providers/ember-glint/default-analyzer.mjs\n    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)\n    at packageResolve (node:internal/modules/esm/resolve:784:25)\n    at moduleResolve (node:internal/modules/esm/resolve:873:18)\n    at defaultResolve (node:internal/modules/esm/resolve:1006:11)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:704:20)\n    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:724:38)\n    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:762:56)\n    at #resolve (node:internal/modules/esm/loader:686:17)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:606:35)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:164:33) {\n  code: 'ERR_MODULE_NOT_FOUND'\n}\n\nNode.js v26.4.0\n"
+        --- FAIL: TestProductionExternalProviderCompletesManagedLifecycle (0.07s)
+        FAIL
+        FAIL	lsp-trace/internal/provider	0.323s
+        FAIL
+FAIL
+FAIL	lsp-trace/internal/qualificationpolicy	0.768s
+FAIL
+FAIL R-EXTERNAL-PROVIDER-QUALIFICATION-AUTHENTICITY: retained response or real-path policy failed

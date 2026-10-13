@@ -1,0 +1,5 @@
+command=go test ./internal/integratedconformance -run \^TestADR0007OwnershipRejectsAdjacentPaths\$ -count=1 -v 
+started_utc=2026-10-12T23:57:43Z
+finished_utc=2026-10-12T23:57:44Z
+elapsed_ns=480818667
+exit_code=0
