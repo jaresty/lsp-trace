@@ -1,0 +1,19 @@
+ADR0011 outgoing production structural census v1
+head=4b910fc0c517cb7801fb51d17d295897230d11fa
+status=RESOLVED_AT_HEAD
+entry_file=cmd/lsp-trace-mcp/trace_executor.go
+entry_type=traceExecutor
+entry_function=(*traceExecutor).Execute lines 92-178
+entry_interfaces=traceRuntime(acquisitionorchestration.Runtime); documentRuntime.PrepareDocument
+entry_dispatch=acquisitionorchestration.ExecuteExplicitTracePrepared or ExecuteExplicitTrace
+traversal_file=internal/slicer/discover.go
+traversal_interface=slicer.Client {SupportsDocumentSymbols; DocumentSymbols; PrepareCallHierarchy; OutgoingCalls}
+traversal_functions=slicer.DiscoverPrepared lines 103-109; slicer.Discover lines 111-339
+outgoing_effect_site=internal/slicer/discover.go:214 client.OutgoingCalls(ctx,q.item)
+owner=internal/slicer.Discover owns BFS queue, expanded set, outgoing result validation, ranges, nodes, edges, terminals, diagnostics, completeness and truncation; SessionClient/managed runtime owns wire transaction
+production_tests=cmd/lsp-trace-mcp/trace_executor_test.go; internal/slicer/discover_test.go; sliceops/provenance_wire_test.go; sliceops/retained_calls_wire_test.go
+minimal_future_write_set=cmd/lsp-trace-mcp/trace_executor.go (private qualification plumbing only); internal/slicer/discover.go (outgoing-only immutable transfer/ledger); cmd/lsp-trace-mcp/trace_executor_test.go; internal/slicer/discover_test.go; sliceops/provenance_wire_test.go (real path parity/custody). retained_calls_wire_test.go is verification-only unless a failing causal assertion proves it must change.
+forbidden=incomingops/executor.go; public input/schema/registry/config/CLI/MCP changes; shared incoming/outgoing semantic types
+source_sha256=trace_executor.go:52b1ae3217877c1c1d6db00fab796b17d940bd6a9f823dec6e15c4fe47e40455;discover.go:ccd35ac3e9984cb20c753f67623997c7c528158ec2aeb36f06a11ef9f2e4781c
+structural_basis=nn ast exact declarations plus exact source windows; server-reported CALLS completeness remains unknown and is not claimed
+architecture_blocker_structural_census=RESOLVED
