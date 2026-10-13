@@ -1,0 +1,163 @@
+PRODUCTION_SPLICE_COMPILE_ONLY
+MECHANICALLY_DERIVED_REVERSE_DEPENDENT_CLOSURE
+ALL_PACKAGE_ATTEMPT_BASELINE_DOCUMENTATION_FAILURE_OBSERVED
+CLOSURE lsp-trace/acquisitionops
+CLOSURE lsp-trace/cmd/fake-lsp
+CLOSURE lsp-trace/cmd/lsp-trace
+CLOSURE lsp-trace/cmd/lsp-trace-mcp
+CLOSURE lsp-trace/docs/qualification/adr0007-lsp-trace
+CLOSURE lsp-trace/incomingops
+CLOSURE lsp-trace/internal/acquisition/sessionclient
+CLOSURE lsp-trace/internal/acquisitionauthority
+CLOSURE lsp-trace/internal/acquisitionengine
+CLOSURE lsp-trace/internal/acquisitionorchestration
+CLOSURE lsp-trace/internal/adr0011acquisition
+CLOSURE lsp-trace/internal/adr0011methodresult
+CLOSURE lsp-trace/internal/adr0011methodtransport
+CLOSURE lsp-trace/internal/adr0011requestkey
+CLOSURE lsp-trace/internal/boundedanalysis
+CLOSURE lsp-trace/internal/boundedmetrics
+CLOSURE lsp-trace/internal/boundedranking
+CLOSURE lsp-trace/internal/candidatepublication
+CLOSURE lsp-trace/internal/captureset
+CLOSURE lsp-trace/internal/capturesetinspection
+CLOSURE lsp-trace/internal/census
+CLOSURE lsp-trace/internal/censusacquisition
+CLOSURE lsp-trace/internal/censuscontinuation
+CLOSURE lsp-trace/internal/censusprogramc
+CLOSURE lsp-trace/internal/censusresult
+CLOSURE lsp-trace/internal/communityregister
+CLOSURE lsp-trace/internal/continuationhost
+CLOSURE lsp-trace/internal/describerequest
+CLOSURE lsp-trace/internal/describeworker
+CLOSURE lsp-trace/internal/execution
+CLOSURE lsp-trace/internal/graphprovenance
+CLOSURE lsp-trace/internal/hydratedevidence
+CLOSURE lsp-trace/internal/hydratedinspection
+CLOSURE lsp-trace/internal/liveprojection
+CLOSURE lsp-trace/internal/lspwire
+CLOSURE lsp-trace/internal/mcp
+CLOSURE lsp-trace/internal/mcpcontract
+CLOSURE lsp-trace/internal/operation
+CLOSURE lsp-trace/internal/passageverification
+CLOSURE lsp-trace/internal/presentation
+CLOSURE lsp-trace/internal/programc
+CLOSURE lsp-trace/internal/programcadmission
+CLOSURE lsp-trace/internal/programccompose
+CLOSURE lsp-trace/internal/programcpresentation
+CLOSURE lsp-trace/internal/programcrepresentative
+CLOSURE lsp-trace/internal/programctestfixture
+CLOSURE lsp-trace/internal/projectionfailure
+CLOSURE lsp-trace/internal/provisionalfeaturecatalog
+CLOSURE lsp-trace/internal/referencegrouping
+CLOSURE lsp-trace/internal/requestlifecycle
+CLOSURE lsp-trace/internal/retainedcalls
+CLOSURE lsp-trace/internal/retainedinspection
+CLOSURE lsp-trace/internal/retainedmanifest
+CLOSURE lsp-trace/internal/retainedoperation
+CLOSURE lsp-trace/internal/retainedprojection
+CLOSURE lsp-trace/internal/retainedprojectiontestfixture
+CLOSURE lsp-trace/internal/retainedrelations
+CLOSURE lsp-trace/internal/retainedreplay
+CLOSURE lsp-trace/internal/retainedresolver
+CLOSURE lsp-trace/internal/seedformat
+CLOSURE lsp-trace/internal/sourceprojection
+CLOSURE lsp-trace/internal/sourceprojectionv2
+CLOSURE lsp-trace/internal/sourceprojectionv3
+CLOSURE lsp-trace/internal/targetpacket
+CLOSURE lsp-trace/internal/transientstructural
+CLOSURE lsp-trace/internal/transientstructuraldelta
+CLOSURE lsp-trace/internal/transientstructuralresult
+CLOSURE lsp-trace/internal/v5sourcesnapshot
+CLOSURE lsp-trace/internal/v5sourcesnapshotv2
+CLOSURE lsp-trace/internal/v5sourcesnapshotv3
+CLOSURE lsp-trace/internal/v5sourcesnapshotv4
+CLOSURE lsp-trace/internal/v5sourcesnapshotv5
+CLOSURE lsp-trace/internal/v5sourcesnapshotv6
+CLOSURE lsp-trace/internal/vcssidecar
+CLOSURE lsp-trace/lifecycleops
+CLOSURE lsp-trace/sessionruntime
+CLOSURE lsp-trace/sliceops
+CLOSURE lsp-trace/structuralcontextsymbolops
+$ go test -run ^$ lsp-trace/acquisitionops lsp-trace/cmd/fake-lsp lsp-trace/cmd/lsp-trace lsp-trace/cmd/lsp-trace-mcp lsp-trace/docs/qualification/adr0007-lsp-trace lsp-trace/incomingops lsp-trace/internal/acquisition/sessionclient lsp-trace/internal/acquisitionauthority lsp-trace/internal/acquisitionengine lsp-trace/internal/acquisitionorchestration lsp-trace/internal/adr0011acquisition lsp-trace/internal/adr0011methodresult lsp-trace/internal/adr0011methodtransport lsp-trace/internal/adr0011requestkey lsp-trace/internal/boundedanalysis lsp-trace/internal/boundedmetrics lsp-trace/internal/boundedranking lsp-trace/internal/candidatepublication lsp-trace/internal/captureset lsp-trace/internal/capturesetinspection lsp-trace/internal/census lsp-trace/internal/censusacquisition lsp-trace/internal/censuscontinuation lsp-trace/internal/censusprogramc lsp-trace/internal/censusresult lsp-trace/internal/communityregister lsp-trace/internal/continuationhost lsp-trace/internal/describerequest lsp-trace/internal/describeworker lsp-trace/internal/execution lsp-trace/internal/graphprovenance lsp-trace/internal/hydratedevidence lsp-trace/internal/hydratedinspection lsp-trace/internal/liveprojection lsp-trace/internal/lspwire lsp-trace/internal/mcp lsp-trace/internal/mcpcontract lsp-trace/internal/operation lsp-trace/internal/passageverification lsp-trace/internal/presentation lsp-trace/internal/programc lsp-trace/internal/programcadmission lsp-trace/internal/programccompose lsp-trace/internal/programcpresentation lsp-trace/internal/programcrepresentative lsp-trace/internal/programctestfixture lsp-trace/internal/projectionfailure lsp-trace/internal/provisionalfeaturecatalog lsp-trace/internal/referencegrouping lsp-trace/internal/requestlifecycle lsp-trace/internal/retainedcalls lsp-trace/internal/retainedinspection lsp-trace/internal/retainedmanifest lsp-trace/internal/retainedoperation lsp-trace/internal/retainedprojection lsp-trace/internal/retainedprojectiontestfixture lsp-trace/internal/retainedrelations lsp-trace/internal/retainedreplay lsp-trace/internal/retainedresolver lsp-trace/internal/seedformat lsp-trace/internal/sourceprojection lsp-trace/internal/sourceprojectionv2 lsp-trace/internal/sourceprojectionv3 lsp-trace/internal/targetpacket lsp-trace/internal/transientstructural lsp-trace/internal/transientstructuraldelta lsp-trace/internal/transientstructuralresult lsp-trace/internal/v5sourcesnapshot lsp-trace/internal/v5sourcesnapshotv2 lsp-trace/internal/v5sourcesnapshotv3 lsp-trace/internal/v5sourcesnapshotv4 lsp-trace/internal/v5sourcesnapshotv5 lsp-trace/internal/v5sourcesnapshotv6 lsp-trace/internal/vcssidecar lsp-trace/lifecycleops lsp-trace/sessionruntime lsp-trace/sliceops lsp-trace/structuralcontextsymbolops
+ok  	lsp-trace/acquisitionops	0.293s [no tests to run]
+ok  	lsp-trace/cmd/fake-lsp	0.486s [no tests to run]
+ok  	lsp-trace/cmd/lsp-trace	0.300s [no tests to run]
+ok  	lsp-trace/cmd/lsp-trace-mcp	0.571s [no tests to run]
+?   	lsp-trace/docs/qualification/adr0007-lsp-trace	[no test files]
+ok  	lsp-trace/incomingops	1.818s [no tests to run]
+ok  	lsp-trace/internal/acquisition/sessionclient	2.023s [no tests to run]
+ok  	lsp-trace/internal/acquisitionauthority	0.769s [no tests to run]
+ok  	lsp-trace/internal/acquisitionengine	2.630s [no tests to run]
+ok  	lsp-trace/internal/acquisitionorchestration	2.432s [no tests to run]
+ok  	lsp-trace/internal/adr0011acquisition	3.487s [no tests to run]
+ok  	lsp-trace/internal/adr0011methodresult	3.260s [no tests to run]
+ok  	lsp-trace/internal/adr0011methodtransport	3.026s [no tests to run]
+ok  	lsp-trace/internal/adr0011requestkey	2.813s [no tests to run]
+ok  	lsp-trace/internal/boundedanalysis	2.235s [no tests to run]
+ok  	lsp-trace/internal/boundedmetrics	1.176s [no tests to run]
+ok  	lsp-trace/internal/boundedranking	0.972s [no tests to run]
+ok  	lsp-trace/internal/candidatepublication	1.385s [no tests to run]
+ok  	lsp-trace/internal/captureset	1.595s [no tests to run]
+ok  	lsp-trace/internal/capturesetinspection	3.583s [no tests to run]
+ok  	lsp-trace/internal/census	3.759s [no tests to run]
+ok  	lsp-trace/internal/censusacquisition	3.964s [no tests to run]
+ok  	lsp-trace/internal/censuscontinuation	3.911s [no tests to run]
+ok  	lsp-trace/internal/censusprogramc	3.920s [no tests to run]
+ok  	lsp-trace/internal/censusresult	3.926s [no tests to run]
+ok  	lsp-trace/internal/communityregister	3.930s [no tests to run]
+ok  	lsp-trace/internal/continuationhost	3.931s [no tests to run]
+ok  	lsp-trace/internal/describerequest	3.917s [no tests to run]
+ok  	lsp-trace/internal/describeworker	3.906s [no tests to run]
+ok  	lsp-trace/internal/execution	3.905s [no tests to run]
+ok  	lsp-trace/internal/graphprovenance	3.891s [no tests to run]
+ok  	lsp-trace/internal/hydratedevidence	3.902s [no tests to run]
+ok  	lsp-trace/internal/hydratedinspection	3.908s [no tests to run]
+ok  	lsp-trace/internal/liveprojection	3.944s [no tests to run]
+ok  	lsp-trace/internal/lspwire	3.923s [no tests to run]
+ok  	lsp-trace/internal/mcp	3.922s [no tests to run]
+ok  	lsp-trace/internal/mcpcontract	3.916s [no tests to run]
+ok  	lsp-trace/internal/operation	3.939s [no tests to run]
+ok  	lsp-trace/internal/passageverification	3.946s [no tests to run]
+ok  	lsp-trace/internal/presentation	3.782s [no tests to run]
+ok  	lsp-trace/internal/programc	3.781s [no tests to run]
+ok  	lsp-trace/internal/programcadmission	3.780s [no tests to run]
+ok  	lsp-trace/internal/programccompose	3.789s [no tests to run]
+ok  	lsp-trace/internal/programcpresentation	3.792s [no tests to run]
+ok  	lsp-trace/internal/programcrepresentative	3.821s [no tests to run]
+?   	lsp-trace/internal/programctestfixture	[no test files]
+ok  	lsp-trace/internal/projectionfailure	3.812s [no tests to run]
+ok  	lsp-trace/internal/provisionalfeaturecatalog	3.819s [no tests to run]
+ok  	lsp-trace/internal/referencegrouping	3.831s [no tests to run]
+ok  	lsp-trace/internal/requestlifecycle	3.835s [no tests to run]
+ok  	lsp-trace/internal/retainedcalls	3.842s [no tests to run]
+ok  	lsp-trace/internal/retainedinspection	3.833s [no tests to run]
+ok  	lsp-trace/internal/retainedmanifest	3.822s [no tests to run]
+ok  	lsp-trace/internal/retainedoperation	3.846s [no tests to run]
+ok  	lsp-trace/internal/retainedprojection	3.826s [no tests to run]
+?   	lsp-trace/internal/retainedprojectiontestfixture	[no test files]
+ok  	lsp-trace/internal/retainedrelations	3.796s [no tests to run]
+ok  	lsp-trace/internal/retainedreplay	3.774s [no tests to run]
+ok  	lsp-trace/internal/retainedresolver	3.776s [no tests to run]
+ok  	lsp-trace/internal/seedformat	3.785s [no tests to run]
+ok  	lsp-trace/internal/sourceprojection	3.777s [no tests to run]
+ok  	lsp-trace/internal/sourceprojectionv2	3.768s [no tests to run]
+ok  	lsp-trace/internal/sourceprojectionv3	3.746s [no tests to run]
+ok  	lsp-trace/internal/targetpacket	3.741s [no tests to run]
+ok  	lsp-trace/internal/transientstructural	3.711s [no tests to run]
+ok  	lsp-trace/internal/transientstructuraldelta	3.729s [no tests to run]
+ok  	lsp-trace/internal/transientstructuralresult	3.728s [no tests to run]
+?   	lsp-trace/internal/v5sourcesnapshot	[no test files]
+ok  	lsp-trace/internal/v5sourcesnapshotv2	3.712s [no tests to run]
+ok  	lsp-trace/internal/v5sourcesnapshotv3	3.720s [no tests to run]
+ok  	lsp-trace/internal/v5sourcesnapshotv4	3.716s [no tests to run]
+ok  	lsp-trace/internal/v5sourcesnapshotv5	3.875s [no tests to run]
+ok  	lsp-trace/internal/v5sourcesnapshotv6	3.881s [no tests to run]
+ok  	lsp-trace/internal/vcssidecar	3.864s [no tests to run]
+ok  	lsp-trace/lifecycleops	3.866s [no tests to run]
+ok  	lsp-trace/sessionruntime	3.898s [no tests to run]
+ok  	lsp-trace/sliceops	3.942s [no tests to run]
+ok  	lsp-trace/structuralcontextsymbolops	3.936s [no tests to run]
+
+$ go vet ./sessionruntime ./internal/lspwire
+
