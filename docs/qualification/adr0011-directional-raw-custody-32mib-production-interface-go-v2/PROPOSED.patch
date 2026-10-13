@@ -1,0 +1,434 @@
+diff --git a/sessionruntime/b4_explicit_bytes_c15_private.go b/sessionruntime/b4_explicit_bytes_c15_private.go
+index 05018649..31f8d3be 100644
+--- a/sessionruntime/b4_explicit_bytes_c15_private.go
++++ b/sessionruntime/b4_explicit_bytes_c15_private.go
+@@ -132,6 +132,7 @@ type privateB4ByteAccountV2 struct {
+ 	c15BackingSiteID   string
+ 	c15Leases          map[privateB4ByteLease]privateB4C15LeaseState
+ 	c15ZeroLeases      []privateB4C15LeaseState
++	directional        privateB4DirectionalPartitionV1
+ }
+ 
+ type privateB4ByteLeaseV2 struct {
+diff --git a/sessionruntime/b4_owned_method_pair_lease.go b/sessionruntime/b4_owned_method_pair_lease.go
+index 858172a5..58e1eca6 100644
+--- a/sessionruntime/b4_owned_method_pair_lease.go
++++ b/sessionruntime/b4_owned_method_pair_lease.go
+@@ -498,6 +498,7 @@ type callHierarchyLayer1GenericOwner struct {
+ 	mu                                        sync.Mutex
+ 	cond                                      sync.Cond
+ 	observation                               callHierarchyLayer1GenericObservation
++	directionalRawV1                          *privateCallHierarchyDirectionalTerminalV1
+ 	active                                    uint32
+ 	admissionClosed, releaseStarted, released bool
+ }
+@@ -591,8 +592,8 @@ func copyGenericObservation(o callHierarchyLayer1GenericObservation) callHierarc
+ 	o.result.bytes = append(json.RawMessage(nil), o.result.bytes...)
+ 	return o
+ }
+-func newCallHierarchyLayer1GenericOwner(observation callHierarchyLayer1GenericObservation) *callHierarchyLayer1GenericOwner {
+-	o := &callHierarchyLayer1GenericOwner{observation: copyGenericObservation(observation)}
++func newCallHierarchyLayer1GenericOwner(observation callHierarchyLayer1GenericObservation, directional *privateCallHierarchyDirectionalTerminalV1) *callHierarchyLayer1GenericOwner {
++	o := &callHierarchyLayer1GenericOwner{observation: copyGenericObservation(observation), directionalRawV1: directional}
+ 	o.cond.L = &o.mu
+ 	return o
+ }
+@@ -656,6 +657,10 @@ func (o *callHierarchyLayer1GenericOwner) releaseLocked() bool {
+ 		return false
+ 	}
+ 	o.releaseStarted = true
++	if o.directionalRawV1 != nil {
++		o.directionalRawV1.releaseLocked()
++		o.directionalRawV1 = nil
++	}
+ 	o.observation = callHierarchyLayer1GenericObservation{}
+ 	o.released = true
+ 	o.cond.Broadcast()
+@@ -824,8 +829,8 @@ func (m *Manager) finishCallHierarchyLayer1GenericRefusal(a *callHierarchyLayer1
+ 	a.recordRefusal(kind, reason)
+ 	zero := genericMeasure(0, true)
+ 	a.before.ledger = callHierarchyTransportEffectLedger{callbacks: callHierarchyMeasuredDelta{before: zero, after: zero}, externalBytes: callHierarchyMeasuredDelta{before: zero, after: zero}, leases: callHierarchyMeasuredDelta{before: zero, after: zero}, reservations: callHierarchyMeasuredDelta{before: zero, after: zero}, transportBytes: callHierarchyMeasuredDelta{before: zero, after: zero}, transportMessages: callHierarchyMeasuredDelta{before: zero, after: zero}}
+-	o := newCallHierarchyLayer1GenericOwner(a.finishAccepted(result, result.Failure, "", callHierarchyLayer1GenericAfterSnapshot{ledger: a.before.ledger}))
+ 	m.mu.Lock()
++	o := newCallHierarchyLayer1GenericOwner(a.finishAccepted(result, result.Failure, "", callHierarchyLayer1GenericAfterSnapshot{ledger: a.before.ledger}), m.newDirectionalTerminalV1Locked())
+ 	result, terminal := m.publishCallHierarchyLayer1GenericOwnerLocked(result, o)
+ 	m.mu.Unlock()
+ 	if terminal != nil {
+diff --git a/sessionruntime/call_hierarchy_directional_raw_v1_private.go b/sessionruntime/call_hierarchy_directional_raw_v1_private.go
+new file mode 100644
+index 00000000..e8b15ffa
+--- /dev/null
++++ b/sessionruntime/call_hierarchy_directional_raw_v1_private.go
+@@ -0,0 +1,328 @@
++package sessionruntime
++
++import (
++	"lsp-trace/internal/session"
++	"math"
++)
++
++const (
++	privateCallHierarchyDirectionalMaxBytesV1 uint64 = 32 << 20
++	privateCallHierarchyCombinedMaxBytesV1    uint64 = 64 << 20
++)
++
++type privateB4PartitionIDV1 uint8
++
++const (
++	privateB4PartitionGeneralC15V2 privateB4PartitionIDV1 = iota + 1
++	privateB4PartitionDirectionalRawV1
++)
++
++type privateB4DirectionalPartitionV1 struct {
++	live       uint64
++	cumulative uint64
++	generation uint64
++	holder     uint64
++	occupied   bool
++}
++
++type privateB4DirectionalLeaseV1 struct {
++	account    *privateB4ByteAccountV2
++	partition  privateB4PartitionIDV1
++	generation uint64
++	holder     uint64
++	capacity   uint64
++	active     bool
++}
++
++type privateCallHierarchyDirectionalLedgerV1 struct {
++	account  *privateB4ByteAccountV2
++	attempts map[privateCallHierarchyDirectionalAttemptIDV1]*privateCallHierarchyDirectionalAttemptV1
++	sequence uint64
++}
++type privateCallHierarchyDirectionalAttemptIDV1 struct{ Sequence uint64 }
++type privateCallHierarchyDirectionalAttemptV1 struct {
++	account  *privateB4ByteAccountV2
++	leases   []privateB4DirectionalLeaseV1
++	terminal bool
++}
++type privateCallHierarchyDirectionalTerminalV1 struct {
++	attempt *privateCallHierarchyDirectionalAttemptV1
++}
++
++func (a *privateB4ByteAccountV2) reserveDirectionalV1(capacity uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	if a == nil || capacity == 0 {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	a.mu.Lock()
++	defer a.mu.Unlock()
++	d := &a.directional
++	general := a.table.general.live
++	if a.terminalRequested || a.backingReleased || d.occupied || d.generation == math.MaxUint64 {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	if capacity > privateCallHierarchyDirectionalMaxBytesV1 {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	if general > privateB4MaxOwnedBytes || general > math.MaxUint64-capacity || general+capacity > privateCallHierarchyCombinedMaxBytesV1 {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	if d.cumulative > math.MaxUint64-capacity {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	d.generation++
++	d.holder = d.generation
++	d.live = capacity
++	d.cumulative += capacity
++	d.occupied = true
++	return privateB4DirectionalLeaseV1{account: a, partition: privateB4PartitionDirectionalRawV1, generation: d.generation, holder: d.holder, capacity: capacity, active: true}, ""
++}
++func (l privateB4DirectionalLeaseV1) alias() privateB4DirectionalLeaseV1 {
++	if l.account == nil || l.partition != privateB4PartitionDirectionalRawV1 || !l.active {
++		return privateB4DirectionalLeaseV1{}
++	}
++	l.account.mu.Lock()
++	defer l.account.mu.Unlock()
++	d := &l.account.directional
++	if !d.occupied || d.generation != l.generation || d.holder != l.holder || d.live != l.capacity {
++		return privateB4DirectionalLeaseV1{}
++	}
++	return l
++}
++func transferDirectionalV1(source *privateB4DirectionalLeaseV1, destination privateB4PartitionIDV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	if source == nil || source.account == nil || source.partition != privateB4PartitionDirectionalRawV1 || destination != source.partition || !source.active {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	a := source.account
++	a.mu.Lock()
++	defer a.mu.Unlock()
++	d := &a.directional
++	if !d.occupied || d.generation != source.generation || d.holder != source.holder || d.live != source.capacity || d.holder == math.MaxUint64 {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	d.holder++
++	out := *source
++	out.holder = d.holder
++	source.active = false
++	return out, ""
++}
++func (l *privateB4DirectionalLeaseV1) release() bool {
++	if l == nil || l.account == nil || l.partition != privateB4PartitionDirectionalRawV1 || !l.active {
++		return false
++	}
++	a := l.account
++	a.mu.Lock()
++	defer a.mu.Unlock()
++	d := &a.directional
++	if !d.occupied || d.generation != l.generation || d.holder != l.holder || d.live != l.capacity {
++		l.active = false
++		return false
++	}
++	d.live = 0
++	d.occupied = false
++	l.active = false
++	return true
++}
++func releaseDirectionalGenerationV1(l *privateB4DirectionalLeaseV1) bool {
++	if l == nil || l.account == nil || l.partition != privateB4PartitionDirectionalRawV1 {
++		return false
++	}
++	a := l.account
++	a.mu.Lock()
++	defer a.mu.Unlock()
++	d := &a.directional
++	if !d.occupied || d.generation != l.generation || d.live != l.capacity {
++		l.active = false
++		return false
++	}
++	d.live = 0
++	d.occupied = false
++	l.active = false
++	return true
++}
++func (t *privateCallHierarchyDirectionalTerminalV1) releaseLocked() {
++	if t == nil || t.attempt == nil || t.attempt.terminal {
++		return
++	}
++	t.attempt.terminal = true
++	for i := range t.attempt.leases {
++		releaseDirectionalGenerationV1(&t.attempt.leases[i])
++		t.attempt.leases[i] = privateB4DirectionalLeaseV1{}
++	}
++	t.attempt.leases = nil
++}
++func (m *Manager) newDirectionalTerminalV1Locked() *privateCallHierarchyDirectionalTerminalV1 {
++	ledger := &m.directionalRawV1
++	for id, attempt := range ledger.attempts {
++		if attempt.terminal {
++			delete(ledger.attempts, id)
++		}
++	}
++	ledger.sequence++
++	attempt := &privateCallHierarchyDirectionalAttemptV1{account: ledger.account}
++	ledger.attempts[privateCallHierarchyDirectionalAttemptIDV1{Sequence: ledger.sequence}] = attempt
++	return &privateCallHierarchyDirectionalTerminalV1{attempt: attempt}
++}
++func reserveDirectionalComponentV1(a *privateCallHierarchyDirectionalAttemptV1, n uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	if a == nil || a.account == nil || a.terminal || len(a.leases) != 0 {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	lease, failure := a.account.reserveDirectionalV1(n)
++	if failure == "" {
++		a.leases = append(a.leases, lease)
++	}
++	return lease, failure
++}
++func copyDirectionalComponentV1(l privateB4DirectionalLeaseV1, source []byte) ([]byte, privateB4DirectionalLeaseV1, session.Failure) {
++	if uint64(len(source)) > l.capacity || !l.alias().active {
++		return nil, privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	return append([]byte(nil), source...), l, ""
++}
++func aliasDirectionalComponentV1(l privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	a := l.alias()
++	if !a.active {
++		return privateB4DirectionalLeaseV1{}, session.ResourceExhausted
++	}
++	return a, ""
++}
++func releaseDirectionalTerminalCoreV1(l *privateB4DirectionalLeaseV1) bool { return l.release() }
++
++// 299523ae8df6878b9e9100746c96dbaa22ab11e437c3629e4ecac8f277a2bd8e PLANNED_RESERVATION
++const privateStageAReserveDirectionalPrepareFrameV1 = "299523ae8df6878b9e9100746c96dbaa22ab11e437c3629e4ecac8f277a2bd8e"
++
++func reserveDirectionalPrepareFrameV1(a *privateCallHierarchyDirectionalAttemptV1, n uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	return reserveDirectionalComponentV1(a, n)
++}
++
++// 51590290aea507a4972547c0923647c52d1c657fdecdfbb3aa6244ba5a417347 PLANNED_COPY
++const privateStageACopyDirectionalPrepareFrameV1 = "51590290aea507a4972547c0923647c52d1c657fdecdfbb3aa6244ba5a417347"
++
++func copyDirectionalPrepareFrameV1(l privateB4DirectionalLeaseV1, b []byte) ([]byte, privateB4DirectionalLeaseV1, session.Failure) {
++	return copyDirectionalComponentV1(l, b)
++}
++
++// 055df35ed225ff329f21bd094f0c1f2c172848bb7c2ff772a93c8fbd6386521b PLANNED_ALIAS
++const privateStageAAliasDirectionalPrepareFrameV1 = "055df35ed225ff329f21bd094f0c1f2c172848bb7c2ff772a93c8fbd6386521b"
++
++func aliasDirectionalPrepareFrameV1(l privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	return aliasDirectionalComponentV1(l)
++}
++
++// 2087074f6c253c7566e94420b67919d0f1cf032a01cdd79ca73345159fc38506 PLANNED_RESERVATION
++const privateStageAReserveDirectionalPrepareResultV1 = "2087074f6c253c7566e94420b67919d0f1cf032a01cdd79ca73345159fc38506"
++
++func reserveDirectionalPrepareResultV1(a *privateCallHierarchyDirectionalAttemptV1, n uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	return reserveDirectionalComponentV1(a, n)
++}
++
++// ddbbfd7184803b94919684bb5762ef16309986b1d5b091d650c1e05a9b578779 PLANNED_COPY
++const privateStageACopyDirectionalPrepareResultV1 = "ddbbfd7184803b94919684bb5762ef16309986b1d5b091d650c1e05a9b578779"
++
++func copyDirectionalPrepareResultV1(l privateB4DirectionalLeaseV1, b []byte) ([]byte, privateB4DirectionalLeaseV1, session.Failure) {
++	return copyDirectionalComponentV1(l, b)
++}
++
++// 7069d8601cb76101ee1a2c7886f223d0a6119e74b76891d3dd49f35117cb0736 PLANNED_ALIAS
++const privateStageAAliasDirectionalPrepareResultV1 = "7069d8601cb76101ee1a2c7886f223d0a6119e74b76891d3dd49f35117cb0736"
++
++func aliasDirectionalPrepareResultV1(l privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	return aliasDirectionalComponentV1(l)
++}
++
++// 480446a4372c7fb04f694840320ffdf3ee29da89e9c4e6423ac261916068ca5b PLANNED_RESERVATION
++const privateStageAReserveDirectionalSelectedHandoffV1 = "480446a4372c7fb04f694840320ffdf3ee29da89e9c4e6423ac261916068ca5b"
++
++func reserveDirectionalSelectedHandoffV1(a *privateCallHierarchyDirectionalAttemptV1, n uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	return reserveDirectionalComponentV1(a, n)
++}
++
++// 2c914f9c29b62ddd6c32e2dc7a2e6008ece26d7c1bca3f26e2ceb761e02e77b2 PLANNED_COPY
++const privateStageACopyDirectionalSelectedHandoffV1 = "2c914f9c29b62ddd6c32e2dc7a2e6008ece26d7c1bca3f26e2ceb761e02e77b2"
++
++func copyDirectionalSelectedHandoffV1(l privateB4DirectionalLeaseV1, b []byte) ([]byte, privateB4DirectionalLeaseV1, session.Failure) {
++	return copyDirectionalComponentV1(l, b)
++}
++
++// b1bf63296afd47f73f2be7e8a9c70db37f0ce77677b5ddf38a8b3a15fcba77d3 PLANNED_ALIAS
++const privateStageAAliasDirectionalSelectedHandoffV1 = "b1bf63296afd47f73f2be7e8a9c70db37f0ce77677b5ddf38a8b3a15fcba77d3"
++
++func aliasDirectionalSelectedHandoffV1(l privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	return aliasDirectionalComponentV1(l)
++}
++
++// a3ec11a555246160475c5519e29735fc4f86ce88eeef053bd0f97c88e4221102 PLANNED_RESERVATION
++const privateStageAReserveDirectionalDirectionalFrameV1 = "a3ec11a555246160475c5519e29735fc4f86ce88eeef053bd0f97c88e4221102"
++
++func reserveDirectionalDirectionalFrameV1(a *privateCallHierarchyDirectionalAttemptV1, n uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	return reserveDirectionalComponentV1(a, n)
++}
++
++// 645cf06e35e54bc3fe5a827bc0f6a4156c2b23e5739d70d2b012c5c1884ae894 PLANNED_COPY
++const privateStageACopyDirectionalDirectionalFrameV1 = "645cf06e35e54bc3fe5a827bc0f6a4156c2b23e5739d70d2b012c5c1884ae894"
++
++func copyDirectionalDirectionalFrameV1(l privateB4DirectionalLeaseV1, b []byte) ([]byte, privateB4DirectionalLeaseV1, session.Failure) {
++	return copyDirectionalComponentV1(l, b)
++}
++
++// c2d3d4696cd315f18b986c14afd02a5ed642d7a99c2888ae172177a48f5ff1bc PLANNED_ALIAS
++const privateStageAAliasDirectionalDirectionalFrameV1 = "c2d3d4696cd315f18b986c14afd02a5ed642d7a99c2888ae172177a48f5ff1bc"
++
++func aliasDirectionalDirectionalFrameV1(l privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	return aliasDirectionalComponentV1(l)
++}
++
++// d3ed276e5de20a331b277b63638f7bc5ef05a45c9366a06ece882bb90502ac20 PLANNED_RESERVATION
++const privateStageAReserveDirectionalDirectionalResultV1 = "d3ed276e5de20a331b277b63638f7bc5ef05a45c9366a06ece882bb90502ac20"
++
++func reserveDirectionalDirectionalResultV1(a *privateCallHierarchyDirectionalAttemptV1, n uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	return reserveDirectionalComponentV1(a, n)
++}
++
++// b3846db09b2b683ea536a8d6ddcdf3c5ff7408b0c4f6e0097656a4f7a2e16800 PLANNED_COPY
++const privateStageACopyDirectionalDirectionalResultV1 = "b3846db09b2b683ea536a8d6ddcdf3c5ff7408b0c4f6e0097656a4f7a2e16800"
++
++func copyDirectionalDirectionalResultV1(l privateB4DirectionalLeaseV1, b []byte) ([]byte, privateB4DirectionalLeaseV1, session.Failure) {
++	return copyDirectionalComponentV1(l, b)
++}
++
++// 7f46d76e8acde79c1eec46102632bd6db557ac394d329b31b68c9697abbd4ea2 PLANNED_ALIAS
++const privateStageAAliasDirectionalDirectionalResultV1 = "7f46d76e8acde79c1eec46102632bd6db557ac394d329b31b68c9697abbd4ea2"
++
++func aliasDirectionalDirectionalResultV1(l privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	return aliasDirectionalComponentV1(l)
++}
++
++// c730d1a3978f99c2de26d634266e05a0909a0d5662eee7e86889f7b7603cb5aa PLANNED_RESERVATION
++const privateStageAReserveDirectionalRetainedExternalEvidenceV1 = "c730d1a3978f99c2de26d634266e05a0909a0d5662eee7e86889f7b7603cb5aa"
++
++func reserveDirectionalRetainedExternalEvidenceV1(a *privateCallHierarchyDirectionalAttemptV1, n uint64) (privateB4DirectionalLeaseV1, session.Failure) {
++	return reserveDirectionalComponentV1(a, n)
++}
++
++// 422d413c63ede254ab3b8004e9cb58aec083b1c470da2b28c92084d378c5a2a5 PLANNED_COPY
++const privateStageACopyDirectionalRetainedExternalEvidenceV1 = "422d413c63ede254ab3b8004e9cb58aec083b1c470da2b28c92084d378c5a2a5"
++
++func copyDirectionalRetainedExternalEvidenceV1(l privateB4DirectionalLeaseV1, b []byte) ([]byte, privateB4DirectionalLeaseV1, session.Failure) {
++	return copyDirectionalComponentV1(l, b)
++}
++
++// 75e32e98aaf21d7ec04d26d13fd202699b4bf6ad466688edb8f70231835a14e7 PLANNED_ALIAS
++const privateStageAAliasDirectionalRetainedExternalEvidenceV1 = "75e32e98aaf21d7ec04d26d13fd202699b4bf6ad466688edb8f70231835a14e7"
++
++func aliasDirectionalRetainedExternalEvidenceV1(l privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	return aliasDirectionalComponentV1(l)
++}
++
++// 00f52d648d11e611a85f4fa643f503746864c5c82e0f317284481a4be9bd7737 PLANNED_TRANSFER
++const privateStageATransferDirectionalAcquisitionV1 = "00f52d648d11e611a85f4fa643f503746864c5c82e0f317284481a4be9bd7737"
++
++func transferDirectionalAcquisitionV1(l *privateB4DirectionalLeaseV1) (privateB4DirectionalLeaseV1, session.Failure) {
++	return transferDirectionalV1(l, privateB4PartitionDirectionalRawV1)
++}
++
++// 1ec36108e922c83c2dcad7426641e323349738253a6ff509e73647a3cc149907 PLANNED_RELEASE
++const privateStageAReleaseDirectionalTerminalV1 = "1ec36108e922c83c2dcad7426641e323349738253a6ff509e73647a3cc149907"
++
++func releaseDirectionalTerminalV1(l *privateB4DirectionalLeaseV1) bool {
++	return releaseDirectionalTerminalCoreV1(l)
++}
+diff --git a/sessionruntime/sessionruntime.go b/sessionruntime/sessionruntime.go
+index 76eada33..d7133c63 100644
+--- a/sessionruntime/sessionruntime.go
++++ b/sessionruntime/sessionruntime.go
+@@ -1498,7 +1498,7 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
+ 	if attempt := result.callHierarchyLayer1GenericAttempt; attempt != nil {
+ 		after := callHierarchyLayer1GenericAfterSnapshot{ledger: result.callHierarchyLayer1.ledger, terminal: callHierarchyTransportTerminalSnapshot{value: string(terminal), available: true}}
+ 		observation := attempt.finishAccepted(result, failure, terminal, after)
+-		result, genericTerminal = m.publishCallHierarchyLayer1GenericOwnerLocked(result, newCallHierarchyLayer1GenericOwner(observation))
++		result, genericTerminal = m.publishCallHierarchyLayer1GenericOwnerLocked(result, newCallHierarchyLayer1GenericOwner(observation, m.newDirectionalTerminalV1Locked()))
+ 	}
+ 	result.callHierarchyLayer1GenericAttempt = nil
+ 	m.workers--
+@@ -1609,6 +1609,7 @@ type Manager struct {
+ 	privateDiagnosticHistory                     *privateDiagnosticHistory
+ 	privateB4C15Contexts                         map[string]privateB4C15ManagerContext
+ 	callHierarchyLayer1GenericOwners             []*callHierarchyLayer1GenericOwner
++	directionalRawV1                             privateCallHierarchyDirectionalLedgerV1
+ 	callHierarchyLayer1GenericRetiredGenerations map[callHierarchyLayer1GenericGenerationKey]struct{}
+ 	cWireObserver                                lspwire.Observer
+ 	cDecodeEntry                                 func()
+@@ -1668,7 +1669,11 @@ func New(c Config) (*Manager, error) {
+ 	if failure != "" {
+ 		return nil, errors.New("sessionruntime: manager diagnostic owner unavailable")
+ 	}
+-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, readinessHistoryRandom: historyRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook, privateB4SourceIngress: sourceIngress, managerDiagnosticOwner: diagnosticOwner, privateDiagnosticHistory: new(privateDiagnosticHistory), cWireObserver: c.cWireObserver, cDecodeEntry: c.cDecodeEntry, cRetainEntry: c.cRetainEntry}, nil
++	directionalAccount, failure := newPrivateB4ByteAccountV2()
++	if failure != "" {
++		return nil, errors.New("sessionruntime: directional raw account unavailable")
++	}
++	return &Manager{directionalRawV1: privateCallHierarchyDirectionalLedgerV1{account: directionalAccount, attempts: make(map[privateCallHierarchyDirectionalAttemptIDV1]*privateCallHierarchyDirectionalAttemptV1)}, limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, readinessHistoryRandom: historyRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook, privateB4SourceIngress: sourceIngress, managerDiagnosticOwner: diagnosticOwner, privateDiagnosticHistory: new(privateDiagnosticHistory), cWireObserver: c.cWireObserver, cDecodeEntry: c.cDecodeEntry, cRetainEntry: c.cRetainEntry}, nil
+ }
+ 
+ const (
+@@ -3081,6 +3086,9 @@ func (m *Manager) Shutdown(ctx context.Context) error {
+ 		genericOwner.requestTerminal()
+ 		genericOwner.waitReleased()
+ 	}
++	if m.directionalRawV1.account != nil {
++		m.directionalRawV1.account.requestTerminalRelease()
++	}
+ 	return nil
+ }
+ 
