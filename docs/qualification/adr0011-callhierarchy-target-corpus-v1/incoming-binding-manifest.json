@@ -1,0 +1,16 @@
+{
+  "schema": "ADR0011_CALLHIERARCHY_TARGET_BINDING_V1",
+  "direction": "INCOMING",
+  "profile": "GO_GOPLS_INCOMING_CALLS_V1",
+  "domain": "CALL_HIERARCHY_INCOMING",
+  "workspace_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+  "corpus_file": "targets.json",
+  "corpus_sha256": "301fdff765cb31a47900c9fc3bf6af8a02d27c91c7e027bfb5e3f3ebabadc16e",
+  "binding_mode": "DIRECT_POSITION",
+  "target_count": 5900,
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "production_admission": "REFUSED_MISSING_EVIDENCE",
+  "provider_evidence_acquired": false
+}

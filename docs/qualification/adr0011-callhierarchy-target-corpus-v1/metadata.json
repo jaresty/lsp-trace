@@ -1,0 +1,24 @@
+{
+  "schema": "ADR0011_CALLHIERARCHY_TARGET_CORPUS_V1",
+  "workspace_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+  "workspace_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+  "inclusion_contract": "all tracked .go paths at pinned tree; exclude docs retained documentation/evidence/pilots, .pi/evidence retained tooling evidence, explicit vendor/testdata path components, *_test.go, and standard generated header; admit every remainder regardless of build constraints",
+  "source_manifest_sha256": "ab8122e23480ab67b8bad9166f4b1c4fc0ab1f3e9758afd2aee72784fcfef178",
+  "targets_json_sha256": "301fdff765cb31a47900c9fc3bf6af8a02d27c91c7e027bfb5e3f3ebabadc16e",
+  "targets_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4",
+  "generator_sha256": "737ab249398664e04edb347a5dbc7bab1bfd4a40834bef76525078424e0d19f7",
+  "counts": {
+    "tracked_go": 1689,
+    "admitted": 653,
+    "excluded_tests": 937,
+    "excluded_testdata": 56,
+    "excluded_vendor": 0,
+    "excluded_generated": 3,
+    "excluded_documentation": 34,
+    "excluded_tooling_evidence": 6,
+    "targets": 5900,
+    "parse_errors": 0,
+    "duplicate_ids": 0,
+    "unaccounted_tracked_go": 0
+  }
+}
