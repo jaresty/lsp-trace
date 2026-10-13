@@ -1,0 +1,466 @@
+package sessionruntime
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"sync"
+)
+
+const (
+	privateCallsLSPIncomingExactV1                              = "CALLS_LSP_INCOMING_EXACT_V1"
+	privateCallsLSPOutgoingExactV1                              = "CALLS_LSP_OUTGOING_EXACT_V1"
+	privateCallsLSPIncomingDomainV1                             = "lsp-trace.adr0011.calls.lsp.incoming.exact.v1"
+	privateCallsLSPOutgoingDomainV1                             = "lsp-trace.adr0011.calls.lsp.outgoing.exact.v1"
+	privateCallsLSPProfileDigestConstructorDomainV1             = "lsp-trace.adr0011.calls.profile-identity.digest.v1\x00"
+	privateCallHierarchyDirectionalMeasurementMaxBytesV1 uint64 = 32 << 20
+	privateCallHierarchyDirectionalAggregateMaxBytesV1   uint64 = 32 << 20
+	privateCallHierarchyDirectionalMaxActiveSlotsV1      uint32 = 1
+	privateCallHierarchyDirectionalComponentSlotsV1             = 7
+)
+
+type privateCallHierarchyDirectionV1 uint8
+
+const (
+	privateCallHierarchyDirectionInvalidV1 privateCallHierarchyDirectionV1 = iota
+	privateCallHierarchyDirectionIncomingV1
+	privateCallHierarchyDirectionOutgoingV1
+)
+
+type privateCallHierarchyDispositionV1 uint8
+
+const (
+	privateCallHierarchyDispositionInvalidV1 privateCallHierarchyDispositionV1 = iota
+	privateCallHierarchyDispositionCompleteV1
+	privateCallHierarchyDispositionCompleteEmptyNullV1
+	privateCallHierarchyDispositionCompleteEmptyArrayV1
+	privateCallHierarchyDispositionFailedV1
+	privateCallHierarchyDispositionUnsupportedV1
+	privateCallHierarchyDispositionCancelledV1
+	privateCallHierarchyDispositionTimedOutV1
+	privateCallHierarchyDispositionRefusedV1
+	privateCallHierarchyDispositionPartialV1
+)
+
+type privateCallHierarchyStageV1 uint8
+
+const (
+	privateCallHierarchyStageInvalidV1 privateCallHierarchyStageV1 = iota
+	privateCallHierarchyStageReservationV1
+	privateCallHierarchyStageTargetSelectionV1
+	privateCallHierarchyStagePrepareRequestV1
+	privateCallHierarchyStagePrepareCustodyV1
+	privateCallHierarchyStagePreparedItemSelectionV1
+	privateCallHierarchyStageSelectedItemHandoffV1
+	privateCallHierarchyStageDirectionalRequestV1
+	privateCallHierarchyStageDirectionalCustodyV1
+	privateCallHierarchyStageOccurrenceAccountingV1
+	privateCallHierarchyStageTerminalV1
+	privateCallHierarchyStageReleaseV1
+)
+
+type privateCallHierarchyTerminalV1 uint8
+
+const (
+	privateCallHierarchyTerminalNoneV1 privateCallHierarchyTerminalV1 = iota
+	privateCallHierarchyTerminalCompleteV1
+	privateCallHierarchyTerminalCompleteEmptyNullV1
+	privateCallHierarchyTerminalCompleteEmptyArrayV1
+	privateCallHierarchyTerminalTransportErrorV1
+	privateCallHierarchyTerminalProtocolErrorV1
+	privateCallHierarchyTerminalMissingPayloadV1
+	privateCallHierarchyTerminalMalformedV1
+	privateCallHierarchyTerminalPartialCaptureV1
+	privateCallHierarchyTerminalLimitRefusedV1
+	privateCallHierarchyTerminalPolicyRefusedV1
+	privateCallHierarchyTerminalUnsupportedV1
+	privateCallHierarchyTerminalCancelledV1
+	privateCallHierarchyTerminalTimedOutV1
+)
+
+type privateCallHierarchyRefusalV1 uint8
+
+const (
+	privateCallHierarchyRefusalNoneV1 privateCallHierarchyRefusalV1 = iota
+	privateCallHierarchyRefusalInvalidV1
+	privateCallHierarchyRefusalNilV1
+	privateCallHierarchyRefusalForeignV1
+	privateCallHierarchyRefusalStaleV1
+	privateCallHierarchyRefusalSlotBusyV1
+	privateCallHierarchyRefusalLimitV1
+	privateCallHierarchyRefusalOverflowV1
+	privateCallHierarchyRefusalStateV1
+	privateCallHierarchyRefusalMutationV1
+	privateCallHierarchyRefusalIdentityV1
+	privateCallHierarchyRefusalMalformedV1
+	privateCallHierarchyRefusalTerminalRaceV1
+)
+
+type privateCallHierarchyLifetimeV1 uint8
+
+const (
+	privateCallHierarchyLifetimeInvalidV1 privateCallHierarchyLifetimeV1 = iota
+	privateCallHierarchyLifetimeBorrowedV1
+	privateCallHierarchyLifetimeCopiedV1
+	privateCallHierarchyLifetimeAliasedV1
+	privateCallHierarchyLifetimeViewV1
+	privateCallHierarchyLifetimeReleasedV1
+)
+
+type privateCallHierarchyStateV1 uint8
+
+const (
+	privateCallHierarchyStateUnreservedV1 privateCallHierarchyStateV1 = iota
+	privateCallHierarchyStateReservedV1
+	privateCallHierarchyStatePreparedRawOwnedV1
+	privateCallHierarchyStateSelectedHandoffV1
+	privateCallHierarchyStateDirectionalRawOwnedV1
+	privateCallHierarchyStateAccountedV1
+	privateCallHierarchyStateTerminalV1
+	privateCallHierarchyStateReleasedV1
+	privateCallHierarchyStateReusableV1
+)
+
+type privateCallHierarchyComponentV1 uint8
+
+const (
+	privateCallHierarchyComponentInvalidV1 privateCallHierarchyComponentV1 = iota
+	privateCallHierarchyComponentPrepareRequestV1
+	privateCallHierarchyComponentPrepareResponseV1
+	privateCallHierarchyComponentIncompletePrefixV1
+	privateCallHierarchyComponentSelectedItemV1
+	privateCallHierarchyComponentDirectionalRequestV1
+	privateCallHierarchyComponentDirectionalResponseV1
+	privateCallHierarchyComponentObservationV1
+)
+
+type privateCallHierarchyAttemptIDV1 struct{ Generation, Sequence uint64 }
+type privateCallHierarchyRawSpanV1 struct {
+	Offset, Length uint64
+	SHA256         [sha256.Size]byte
+}
+type privateCallHierarchyProfileIdentityV1 struct {
+	ID, Domain string
+	Digest     [sha256.Size]byte
+}
+type privateCallHierarchyProviderBindingReceiptV1 struct {
+	OpaqueIdentity [sha256.Size]byte
+	Present        bool
+}
+type privateCallHierarchyTargetIdentityV1 struct {
+	Ordinal                                           uint64
+	URI                                               string
+	SelectionIdentity, SourceCustody, RevisionCustody [sha256.Size]byte
+}
+type privateCallHierarchyFrontierV1 struct {
+	Present             bool
+	TargetOrdinal       uint64
+	Stage               privateCallHierarchyStageV1
+	Reason              privateCallHierarchyRefusalV1
+	UnattemptedOrdinals []uint64
+}
+type privateCallHierarchyAttemptOutcomeV1 struct {
+	TargetOrdinal uint64
+	Disposition   privateCallHierarchyDispositionV1
+	Terminal      privateCallHierarchyTerminalV1
+	RefusalStage  privateCallHierarchyStageV1
+	Refusal       privateCallHierarchyRefusalV1
+}
+type privateCallHierarchyTargetAccountingV1 struct {
+	TargetSetID                                                                                [sha256.Size]byte
+	DenominatorKnown                                                                           bool
+	Denominator, Attempted, Unattempted                                                        uint64
+	CompleteSuccess, CompleteEmpty, Failed, Unsupported, Cancelled, TimedOut, Refused, Partial uint64
+	AttemptOutcomes                                                                            []privateCallHierarchyAttemptOutcomeV1
+	Frontier                                                                                   privateCallHierarchyFrontierV1
+}
+type privateCallHierarchyOccurrenceV1 struct {
+	TargetOrdinal, MemberOrdinal, RangeOrdinal, RequestOrdinal, ExpansionOrdinal, PreparedItemOrdinal uint64
+	CallerURI, CalleeURI                                                                              string
+	Range                                                                                             privateCallHierarchyRawSpanV1
+}
+type privateCallHierarchyRawSelectionV1 struct {
+	Ordinal uint64
+	Raw     []byte
+	Span    privateCallHierarchyRawSpanV1
+}
+type privateCallHierarchyRawArrayV1 struct {
+	Source  []byte
+	Members []privateCallHierarchyRawSpanV1
+}
+
+// Existing production declarations mirrored only by the disposable interface harness.
+type privateB4ByteLeaseV2 struct{}
+
+func (l *privateB4ByteLeaseV2) release() {}
+
+type callHierarchyLayer1GenericOwner struct {
+	mu                sync.Mutex
+	directionalRawV1  [privateCallHierarchyDirectionalComponentSlotsV1]privateCallHierarchyOwnerBackingV1
+	directionalLinkV1 privateCallHierarchyTerminalLinkV1
+}
+type callHierarchyLayer1GenericLease struct {
+	owner         *callHierarchyLayer1GenericOwner
+	directionalV1 *privateCallHierarchyTerminalLinkV1
+}
+type privateCallHierarchyOwnerBackingV1 struct {
+	bytes            []byte
+	length, capacity uint64
+	sha256           [sha256.Size]byte
+	charge           privateB4ByteLeaseV2
+	valid            bool
+}
+type privateCallHierarchyTerminalLinkV1 struct {
+	manager     *Manager
+	reservation *privateCallHierarchyReservationV1
+}
+type privateCallHierarchyCustodyV1 struct {
+	lease    callHierarchyLayer1GenericLease
+	slot     uint8
+	attempt  privateCallHierarchyAttemptIDV1
+	lifetime privateCallHierarchyLifetimeV1
+}
+type privateCallHierarchyComponentEntryV1 struct {
+	Component                   privateCallHierarchyComponentV1
+	Custody                     privateCallHierarchyCustodyV1
+	BackingID, Capacity, Length uint64
+	SHA256                      [sha256.Size]byte
+	Lifetime                    privateCallHierarchyLifetimeV1
+}
+type privateCallHierarchyReservationV1 struct {
+	Attempt                                                                                      privateCallHierarchyAttemptIDV1
+	Direction                                                                                    privateCallHierarchyDirectionV1
+	Profile                                                                                      privateCallHierarchyProfileIdentityV1
+	ProviderBinding                                                                              privateCallHierarchyProviderBindingReceiptV1
+	Target                                                                                       privateCallHierarchyTargetIdentityV1
+	State                                                                                        privateCallHierarchyStateV1
+	AllowedBytes, RequestedBytes, AdmittedBytes, LiveBytesBefore, LiveBytesAfter, AggregateLimit uint64
+	SlotsBefore, SlotsAfter                                                                      uint32
+	Components                                                                                   [privateCallHierarchyDirectionalComponentSlotsV1]privateCallHierarchyComponentEntryV1
+	ComponentCount                                                                               uint8
+	SelectedPreparedOrdinal                                                                      uint64
+	SelectedPreparedOrdinalPresent                                                               bool
+	Accounting                                                                                   privateCallHierarchyTargetAccountingV1
+	ReleaseID                                                                                    uint64
+	RefusalStage                                                                                 privateCallHierarchyStageV1
+	Refusal                                                                                      privateCallHierarchyRefusalV1
+	Terminal                                                                                     privateCallHierarchyTerminalV1
+	Disposition                                                                                  privateCallHierarchyDispositionV1
+}
+type privateCallHierarchyLedgerV1 struct {
+	LiveBytes, CumulativeAdmitted, CumulativeReleased uint64
+	ActiveSlots                                       uint32
+	NextSequence, NextReleaseID                       uint64
+	active                                            *privateCallHierarchyReservationV1
+}
+type privateCallHierarchyViewV1 struct {
+	Attempt                        privateCallHierarchyAttemptIDV1
+	Direction                      privateCallHierarchyDirectionV1
+	Profile                        privateCallHierarchyProfileIdentityV1
+	State                          privateCallHierarchyStateV1
+	Components                     [privateCallHierarchyDirectionalComponentSlotsV1]privateCallHierarchyComponentEntryV1
+	ComponentCount                 uint8
+	SelectedPreparedOrdinal        uint64
+	SelectedPreparedOrdinalPresent bool
+	Accounting                     privateCallHierarchyTargetAccountingV1
+	RefusalStage                   privateCallHierarchyStageV1
+	Refusal                        privateCallHierarchyRefusalV1
+	Terminal                       privateCallHierarchyTerminalV1
+	Disposition                    privateCallHierarchyDispositionV1
+	ReleaseID                      uint64
+}
+type privateCallHierarchyTransferV1 struct {
+	Custody                 privateCallHierarchyCustodyV1
+	Length                  uint64
+	SHA256                  [sha256.Size]byte
+	Lifetime                privateCallHierarchyLifetimeV1
+	SelectedPreparedOrdinal uint64
+}
+type Manager struct {
+	mu          sync.Mutex
+	directional privateCallHierarchyLedgerV1
+}
+
+func newPrivateCallHierarchyLedgerV1() privateCallHierarchyLedgerV1 {
+	return privateCallHierarchyLedgerV1{}
+}
+func privateCallHierarchyProfileDigestV1(id, domain string) [sha256.Size]byte {
+	preimage := make([]byte, 0, len(privateCallsLSPProfileDigestConstructorDomainV1)+8+len(domain)+len(id))
+	preimage = append(preimage, privateCallsLSPProfileDigestConstructorDomainV1...)
+	var length [4]byte
+	binary.BigEndian.PutUint32(length[:], uint32(len(domain)))
+	preimage = append(preimage, length[:]...)
+	preimage = append(preimage, domain...)
+	binary.BigEndian.PutUint32(length[:], uint32(len(id)))
+	preimage = append(preimage, length[:]...)
+	preimage = append(preimage, id...)
+	return sha256.Sum256(preimage)
+}
+func newPrivateCallsLSPIncomingProfileV1() privateCallHierarchyProfileIdentityV1 {
+	return privateCallHierarchyProfileIdentityV1{
+		ID:     privateCallsLSPIncomingExactV1,
+		Domain: privateCallsLSPIncomingDomainV1,
+		Digest: privateCallHierarchyProfileDigestV1(privateCallsLSPIncomingExactV1, privateCallsLSPIncomingDomainV1),
+	}
+}
+func newPrivateCallsLSPOutgoingProfileV1() privateCallHierarchyProfileIdentityV1 {
+	return privateCallHierarchyProfileIdentityV1{
+		ID:     privateCallsLSPOutgoingExactV1,
+		Domain: privateCallsLSPOutgoingDomainV1,
+		Digest: privateCallHierarchyProfileDigestV1(privateCallsLSPOutgoingExactV1, privateCallsLSPOutgoingDomainV1),
+	}
+}
+func (m *Manager) reserveCallHierarchyV1(lease callHierarchyLayer1GenericLease, profile privateCallHierarchyProfileIdentityV1, direction privateCallHierarchyDirectionV1, target privateCallHierarchyTargetIdentityV1, requested uint64) (*privateCallHierarchyReservationV1, privateCallHierarchyStageV1, privateCallHierarchyRefusalV1) {
+	return nil, 0, 0
+}
+func (m *Manager) transferCallHierarchyComponentV1(lease callHierarchyLayer1GenericLease, r *privateCallHierarchyReservationV1, component privateCallHierarchyComponentV1, backingID, capacity uint64, raw []byte, charge *privateB4ByteLeaseV2, lifetime privateCallHierarchyLifetimeV1) (privateCallHierarchyCustodyV1, privateCallHierarchyStageV1, privateCallHierarchyRefusalV1) {
+	return privateCallHierarchyCustodyV1{}, 0, 0
+}
+func (m *Manager) advanceCallHierarchyV1(lease callHierarchyLayer1GenericLease, r *privateCallHierarchyReservationV1, from, to privateCallHierarchyStateV1) (privateCallHierarchyStageV1, privateCallHierarchyRefusalV1) {
+	return 0, 0
+}
+func (m *Manager) viewCallHierarchyV1(lease callHierarchyLayer1GenericLease, r *privateCallHierarchyReservationV1) (privateCallHierarchyViewV1, bool) {
+	return privateCallHierarchyViewV1{}, false
+}
+func (m *Manager) terminalCallHierarchyV1(lease callHierarchyLayer1GenericLease, r *privateCallHierarchyReservationV1, stage privateCallHierarchyStageV1, disposition privateCallHierarchyDispositionV1, terminal privateCallHierarchyTerminalV1, refusal privateCallHierarchyRefusalV1, accounting privateCallHierarchyTargetAccountingV1) bool {
+	return false
+}
+func (m *Manager) releaseCallHierarchyV1(lease callHierarchyLayer1GenericLease, r *privateCallHierarchyReservationV1) bool {
+	return false
+}
+func (m *Manager) releaseCallHierarchyTerminalV1(owner *callHierarchyLayer1GenericOwner, r *privateCallHierarchyReservationV1) bool {
+	return false
+}
+func (m *Manager) handoffCallHierarchySelectedRawV1(lease callHierarchyLayer1GenericLease, r *privateCallHierarchyReservationV1, custody privateCallHierarchyCustodyV1, selected privateCallHierarchyRawSelectionV1) (privateCallHierarchyTransferV1, privateCallHierarchyStageV1, privateCallHierarchyRefusalV1, error) {
+	return privateCallHierarchyTransferV1{}, 0, 0, nil
+}
+func scanCallHierarchyRawArrayV1(raw []byte, maxMembers uint64) (privateCallHierarchyRawArrayV1, error) {
+	return privateCallHierarchyRawArrayV1{}, nil
+}
+func selectCallHierarchyPreparedOrdinalV1(array privateCallHierarchyRawArrayV1, ordinal uint64) (privateCallHierarchyRawSelectionV1, error) {
+	return privateCallHierarchyRawSelectionV1{}, nil
+}
+func assembleIncomingCallHierarchyParamsV1(selected privateCallHierarchyRawSelectionV1) ([]byte, error) {
+	return nil, nil
+}
+func assembleOutgoingCallHierarchyParamsV1(selected privateCallHierarchyRawSelectionV1) ([]byte, error) {
+	return nil, nil
+}
+func (l callHierarchyLayer1GenericLease) Release() bool {
+	if l.directionalV1 != nil {
+		return l.directionalV1.manager.releaseCallHierarchyTerminalV1(l.owner, l.directionalV1.reservation)
+	}
+	return false
+}
+func (o *callHierarchyLayer1GenericOwner) requestTerminal() {
+	link := o.directionalLinkV1
+	if link.manager != nil {
+		_ = link.manager.releaseCallHierarchyTerminalV1(o, link.reservation)
+	}
+}
+
+func compilePlannedCallSitesForDirection(profile privateCallHierarchyProfileIdentityV1, direction privateCallHierarchyDirectionV1) {
+	m := &Manager{directional: newPrivateCallHierarchyLedgerV1()}
+	owner := &callHierarchyLayer1GenericOwner{}
+	lease := callHierarchyLayer1GenericLease{owner: owner}
+	target := privateCallHierarchyTargetIdentityV1{Ordinal: 1}
+
+	r, stage, refusal := m.reserveCallHierarchyV1(lease, profile, direction, target, privateCallHierarchyDirectionalMeasurementMaxBytesV1)
+	_, _, _ = m.reserveCallHierarchyV1(lease, profile, direction, target, privateCallHierarchyDirectionalMeasurementMaxBytesV1+1)
+	_, _, _ = m.reserveCallHierarchyV1(lease, privateCallHierarchyProfileIdentityV1{}, privateCallHierarchyDirectionInvalidV1, privateCallHierarchyTargetIdentityV1{}, 0)
+	var nilManager *Manager
+	_, _, _ = nilManager.reserveCallHierarchyV1(callHierarchyLayer1GenericLease{}, privateCallHierarchyProfileIdentityV1{}, privateCallHierarchyDirectionInvalidV1, privateCallHierarchyTargetIdentityV1{}, 0)
+	if r == nil {
+		r = &privateCallHierarchyReservationV1{}
+	}
+
+	charge := privateB4ByteLeaseV2{}
+	custody, stage, refusal := m.transferCallHierarchyComponentV1(lease, r, privateCallHierarchyComponentPrepareResponseV1, 1, 2, []byte("[]"), &charge, privateCallHierarchyLifetimeBorrowedV1)
+	_, _, _ = m.transferCallHierarchyComponentV1(lease, r, privateCallHierarchyComponentInvalidV1, 0, 0, nil, nil, privateCallHierarchyLifetimeInvalidV1)
+	stage, refusal = m.advanceCallHierarchyV1(lease, r, privateCallHierarchyStateReservedV1, privateCallHierarchyStatePreparedRawOwnedV1)
+	a, err := scanCallHierarchyRawArrayV1([]byte("[{}]"), 1)
+	_, _ = scanCallHierarchyRawArrayV1(nil, 0)
+	s, err := selectCallHierarchyPreparedOrdinalV1(a, 0)
+	_, _ = selectCallHierarchyPreparedOrdinalV1(privateCallHierarchyRawArrayV1{}, 1)
+	_, err = assembleIncomingCallHierarchyParamsV1(s)
+	_, err = assembleOutgoingCallHierarchyParamsV1(s)
+	_, stage, refusal, err = m.handoffCallHierarchySelectedRawV1(lease, r, custody, s)
+	_, _, _, _ = m.handoffCallHierarchySelectedRawV1(callHierarchyLayer1GenericLease{}, nil, privateCallHierarchyCustodyV1{}, privateCallHierarchyRawSelectionV1{})
+	_, _ = m.viewCallHierarchyV1(lease, r)
+	_, _ = m.viewCallHierarchyV1(callHierarchyLayer1GenericLease{}, nil)
+
+	dispositions := [...]privateCallHierarchyDispositionV1{
+		privateCallHierarchyDispositionInvalidV1, privateCallHierarchyDispositionCompleteV1,
+		privateCallHierarchyDispositionCompleteEmptyNullV1, privateCallHierarchyDispositionCompleteEmptyArrayV1,
+		privateCallHierarchyDispositionFailedV1, privateCallHierarchyDispositionUnsupportedV1,
+		privateCallHierarchyDispositionCancelledV1, privateCallHierarchyDispositionTimedOutV1,
+		privateCallHierarchyDispositionRefusedV1, privateCallHierarchyDispositionPartialV1,
+	}
+	terminals := [...]privateCallHierarchyTerminalV1{
+		privateCallHierarchyTerminalNoneV1, privateCallHierarchyTerminalCompleteV1,
+		privateCallHierarchyTerminalCompleteEmptyNullV1, privateCallHierarchyTerminalCompleteEmptyArrayV1,
+		privateCallHierarchyTerminalTransportErrorV1, privateCallHierarchyTerminalProtocolErrorV1,
+		privateCallHierarchyTerminalMissingPayloadV1, privateCallHierarchyTerminalMalformedV1,
+		privateCallHierarchyTerminalPartialCaptureV1, privateCallHierarchyTerminalLimitRefusedV1,
+		privateCallHierarchyTerminalPolicyRefusedV1, privateCallHierarchyTerminalUnsupportedV1,
+		privateCallHierarchyTerminalCancelledV1, privateCallHierarchyTerminalTimedOutV1,
+	}
+	refusals := [...]privateCallHierarchyRefusalV1{
+		privateCallHierarchyRefusalNoneV1, privateCallHierarchyRefusalInvalidV1, privateCallHierarchyRefusalNilV1,
+		privateCallHierarchyRefusalForeignV1, privateCallHierarchyRefusalStaleV1, privateCallHierarchyRefusalSlotBusyV1,
+		privateCallHierarchyRefusalLimitV1, privateCallHierarchyRefusalOverflowV1, privateCallHierarchyRefusalStateV1,
+		privateCallHierarchyRefusalMutationV1, privateCallHierarchyRefusalIdentityV1,
+		privateCallHierarchyRefusalMalformedV1, privateCallHierarchyRefusalTerminalRaceV1,
+	}
+	lifetimes := [...]privateCallHierarchyLifetimeV1{
+		privateCallHierarchyLifetimeInvalidV1, privateCallHierarchyLifetimeBorrowedV1,
+		privateCallHierarchyLifetimeCopiedV1, privateCallHierarchyLifetimeAliasedV1,
+		privateCallHierarchyLifetimeViewV1, privateCallHierarchyLifetimeReleasedV1,
+	}
+	accounting := privateCallHierarchyTargetAccountingV1{
+		DenominatorKnown: true,
+		Denominator:      3,
+		Attempted:        2,
+		Unattempted:      1,
+		CompleteSuccess:  1,
+		Failed:           1,
+		AttemptOutcomes: []privateCallHierarchyAttemptOutcomeV1{
+			{TargetOrdinal: 0, Disposition: privateCallHierarchyDispositionCompleteV1, Terminal: privateCallHierarchyTerminalCompleteV1},
+			{TargetOrdinal: 1, Disposition: privateCallHierarchyDispositionFailedV1, Terminal: privateCallHierarchyTerminalTransportErrorV1},
+		},
+		Frontier: privateCallHierarchyFrontierV1{
+			Present: true, TargetOrdinal: 2, Stage: privateCallHierarchyStageDirectionalCustodyV1,
+			Reason: privateCallHierarchyRefusalLimitV1, UnattemptedOrdinals: []uint64{2},
+		},
+	}
+	for i, disposition := range dispositions {
+		terminal := terminals[i%len(terminals)]
+		refusal = refusals[i%len(refusals)]
+		_ = m.terminalCallHierarchyV1(lease, r, privateCallHierarchyStageTerminalV1, disposition, terminal, refusal, accounting)
+	}
+	for _, terminal := range terminals {
+		_ = m.terminalCallHierarchyV1(lease, r, privateCallHierarchyStageTerminalV1, privateCallHierarchyDispositionFailedV1, terminal, privateCallHierarchyRefusalNoneV1, accounting)
+	}
+	for _, refusal = range refusals {
+		_ = m.terminalCallHierarchyV1(lease, r, privateCallHierarchyStageDirectionalCustodyV1, privateCallHierarchyDispositionRefusedV1, privateCallHierarchyTerminalLimitRefusedV1, refusal, accounting)
+	}
+	for _, lifetime := range lifetimes {
+		_, _, _ = m.transferCallHierarchyComponentV1(lease, r, privateCallHierarchyComponentObservationV1, 2, 2, []byte("{}"), &charge, lifetime)
+	}
+
+	owner.directionalLinkV1 = privateCallHierarchyTerminalLinkV1{manager: m, reservation: r}
+	lease.directionalV1 = &owner.directionalLinkV1
+	_ = lease.Release()
+	_ = lease.Release()
+	owner.requestTerminal()
+	owner.requestTerminal()
+	_ = m.releaseCallHierarchyV1(lease, r)
+	_ = m.releaseCallHierarchyV1(lease, r)
+	_ = m.releaseCallHierarchyTerminalV1(owner, r)
+	_ = m.releaseCallHierarchyTerminalV1(owner, r)
+	_, _, _, _ = stage, refusal, custody, err
+}
+
+func compileAllPlannedCallSites() {
+	compilePlannedCallSitesForDirection(newPrivateCallsLSPIncomingProfileV1(), privateCallHierarchyDirectionIncomingV1)
+	compilePlannedCallSitesForDirection(newPrivateCallsLSPOutgoingProfileV1(), privateCallHierarchyDirectionOutgoingV1)
+}

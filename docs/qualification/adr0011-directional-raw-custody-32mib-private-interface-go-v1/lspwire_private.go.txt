@@ -1,0 +1,52 @@
+package lspwire
+
+import (
+	"context"
+	"crypto/sha256"
+	"io"
+)
+
+const privateCallHierarchyDirectionalMeasurementMaxBytesV1 uint64 = 32 << 20
+
+type boundedIncompleteFrameDispositionV1 uint8
+
+const (
+	boundedIncompleteFrameDispositionInvalidV1 boundedIncompleteFrameDispositionV1 = iota
+	boundedIncompleteFrameDispositionCompleteV1
+	boundedIncompleteFrameDispositionIncompleteOpaquePrefixV1
+	boundedIncompleteFrameDispositionRefusedV1
+)
+
+type boundedIncompleteFrameTerminalV1 uint8
+
+const (
+	boundedIncompleteFrameTerminalNoneV1 boundedIncompleteFrameTerminalV1 = iota
+	boundedIncompleteFrameTerminalMalformedV1
+	boundedIncompleteFrameTerminalShortEOFV1
+	boundedIncompleteFrameTerminalTimeoutV1
+	boundedIncompleteFrameTerminalCancelledV1
+	boundedIncompleteFrameTerminalReadErrorV1
+)
+
+type boundedIncompleteFrameV1 struct {
+	Bytes       []byte
+	Length      uint64
+	SHA256      [sha256.Size]byte
+	Limit       uint64
+	Complete    bool
+	Present     bool
+	Disposition boundedIncompleteFrameDispositionV1
+	Terminal    boundedIncompleteFrameTerminalV1
+	Err         error
+}
+
+type Reader struct{ R io.Reader }
+
+func (r *Reader) readWithBoundedIncompleteFrameV1(ctx context.Context, reserved []byte, limit uint64) (boundedIncompleteFrameV1, error) {
+	return boundedIncompleteFrameV1{}, nil
+}
+
+func compileReaderCallSite(r *Reader, ctx context.Context, reserved []byte) {
+	result, err := r.readWithBoundedIncompleteFrameV1(ctx, reserved, privateCallHierarchyDirectionalMeasurementMaxBytesV1)
+	_, _ = result, err
+}
