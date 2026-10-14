@@ -1,0 +1,67 @@
+{
+  "profile": "CALLS_LSP_OUTGOING_EXACT_V1",
+  "disposition": "GENERIC_OUTGOING_SEMANTICS_AUTHORED_NOT_GO",
+  "cases": {
+    "OUT-TOP-NULL": {"classification": "SUCCESS_EMPTY_TOP_LEVEL_NULL", "relationships": [], "occurrences": [], "diagnostics": []},
+    "OUT-TOP-EMPTY": {"classification": "SUCCESS_EMPTY_TOP_LEVEL_ARRAY", "relationships": [], "occurrences": [], "diagnostics": []},
+    "OUT-TOP-NOT-ARRAY": {"classification": "MALFORMED", "relationships": [], "occurrences": [], "diagnostics": ["MALFORMED_TOP_LEVEL_NOT_ARRAY_OR_NULL"], "atomic_refusal": true},
+    "OUT-MEMBER-ABSENT-TO": {"classification": "MALFORMED", "relationships": [], "occurrences": [], "diagnostics": ["MALFORMED_MEMBER_TO_ABSENT"], "atomic_refusal": true},
+    "OUT-MEMBER-NULL-TO": {"classification": "MALFORMED", "relationships": [], "occurrences": [], "diagnostics": ["MALFORMED_MEMBER_TO_NOT_OBJECT"], "atomic_refusal": true},
+    "OUT-MEMBER-ABSENT-FROMRANGES": {"classification": "MALFORMED", "relationships": [], "occurrences": [], "diagnostics": ["MALFORMED_MEMBER_REQUIRED_PROPERTY_ABSENT"], "atomic_refusal": true},
+    "OUT-MEMBER-NULL-FROMRANGES": {"classification": "MALFORMED", "relationships": [], "occurrences": [], "diagnostics": ["MALFORMED_MEMBER_FROMRANGES_NOT_ARRAY"], "atomic_refusal": true},
+    "OUT-MEMBER-EMPTY-FROMRANGES": {
+      "classification": "SUCCESS_NONEMPTY_MEMBERS_ZERO_OCCURRENCES",
+      "relationships": [{"from": "A", "to": "B", "member_ordinal": 0, "range_count": 0, "to_endpoint": {"name": "B", "kind": 12, "detail": "func B()", "uri": "file:///fixture/b.go", "range": {"start": {"line": 10, "character": 0}, "end": {"line": 14, "character": 1}}, "selectionRange": {"start": {"line": 10, "character": 5}, "end": {"line": 10, "character": 6}}, "data": {"stable": "callee-b"}}, "occurrence_evidence": "ZERO_CALL_SITE_OCCURRENCES"}],
+      "occurrences": [],
+      "diagnostics": []
+    },
+    "OUT-MEMBER-NONEMPTY-TWO-RANGES": {
+      "classification": "SUCCESS_OCCURRENCES",
+      "relationships": [{"from": "A", "to": "B", "member_ordinal": 0, "range_count": 2, "to_endpoint": {"name": "B", "kind": 12, "detail": "func B()", "uri": "file:///fixture/b.go", "range": {"start": {"line": 10, "character": 0}, "end": {"line": 14, "character": 1}}, "selectionRange": {"start": {"line": 10, "character": 5}, "end": {"line": 10, "character": 6}}, "data": {"stable": "callee-b"}}}],
+      "occurrences": [
+        {"from": "A", "to": "B", "member_ordinal": 0, "range_ordinal": 0, "range": {"start": {"line": 4, "character": 2}, "end": {"line": 4, "character": 5}}},
+        {"from": "A", "to": "B", "member_ordinal": 0, "range_ordinal": 1, "range": {"start": {"line": 7, "character": 3}, "end": {"line": 7, "character": 6}}}
+      ],
+      "diagnostics": []
+    },
+    "OUT-MEMBER-DUPLICATE-RANGES": {
+      "classification": "SUCCESS_OCCURRENCES",
+      "relationships": [{"from": "A", "to": "B", "member_ordinal": 0, "range_count": 2, "to_endpoint": {"name": "B", "kind": 12, "detail": "func B()", "uri": "file:///fixture/b.go", "range": {"start": {"line": 10, "character": 0}, "end": {"line": 14, "character": 1}}, "selectionRange": {"start": {"line": 10, "character": 5}, "end": {"line": 10, "character": 6}}, "data": {"stable": "callee-b"}}}],
+      "occurrences": [
+        {"from": "A", "to": "B", "member_ordinal": 0, "range_ordinal": 0, "range": {"start": {"line": 4, "character": 2}, "end": {"line": 4, "character": 5}}},
+        {"from": "A", "to": "B", "member_ordinal": 0, "range_ordinal": 1, "range": {"start": {"line": 4, "character": 2}, "end": {"line": 4, "character": 5}}}
+      ],
+      "diagnostics": []
+    },
+    "OUT-MULTI-MEMBER-ORDER": {
+      "classification": "SUCCESS_OCCURRENCES",
+      "relationships": [
+        {"from": "A", "to": "B", "member_ordinal": 0, "range_count": 0, "to_endpoint": {"name": "B", "kind": 12, "detail": "func B()", "uri": "file:///fixture/b.go", "range": {"start": {"line": 10, "character": 0}, "end": {"line": 14, "character": 1}}, "selectionRange": {"start": {"line": 10, "character": 5}, "end": {"line": 10, "character": 6}}, "data": {"stable": "callee-b"}}, "occurrence_evidence": "ZERO_CALL_SITE_OCCURRENCES"},
+        {"from": "A", "to": "C", "member_ordinal": 1, "range_count": 1, "to_endpoint": {"name": "C", "kind": 12, "uri": "file:///fixture/c.go", "range": {"start": {"line": 30, "character": 0}, "end": {"line": 32, "character": 1}}, "selectionRange": {"start": {"line": 30, "character": 5}, "end": {"line": 30, "character": 6}}}}
+      ],
+      "occurrences": [{"from": "A", "to": "C", "member_ordinal": 1, "range_ordinal": 0, "range": {"start": {"line": 7, "character": 3}, "end": {"line": 7, "character": 6}}}],
+      "diagnostics": []
+    },
+    "OUT-MIXED-PREFIX-THEN-MALFORMED": {"classification": "MALFORMED", "relationships": [], "occurrences": [], "diagnostics": ["MALFORMED_RANGE_ORDER"], "atomic_refusal": true, "valid_prefix_salvage": false},
+    "OUT-TO-URI-MUTATION": {
+      "classification": "SUCCESS_NONEMPTY_MEMBERS_ZERO_OCCURRENCES",
+      "relationships": [{"from": "A", "to": "B", "member_ordinal": 0, "range_count": 0, "to_endpoint": {"name": "B", "kind": 12, "detail": "func B()", "uri": "file:///fixture/b_alt.go", "range": {"start": {"line": 10, "character": 0}, "end": {"line": 14, "character": 1}}, "selectionRange": {"start": {"line": 10, "character": 5}, "end": {"line": 10, "character": 6}}, "data": {"stable": "callee-b"}}, "occurrence_evidence": "ZERO_CALL_SITE_OCCURRENCES"}],
+      "occurrences": [], "diagnostics": []
+    },
+    "OUT-TO-KIND-MUTATION": {
+      "classification": "SUCCESS_NONEMPTY_MEMBERS_ZERO_OCCURRENCES",
+      "relationships": [{"from": "A", "to": "B", "member_ordinal": 0, "range_count": 0, "to_endpoint": {"name": "B", "kind": 13, "detail": "func B()", "uri": "file:///fixture/b.go", "range": {"start": {"line": 10, "character": 0}, "end": {"line": 14, "character": 1}}, "selectionRange": {"start": {"line": 10, "character": 5}, "end": {"line": 10, "character": 6}}, "data": {"stable": "callee-b"}}, "occurrence_evidence": "ZERO_CALL_SITE_OCCURRENCES"}],
+      "occurrences": [], "diagnostics": []
+    },
+    "OUT-TO-RANGE-MUTATION": {
+      "classification": "SUCCESS_NONEMPTY_MEMBERS_ZERO_OCCURRENCES",
+      "relationships": [{"from": "A", "to": "B", "member_ordinal": 0, "range_count": 0, "to_endpoint": {"name": "B", "kind": 12, "detail": "func B()", "uri": "file:///fixture/b.go", "range": {"start": {"line": 11, "character": 0}, "end": {"line": 15, "character": 1}}, "selectionRange": {"start": {"line": 11, "character": 5}, "end": {"line": 11, "character": 6}}, "data": {"stable": "callee-b"}}, "occurrence_evidence": "ZERO_CALL_SITE_OCCURRENCES"}],
+      "occurrences": [], "diagnostics": []
+    },
+    "OUT-TO-SELECTIONRANGE-MUTATION": {
+      "classification": "SUCCESS_NONEMPTY_MEMBERS_ZERO_OCCURRENCES",
+      "relationships": [{"from": "A", "to": "B", "member_ordinal": 0, "range_count": 0, "to_endpoint": {"name": "B", "kind": 12, "detail": "func B()", "uri": "file:///fixture/b.go", "range": {"start": {"line": 10, "character": 0}, "end": {"line": 14, "character": 1}}, "selectionRange": {"start": {"line": 10, "character": 7}, "end": {"line": 10, "character": 8}}, "data": {"stable": "callee-b"}}, "occurrence_evidence": "ZERO_CALL_SITE_OCCURRENCES"}],
+      "occurrences": [], "diagnostics": []
+    }
+  }
+}
