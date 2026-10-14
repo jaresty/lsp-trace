@@ -1,0 +1,11 @@
+{
+  "complete_env_key_count": 63,
+  "complete_env_sha256": "2773ca7ba71d1c42266ce505fc32a3892048c101912579c8dd174d1ddc2ce3f5",
+  "private_values_retained": true,
+  "record_byte_length": 22996,
+  "record_relative": "custody/prelaunch-custody.private.json",
+  "record_sha256": "5025d3f6983ebfdc6d94694b63c5fa6699ee811de99a0c822bdd8a20893b5199",
+  "run_id": "TEST_ONLY_ENV_PROBE_V5",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-seal.v3",
+  "sealed_before_gopls_launch": true
+}

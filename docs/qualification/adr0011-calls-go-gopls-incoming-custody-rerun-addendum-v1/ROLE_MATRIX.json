@@ -1,0 +1,118 @@
+[
+  {
+    "authority": 0,
+    "evidence": "private prelaunch record retains canonical path/length/hash/version; public summary carries only length/hash/version-output digests",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "gopls_canonical_path_length_digest_version",
+    "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+  },
+  {
+    "authority": 0,
+    "evidence": "private prelaunch record plus popen-env-binding.private.json; wrapper source uses env=captured_env",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "exact_argv_cwd_complete_env_passed_to_popen",
+    "sensitive_handling": "PRIVATE_VALUES_RETAINED_NOT_PUBLIC",
+    "source": "env=captured_env",
+    "status": "PRESENT_FOR_TEST_ONLY_ENV_PROBE; REQUIRED_FOR_FULL_RERUN"
+  },
+  {
+    "authority": 0,
+    "evidence": "prelaunch-custody.private.json retained privately with public deterministic digest/key count only",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "prelaunch_complete_env_private_seal",
+    "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+  },
+  {
+    "authority": 0,
+    "construction": "ALLOWLIST_ONLY",
+    "evidence": "build_public_summary constructs allowlisted metadata only; verifier rejects forbidden keys and raw-looking path/env values",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "raw_environment_key_names_public": false,
+    "raw_environment_values_public": false,
+    "role": "allowlisted_public_summary_no_env_leakage",
+    "status": "PRESENT"
+  },
+  {
+    "authority": 0,
+    "evidence": "reserve_fresh_run_dir refuses existing run-dir/run-id dirs and uses mkdir(exist_ok=False) with symlink/confinement checks",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "retry_policy": "FRESH_ONLY_NO_RESUME",
+    "role": "atomic_fresh_run_namespace_reservation",
+    "status": "PRESENT"
+  },
+  {
+    "authority": 0,
+    "evidence": "private record retains exact initialize; public summary carries byte lengths/digests and root URI digest only",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "initialize_bytes_root_workspace_capability",
+    "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+  },
+  {
+    "authority": 0,
+    "evidence": "go resolved from exact captured PATH in private record; public metadata carries only length/hash/version-output digests",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "go_executable_from_exact_captured_path_length_digest_version",
+    "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+  },
+  {
+    "authority": 0,
+    "evidence": "private record retains exact go env GOROOT/GOTOOLDIR inventory; public summary carries record counts/digests only",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "closed_go_toolchain_inventory_from_goroot_gotooldir",
+    "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+  },
+  {
+    "authority": 0,
+    "evidence": "private record retains python/source identity; public summary carries source/runtime digests and byte lengths only",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "runner_python_runtime_and_source_hashes",
+    "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+  },
+  {
+    "authority": 0,
+    "evidence": "package-owned finalize-run and verify-full-run modes; TEST_ONLY synthetic fixture and tamper tests cover changed/missing/extra/symlink artifacts",
+    "fail_closed_if_missing": true,
+    "full_run_executed_now": false,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "post_full_run_seal_and_verify",
+    "status": "PRESENT_TEST_ONLY_FIXTURE; REQUIRED_AFTER_FULL_RERUN",
+    "synthetic_tamper_tests": true
+  },
+  {
+    "authority": 0,
+    "evidence": "source pins to accepted v5/provider candidate; addendum records no authority merge and preserves frontier UNKNOWN",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "historical_failure_refusal_frontier_preservation",
+    "status": "PRESERVED_BY_SOURCE_PINS_AND_NON_CLAIMS"
+  },
+  {
+    "authority": 0,
+    "evidence": "manifest/result/execution contract refuse GO, production admission, outgoing authority, composition/public/runtime changes",
+    "fail_closed_if_missing": true,
+    "mandatory": true,
+    "missing_disposition": "NO_GO_FAIL_CLOSED",
+    "role": "authority_non_merge_boundary",
+    "status": "PRESENT"
+  }
+]

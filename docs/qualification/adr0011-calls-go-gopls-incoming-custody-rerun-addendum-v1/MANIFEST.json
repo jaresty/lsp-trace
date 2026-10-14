@@ -1,0 +1,366 @@
+{
+  "binds_to_generic_profile_id": "CALLS_LSP_INCOMING_EXACT_V1",
+  "custody_roles": [
+    {
+      "authority": 0,
+      "evidence": "private prelaunch record retains canonical path/length/hash/version; public summary carries only length/hash/version-output digests",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "gopls_canonical_path_length_digest_version",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "private prelaunch record plus popen-env-binding.private.json; wrapper source uses env=captured_env",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "exact_argv_cwd_complete_env_passed_to_popen",
+      "sensitive_handling": "PRIVATE_VALUES_RETAINED_NOT_PUBLIC",
+      "source": "env=captured_env",
+      "status": "PRESENT_FOR_TEST_ONLY_ENV_PROBE; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "prelaunch-custody.private.json retained privately with public deterministic digest/key count only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "prelaunch_complete_env_private_seal",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "construction": "ALLOWLIST_ONLY",
+      "evidence": "build_public_summary constructs allowlisted metadata only; verifier rejects forbidden keys and raw-looking path/env values",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "raw_environment_key_names_public": false,
+      "raw_environment_values_public": false,
+      "role": "allowlisted_public_summary_no_env_leakage",
+      "status": "PRESENT"
+    },
+    {
+      "authority": 0,
+      "evidence": "reserve_fresh_run_dir refuses existing run-dir/run-id dirs and uses mkdir(exist_ok=False) with symlink/confinement checks",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "retry_policy": "FRESH_ONLY_NO_RESUME",
+      "role": "atomic_fresh_run_namespace_reservation",
+      "status": "PRESENT"
+    },
+    {
+      "authority": 0,
+      "evidence": "private record retains exact initialize; public summary carries byte lengths/digests and root URI digest only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "initialize_bytes_root_workspace_capability",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "go resolved from exact captured PATH in private record; public metadata carries only length/hash/version-output digests",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "go_executable_from_exact_captured_path_length_digest_version",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "private record retains exact go env GOROOT/GOTOOLDIR inventory; public summary carries record counts/digests only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "closed_go_toolchain_inventory_from_goroot_gotooldir",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "private record retains python/source identity; public summary carries source/runtime digests and byte lengths only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "runner_python_runtime_and_source_hashes",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "package-owned finalize-run and verify-full-run modes; TEST_ONLY synthetic fixture and tamper tests cover changed/missing/extra/symlink artifacts",
+      "fail_closed_if_missing": true,
+      "full_run_executed_now": false,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "post_full_run_seal_and_verify",
+      "status": "PRESENT_TEST_ONLY_FIXTURE; REQUIRED_AFTER_FULL_RERUN",
+      "synthetic_tamper_tests": true
+    },
+    {
+      "authority": 0,
+      "evidence": "source pins to accepted v5/provider candidate; addendum records no authority merge and preserves frontier UNKNOWN",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "historical_failure_refusal_frontier_preservation",
+      "status": "PRESERVED_BY_SOURCE_PINS_AND_NON_CLAIMS"
+    },
+    {
+      "authority": 0,
+      "evidence": "manifest/result/execution contract refuse GO, production admission, outgoing authority, composition/public/runtime changes",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "authority_non_merge_boundary",
+      "status": "PRESENT"
+    }
+  ],
+  "direction": "incoming",
+  "estimate": {
+    "contractual_worst_case_request_timeout_only": "about 49.17 hours if every target consumed the 30s request timeout; not a forecast",
+    "historical_observed_max_elapsed_seconds_per_target": 1.950021,
+    "sequential_estimate_from_observed_max": "about 3.20 hours plus startup/filesystem overhead"
+  },
+  "execution": {
+    "finalize_after_full_run": "python3 docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/capture_incoming_custody_rerun.py --finalize-run <fresh-run-dir>",
+    "full_rerun_command_after_review": "python3 docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/capture_incoming_custody_rerun.py --run-full --direction incoming --workspace <exact-reviewed-workspace> --gopls gopls --run-id <fresh-never-used-reviewed-run-id>",
+    "package_verification": "python3 docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/verify_custody_rerun_addendum.py",
+    "verify_full_run": "python3 docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/capture_incoming_custody_rerun.py --verify-full-run <fresh-run-dir>"
+  },
+  "forbidden_effects": {
+    "authority_merge": false,
+    "composition_change": false,
+    "custody_policy_change": false,
+    "outgoing_execution": false,
+    "production_admission": false,
+    "profile_go_issued_by_producer": false,
+    "public_surface_change": false,
+    "runtime_code_change": false,
+    "runtime_memory_ceiling_change": false,
+    "schema_publication": false
+  },
+  "fresh_run_dir_policy": "MUST_NOT_EXIST_AT_ALL_AT_RESERVATION",
+  "fresh_run_namespace": "lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1",
+  "frontier_inference": "FORBIDDEN",
+  "frozen_incoming_workload": {
+    "batch_count": 118,
+    "batch_size": 50,
+    "max_raw_response_bytes": 33554432,
+    "retry_policy": "RETRY_FREE_FRESH_RUN_ONLY",
+    "sequential_batches": true,
+    "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+    "target_count": 5900,
+    "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+  },
+  "full_campaign_executed_by_this_package": false,
+  "historical_evidence_mutation": "FORBIDDEN",
+  "no_follow_path_resolution": {
+    "applies_to": [
+      "seal_refs",
+      "private_refs",
+      "checksum_inventory",
+      "finalize_run",
+      "verify_full_run"
+    ],
+    "bounded_nonregular_tests": [
+      "fifo",
+      "unix_socket",
+      "directory",
+      "device_node_or_nonregular_substitute"
+    ],
+    "discipline": "component_by_component_openat_no_follow_from_validated_run_root_descriptor",
+    "enabled": true,
+    "final_open_flags": "O_NONBLOCK|O_NOFOLLOW|O_CLOEXEC where available before fstat",
+    "read_before_regular_fstat": "FORBIDDEN",
+    "rejects": [
+      "absolute_paths",
+      "dot_components",
+      "dotdot_components",
+      "empty_components",
+      "ambiguous_components",
+      "intermediate_symlinks",
+      "final_symlinks",
+      "nonregular_required_files"
+    ]
+  },
+  "observed_test_only_public_tool_summaries": {
+    "go": {
+      "byte_length": 14481762,
+      "sha256": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 33,
+        "stdout_sha256": "278375c8a03c34bb0f855154850de7c4f217fd3b8cdf37986819e3f05d0a4c33"
+      }
+    },
+    "gopls": {
+      "byte_length": 41038194,
+      "sha256": "82600f8b7f6ad337120b27ab738a5e44897ff1701919bc4620836ff7d98c2f7a",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 33,
+        "stdout_sha256": "b90357f9cf20cb15327b21a90e8930a1cf93c7536c710198beade2dc9d821af9"
+      }
+    },
+    "initialize": {
+      "body_byte_length": 340,
+      "body_sha256": "42b55cdbaa10d982936f9ba98880d77b66a73a77ebc6b48e0cc216341ee5cebf",
+      "client_call_hierarchy_dynamic_registration": false,
+      "framed_byte_length": 363,
+      "framed_sha256": "e5e733e15e2df9098f0bd0168c449e707c2785cd878fd08c8e83addb4d9e09f6",
+      "root_uri_sha256": "4c0156b3fd5f5c4774c900181365bf725f1e33b20f73f023a81d821d862cbbcb",
+      "workspace_folder_count": 1
+    },
+    "python": {
+      "byte_length": 52448,
+      "sha256": "b502cb4c5b46b8d4192ec6bcb600ce8922f1afc396fcf646e8765c6eba74a0bf",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 14,
+        "stdout_sha256": "917601090ffb73a030e3eaa8b7a01c41400cad4b61366b4218d7756a5733b66c"
+      }
+    },
+    "toolchain_required_record_count": 14
+  },
+  "outgoing_run_authority": false,
+  "package": "adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1",
+  "preserved_unknowns": [
+    "frontier remains UNKNOWN and must not be inferred",
+    "historical failures/refusals are preserved and not overwritten",
+    "no source graph completeness or production-runtime authority is claimed"
+  ],
+  "producer_disposition": "INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
+  "producer_may_issue_go": false,
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "public_artifact_scanner": {
+    "enabled": true,
+    "private_values_location": "*.private.json only",
+    "rejects_absolute_paths": true,
+    "rejects_forbidden_public_fields": [
+      "record",
+      "binding_private_record",
+      "workspace",
+      "runner",
+      "original_runner",
+      "gopls_path",
+      "gopls_launch_argv",
+      "complete_env_private_record"
+    ],
+    "rejects_private_prefixes": true
+  },
+  "public_summary_policy": {
+    "allowed_public_fields": "structural counts, byte lengths, digests, booleans, dispositions",
+    "construction": "ALLOWLIST_ONLY",
+    "raw_environment_key_names_public": false,
+    "raw_environment_values_public": false,
+    "raw_paths_public": false
+  },
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-addendum.manifest.v5",
+  "source_pins": {
+    "accepted_v5_manifest": {
+      "byte_length": 743,
+      "path": "docs/qualification/adr0011-incoming-calls-v1-final-qualification-v5/MANIFEST.json",
+      "sha256": "e5929f0ec69947f4998ea55d1a8322c9fb511b3e26f25a59d43fa8b1adfaf6c1"
+    },
+    "accepted_v5_result": {
+      "byte_length": 23947,
+      "path": "docs/qualification/adr0011-incoming-calls-v1-final-qualification-v5/RESULT.json",
+      "sha256": "8a502f0a3ee7933d599eeaabd9446c2f2629189c0d2337fa67d173c9a8628d2f"
+    },
+    "incoming_evidence_manifest": {
+      "byte_length": 10433,
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-evidence-manifest.json",
+      "sha256": "334a6a1f3c26b0408023d24f8bd08f74bfbcd0125629ee1cf04fdd425fa6ce87"
+    },
+    "incoming_plan": {
+      "byte_length": 11351,
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-profile-plan.md",
+      "sha256": "e9b3d940a50d03d7863197966742bd92953b724a43cfac70b6bf69b866ddbcde"
+    },
+    "incoming_review_v2": {
+      "byte_length": 15081,
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-review-v2.md",
+      "sha256": "fe6302804b24f9ad9144bdaba943aeadb0763cf97236dff9e3713e9a140e2fa8"
+    },
+    "separate_provider_candidate_manifest_read_only": {
+      "byte_length": 18832,
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-profile-qualification-v1/MANIFEST.json",
+      "sha256": "9599f576fa74000d00d7f09786213254227d51e7c57f2343c1b48c8f29855ff1"
+    },
+    "separate_provider_candidate_result_read_only": {
+      "byte_length": 1771,
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-profile-qualification-v1/RESULT.json",
+      "sha256": "c0acdb0e624698cdf49cf80962cf42c3b7600d050c5c3a8badb08059059fb638"
+    },
+    "target_tsv": {
+      "byte_length": 1685888,
+      "path": "docs/qualification/adr0011-callhierarchy-target-corpus-v1/targets.tsv",
+      "sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+    },
+    "workload_contract": {
+      "byte_length": 6449,
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/contract.json",
+      "sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad"
+    },
+    "workload_runner": {
+      "byte_length": 48312,
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/adr0011_workload_runner.py",
+      "sha256": "10456c34a2b8c629b301c2ebfdafbbad7ba432db85ae33ac49b464906818f482"
+    }
+  },
+  "supplements_historical_evidence": true,
+  "test_only_artifacts": {
+    "dry_full_plan": {
+      "batches_digest": "c68e8948a4ef41afe3f9a18ea40269fa1f622b80c7ea8cb58a434986bdf7f0fb",
+      "mode": "DRY_FULL_PLAN",
+      "path": "runs/TEST_ONLY_DRY_FULL_PLAN_V2/full-incoming/full-plan.json",
+      "sha256": "70fcec3e22b3e72eaa2b938e5a35c9a2c0a3e9216a4c43716f6a35c9966f5267"
+    },
+    "popen_env_binding_private": {
+      "byte_length": 10610,
+      "path": "runs/TEST_ONLY_ENV_PROBE_V5/full-incoming/custody/popen-env-binding.private.json",
+      "sha256": "ec6c82383e037c769bb8b7247aef5512b4d9081f212171c9375b23a11d68fbf9",
+      "source": "env=captured_env"
+    },
+    "prelaunch_private_record": {
+      "byte_length": 22996,
+      "complete_env_sha256": "2773ca7ba71d1c42266ce505fc32a3892048c101912579c8dd174d1ddc2ce3f5",
+      "path": "runs/TEST_ONLY_ENV_PROBE_V5/full-incoming/custody/prelaunch-custody.private.json",
+      "private_values_retained": true,
+      "sha256": "5025d3f6983ebfdc6d94694b63c5fa6699ee811de99a0c822bdd8a20893b5199"
+    },
+    "prelaunch_public_summary": {
+      "path": "runs/TEST_ONLY_ENV_PROBE_V5/full-incoming/custody/prelaunch-custody.summary.json",
+      "policy": "ALLOWLIST_ONLY_NO_RAW_ENV_VALUES",
+      "sha256": "5ae5941e6dfb35d496325a029ce088625a37c1495617305475850d42824c7700"
+    },
+    "synthetic_final_seal": {
+      "artifact_count": 18,
+      "checksums_sha256": "f7c35b94b74636f79f112fd5a37b30b16a2034196400f7aba056414bee5324fa",
+      "path": "runs/TEST_ONLY_SEAL_FIXTURE/full-incoming.final-run.seal.json",
+      "sha256": "490565ba2710ba2966e3dd8fbdc7aec703fdd4dc8dbe9759e0859a084edc49b3",
+      "test_only_synthetic": true
+    }
+  },
+  "test_only_modes": {
+    "dry_plan_run_id": "TEST_ONLY_DRY_FULL_PLAN_V2",
+    "env_probe_run_id": "TEST_ONLY_ENV_PROBE_V5",
+    "gopls_launched_in_test_only_modes": false,
+    "may_masquerade_as_denominator_evidence": false,
+    "synthetic_seal_run_id": "TEST_ONLY_SEAL_FIXTURE"
+  },
+  "worktree_head": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
+}

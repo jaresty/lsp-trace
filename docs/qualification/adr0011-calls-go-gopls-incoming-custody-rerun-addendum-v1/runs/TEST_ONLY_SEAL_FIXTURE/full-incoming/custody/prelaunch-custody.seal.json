@@ -1,0 +1,6 @@
+{
+  "record_sha256": "test",
+  "run_id": "TEST_ONLY_SEAL_FIXTURE",
+  "schema": "test-only-seal",
+  "sealed_before_gopls_launch": true
+}

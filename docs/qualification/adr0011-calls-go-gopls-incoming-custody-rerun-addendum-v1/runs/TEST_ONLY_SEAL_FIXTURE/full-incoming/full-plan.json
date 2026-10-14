@@ -1,0 +1,12 @@
+{
+  "authority": 0,
+  "batch_count": 2,
+  "batch_size": 1,
+  "batches_digest": "TEST_ONLY",
+  "direction": "incoming",
+  "mode": "RUN_FULL",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.full-plan.v1",
+  "target_count": 2,
+  "target_tsv_sha256": "TEST_ONLY_SYNTHETIC_NOT_CORPUS"
+}

@@ -1,0 +1,8 @@
+{
+  "byte_length": 23,
+  "direction": "incoming",
+  "ordinal": 0,
+  "path": "raw/incoming/00000/callHierarchy_incomingCalls.response.0.bin",
+  "schema": "test-only-raw-sidecar",
+  "sha256": "8808496a20662ce284ee12c8544c64bb04c3554629f42b2d3cf628ff21756b7c"
+}

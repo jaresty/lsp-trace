@@ -1,0 +1,9 @@
+{
+  "launch": {
+    "complete_env": {
+      "TEST_ONLY": "1"
+    }
+  },
+  "run_id": "TEST_ONLY_SEAL_FIXTURE",
+  "schema": "test-only-private"
+}

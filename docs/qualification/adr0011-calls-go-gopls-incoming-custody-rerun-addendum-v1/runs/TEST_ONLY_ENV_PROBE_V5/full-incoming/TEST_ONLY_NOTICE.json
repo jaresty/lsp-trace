@@ -1,0 +1,8 @@
+{
+  "binding_private_record_relative": "custody/popen-env-binding.private.json",
+  "gopls_launched": false,
+  "may_masquerade_as_full_campaign_evidence": false,
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.test-only-notice.v1",
+  "status": "TEST_ONLY_ENV_PROBE_NOT_DENOMINATOR_EVIDENCE_NO_GOPLS_LAUNCH",
+  "target_denominator_evidence": false
+}

@@ -1,0 +1,6 @@
+{
+  "public_summary_policy": {
+    "construction": "ALLOWLIST_ONLY"
+  },
+  "schema": "test-only-public-summary"
+}

@@ -1,0 +1,4 @@
+{"attempt": 1, "authority": 0, "direction": "incoming", "disposition": "STARTED", "ordinal": 0, "schema": "test-only-attempt", "target_id": "t0"}
+{"attempt": 1, "authority": 0, "direction": "incoming", "disposition": "SUCCEEDED_EMPTY", "ordinal": 0, "schema": "test-only-attempt", "target_id": "t0"}
+{"attempt": 1, "authority": 0, "direction": "incoming", "disposition": "STARTED", "ordinal": 1, "schema": "test-only-attempt", "target_id": "t1"}
+{"attempt": 1, "authority": 0, "direction": "incoming", "disposition": "FAILED_LSP_ERROR", "ordinal": 1, "schema": "test-only-attempt", "target_id": "t1"}

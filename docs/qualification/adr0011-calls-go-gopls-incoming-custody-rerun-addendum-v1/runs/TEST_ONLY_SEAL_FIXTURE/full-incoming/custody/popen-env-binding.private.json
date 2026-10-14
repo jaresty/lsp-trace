@@ -1,0 +1,7 @@
+{
+  "equality": {
+    "passed_equals_prelaunch_complete_env": true
+  },
+  "schema": "test-only-binding",
+  "source": "env=captured_env"
+}

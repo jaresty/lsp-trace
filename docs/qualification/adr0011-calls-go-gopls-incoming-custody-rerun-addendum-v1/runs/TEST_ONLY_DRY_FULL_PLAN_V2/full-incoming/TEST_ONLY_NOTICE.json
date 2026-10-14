@@ -1,0 +1,8 @@
+{
+  "full_campaign_executed": false,
+  "gopls_launched": false,
+  "may_masquerade_as_full_campaign_evidence": false,
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.test-only-notice.v1",
+  "status": "TEST_ONLY_DRY_FULL_PLAN_NOT_DENOMINATOR_EVIDENCE",
+  "target_denominator_evidence": false
+}

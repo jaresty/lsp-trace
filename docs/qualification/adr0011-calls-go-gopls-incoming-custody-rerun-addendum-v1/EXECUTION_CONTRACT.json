@@ -1,0 +1,58 @@
+{
+  "authority": 0,
+  "batch_count": 118,
+  "batch_size": 50,
+  "binds_to_generic_profile_id": "CALLS_LSP_INCOMING_EXACT_V1",
+  "completeness": "UNKNOWN",
+  "direction": "incoming",
+  "forbid_outgoing": true,
+  "fresh_run_dir_policy": "MUST_NOT_EXIST_AT_ALL_AT_RESERVATION",
+  "fresh_run_namespace": "lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1",
+  "max_raw_response_bytes": 33554432,
+  "non_claims": [
+    "not denominator evidence until --run-full is explicitly reviewed and run",
+    "no historical overwrite",
+    "no production admission",
+    "no custody ownership",
+    "no outgoing authority",
+    "no ceiling change",
+    "public summary is not a raw environment transcript"
+  ],
+  "popen_env_source": "captured_env",
+  "post_full_run_seal": {
+    "finalize_command_required": true,
+    "full_run_executed_now": false,
+    "rejects_missing_extra_changed_symlink_nonregular": true,
+    "requires_unfinalized_ordinals_zero": true,
+    "seal_outside_run_dir": true,
+    "self_reference": false,
+    "verify_full_run_mode": true
+  },
+  "producer_disposition": "INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
+  "producer_may_issue_go": false,
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "public_summary_policy": {
+    "allowed_public_fields": "structural counts, byte lengths, digests, booleans, dispositions",
+    "construction": "ALLOWLIST_ONLY",
+    "raw_environment_key_names_public": false,
+    "raw_environment_values_public": false,
+    "raw_paths_public": false
+  },
+  "raw_ceiling_change": false,
+  "require_explicit_popen_env": true,
+  "require_prelaunch_capture_before_gopls_launch": true,
+  "retry_policy": "RETRY_FREE_FRESH_RUN_ONLY",
+  "run_dir_reservation": "atomic mkdir(exist_ok=False) after symlink and confinement checks; no same run-id resume after custody-only crash",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun.execution-contract.v2",
+  "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+  "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+  "target_count": 5900,
+  "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4",
+  "toolchain_inventory_scope": [
+    "private exact go env GOROOT/GOTOOLDIR",
+    "private go tool list records",
+    "private selected go env external executable closure",
+    "public digest/count summaries only"
+  ]
+}

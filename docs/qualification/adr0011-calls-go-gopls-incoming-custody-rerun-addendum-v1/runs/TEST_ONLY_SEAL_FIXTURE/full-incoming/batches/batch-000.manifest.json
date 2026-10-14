@@ -1,0 +1,8 @@
+{
+  "batch_count": 2,
+  "batch_index": 0,
+  "direction": "incoming",
+  "dry_run": false,
+  "output_digest": "test",
+  "target_count": 1
+}
