@@ -1,0 +1,130 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.provider-qualification-result.v3",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "binds_to_generic_profile_id": "CALLS_LSP_INCOMING_EXACT_V1",
+  "producer_disposition": "AUTHORED_NOT_GO",
+  "producer_may_issue_go": false,
+  "review_token_requested": "ADR0011_QUALIFIED_CALLS_INCOMING_PROFILE_GO",
+  "review_token_requested_by_producer": false,
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "bounded_qualification_candidate": {
+    "target_count": 5900,
+    "counts": {
+      "succeeded_nonempty": 5608,
+      "succeeded_empty": 225,
+      "failed_lsp_error": 67,
+      "refused": 0,
+      "one_final_disposition_ordinals": 5900
+    },
+    "frontier": "UNKNOWN",
+    "numeric_maxima_scope": "measured-not-universal",
+    "generic_dependency_token": "CALLS_LSP_INCOMING_EXACT_V1_SEMANTICS_GO",
+    "custody_dependency_token": "INCOMING_CUSTODY_CORRECTION_EVIDENCE_GO",
+    "producer_fail_closed_blocker": null,
+    "independent_review_required": true
+  },
+  "closed_v2_custody_roles": {
+    "gopls_executable_byte_length": 41038194,
+    "complete_prelaunch_environment": {
+      "environment_digest": "21fe317ba06ab7dc9fbc0758dd1561945860a2471ffd133835db8d2b62f1d72c",
+      "environment_key_count": 64,
+      "private_record_sha256": "32789e7ec3efde32db09e83c7e7dd5b080fc0564f3b2bb28fa6134454a62f48d"
+    },
+    "go_toolchain_binary_digest_inventory": {
+      "complete": true,
+      "go_executable_byte_length": 14481762,
+      "go_executable_sha256": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0",
+      "closed_inventory_scope_count": 4,
+      "required_record_count": 14
+    }
+  },
+  "historical_vs_correction": {
+    "final_counts_equal": true,
+    "historical_raw_aggregate_digest": "dfedbc400dcdb7315143fd0479e791a67dda79331112bd922446e4f770c717bc",
+    "correction_artifact_inventory_digest": "2e59bdcc6ff3b1dab8d8303a18f544c1e8c7af6956802b2da14ec5c54c7939cc",
+    "correction_run_dir_sha256": "ddc7a39f2322ed5d3e0730f376563ef69e8ffd31c982c1f0928d3ea7f0174633",
+    "bounded_difference": "correction v2 adds custody rerun packaging, complete prelaunch environment capture, executable byte lengths, and closed toolchain inventory; it does not change final incoming dispositions"
+  },
+  "non_claims": [
+    "no provider self-GO",
+    "no universal bounds",
+    "no repository completeness",
+    "no source-graph completeness",
+    "no production admission",
+    "no runtime memory ceiling change",
+    "no authority for any other direction or profile",
+    "no schema publication",
+    "no runtime code change",
+    "no custody-policy change",
+    "no custody ownership transfer",
+    "no raw private environment value publication"
+  ],
+  "residual_unknowns": [
+    "frontier remains UNKNOWN: no frontier bound is retained in historical or correction evidence",
+    "production admission remains refused pending separate authority"
+  ],
+  "accepted_generic_semantic_statements": [
+    {
+      "id": "top_level_response_null_vs_empty_array_distinct",
+      "statement": "top-level response null and [] remain distinct successful-empty source forms when admitted by terminal policy"
+    },
+    {
+      "id": "missing_fromRanges_malformed",
+      "statement": "missing member fromRanges is malformed for semantic admission and preserved only in raw custody"
+    },
+    {
+      "id": "null_fromRanges_malformed",
+      "statement": "null member fromRanges is malformed for semantic admission and preserved only in raw custody"
+    },
+    {
+      "id": "present_empty_fromRanges_retains_member_zero_occurrence_range_rows",
+      "statement": "present empty fromRanges: [] retains an otherwise-valid relationship/member and emits zero CALLS occurrence rows and zero occurrence range rows"
+    },
+    {
+      "id": "nonempty_fromRanges_preserve_supplied_ranges_order_duplicates_ordinals_without_synthesis",
+      "statement": "nonempty supplied fromRanges are the only CALLS occurrence ranges; supplied range order, target ordinal, member ordinal, and duplicate multiplicity are preserved without synthesized ranges"
+    },
+    {
+      "id": "endpoint_spans_identity_display_never_occurrence_evidence",
+      "statement": "returned from.range and from.selectionRange are endpoint identity/display spans, never occurrence evidence; CALLS occurrences are derived solely from supplied fromRanges"
+    }
+  ],
+  "semantic_artifacts": {
+    "generic_semantics_preserved_verbatim": [
+      "top-level response null and [] remain distinct successful-empty source forms when admitted by terminal policy",
+      "missing member fromRanges is malformed for semantic admission and preserved only in raw custody",
+      "null member fromRanges is malformed for semantic admission and preserved only in raw custody",
+      "present empty fromRanges: [] retains an otherwise-valid relationship/member and emits zero CALLS occurrence rows and zero occurrence range rows",
+      "nonempty supplied fromRanges are the only CALLS occurrence ranges; supplied range order, target ordinal, member ordinal, and duplicate multiplicity are preserved without synthesized ranges",
+      "returned from.range and from.selectionRange are endpoint identity/display spans, never occurrence evidence; CALLS occurrences are derived solely from supplied fromRanges"
+    ],
+    "role_semantic_artifacts": {
+      "manifest_role": "generic_semantic_statement_preservation",
+      "statement_ids": [
+        "top_level_response_null_vs_empty_array_distinct",
+        "missing_fromRanges_malformed",
+        "null_fromRanges_malformed",
+        "present_empty_fromRanges_retains_member_zero_occurrence_range_rows",
+        "nonempty_fromRanges_preserve_supplied_ranges_order_duplicates_ordinals_without_synthesis",
+        "endpoint_spans_identity_display_never_occurrence_evidence"
+      ]
+    },
+    "occurrence_source_policy": "CALLS occurrence evidence is derived solely from supplied fromRanges; from.range and from.selectionRange are endpoint identity/display spans only and never occurrence evidence."
+  },
+  "declared_authority": {
+    "profile": {
+      "authority": 0,
+      "accepted": false,
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED"
+    },
+    "custody": {
+      "authority": 0,
+      "accepted": false,
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED"
+    }
+  },
+  "reviewer_no_go_corrected": "occurrence_source_policy_escape_NO_GO"
+}

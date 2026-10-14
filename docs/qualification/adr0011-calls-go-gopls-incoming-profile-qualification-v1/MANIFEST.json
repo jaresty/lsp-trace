@@ -1,0 +1,442 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.provider-qualification-package.v3",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "binds_to_generic_profile_id": "CALLS_LSP_INCOMING_EXACT_V1",
+  "canonical_identity_domain": "lsp-trace.adr0011.calls.go.gopls.incoming.exact.v1",
+  "producer_disposition": "AUTHORED_NOT_GO",
+  "producer_may_issue_go": false,
+  "review_token_requested": "ADR0011_QUALIFIED_CALLS_INCOMING_PROFILE_GO",
+  "review_token_requested_by_producer": false,
+  "review_request_disposition": "VERIFY_VERIFIER_COVERAGE_AND_EITHER_ISSUE_GO_OR_RETURN_BOUNDED_BLOCKER",
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "worktree_head": "b4a86914702fd595f66bd1e0085c7063fe517144",
+  "source_pins": {
+    "generic_semantics_commit": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a",
+    "run_package_commit": "b4a86914702fd595f66bd1e0085c7063fe517144",
+    "incoming_plan": {
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-profile-plan.md",
+      "sha256": "e9b3d940a50d03d7863197966742bd92953b724a43cfac70b6bf69b866ddbcde"
+    },
+    "generic_semantics_checksums": {
+      "path": "docs/qualification/adr0011-calls-lsp-incoming-exact-v1-generic-semantics-v1/CHECKSUMS.sha256",
+      "sha256": "844e2c072474f6b3756ec221ea0b6df2888d775e9b866e1da0bbef030e35b351"
+    },
+    "generic_semantics_manifest": {
+      "path": "docs/qualification/adr0011-calls-lsp-incoming-exact-v1-generic-semantics-v1/MANIFEST.json",
+      "sha256": "8657876ab14ad6c4939218331d8a58e3c222da61b21ae55200644e5c43674f7d"
+    },
+    "historical_incoming_final_summary": {
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/runs/full-incoming/FINAL_SUMMARY.json",
+      "sha256": "7bab05495d489f4e12f2e25a9ab16ba9206ca7eb74f62f9d947f92498f55066f"
+    },
+    "historical_incoming_numeric_bounds": {
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/runs/full-incoming/NUMERIC_BOUNDS.json",
+      "sha256": "46a484d004dfcf8c019290aa8d8a724e1a1a1682982c5460c1976c68c47b6397"
+    },
+    "historical_incoming_failures": {
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/runs/full-incoming/FAILURES.jsonl",
+      "sha256": "ad2785c3690f1ce104cd803058c9dace7fbb379ad65bd18d8ebc87ab7cef345f"
+    },
+    "historical_incoming_ledger": {
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/runs/full-incoming/ledgers/incoming.attempts.jsonl",
+      "sha256": "5c181ac1304547ba8f9e915aa512f3c4e93ca1fd8594da381f7f61b165d7139f"
+    },
+    "custody_v2_run_dir": {
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/runs/incoming-custody-correction-v2/full-incoming",
+      "run_dir_sha256": "ddc7a39f2322ed5d3e0730f376563ef69e8ffd31c982c1f0928d3ea7f0174633"
+    },
+    "custody_v2_final_checksums": {
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/runs/incoming-custody-correction-v2/full-incoming.final-run.checksums.sha256",
+      "sha256": "ba003061790bb4033bcabf85480e92ec97aba4522ab9877d99ccabbf24db60a8"
+    },
+    "custody_v2_final_seal": {
+      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/runs/incoming-custody-correction-v2/full-incoming.final-run.seal.json",
+      "sha256": "a15ddcb57a0f908e13e7742dd0697dff717fd08e66e2aee28a478020f1c3ba34"
+    }
+  },
+  "accepted_generic_dependency": {
+    "profile": "CALLS_LSP_INCOMING_EXACT_V1",
+    "token": "CALLS_LSP_INCOMING_EXACT_V1_SEMANTICS_GO",
+    "commit": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a",
+    "package_path": "docs/qualification/adr0011-calls-lsp-incoming-exact-v1-generic-semantics-v1",
+    "checksums_sha256": "844e2c072474f6b3756ec221ea0b6df2888d775e9b866e1da0bbef030e35b351",
+    "manifest_sha256": "8657876ab14ad6c4939218331d8a58e3c222da61b21ae55200644e5c43674f7d",
+    "semantic_boundary": "provider-neutral only; provider candidate inherits no provider behavior or custody authority"
+  },
+  "accepted_custody_dependency": {
+    "token": "INCOMING_CUSTODY_CORRECTION_EVIDENCE_GO",
+    "run_id": "incoming-custody-correction-v2",
+    "run_package_commit": "b4a86914702fd595f66bd1e0085c7063fe517144",
+    "final_checksums_sha256": "ba003061790bb4033bcabf85480e92ec97aba4522ab9877d99ccabbf24db60a8",
+    "final_seal_sha256": "a15ddcb57a0f908e13e7742dd0697dff717fd08e66e2aee28a478020f1c3ba34",
+    "artifact_count": 53380,
+    "verification_status": "RUN_VERIFICATION_PASSED"
+  },
+  "generic_semantics_preserved_verbatim": [
+    "top-level response null and [] remain distinct successful-empty source forms when admitted by terminal policy",
+    "missing member fromRanges is malformed for semantic admission and preserved only in raw custody",
+    "null member fromRanges is malformed for semantic admission and preserved only in raw custody",
+    "present empty fromRanges: [] retains an otherwise-valid relationship/member and emits zero CALLS occurrence rows and zero occurrence range rows",
+    "nonempty supplied fromRanges are the only CALLS occurrence ranges; supplied range order, target ordinal, member ordinal, and duplicate multiplicity are preserved without synthesized ranges",
+    "returned from.range and from.selectionRange are endpoint identity/display spans, never occurrence evidence; CALLS occurrences are derived solely from supplied fromRanges"
+  ],
+  "workload_counts": {
+    "denominator": 5900,
+    "attempted": 5900,
+    "unattempted": 0,
+    "nonempty": 5608,
+    "empty": 225,
+    "fail": 67,
+    "refused": 0,
+    "unsupported": 0,
+    "timeout": 0,
+    "cancel": 0,
+    "malformed": 0,
+    "partial": 0,
+    "one_final_disposition_ordinals": 5900
+  },
+  "final_disposition_counts": {
+    "FAILED_LSP_ERROR": 67,
+    "SUCCEEDED_EMPTY": 225,
+    "SUCCEEDED_NON_EMPTY": 5608
+  },
+  "numeric_envelope_observed_maxima": {
+    "max_elapsed_seconds": 1.950021,
+    "max_message_count_per_target": 157,
+    "max_prepare_request_bytes": 309,
+    "max_prepare_response_bytes": 10861,
+    "max_prepare_returned_members": 1,
+    "max_prepare_returned_nodes": 1,
+    "max_prepare_returned_ranges": 2,
+    "max_request_bytes": 144704,
+    "max_response_bytes": 67906,
+    "max_result_request_bytes": 572,
+    "max_result_response_bytes": 67906,
+    "max_result_returned_members": 114,
+    "max_result_returned_nodes": 114,
+    "max_result_returned_occurrences": 328,
+    "max_result_returned_ranges": 328,
+    "max_ledger_result_count": 114
+  },
+  "numeric_envelope_scope": "observed maxima over accepted historical workload corpus/run/environment only; measured-not-universal; no runtime ceiling change",
+  "frontier": {
+    "status": "UNKNOWN",
+    "reason": "UNKNOWN: no frontier bound in historical or correction evidence"
+  },
+  "provider_runtime_evidence_v2": {
+    "gopls": {
+      "byte_length": 41038194,
+      "sha256": "82600f8b7f6ad337120b27ab738a5e44897ff1701919bc4620836ff7d98c2f7a",
+      "version_stdout_sha256": "b90357f9cf20cb15327b21a90e8930a1cf93c7536c710198beade2dc9d821af9"
+    },
+    "go": {
+      "byte_length": 14481762,
+      "sha256": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0",
+      "version_stdout_sha256": "278375c8a03c34bb0f855154850de7c4f217fd3b8cdf37986819e3f05d0a4c33"
+    },
+    "python": {
+      "byte_length": 52448,
+      "sha256": "b502cb4c5b46b8d4192ec6bcb600ce8922f1afc396fcf646e8765c6eba74a0bf"
+    },
+    "complete_prelaunch_environment": {
+      "source": "captured_env",
+      "key_count": 64,
+      "environment_digest": "21fe317ba06ab7dc9fbc0758dd1561945860a2471ffd133835db8d2b62f1d72c",
+      "private_record_sha256": "32789e7ec3efde32db09e83c7e7dd5b080fc0564f3b2bb28fa6134454a62f48d",
+      "public_summary_policy": "ALLOWLIST_ONLY_NO_RAW_ENV_VALUES"
+    },
+    "toolchain_summary": {
+      "complete": true,
+      "closed_inventory_scope_count": 4,
+      "required_record_count": 14,
+      "required_records_digest": "f1031a52261250e43d14c40206a51f39a603112b732f9130133b1f67c0e0d784"
+    },
+    "initialize_summary": {
+      "root_uri_sha256": "4c0156b3fd5f5c4774c900181365bf725f1e33b20f73f023a81d821d862cbbcb",
+      "workspace_folder_count": 1,
+      "client_call_hierarchy_dynamic_registration": false,
+      "framed_sha256": "e5e733e15e2df9098f0bd0168c449e707c2785cd878fd08c8e83addb4d9e09f6"
+    }
+  },
+  "raw_provenance": {
+    "historical_raw_aggregate_digest": "dfedbc400dcdb7315143fd0479e791a67dda79331112bd922446e4f770c717bc",
+    "historical_sidecar_count": 26708,
+    "correction_artifact_count": 53380,
+    "correction_artifact_inventory_digest": "2e59bdcc6ff3b1dab8d8303a18f544c1e8c7af6956802b2da14ec5c54c7939cc",
+    "correction_run_dir_sha256": "ddc7a39f2322ed5d3e0730f376563ef69e8ffd31c982c1f0928d3ea7f0174633",
+    "final_checksums_line_count": 53380
+  },
+  "historical_vs_correction": {
+    "final_counts_equal": true,
+    "bounded_differences": [
+      "correction v2 adds sealed complete prelaunch environment custody",
+      "correction v2 records gopls and Go executable byte lengths and digests",
+      "correction v2 records closed Go toolchain inventory",
+      "correction v2 raw artifact inventory differs from historical workload raw aggregate and is pinned separately"
+    ],
+    "semantic_result_drift_blocker": null
+  },
+  "role_manifest": [
+    {
+      "role": "generic_incoming_semantics_dependency",
+      "status": "PRESENT_ACCEPTED_BY_USER",
+      "mandatory": true
+    },
+    {
+      "role": "generic_semantic_statement_preservation",
+      "status": "PRESENT_EXACT",
+      "mandatory": true,
+      "statement_count": 6,
+      "statement_ids": [
+        "top_level_response_null_vs_empty_array_distinct",
+        "missing_fromRanges_malformed",
+        "null_fromRanges_malformed",
+        "present_empty_fromRanges_retains_member_zero_occurrence_range_rows",
+        "nonempty_fromRanges_preserve_supplied_ranges_order_duplicates_ordinals_without_synthesis",
+        "endpoint_spans_identity_display_never_occurrence_evidence"
+      ],
+      "occurrence_source_policy": "CALLS occurrence evidence is derived solely from supplied fromRanges; from.range and from.selectionRange are endpoint identity/display spans only and never occurrence evidence."
+    },
+    {
+      "role": "provider_binding_identity",
+      "status": "PRESENT",
+      "mandatory": true
+    },
+    {
+      "role": "incoming_plan_freeze",
+      "status": "PRESENT",
+      "mandatory": true
+    },
+    {
+      "role": "target_set_identity",
+      "status": "PRESENT",
+      "mandatory": true
+    },
+    {
+      "role": "gopls_executable_path",
+      "status": "PRESENT_RETAINED",
+      "mandatory": true
+    },
+    {
+      "role": "gopls_executable_digest",
+      "status": "PRESENT_RETAINED",
+      "mandatory": true
+    },
+    {
+      "role": "gopls_executable_version",
+      "status": "PRESENT_RETAINED",
+      "mandatory": true
+    },
+    {
+      "role": "gopls_executable_byte_length",
+      "status": "PRESENT_RETAINED_V2",
+      "mandatory": true,
+      "value": 41038194
+    },
+    {
+      "role": "gopls_launch_argv",
+      "status": "PRESENT_FROM_RETAINED_RUNNER",
+      "mandatory": true
+    },
+    {
+      "role": "launch_cwd",
+      "status": "PRESENT_RETAINED",
+      "mandatory": true
+    },
+    {
+      "role": "complete_prelaunch_environment",
+      "status": "PRESENT_RETAINED_PRIVATE_V2",
+      "mandatory": true
+    },
+    {
+      "role": "behavior_relevant_go_environment",
+      "status": "PRESENT_RETAINED",
+      "mandatory": true
+    },
+    {
+      "role": "go_toolchain_binary_digest_inventory",
+      "status": "PRESENT_RETAINED_V2",
+      "mandatory": true
+    },
+    {
+      "role": "initialize_root_uri_and_workspace_folders",
+      "status": "PRESENT_RETAINED_RAW",
+      "mandatory": true
+    },
+    {
+      "role": "initialize_client_call_hierarchy_capability",
+      "status": "PRESENT_RETAINED_RAW",
+      "mandatory": true
+    },
+    {
+      "role": "initialize_server_call_hierarchy_provider",
+      "status": "PRESENT_RETAINED_RAW",
+      "mandatory": true
+    },
+    {
+      "role": "all_5900_final_dispositions",
+      "status": "PRESENT_EQUAL_HISTORICAL_AND_V2",
+      "mandatory": true
+    },
+    {
+      "role": "failure_identity_preservation",
+      "status": "PRESENT",
+      "mandatory": true
+    },
+    {
+      "role": "raw_payload_references",
+      "status": "PRESENT_PINNED_HISTORICAL_AND_V2",
+      "mandatory": true
+    },
+    {
+      "role": "numeric_envelope",
+      "status": "PRESENT_MEASURED_NOT_UNIVERSAL",
+      "mandatory": true
+    },
+    {
+      "role": "frontier",
+      "status": "UNKNOWN_NOT_INVENTED",
+      "mandatory": false
+    },
+    {
+      "role": "independent_provider_qualification_review",
+      "status": "REQUESTED_NOT_PRODUCER_ISSUED",
+      "mandatory": false
+    },
+    {
+      "role": "production_admission_prerequisites",
+      "status": "REFUSED_NOT_GRANTED",
+      "mandatory": true
+    }
+  ],
+  "role_closure": {
+    "mandatory_role_count": 21,
+    "mandatory_missing_count": 0,
+    "mandatory_refused_count": 0,
+    "producer_self_go": false,
+    "closed_by_v2_roles": [
+      "gopls_executable_byte_length",
+      "complete_prelaunch_environment",
+      "go_toolchain_binary_digest_inventory"
+    ]
+  },
+  "recursive_presumption_ledger": [
+    {
+      "id": "P0",
+      "event": "first_provider_candidate_NO_GO",
+      "disposition": "generic prerequisite missing and provider custody overstated"
+    },
+    {
+      "id": "P1",
+      "event": "generic_prerequisite_GO",
+      "disposition": "CALLS_LSP_INCOMING_EXACT_V1_SEMANTICS_GO accepted at c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
+    },
+    {
+      "id": "P2",
+      "event": "failed_pre_effect_v1",
+      "disposition": "candidate consumed generic closure but still carried stale custody blockers"
+    },
+    {
+      "id": "P3",
+      "event": "second_provider_candidate_NO_GO",
+      "disposition": "provider package stayed AUTHORED_NOT_GO pending custody rerun corrections"
+    },
+    {
+      "id": "P4",
+      "event": "incoming_custody_rerun_corrections",
+      "disposition": "addendum GO and head correction GO produced accepted v2 custody evidence"
+    },
+    {
+      "id": "P5",
+      "event": "accepted_v2",
+      "disposition": "counts exactly equal; mandatory custody roles closed; producer remains AUTHORED_NOT_GO"
+    },
+    {
+      "id": "P6",
+      "event": "verifier_tamper_coverage_NO_GO",
+      "disposition": "Final reviewer returned NO_GO solely because verifier/tamper coverage did not independently assert every generic semantic statement and authority numeric typing across MANIFEST/RESULT."
+    },
+    {
+      "id": "P7",
+      "event": "verifier_tamper_coverage_corrected",
+      "disposition": "Verifier now asserts exact MANIFEST/RESULT/role semantic preservation, numeric authority 0, refusal/accepted false, and semantic assertion-bound tamper failures while producer remains AUTHORED_NOT_GO."
+    },
+    {
+      "id": "P8",
+      "event": "occurrence_source_policy_escape_NO_GO",
+      "disposition": "Reviewer found sole remaining escape: in-memory mutation of RESULT.semantic_artifacts.occurrence_source_policy to endpoint-span-derived occurrences passed; expected RESULT_OCCURRENCE_SOURCE_POLICY_EXACT."
+    },
+    {
+      "id": "P9",
+      "event": "occurrence_source_policy_escape_corrected",
+      "disposition": "Package now defines one canonical exact occurrence-source policy and requires exact equality in RESULT, MANIFEST, and role artifacts, with mutation/deletion tamper failures bound to RESULT_OCCURRENCE_SOURCE_POLICY_EXACT."
+    }
+  ],
+  "forbidden_effects": {
+    "runtime_memory_ceiling_change": false,
+    "profile_go_issued_by_producer": false,
+    "production_admission": false,
+    "schema_publication": false,
+    "runtime_code_change": false,
+    "other_direction_authority": false,
+    "composition_change": false,
+    "source_runtime_change": false,
+    "public_surface_change": false,
+    "custody_policy_change": false,
+    "custody_ownership_transfer": false
+  },
+  "residual_unknowns": [
+    "frontier remains UNKNOWN: no frontier bound in historical or correction evidence",
+    "production admission remains refused pending separate authority"
+  ],
+  "accepted_generic_semantic_statements": [
+    {
+      "id": "top_level_response_null_vs_empty_array_distinct",
+      "statement": "top-level response null and [] remain distinct successful-empty source forms when admitted by terminal policy"
+    },
+    {
+      "id": "missing_fromRanges_malformed",
+      "statement": "missing member fromRanges is malformed for semantic admission and preserved only in raw custody"
+    },
+    {
+      "id": "null_fromRanges_malformed",
+      "statement": "null member fromRanges is malformed for semantic admission and preserved only in raw custody"
+    },
+    {
+      "id": "present_empty_fromRanges_retains_member_zero_occurrence_range_rows",
+      "statement": "present empty fromRanges: [] retains an otherwise-valid relationship/member and emits zero CALLS occurrence rows and zero occurrence range rows"
+    },
+    {
+      "id": "nonempty_fromRanges_preserve_supplied_ranges_order_duplicates_ordinals_without_synthesis",
+      "statement": "nonempty supplied fromRanges are the only CALLS occurrence ranges; supplied range order, target ordinal, member ordinal, and duplicate multiplicity are preserved without synthesized ranges"
+    },
+    {
+      "id": "endpoint_spans_identity_display_never_occurrence_evidence",
+      "statement": "returned from.range and from.selectionRange are endpoint identity/display spans, never occurrence evidence; CALLS occurrences are derived solely from supplied fromRanges"
+    }
+  ],
+  "declared_authority": {
+    "profile": {
+      "authority": 0,
+      "accepted": false,
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED"
+    },
+    "custody": {
+      "authority": 0,
+      "accepted": false,
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED"
+    },
+    "review_request": {
+      "authority": 0,
+      "accepted": false,
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED"
+    }
+  },
+  "occurrence_source_policy": "CALLS occurrence evidence is derived solely from supplied fromRanges; from.range and from.selectionRange are endpoint identity/display spans only and never occurrence evidence.",
+  "semantic_artifacts": {
+    "occurrence_source_policy": "CALLS occurrence evidence is derived solely from supplied fromRanges; from.range and from.selectionRange are endpoint identity/display spans only and never occurrence evidence."
+  }
+}
