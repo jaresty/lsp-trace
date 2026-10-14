@@ -1,5 +1,9 @@
 {
   "accepted": false,
+  "actual_execution_head_provenance": {
+    "private": "full actual HEAD retained in private prelaunch repository_state.actual_head",
+    "public": "actual HEAD exposed only as 12-character token plus sha256 digest"
+  },
   "authority": 0,
   "blocker_corrections": [
     "public summary now allowlist-only with raw env/path/key leakage tests",
@@ -7,7 +11,8 @@
     "post-full-run finalize/verify sealing implemented and exercised on synthetic TEST_ONLY fixture with tamper failures",
     "nominal public artifacts recursively scanned for absolute/private path leaks; public seals/notices/provenance use relative references and digests only",
     "resolve_run_relative replaced with component-by-component no-follow descriptor traversal; adversarial symlink/dotdot/absolute tests added",
-    "final no-follow opens now include O_NONBLOCK before fstat so FIFO/socket/device/directory nonregular paths reject without blocking or reads"
+    "final no-follow opens now include O_NONBLOCK before fstat so FIFO/socket/device/directory nonregular paths reject without blocking or reads",
+    "exact HEAD self-reference replaced with immutable-base ancestry plus addendum-only descendant and package-integrity checks"
   ],
   "completeness": "UNKNOWN",
   "estimate": {
@@ -15,7 +20,16 @@
     "historical_observed_max_elapsed_seconds_per_target": 1.950021,
     "sequential_estimate_from_observed_max": "about 3.20 hours plus startup/filesystem overhead"
   },
+  "failed_pre_effect_run": {
+    "correction_scope": "committed addendum package only; no fullrun/retry/commit/delegation/outgoing/provider/composition",
+    "failed_before_effects": true,
+    "failed_head_sha256": "e56d6f0aee6f3e3745f6250c30be6ecb4a0f18b88b11b7d2b5b754727dc02b32",
+    "failed_head_token": "4197017862a1",
+    "failed_run_id": "incoming-custody-correction-v1",
+    "no_successful_run_dir_or_evidence": true
+  },
   "full_campaign_executed": false,
+  "immutable_dependency_base": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a",
   "non_claims": [
     "not denominator evidence until --run-full is explicitly reviewed and run",
     "no historical overwrite",
@@ -27,9 +41,9 @@
   ],
   "producer_may_issue_go": false,
   "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
-  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-addendum.result.v5",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-addendum.result.v6",
   "status": "INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
-  "summary": "Addendum corrected for three NO-GO blockers; only TEST_ONLY fixtures were run, no full incoming campaign.",
+  "summary": "Addendum corrected for NO-GO blockers and exact-HEAD self-reference; only TEST_ONLY fixtures were run, no full incoming campaign.",
   "test_only_dry_plan": {
     "batch_count": 118,
     "batch_size": 50,
@@ -43,8 +57,8 @@
     "complete_env_sha256": "2773ca7ba71d1c42266ce505fc32a3892048c101912579c8dd174d1ddc2ce3f5",
     "gopls_launched": false,
     "popen_binding_sha256": "ec6c82383e037c769bb8b7247aef5512b4d9081f212171c9375b23a11d68fbf9",
-    "public_summary_sha256": "5ae5941e6dfb35d496325a029ce088625a37c1495617305475850d42824c7700",
-    "record_sha256": "5025d3f6983ebfdc6d94694b63c5fa6699ee811de99a0c822bdd8a20893b5199"
+    "public_summary_sha256": "2e70b090b7519746a0aeab9b285c2691e984558599d2be69f2d27e2b90d11d57",
+    "record_sha256": "62be4acd970d48c498d1638485240e0d1bf871110fe2bbb998ae1a87832c297b"
   },
   "test_only_synthetic_seal": {
     "artifact_count": 18,

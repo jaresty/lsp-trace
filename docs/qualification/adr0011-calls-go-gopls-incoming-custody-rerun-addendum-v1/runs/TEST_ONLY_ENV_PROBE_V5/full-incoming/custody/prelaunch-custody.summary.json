@@ -3,8 +3,8 @@
   "artifact_digests": {
     "environment_digest": "2773ca7ba71d1c42266ce505fc32a3892048c101912579c8dd174d1ddc2ce3f5",
     "environment_key_count": 63,
-    "private_prelaunch_record_byte_length": 22996,
-    "private_prelaunch_record_sha256": "5025d3f6983ebfdc6d94694b63c5fa6699ee811de99a0c822bdd8a20893b5199",
+    "private_prelaunch_record_byte_length": 24065,
+    "private_prelaunch_record_sha256": "62be4acd970d48c498d1638485240e0d1bf871110fe2bbb998ae1a87832c297b",
     "private_record_path_sha256": "ea73aebd4993d145b4629e802ad6b419ec21367c2210b8dd6290924b6f07f97c"
   },
   "authority": 0,
@@ -61,6 +61,8 @@
     }
   },
   "historical_evidence_use": "FRESH_RERUN_ONLY_DO_NOT_REPRESENT_AS_OLD_RUN_EVIDENCE",
+  "immutable_dependency_base_sha256": "03a877b08ccd9bc2b2dabbb617d75f32e5054996b56f3a0d095d5b9e0b78b14b",
+  "immutable_dependency_base_token": "c3d77247f5a2",
   "initialize_summary": {
     "body_byte_length": 340,
     "body_sha256": "42b55cdbaa10d982936f9ba98880d77b66a73a77ebc6b48e0cc216341ee5cebf",
@@ -87,6 +89,14 @@
     "raw_environment_values_present": false,
     "raw_paths_present": false
   },
+  "repository_state_policy": {
+    "base_is_ancestor": true,
+    "descendant_changed_path_count": 0,
+    "descendant_changed_paths_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "descendant_changes_confined_to_addendum_package": true,
+    "package_integrity_schema": "lsp-trace.adr0011.calls.go.gopls.incoming.addendum-package-integrity.v1",
+    "untracked_paths_authorized": false
+  },
   "run_id": "TEST_ONLY_ENV_PROBE_V5",
   "run_namespace": "lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1",
   "runner_runtime_summary": {
@@ -99,7 +109,7 @@
     "wrapper_source_byte_length": 51917,
     "wrapper_source_sha256": "cd05f734b895bc7a3f3590ca8e623f645ac08aed55074a5d2a17231913351466"
   },
-  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-public-summary.v2",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-public-summary.v3",
   "toolchain_summary": {
     "closed_inventory_scope_count": 4,
     "complete": true,
@@ -128,5 +138,6 @@
     "required_records_digest": "f1031a52261250e43d14c40206a51f39a603112b732f9130133b1f67c0e0d784",
     "schema": "lsp-trace.adr0011.calls.go.gopls.closed-toolchain-inventory.v1"
   },
-  "worktree_head": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
+  "worktree_head_sha256": "03a877b08ccd9bc2b2dabbb617d75f32e5054996b56f3a0d095d5b9e0b78b14b",
+  "worktree_head_token": "c3d77247f5a2"
 }

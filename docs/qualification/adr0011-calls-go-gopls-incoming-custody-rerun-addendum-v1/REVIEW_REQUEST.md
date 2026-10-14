@@ -10,5 +10,7 @@ Review questions:
 4. Are 5,900 / 50 / 118 / 33,554,432 / incoming-only / retry-free / fresh namespace invariants enforced?
 5. Are historical failures/refusals/frontier `UNKNOWN` preserved without authority merge?
 6. Are TEST_ONLY artifacts prevented from masquerading as denominator evidence?
+7. Does the self-reference correction keep `c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a` as an immutable ancestor while accepting only addendum-confined descendants with clean tracked state and matching package checksums?
+8. Does public/private provenance record the actual execution HEAD only in bounded public token/digest form and full private form?
 
 Expected answer if accepted: package remains `INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO`, with a separate human decision needed before any `--run-full` execution.

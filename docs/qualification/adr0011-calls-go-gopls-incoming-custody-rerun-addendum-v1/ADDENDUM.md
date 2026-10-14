@@ -21,3 +21,7 @@ This package finalizes and corrects an interrupted addendum for a future fresh i
 - retry policy: retry-free fresh run directory only; existing run dir/run-id dir fails closed
 - raw response ceiling: 33,554,432 bytes unchanged
 - namespace: `lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1`
+
+## Exact-HEAD self-reference correction
+
+The failed pre-effect run `incoming-custody-correction-v1` produced no successful run directory or evidence because the wrapper pinned the addendum precommit parent as an exact `EXPECTED_HEAD`. This correction keeps `c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a` as an immutable dependency base, but allows descendant HEADs only when the base is an ancestor, the tracked diff from base to HEAD is confined to this addendum package, there are no staged or dirty tracked files, and every current package file is regular/non-symlink and covered by matching package checksums. Untracked provider-candidate material is neither read nor authorized.

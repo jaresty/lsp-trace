@@ -1,4 +1,8 @@
 {
+  "actual_execution_head_provenance": {
+    "private": "full actual HEAD retained in private prelaunch repository_state.actual_head",
+    "public": "actual HEAD exposed only as 12-character token plus sha256 digest"
+  },
   "binds_to_generic_profile_id": "CALLS_LSP_INCOMING_EXACT_V1",
   "custody_roles": [
     {
@@ -101,7 +105,7 @@
     },
     {
       "authority": 0,
-      "evidence": "source pins to accepted v5/provider candidate; addendum records no authority merge and preserves frontier UNKNOWN",
+      "evidence": "source pins to accepted v5 inputs only; addendum records no authority merge and preserves frontier UNKNOWN without reading any untracked provider candidate",
       "fail_closed_if_missing": true,
       "mandatory": true,
       "missing_disposition": "NO_GO_FAIL_CLOSED",
@@ -130,6 +134,14 @@
     "package_verification": "python3 docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/verify_custody_rerun_addendum.py",
     "verify_full_run": "python3 docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/capture_incoming_custody_rerun.py --verify-full-run <fresh-run-dir>"
   },
+  "failed_pre_effect_run_correction": {
+    "correction_scope": "committed addendum package only; no fullrun/retry/commit/delegation/outgoing/provider/composition",
+    "failed_before_effects": true,
+    "failed_head_sha256": "e56d6f0aee6f3e3745f6250c30be6ecb4a0f18b88b11b7d2b5b754727dc02b32",
+    "failed_head_token": "4197017862a1",
+    "failed_run_id": "incoming-custody-correction-v1",
+    "no_successful_run_dir_or_evidence": true
+  },
   "forbidden_effects": {
     "authority_merge": false,
     "composition_change": false,
@@ -157,7 +169,20 @@
     "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
   },
   "full_campaign_executed_by_this_package": false,
+  "head_policy": {
+    "allows_addendum_only_descendant_heads": true,
+    "ignores_untracked_paths": true,
+    "rejects_dirty_tracked_changes": true,
+    "rejects_missing_or_extra_executable_contract_files": true,
+    "rejects_staged_changes": true,
+    "rejects_symlink_or_nonregular_package_files": true,
+    "rejects_unrelated_tracked_descendant_changes": true,
+    "requires_base_ancestor": true,
+    "requires_current_addendum_files_covered_by_checksums": true,
+    "untracked_provider_candidate_authorized": false
+  },
   "historical_evidence_mutation": "FORBIDDEN",
+  "immutable_dependency_base": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a",
   "no_follow_path_resolution": {
     "applies_to": [
       "seal_refs",
@@ -237,6 +262,17 @@
   },
   "outgoing_run_authority": false,
   "package": "adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1",
+  "package_integrity": {
+    "checksum_file": "CHECKSUMS.sha256",
+    "checksums_cover_current_addendum_files": true,
+    "excluded_generated_logs": [
+      "VERIFICATION.log",
+      "TAMPER_TESTS.log"
+    ],
+    "rejects_checksum_drift": true,
+    "rejects_missing_or_extra_executable_contract_files": true,
+    "rejects_symlink_or_nonregular_package_files": true
+  },
   "preserved_unknowns": [
     "frontier remains UNKNOWN and must not be inferred",
     "historical failures/refusals are preserved and not overwritten",
@@ -268,7 +304,7 @@
     "raw_environment_values_public": false,
     "raw_paths_public": false
   },
-  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-addendum.manifest.v5",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-addendum.manifest.v6",
   "source_pins": {
     "accepted_v5_manifest": {
       "byte_length": 743,
@@ -294,16 +330,6 @@
       "byte_length": 15081,
       "path": "docs/qualification/adr0011-calls-go-gopls-incoming-review-v2.md",
       "sha256": "fe6302804b24f9ad9144bdaba943aeadb0763cf97236dff9e3713e9a140e2fa8"
-    },
-    "separate_provider_candidate_manifest_read_only": {
-      "byte_length": 18832,
-      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-profile-qualification-v1/MANIFEST.json",
-      "sha256": "9599f576fa74000d00d7f09786213254227d51e7c57f2343c1b48c8f29855ff1"
-    },
-    "separate_provider_candidate_result_read_only": {
-      "byte_length": 1771,
-      "path": "docs/qualification/adr0011-calls-go-gopls-incoming-profile-qualification-v1/RESULT.json",
-      "sha256": "c0acdb0e624698cdf49cf80962cf42c3b7600d050c5c3a8badb08059059fb638"
     },
     "target_tsv": {
       "byte_length": 1685888,
@@ -336,16 +362,16 @@
       "source": "env=captured_env"
     },
     "prelaunch_private_record": {
-      "byte_length": 22996,
+      "byte_length": 24065,
       "complete_env_sha256": "2773ca7ba71d1c42266ce505fc32a3892048c101912579c8dd174d1ddc2ce3f5",
       "path": "runs/TEST_ONLY_ENV_PROBE_V5/full-incoming/custody/prelaunch-custody.private.json",
       "private_values_retained": true,
-      "sha256": "5025d3f6983ebfdc6d94694b63c5fa6699ee811de99a0c822bdd8a20893b5199"
+      "sha256": "62be4acd970d48c498d1638485240e0d1bf871110fe2bbb998ae1a87832c297b"
     },
     "prelaunch_public_summary": {
       "path": "runs/TEST_ONLY_ENV_PROBE_V5/full-incoming/custody/prelaunch-custody.summary.json",
       "policy": "ALLOWLIST_ONLY_NO_RAW_ENV_VALUES",
-      "sha256": "5ae5941e6dfb35d496325a029ce088625a37c1495617305475850d42824c7700"
+      "sha256": "2e70b090b7519746a0aeab9b285c2691e984558599d2be69f2d27e2b90d11d57"
     },
     "synthetic_final_seal": {
       "artifact_count": 18,
@@ -361,6 +387,5 @@
     "gopls_launched_in_test_only_modes": false,
     "may_masquerade_as_denominator_evidence": false,
     "synthetic_seal_run_id": "TEST_ONLY_SEAL_FIXTURE"
-  },
-  "worktree_head": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
+  }
 }

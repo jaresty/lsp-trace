@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import builtins
 import copy
 import hashlib
 import importlib.util
@@ -17,7 +18,7 @@ from typing import Any, Dict, Iterable, List
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-EXPECTED_HEAD = "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
+IMMUTABLE_DEPENDENCY_BASE = "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
 PROFILE = "CALLS_GO_GOPLS_INCOMING_EXACT_V1"
 GENERIC_PROFILE = "CALLS_LSP_INCOMING_EXACT_V1"
 DISPOSITION = "INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO"
@@ -195,12 +196,17 @@ def check_public_scanner_mutations() -> None:
 
 def check_manifest(m: Dict[str, Any] | None = None) -> None:
     m = m or j("MANIFEST.json")
-    req("SCHEMA", m.get("schema") == "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-addendum.manifest.v5")
+    req("SCHEMA", m.get("schema") == "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-addendum.manifest.v6")
     req("PROFILE_ID", m.get("profile_id") == PROFILE and m.get("binds_to_generic_profile_id") == GENERIC_PROFILE)
     req("DISPOSITION_NOT_GO", m.get("producer_disposition") == DISPOSITION and m.get("producer_may_issue_go") is False)
     req("RUN_NAMESPACE_FRESH", m.get("fresh_run_namespace") == RUN_NAMESPACE and m.get("supplements_historical_evidence") is True)
     req("NO_HISTORICAL_OVERWRITE", m.get("historical_evidence_mutation") == "FORBIDDEN")
-    req("HEAD_PIN", m.get("worktree_head") == EXPECTED_HEAD)
+    req("IMMUTABLE_BASE", m.get("immutable_dependency_base") == IMMUTABLE_DEPENDENCY_BASE)
+    policy = m.get("head_policy", {})
+    req("HEAD_POLICY_DESCENDANTS", policy.get("requires_base_ancestor") is True and policy.get("allows_addendum_only_descendant_heads") is True)
+    req("HEAD_POLICY_REJECTS_DRIFT", policy.get("rejects_unrelated_tracked_descendant_changes") is True and policy.get("rejects_dirty_tracked_changes") is True and policy.get("rejects_staged_changes") is True)
+    pkg = m.get("package_integrity", {})
+    req("PACKAGE_INTEGRITY_POLICY", pkg.get("checksums_cover_current_addendum_files") is True and pkg.get("rejects_symlink_or_nonregular_package_files") is True and pkg.get("rejects_missing_or_extra_executable_contract_files") is True)
     inv = m.get("frozen_incoming_workload", {})
     for key, expected in EXPECTED.items():
         req("INVARIANT_" + key, inv.get(key) == expected)
@@ -228,7 +234,7 @@ def check_manifest(m: Dict[str, Any] | None = None) -> None:
 
 def check_execution_contract(c: Dict[str, Any] | None = None) -> None:
     c = c or j("EXECUTION_CONTRACT.json")
-    req("EXEC_CONTRACT_SCHEMA", c.get("schema") == "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun.execution-contract.v2")
+    req("EXEC_CONTRACT_SCHEMA", c.get("schema") == "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun.execution-contract.v3")
     req("EXEC_INCOMING_ONLY", c.get("direction") == "incoming" and c.get("forbid_outgoing") is True)
     req("EXEC_EXACT5900", c.get("target_count") == 5900 and c.get("batch_size") == 50 and c.get("batch_count") == 118)
     req("EXEC_RETRY_FREE", c.get("retry_policy") == "RETRY_FREE_FRESH_RUN_ONLY" and c.get("fresh_run_dir_policy") == "MUST_NOT_EXIST_AT_ALL_AT_RESERVATION")
@@ -241,7 +247,9 @@ def check_execution_contract(c: Dict[str, Any] | None = None) -> None:
 
 def check_sources_and_checksums() -> None:
     m = j("MANIFEST.json")
-    for name, rec in m.get("source_pins", {}).items():
+    source_pins = m.get("source_pins", {})
+    req("NO_PROVIDER_CANDIDATE_SOURCE_PINS", not any("incoming-profile-qualification-v1" in json.dumps(rec, sort_keys=True) or "provider_candidate" in name or "provider-candidate" in name for name, rec in source_pins.items()))
+    for name, rec in source_pins.items():
         path = ROOT / rec["path"]
         req("SOURCE_PIN_EXISTS_" + name, path.exists())
         req("SOURCE_PIN_SHA_" + name, sha(path) == rec["sha256"])
@@ -272,6 +280,8 @@ def check_wrapper_source() -> None:
     req("WRAPPER_NO_UNCONTROLLED_GOROOT_TREE", "does not claim an uncontrolled recursive GOROOT tree hash" in text)
     req("WRAPPER_FRESH_RESERVATION", "mkdir(mode=0o700, exist_ok=False)" in text and "refusing same-run-id resume" in text)
     req("WRAPPER_FINALIZE_VERIFY", "def finalize_run" in text and "def verify_sealed_run" in text and "changed, missing, or extra artifact" in text)
+    req("WRAPPER_REPOSITORY_CONTEXT", "validate_repository_execution_context" in text and "IMMUTABLE_DEPENDENCY_BASE" in text and "descendant_changes_confined_to_addendum_package" in text)
+    req("WRAPPER_PACKAGE_INTEGRITY", "validate_addendum_package_integrity" in text and "CHECKSUMS.sha256" in text and "extra executable contract file forbidden" in text)
     req("WRAPPER_NOFOLLOW_RESOLUTION", "_open_relative_no_follow_fd" in text and "O_NOFOLLOW" in text and "invalid path component" in text)
     req("WRAPPER_NONBLOCK_FINAL_OPEN", "O_NONBLOCK" in text and "final=True" in text and "Prevent FIFO/special-file open from blocking" in text)
 
@@ -284,7 +294,9 @@ def check_public_summary() -> None:
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     private = json.loads(private_path.read_text(encoding="utf-8"))
     CAP.assert_public_summary_allowlisted(summary)
-    req("PUBLIC_SUMMARY_SCHEMA", summary.get("schema") == "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-public-summary.v2")
+    req("PUBLIC_SUMMARY_SCHEMA", summary.get("schema") == "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-public-summary.v3")
+    req("PUBLIC_HEAD_BOUNDED", "worktree_head" not in summary and len(summary.get("worktree_head_token", "")) == 12 and len(summary.get("worktree_head_sha256", "")) == 64)
+    req("PUBLIC_BASE_BOUNDED", len(summary.get("immutable_dependency_base_token", "")) == 12 and len(summary.get("immutable_dependency_base_sha256", "")) == 64)
     text = json.dumps(summary, sort_keys=True)
     for forbidden in ["go_env_json", "complete_env", "canonical_path", "env_keys_sorted", "workspaceFolders", "rootUri", "GOPATH", "PATH"]:
         req("PUBLIC_SUMMARY_OMITS_" + forbidden, forbidden not in text)
@@ -556,14 +568,175 @@ def check_synthetic_seal_and_tampers() -> None:
             print("PASS SYNTHETIC_SEAL_TAMPER_FINAL_SYMLINK_FAILS_SKIPPED_UNSUPPORTED")
 
 
-def check_head() -> None:
-    head = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
-    req("HEAD_PIN", head == EXPECTED_HEAD)
+def check_repository_context() -> None:
+    # The working tree is intentionally dirty while this correction is authored.
+    # Runtime execution calls validate_repository_execution_context(), which rejects
+    # dirty/staged state; verifier coverage for accepted execution state lives in
+    # committed temporary git fixtures below.
+    integrity = CAP.validate_addendum_package_integrity()
+    req("CURRENT_PACKAGE_INTEGRITY", integrity.get("package_file_count", 0) > 0 and len(integrity.get("checksum_manifest_sha256", "")) == 64)
+
+
+def _git(repo: pathlib.Path, *args: str) -> str:
+    return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
+
+
+def _write_temp_checksums(pkg: pathlib.Path) -> None:
+    lines = []
+    excluded = {"CHECKSUMS.sha256", "VERIFICATION.log", "TAMPER_TESTS.log"}
+    for path in sorted(pkg.rglob("*")):
+        if "__pycache__" in path.parts or path.is_dir() or path.name in excluded:
+            continue
+        rel = path.relative_to(pkg).as_posix()
+        lines.append(f"{sha(path)}  {rel}\n")
+    (pkg / "CHECKSUMS.sha256").write_text("".join(lines), encoding="utf-8")
+
+
+def _make_repo_context_fixture() -> tuple[pathlib.Path, pathlib.Path, str]:
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix="adr0011-repoctx-"))
+    repo = tmp / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "test"], check=True)
+    (repo / "BASE.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "BASE.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "base"], check=True)
+    base = _git(repo, "rev-parse", "HEAD")
+    pkg = repo / "docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1"
+    shutil.copytree(HERE, pkg, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    subprocess.run(["git", "-C", str(repo), "add", "docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "addendum"], check=True)
+    return repo, pkg, base
+
+
+def expect_repo_rejects(label: str, repo: pathlib.Path, pkg: pathlib.Path, base: str) -> None:
+    expect_raises(label, lambda: CAP.validate_repository_execution_context(repo_root=repo, addendum_dir=pkg, immutable_base=base))
+
+
+def _context_observable_projection(context: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "base": context["immutable_dependency_base"],
+        "head": context["actual_head"],
+        "base_is_ancestor": context["base_is_ancestor"],
+        "descendant_changes_confined_to_addendum_package": context["descendant_changes_confined_to_addendum_package"],
+        "descendant_changed_path_count": context["descendant_changed_path_count"],
+        "descendant_changed_paths_sha256": context["descendant_changed_paths_sha256"],
+        "tracked_dirty_paths": context["tracked_dirty_paths"],
+        "tracked_staged_paths": context["tracked_staged_paths"],
+        "untracked_paths_authorized": context["untracked_paths_authorized"],
+        "untracked_provider_candidate_read": context["untracked_provider_candidate_read"],
+        "package_integrity": context["package_integrity"],
+    }
+
+
+@contextlib.contextmanager
+def forbid_candidate_python_access(candidate: pathlib.Path):
+    candidate_prefix = str(candidate)
+    original_open = builtins.open
+    original_scandir = os.scandir
+    original_path_open = pathlib.Path.open
+    touched: List[str] = []
+
+    def forbidden_path(value: Any) -> bool:
+        try:
+            return str(value).startswith(candidate_prefix)
+        except Exception:
+            return False
+
+    def guarded_open(file, *args, **kwargs):
+        if forbidden_path(file):
+            touched.append("open:" + str(file))
+            raise AssertionError("candidate path opened: " + str(file))
+        return original_open(file, *args, **kwargs)
+
+    def guarded_path_open(self, *args, **kwargs):
+        if forbidden_path(self):
+            touched.append("path_open:" + str(self))
+            raise AssertionError("candidate path opened: " + str(self))
+        return original_path_open(self, *args, **kwargs)
+
+    def guarded_scandir(path=None):
+        if path is not None and forbidden_path(path):
+            touched.append("scandir:" + str(path))
+            raise AssertionError("candidate path enumerated: " + str(path))
+        return original_scandir(path)
+
+    builtins.open = guarded_open
+    pathlib.Path.open = guarded_path_open
+    os.scandir = guarded_scandir
+    try:
+        yield touched
+    finally:
+        builtins.open = original_open
+        pathlib.Path.open = original_path_open
+        os.scandir = original_scandir
+
+
+def check_untracked_provider_candidate_ignored() -> None:
+    absent_repo, absent_pkg, absent_base = _make_repo_context_fixture()
+    candidate = absent_repo / "docs/qualification/adr0011-calls-go-gopls-incoming-profile-qualification-v1"
+    absent = _context_observable_projection(CAP.validate_repository_execution_context(repo_root=absent_repo, addendum_dir=absent_pkg, immutable_base=absent_base))
+    candidate.mkdir(parents=True)
+    (candidate / "MANIFEST.json").write_text('{"mutated": 1}\n', encoding="utf-8")
+    (candidate / "RESULT.json").write_text('{"mutated": 1}\n', encoding="utf-8")
+    with forbid_candidate_python_access(candidate) as touched_present:
+        present = _context_observable_projection(CAP.validate_repository_execution_context(repo_root=absent_repo, addendum_dir=absent_pkg, immutable_base=absent_base))
+    (candidate / "MANIFEST.json").write_text('{"mutated": 2, "extra": "ignored"}\n', encoding="utf-8")
+    (candidate / "EXTRA_UNTRACKED.txt").write_text("ignored\n", encoding="utf-8")
+    with forbid_candidate_python_access(candidate) as touched_mutated:
+        mutated = _context_observable_projection(CAP.validate_repository_execution_context(repo_root=absent_repo, addendum_dir=absent_pkg, immutable_base=absent_base))
+    req("UNTRACKED_PROVIDER_CANDIDATE_ABSENT_PRESENT_MUTATED_IDENTICAL", absent == present == mutated)
+    req("UNTRACKED_PROVIDER_CANDIDATE_PATH_NEVER_OPENED_OR_ENUMERATED", touched_present == [] and touched_mutated == [])
+    req("UNTRACKED_PROVIDER_CANDIDATE_NOT_EVIDENCE", present["untracked_paths_authorized"] is False and present["untracked_provider_candidate_read"] is False)
+
+
+def check_repository_context_tampers() -> None:
+    repo, pkg, base = _make_repo_context_fixture()
+    (repo / "docs/qualification/adr0011-calls-go-gopls-incoming-profile-qualification-v1").mkdir(parents=True, exist_ok=True)
+    (repo / "docs/qualification/adr0011-calls-go-gopls-incoming-profile-qualification-v1/UNTRACKED_DO_NOT_READ").write_text("excluded\n", encoding="utf-8")
+    accepted = CAP.validate_repository_execution_context(repo_root=repo, addendum_dir=pkg, immutable_base=base)
+    req("TAMPER_REPO_ACCEPTED_ADDENDUM_ONLY_DESCENDANT", accepted["descendant_changes_confined_to_addendum_package"] is True)
+
+    accepted_repo, accepted_pkg, accepted_base = _make_repo_context_fixture()
+    (accepted_pkg / "README.md").write_text((accepted_pkg / "README.md").read_text(encoding="utf-8") + "\naddendum-only descendant fixture\n", encoding="utf-8")
+    _write_temp_checksums(accepted_pkg)
+    subprocess.run(["git", "-C", str(accepted_repo), "add", "docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1"], check=True)
+    subprocess.run(["git", "-C", str(accepted_repo), "commit", "-q", "-m", "addendum-only-descendant"], check=True)
+    accepted2 = CAP.validate_repository_execution_context(repo_root=accepted_repo, addendum_dir=accepted_pkg, immutable_base=accepted_base)
+    req("TAMPER_REPO_ACCEPTS_UPDATED_ADDENDUM_ONLY_DESCENDANT", accepted2["descendant_changes_confined_to_addendum_package"] is True)
+
+    unrelated_repo, unrelated_pkg, unrelated_base = _make_repo_context_fixture()
+    (unrelated_repo / "UNRELATED.txt").write_text("unrelated\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(unrelated_repo), "add", "UNRELATED.txt"], check=True)
+    subprocess.run(["git", "-C", str(unrelated_repo), "commit", "-q", "-m", "unrelated"], check=True)
+    expect_repo_rejects("TAMPER_REPO_UNRELATED_DESCENDANT_FAILS", unrelated_repo, unrelated_pkg, unrelated_base)
+
+    dirty_repo, dirty_pkg, dirty_base = _make_repo_context_fixture()
+    (dirty_repo / "BASE.txt").write_text("dirty\n", encoding="utf-8")
+    expect_repo_rejects("TAMPER_REPO_DIRTY_TRACKED_SOURCE_FAILS", dirty_repo, dirty_pkg, dirty_base)
+
+    staged_repo, staged_pkg, staged_base = _make_repo_context_fixture()
+    (staged_repo / "BASE.txt").write_text("staged\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(staged_repo), "add", "BASE.txt"], check=True)
+    expect_repo_rejects("TAMPER_REPO_STAGED_DRIFT_FAILS", staged_repo, staged_pkg, staged_base)
+
+    checksum_repo, checksum_pkg, checksum_base = _make_repo_context_fixture()
+    (checksum_pkg / "README.md").write_text("checksum drift\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(checksum_repo), "add", "docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/README.md"], check=True)
+    subprocess.run(["git", "-C", str(checksum_repo), "commit", "-q", "-m", "checksum-drift"], check=True)
+    expect_repo_rejects("TAMPER_REPO_ADDENDUM_CHECKSUM_DRIFT_FAILS", checksum_repo, checksum_pkg, checksum_base)
+
+    not_ancestor_repo, not_ancestor_pkg, not_ancestor_base = _make_repo_context_fixture()
+    unrelated_base = _git(not_ancestor_repo, "commit-tree", _git(not_ancestor_repo, "write-tree"), "-m", "unrelated-base")
+    expect_repo_rejects("TAMPER_REPO_BASE_NOT_ANCESTOR_FAILS", not_ancestor_repo, not_ancestor_pkg, unrelated_base)
 
 
 def checks() -> None:
-    check_head()
+    check_repository_context()
     check_manifest()
+    check_repository_context_tampers()
+    check_untracked_provider_candidate_ignored()
     check_execution_contract()
     check_sources_and_checksums()
     check_wrapper_source()
@@ -607,6 +780,9 @@ def tampers() -> None:
     tamper("env_public", lambda m: next(r for r in m["custody_roles"] if r["role"] == "exact_argv_cwd_complete_env_passed_to_popen").__setitem__("sensitive_handling", "PUBLIC"))
     tamper("summary_allows_env", lambda m: next(r for r in m["custody_roles"] if r["role"] == "allowlisted_public_summary_no_env_leakage").__setitem__("raw_environment_values_public", True))
     tamper("seal_claims_full_run", lambda m: next(r for r in m["custody_roles"] if r["role"] == "post_full_run_seal_and_verify").__setitem__("full_run_executed_now", True))
+    tamper("immutable_base", lambda m: m.__setitem__("immutable_dependency_base", "4197017862a155d7a35a723dfb327d6fa351c2ad"))
+    tamper("head_policy_allows_unrelated", lambda m: m["head_policy"].__setitem__("rejects_unrelated_tracked_descendant_changes", False))
+    tamper("package_checksums_disabled", lambda m: m["package_integrity"].__setitem__("checksums_cover_current_addendum_files", False))
     print("INCOMING_CUSTODY_RERUN_ADDENDUM_TAMPER_TESTS_OK_FAIL_CLOSED")
 
 

@@ -13,4 +13,7 @@ PASS TAMPER missing_seal_role
 PASS TAMPER env_public
 PASS TAMPER summary_allows_env
 PASS TAMPER seal_claims_full_run
+PASS TAMPER immutable_base
+PASS TAMPER head_policy_allows_unrelated
+PASS TAMPER package_checksums_disabled
 INCOMING_CUSTODY_RERUN_ADDENDUM_TAMPER_TESTS_OK_FAIL_CLOSED

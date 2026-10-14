@@ -29,9 +29,24 @@ GENERIC_PROFILE_ID = "CALLS_LSP_INCOMING_EXACT_V1"
 RUN_NAMESPACE = "lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1"
 RUN_ID_PREFIX = "CALLS_GO_GOPLS_INCOMING_EXACT_V1_CUSTODY_RERUN_V1"
 DISPOSITION = "INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO"
-EXPECTED_HEAD = "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
+IMMUTABLE_DEPENDENCY_BASE = "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
 ADDENDUM_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = ADDENDUM_DIR.parents[2]
+ADDENDUM_RELATIVE = ADDENDUM_DIR.relative_to(REPO_ROOT).as_posix()
+CHECKSUM_EXCLUDED_PACKAGE_FILES = {"CHECKSUMS.sha256", "VERIFICATION.log", "TAMPER_TESTS.log"}
+REQUIRED_PACKAGE_FILES = {
+    "README.md",
+    "ADDENDUM.md",
+    "EXECUTION_CONTRACT.json",
+    "ROLE_MATRIX.json",
+    "PRESUMPTION_LEDGER.md",
+    "REVIEW_REQUEST.md",
+    "RESULT.json",
+    "MANIFEST.json",
+    "capture_incoming_custody_rerun.py",
+    "verify_custody_rerun_addendum.py",
+}
+REQUIRED_EXECUTABLE_CONTRACT_FILES = {"capture_incoming_custody_rerun.py", "verify_custody_rerun_addendum.py"}
 WORKLOAD_PACKAGE = REPO_ROOT / "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1"
 ORIGINAL_RUNNER = WORKLOAD_PACKAGE / "adr0011_workload_runner.py"
 ORIGINAL_CONTRACT = WORKLOAD_PACKAGE / "contract.json"
@@ -501,8 +516,145 @@ def reserve_fresh_run_dir(run_dir: pathlib.Path) -> pathlib.Path:
     return real
 
 
-def git_head() -> str:
-    return subprocess.check_output(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], text=True).strip()
+def git_text(repo_root: pathlib.Path, args: List[str], *, check: bool = True) -> str:
+    cp = subprocess.run(["git", "-C", str(repo_root), *args], text=True, capture_output=True)
+    if check and cp.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} failed: {cp.stderr.strip()}")
+    return cp.stdout
+
+
+def git_head(repo_root: pathlib.Path = REPO_ROOT) -> str:
+    return git_text(repo_root, ["rev-parse", "HEAD"]).strip()
+
+
+def git_paths(repo_root: pathlib.Path, args: List[str]) -> List[str]:
+    return [line for line in git_text(repo_root, args).splitlines() if line]
+
+
+def git_is_ancestor(repo_root: pathlib.Path, base: str, head: str) -> bool:
+    cp = subprocess.run(["git", "-C", str(repo_root), "merge-base", "--is-ancestor", base, head], text=True, capture_output=True)
+    if cp.returncode == 0:
+        return True
+    if cp.returncode == 1:
+        return False
+    raise RuntimeError(f"git merge-base failed: {cp.stderr.strip()}")
+
+
+def load_package_checksums(addendum_dir: pathlib.Path) -> Dict[str, str]:
+    checksums_path = addendum_dir / "CHECKSUMS.sha256"
+    if not checksums_path.is_file() or checksums_path.is_symlink():
+        raise RuntimeError("missing/nonregular CHECKSUMS.sha256")
+    checksums: Dict[str, str] = {}
+    for line_no, line in enumerate(checksums_path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            digest, rel = line.split("  ", 1)
+        except ValueError as exc:
+            raise RuntimeError(f"invalid checksum line {line_no}") from exc
+        if not rel or rel.startswith("/") or ".." in pathlib.PurePosixPath(rel).parts or rel in checksums:
+            raise RuntimeError(f"invalid checksum path at line {line_no}: {rel!r}")
+        checksums[rel] = digest
+    return checksums
+
+
+def iter_addendum_package_files(addendum_dir: pathlib.Path) -> Iterable[pathlib.Path]:
+    for path in sorted(addendum_dir.rglob("*")):
+        rel_parts = path.relative_to(addendum_dir).parts
+        if "__pycache__" in rel_parts:
+            continue
+        if path.is_symlink():
+            raise RuntimeError(f"symlink forbidden in addendum package: {path.relative_to(addendum_dir).as_posix()}")
+        if path.is_dir():
+            continue
+        if not path.is_file():
+            raise RuntimeError(f"nonregular file forbidden in addendum package: {path.relative_to(addendum_dir).as_posix()}")
+        yield path
+
+
+def validate_addendum_package_integrity(addendum_dir: pathlib.Path = ADDENDUM_DIR) -> Dict[str, Any]:
+    checksums = load_package_checksums(addendum_dir)
+    seen: set[str] = set()
+    for required in REQUIRED_PACKAGE_FILES | {"CHECKSUMS.sha256"}:
+        path = addendum_dir / required
+        if not path.exists() or path.is_symlink() or not path.is_file():
+            raise RuntimeError(f"missing/nonregular required addendum file: {required}")
+    executable_files: List[str] = []
+    for path in iter_addendum_package_files(addendum_dir):
+        rel = path.relative_to(addendum_dir).as_posix()
+        mode = path.stat().st_mode
+        if mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
+            executable_files.append(rel)
+            if rel not in REQUIRED_EXECUTABLE_CONTRACT_FILES:
+                raise RuntimeError(f"extra executable contract file forbidden: {rel}")
+        if rel in CHECKSUM_EXCLUDED_PACKAGE_FILES:
+            continue
+        seen.add(rel)
+        if rel not in checksums:
+            raise RuntimeError(f"addendum file missing from CHECKSUMS.sha256: {rel}")
+        actual = sha256_file(path)
+        if actual != checksums[rel]:
+            raise RuntimeError(f"addendum checksum drift: {rel}")
+    missing_executable = sorted(REQUIRED_EXECUTABLE_CONTRACT_FILES - set(executable_files))
+    if missing_executable:
+        raise RuntimeError("missing executable contract files: " + ", ".join(missing_executable))
+    extra_checksum_entries = sorted(set(checksums) - seen)
+    if extra_checksum_entries:
+        raise RuntimeError("CHECKSUMS.sha256 references missing/extra files: " + ", ".join(extra_checksum_entries[:10]))
+    return {
+        "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.addendum-package-integrity.v1",
+        "package_file_count": len(seen),
+        "package_file_list_sha256": sha256_bytes("\n".join(sorted(seen)).encode("utf-8")),
+        "checksum_manifest_sha256": sha256_file(addendum_dir / "CHECKSUMS.sha256"),
+        "required_executable_contract_files": sorted(REQUIRED_EXECUTABLE_CONTRACT_FILES),
+    }
+
+
+def validate_repository_execution_context(
+    repo_root: pathlib.Path = REPO_ROOT,
+    addendum_dir: pathlib.Path = ADDENDUM_DIR,
+    immutable_base: str = IMMUTABLE_DEPENDENCY_BASE,
+) -> Dict[str, Any]:
+    repo_root = repo_root.resolve(strict=True)
+    addendum_dir = addendum_dir.resolve(strict=True)
+    try:
+        addendum_rel = addendum_dir.relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise RuntimeError("addendum package is outside repository root") from exc
+    head = git_head(repo_root)
+    if not git_is_ancestor(repo_root, immutable_base, head):
+        raise RuntimeError(f"immutable dependency base is not an ancestor of HEAD: {immutable_base}")
+    staged = git_paths(repo_root, ["diff", "--cached", "--name-only", "--"])
+    if staged:
+        raise RuntimeError("staged tracked changes forbidden before execution: " + ", ".join(staged[:10]))
+    dirty = git_paths(repo_root, ["diff", "--name-only", "--"])
+    if dirty:
+        raise RuntimeError("dirty tracked changes forbidden before execution: " + ", ".join(dirty[:10]))
+    changed = git_paths(repo_root, ["diff", "--name-only", f"{immutable_base}..{head}", "--"])
+    prefix = addendum_rel + "/"
+    unrelated = [path for path in changed if path != addendum_rel and not path.startswith(prefix)]
+    if unrelated:
+        raise RuntimeError("HEAD descendant changes outside committed addendum package forbidden: " + ", ".join(unrelated[:10]))
+    integrity = validate_addendum_package_integrity(addendum_dir)
+    return {
+        "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.repository-execution-context.v1",
+        "immutable_dependency_base": immutable_base,
+        "immutable_dependency_base_token": immutable_base[:12],
+        "immutable_dependency_base_sha256": sha256_bytes(immutable_base.encode("utf-8")),
+        "actual_head": head,
+        "actual_head_token": head[:12],
+        "actual_head_sha256": sha256_bytes(head.encode("utf-8")),
+        "base_is_ancestor": True,
+        "descendant_changes_confined_to_addendum_package": True,
+        "addendum_package_relative": addendum_rel,
+        "descendant_changed_path_count": len(changed),
+        "descendant_changed_paths_sha256": sha256_bytes("\n".join(changed).encode("utf-8")),
+        "tracked_dirty_paths": 0,
+        "tracked_staged_paths": 0,
+        "untracked_paths_authorized": False,
+        "untracked_provider_candidate_read": False,
+        "package_integrity": integrity,
+    }
 
 
 def load_original_runner():
@@ -524,7 +676,9 @@ def capture_complete_env() -> Tuple[Dict[str, str], Dict[str, str], str]:
 PUBLIC_SUMMARY_ALLOWED_TOP_LEVEL = {
     "schema", "profile_id", "binds_to_generic_profile_id", "run_namespace", "run_id",
     "producer_disposition", "authority", "accepted", "completeness", "production_admission",
-    "worktree_head", "historical_evidence_use", "contract_invariants", "artifact_digests",
+    "worktree_head_token", "worktree_head_sha256", "immutable_dependency_base_token",
+    "immutable_dependency_base_sha256", "repository_state_policy", "historical_evidence_use",
+    "contract_invariants", "artifact_digests",
     "launch_summary", "initialize_summary", "executable_summaries", "toolchain_summary",
     "runner_runtime_summary", "public_summary_policy",
 }
@@ -569,7 +723,7 @@ def assert_public_summary_allowlisted(obj: Any, *, path: str = "$") -> None:
 def build_public_summary(custody: Dict[str, Any], seal: Dict[str, Any], record_path: pathlib.Path) -> Dict[str, Any]:
     toolchain = custody["go_toolchain_inventory"]
     summary = {
-        "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-public-summary.v2",
+        "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-public-summary.v3",
         "profile_id": custody["profile_id"],
         "binds_to_generic_profile_id": custody["binds_to_generic_profile_id"],
         "run_namespace": custody["run_namespace"],
@@ -579,7 +733,18 @@ def build_public_summary(custody: Dict[str, Any], seal: Dict[str, Any], record_p
         "accepted": custody["accepted"],
         "completeness": custody["completeness"],
         "production_admission": custody["production_admission"],
-        "worktree_head": custody["worktree_head"],
+        "worktree_head_token": custody["repository_state"]["actual_head_token"],
+        "worktree_head_sha256": custody["repository_state"]["actual_head_sha256"],
+        "immutable_dependency_base_token": custody["repository_state"]["immutable_dependency_base_token"],
+        "immutable_dependency_base_sha256": custody["repository_state"]["immutable_dependency_base_sha256"],
+        "repository_state_policy": {
+            "base_is_ancestor": custody["repository_state"]["base_is_ancestor"],
+            "descendant_changes_confined_to_addendum_package": custody["repository_state"]["descendant_changes_confined_to_addendum_package"],
+            "descendant_changed_path_count": custody["repository_state"]["descendant_changed_path_count"],
+            "descendant_changed_paths_sha256": custody["repository_state"]["descendant_changed_paths_sha256"],
+            "package_integrity_schema": custody["repository_state"]["package_integrity"]["schema"],
+            "untracked_paths_authorized": False,
+        },
         "historical_evidence_use": custody["historical_evidence_use"],
         "contract_invariants": custody["contract_invariants"],
         "artifact_digests": {
@@ -672,6 +837,7 @@ def assert_contract_invariants(contract: Dict[str, Any]) -> Dict[str, Any]:
 def capture_prelaunch(run_dir: pathlib.Path, workspace: pathlib.Path, gopls: str, run_id: str) -> Dict[str, Any]:
     run_dir = assert_addendum_confined(run_dir)
     workspace = workspace.resolve(strict=True)
+    repository_state = validate_repository_execution_context()
     env, sorted_env, env_digest = capture_complete_env()
     gopls_path = resolve_gopls(gopls, env)
     go_exe = which_exact("go", env)
@@ -681,7 +847,7 @@ def capture_prelaunch(run_dir: pathlib.Path, workspace: pathlib.Path, gopls: str
     contract = load_json(ORIGINAL_CONTRACT)
     contract_invariants = assert_contract_invariants(contract)
     custody = {
-        "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-prelaunch.v2",
+        "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-prelaunch.v3",
         "profile_id": PROFILE_ID,
         "binds_to_generic_profile_id": GENERIC_PROFILE_ID,
         "run_namespace": RUN_NAMESPACE,
@@ -692,7 +858,8 @@ def capture_prelaunch(run_dir: pathlib.Path, workspace: pathlib.Path, gopls: str
         "completeness": "UNKNOWN",
         "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
         "captured_at_unix": time.time(),
-        "worktree_head": git_head(),
+        "worktree_head": repository_state["actual_head"],
+        "repository_state": repository_state,
         "historical_evidence_use": "FRESH_RERUN_ONLY_DO_NOT_REPRESENT_AS_OLD_RUN_EVIDENCE",
         "contract_invariants": contract_invariants,
         "gopls_executable": executable_record(gopls_path, role="gopls_executable", version_argv=[str(gopls_path), "version"], cwd=workspace, env=env),
@@ -723,8 +890,6 @@ def capture_prelaunch(run_dir: pathlib.Path, workspace: pathlib.Path, gopls: str
             "original_contract": {"path": str(ORIGINAL_CONTRACT), "sha256": sha256_file(ORIGINAL_CONTRACT), "byte_length": byte_len(ORIGINAL_CONTRACT)},
         },
     }
-    if custody["worktree_head"] != EXPECTED_HEAD:
-        raise RuntimeError(f"HEAD mismatch: {custody['worktree_head']}")
     custody_dir = run_dir / "custody"
     record_path = custody_dir / "prelaunch-custody.private.json"
     write_json_atomic(record_path, custody, private_mode=True)

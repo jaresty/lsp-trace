@@ -99,7 +99,7 @@
   },
   {
     "authority": 0,
-    "evidence": "source pins to accepted v5/provider candidate; addendum records no authority merge and preserves frontier UNKNOWN",
+    "evidence": "source pins to accepted v5 inputs only; addendum records no authority merge and preserves frontier UNKNOWN without reading any untracked provider candidate",
     "fail_closed_if_missing": true,
     "mandatory": true,
     "missing_disposition": "NO_GO_FAIL_CLOSED",

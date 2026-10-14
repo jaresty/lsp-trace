@@ -445,6 +445,26 @@
   "producer_disposition": "INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
   "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
   "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "repository_state": {
+    "actual_head": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a",
+    "actual_head_sha256": "03a877b08ccd9bc2b2dabbb617d75f32e5054996b56f3a0d095d5b9e0b78b14b",
+    "actual_head_token": "c3d77247f5a2",
+    "base_is_ancestor": true,
+    "descendant_changed_path_count": 0,
+    "descendant_changed_paths_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "descendant_changes_confined_to_addendum_package": true,
+    "immutable_dependency_base": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a",
+    "immutable_dependency_base_sha256": "03a877b08ccd9bc2b2dabbb617d75f32e5054996b56f3a0d095d5b9e0b78b14b",
+    "immutable_dependency_base_token": "c3d77247f5a2",
+    "package_integrity": {
+      "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.addendum-package-integrity.v1"
+    },
+    "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.repository-execution-context.v1",
+    "tracked_dirty_paths": 0,
+    "tracked_staged_paths": 0,
+    "untracked_paths_authorized": false,
+    "untracked_provider_candidate_read": false
+  },
   "run_id": "TEST_ONLY_ENV_PROBE_V5",
   "run_namespace": "lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1",
   "runner_runtime": {
@@ -485,6 +505,6 @@
       "sha256": "cd05f734b895bc7a3f3590ca8e623f645ac08aed55074a5d2a17231913351466"
     }
   },
-  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-prelaunch.v2",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-prelaunch.v3",
   "worktree_head": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a"
 }

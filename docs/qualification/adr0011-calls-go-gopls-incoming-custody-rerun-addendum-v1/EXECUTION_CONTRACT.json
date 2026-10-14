@@ -1,4 +1,8 @@
 {
+  "actual_execution_head_provenance": {
+    "private": "full actual HEAD retained in private prelaunch repository_state.actual_head",
+    "public": "actual HEAD exposed only as 12-character token plus sha256 digest"
+  },
   "authority": 0,
   "batch_count": 118,
   "batch_size": 50,
@@ -8,6 +12,19 @@
   "forbid_outgoing": true,
   "fresh_run_dir_policy": "MUST_NOT_EXIST_AT_ALL_AT_RESERVATION",
   "fresh_run_namespace": "lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1",
+  "head_policy": {
+    "allows_addendum_only_descendant_heads": true,
+    "ignores_untracked_paths": true,
+    "rejects_dirty_tracked_changes": true,
+    "rejects_missing_or_extra_executable_contract_files": true,
+    "rejects_staged_changes": true,
+    "rejects_symlink_or_nonregular_package_files": true,
+    "rejects_unrelated_tracked_descendant_changes": true,
+    "requires_base_ancestor": true,
+    "requires_current_addendum_files_covered_by_checksums": true,
+    "untracked_provider_candidate_authorized": false
+  },
+  "immutable_dependency_base": "c3d77247f5a2e06c0d6ac5b1b55a3df7dbea588a",
   "max_raw_response_bytes": 33554432,
   "non_claims": [
     "not denominator evidence until --run-full is explicitly reviewed and run",
@@ -44,7 +61,7 @@
   "require_prelaunch_capture_before_gopls_launch": true,
   "retry_policy": "RETRY_FREE_FRESH_RUN_ONLY",
   "run_dir_reservation": "atomic mkdir(exist_ok=False) after symlink and confinement checks; no same run-id resume after custody-only crash",
-  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun.execution-contract.v2",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun.execution-contract.v3",
   "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
   "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
   "target_count": 5900,
