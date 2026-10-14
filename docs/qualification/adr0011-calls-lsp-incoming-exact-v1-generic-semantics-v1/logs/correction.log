@@ -1,0 +1,25 @@
+ADR0011 CALLS_LSP_INCOMING_EXACT_V1 generic semantics correction log
+
+Disposition: GENERIC_INCOMING_SEMANTICS_AUTHORED_NOT_GO
+Authority: 0
+Accepted: false
+Provider GO: false
+Incoming provider GO: false
+Production GO: false
+
+Substantive correction boundary:
+- Package remains confined to docs/qualification/adr0011-calls-lsp-incoming-exact-v1-generic-semantics-v1/.
+- No provider, outgoing, source-runtime, public surface, custody, ceiling, composition, implementation, test-suite, or production change is authorized.
+
+Independent reviewer blocker addressed:
+- Prior NO-GO: CALLS_LSP_INCOMING_EXACT_V1_SEMANTICS_NO_GO.
+- Blocker: returned `from` endpoint identity was under-specified and endpoint mutation tests were weak.
+- Correction: NORMATIVE_SOURCES.md pins and excerpts the LSP 3.17 `CallHierarchyItem` contract (`name`, `kind`, `uri`, `range`, `selectionRange`, optional `tags`, `detail`, `data`) and incoming `CallHierarchyIncomingCall` member contract.
+- Correction: SEMANTICS.md and ORACLES.json retain endpoint `uri`, `kind`, `range`, and `selectionRange` on relationship/member rows and keep them distinct from occurrence rows.
+- Correction: fixtures.json and ORACLES.json include absent/null/malformed `from`, missing required endpoint fields, malformed endpoint URI/kind/range/selectionRange, absent/null/malformed `fromRanges`, valid endpoint mutations, zero-site members, nonempty occurrences, duplicate occurrence ranges, malformed containers/ranges, and mixed-prefix atomic refusal.
+- Correction: verify_generic_incoming_semantics.py includes ten semantic tamper tests, including endpoint URI/kind/range/selectionRange mutation-erasure tests that fail by oracle mismatch rather than by checksum mismatch.
+
+Verification sequence:
+1. Full verifier before checksum refresh failed only on stale CHECKSUMS.sha256 entries for files changed by the semantic correction.
+2. Internal semantic verification without checksum validation passed: 30 cases and 10 tamper tests.
+3. After this log/manifest/checksum refresh, final verification must pass with the same disposition and authority.

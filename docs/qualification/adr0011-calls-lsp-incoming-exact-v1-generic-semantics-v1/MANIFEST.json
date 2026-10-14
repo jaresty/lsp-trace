@@ -1,0 +1,47 @@
+{
+  "schema_version": "adr0011.calls.lsp.incoming.generic_semantics.manifest.v1",
+  "package": "docs/qualification/adr0011-calls-lsp-incoming-exact-v1-generic-semantics-v1",
+  "profile": "CALLS_LSP_INCOMING_EXACT_V1",
+  "canonical_domain": "lsp-trace.adr0011.calls.lsp.incoming.exact.v1",
+  "authoring_head": "bcc96022dcfe0c7d559be387d45e92d204602a13",
+  "authority": 0,
+  "accepted": false,
+  "provider_go": false,
+  "incoming_provider_go": false,
+  "production_go": false,
+  "disposition": "GENERIC_INCOMING_SEMANTICS_AUTHORED_NOT_GO",
+  "scope": {
+    "generic_incoming_semantics": true,
+    "provider_qualification": false,
+    "outgoing_semantics": false,
+    "composition_change": false,
+    "source_runtime_change": false,
+    "public_surface_change": false,
+    "custody_change": false,
+    "ceiling_change": false,
+    "implementation_or_test_mutation": false
+  },
+  "normative_lsp_source": {
+    "repository": "microsoft/language-server-protocol",
+    "commit": "f1b0378161a72018a2abeb5794532d5f6e2aebac",
+    "path": "_specifications/lsp/3.17/language/callHierarchy.md",
+    "byte_length": 6812,
+    "sha256": "5fd617bd3f3d6cb5d6dbd754febeeaebe6525808ff20bbb4ca85cee6c832eaf3"
+  },
+  "files": [
+    {"path": "README.md", "role": "overview_and_boundaries"},
+    {"path": "SEMANTICS.md", "role": "semantic_decision_table"},
+    {"path": "NORMATIVE_SOURCES.md", "role": "normative_source_pins_and_excerpts"},
+    {"path": "DEPENDENCIES.sha256", "role": "accepted_contract_dependency_pins"},
+    {"path": "fixtures.json", "role": "executable_fixtures"},
+    {"path": "ORACLES.json", "role": "expected_oracles"},
+    {"path": "verify_generic_incoming_semantics.py", "role": "deterministic_verifier_and_negative_tamper_tests"},
+    {"path": "RECURSIVE_PRESUMPTION_LEDGER.md", "role": "presumption_revision_dependency_ledger"},
+    {"path": "ROLE_CLOSURE.md", "role": "role_closure_and_non_roles"},
+    {"path": "REVIEW_REQUEST.md", "role": "independent_review_request"},
+    {"path": "logs/correction.log", "role": "deterministic_correction_and_verification_log"},
+    {"path": "MANIFEST.json", "role": "manifest"},
+    {"path": "CHECKSUMS.sha256", "role": "checksums_excluding_self"}
+  ],
+  "producer_verdict": "GENERIC_INCOMING_SEMANTICS_AUTHORED_NOT_GO"
+}

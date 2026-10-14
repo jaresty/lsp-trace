@@ -1,0 +1,109 @@
+{
+  "schema_version": "adr0011.calls.lsp.incoming.generic_semantics.fixtures.v2",
+  "profile": "CALLS_LSP_INCOMING_EXACT_V1",
+  "authority": 0,
+  "accepted": false,
+  "disposition": "GENERIC_INCOMING_SEMANTICS_AUTHORED_NOT_GO",
+  "queried_callee": {
+    "name": "B",
+    "kind": 12,
+    "uri": "file:///fixture/b.go",
+    "range": {"start": {"line": 10, "character": 0}, "end": {"line": 12, "character": 1}},
+    "selectionRange": {"start": {"line": 10, "character": 5}, "end": {"line": 10, "character": 6}}
+  },
+  "items": {
+    "callerA": {
+      "name": "A",
+      "kind": 12,
+      "uri": "file:///fixture/a.go",
+      "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}},
+      "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}
+    },
+    "callerC": {
+      "name": "C",
+      "kind": 12,
+      "uri": "file:///fixture/c.go",
+      "range": {"start": {"line": 20, "character": 0}, "end": {"line": 25, "character": 1}},
+      "selectionRange": {"start": {"line": 20, "character": 5}, "end": {"line": 20, "character": 6}}
+    },
+    "callerUriMutated": {
+      "name": "A",
+      "kind": 12,
+      "uri": "file:///fixture/a-renamed.go",
+      "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}},
+      "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}
+    },
+    "callerKindMutated": {
+      "name": "A",
+      "kind": 6,
+      "uri": "file:///fixture/a.go",
+      "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}},
+      "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}
+    },
+    "callerRangeMutated": {
+      "name": "A",
+      "kind": 12,
+      "uri": "file:///fixture/a.go",
+      "range": {"start": {"line": 2, "character": 0}, "end": {"line": 9, "character": 1}},
+      "selectionRange": {"start": {"line": 2, "character": 5}, "end": {"line": 2, "character": 6}}
+    },
+    "callerSelectionRangeMutated": {
+      "name": "A",
+      "kind": 12,
+      "uri": "file:///fixture/a.go",
+      "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}},
+      "selectionRange": {"start": {"line": 1, "character": 7}, "end": {"line": 1, "character": 8}}
+    },
+    "callerOptional": {
+      "name": "D",
+      "kind": 12,
+      "tags": [1],
+      "detail": "func D()",
+      "uri": "file:///fixture/d.go",
+      "range": {"start": {"line": 30, "character": 0}, "end": {"line": 35, "character": 1}},
+      "selectionRange": {"start": {"line": 30, "character": 5}, "end": {"line": 30, "character": 6}},
+      "data": {"opaque": "preserved"}
+    },
+    "missingName": {"kind": 12, "uri": "file:///fixture/a.go", "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}}, "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}},
+    "missingKind": {"name": "A", "uri": "file:///fixture/a.go", "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}}, "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}},
+    "missingUri": {"name": "A", "kind": 12, "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}}, "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}},
+    "missingRange": {"name": "A", "kind": 12, "uri": "file:///fixture/a.go", "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}},
+    "missingSelectionRange": {"name": "A", "kind": 12, "uri": "file:///fixture/a.go", "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}}},
+    "malformedUri": {"name": "A", "kind": 12, "uri": 7, "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}}, "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}},
+    "malformedKind": {"name": "A", "kind": true, "uri": "file:///fixture/a.go", "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}}, "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}},
+    "malformedRange": {"name": "A", "kind": 12, "uri": "file:///fixture/a.go", "range": {"start": {"line": 8, "character": 1}, "end": {"line": 1, "character": 0}}, "selectionRange": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 6}}},
+    "malformedSelectionRange": {"name": "A", "kind": 12, "uri": "file:///fixture/a.go", "range": {"start": {"line": 1, "character": 0}, "end": {"line": 8, "character": 1}}, "selectionRange": {"start": {"line": 9, "character": 0}, "end": {"line": 9, "character": 1}}}
+  },
+  "cases": [
+    {"id": "IN-TOP-NULL", "description": "complete top-level null result", "response": null},
+    {"id": "IN-TOP-EMPTY", "description": "complete top-level empty array result", "response": []},
+    {"id": "IN-MEMBER-ABSENT-FROM", "description": "member omits required from endpoint", "response": [{"fromRanges": []}]},
+    {"id": "IN-MEMBER-NULL-FROM", "description": "member has null from endpoint", "response": [{"from": null, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MISSING-FROM-NAME", "description": "from endpoint missing name", "response": [{"from": {"$ref": "#/items/missingName"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MISSING-FROM-KIND", "description": "from endpoint missing kind", "response": [{"from": {"$ref": "#/items/missingKind"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MISSING-FROM-URI", "description": "from endpoint missing uri", "response": [{"from": {"$ref": "#/items/missingUri"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MISSING-FROM-RANGE", "description": "from endpoint missing range", "response": [{"from": {"$ref": "#/items/missingRange"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MISSING-FROM-SELECTIONRANGE", "description": "from endpoint missing selectionRange", "response": [{"from": {"$ref": "#/items/missingSelectionRange"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MALFORMED-FROM-URI", "description": "from endpoint uri has wrong type", "response": [{"from": {"$ref": "#/items/malformedUri"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MALFORMED-FROM-KIND", "description": "from endpoint kind has wrong type", "response": [{"from": {"$ref": "#/items/malformedKind"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MALFORMED-FROM-RANGE", "description": "from endpoint range is invalid", "response": [{"from": {"$ref": "#/items/malformedRange"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-MALFORMED-FROM-SELECTIONRANGE", "description": "from endpoint selectionRange is outside range", "response": [{"from": {"$ref": "#/items/malformedSelectionRange"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-ABSENT-FROMRANGES", "description": "member omits fromRanges; LSP required Range[] property is absent", "response": [{"from": {"$ref": "#/items/callerA"}}]},
+    {"id": "IN-MEMBER-NULL-FROMRANGES", "description": "member has null fromRanges; LSP type is non-null Range[]", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": null}]},
+    {"id": "IN-MEMBER-EMPTY-FROMRANGES", "description": "present empty fromRanges retains endpoint relationship and zero occurrences", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": []}]},
+    {"id": "IN-FROM-URI-MUTATION", "description": "valid returned caller with distinct uri is distinct retained endpoint identity", "response": [{"from": {"$ref": "#/items/callerUriMutated"}, "fromRanges": []}]},
+    {"id": "IN-FROM-KIND-MUTATION", "description": "valid returned caller with distinct kind is distinct retained endpoint identity", "response": [{"from": {"$ref": "#/items/callerKindMutated"}, "fromRanges": []}]},
+    {"id": "IN-FROM-RANGE-MUTATION", "description": "valid returned caller with distinct range is distinct retained endpoint identity/display span", "response": [{"from": {"$ref": "#/items/callerRangeMutated"}, "fromRanges": []}]},
+    {"id": "IN-FROM-SELECTIONRANGE-MUTATION", "description": "valid returned caller with distinct selectionRange is distinct retained endpoint display span", "response": [{"from": {"$ref": "#/items/callerSelectionRangeMutated"}, "fromRanges": []}]},
+    {"id": "IN-FROM-OPTIONAL-FIELDS-RETAINED", "description": "valid optional endpoint fields remain endpoint metadata, not occurrence evidence", "response": [{"from": {"$ref": "#/items/callerOptional"}, "fromRanges": []}]},
+    {"id": "IN-MEMBER-NONEMPTY-TWO-RANGES", "description": "two caller-side occurrence ranges preserve order", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": [{"start": {"line": 3, "character": 2}, "end": {"line": 3, "character": 5}}, {"start": {"line": 4, "character": 1}, "end": {"line": 4, "character": 4}}]}]},
+    {"id": "IN-MEMBER-DUPLICATE-RANGES", "description": "duplicate ranges preserve duplicate multiplicity and distinct range ordinals", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": [{"start": {"line": 3, "character": 2}, "end": {"line": 3, "character": 5}}, {"start": {"line": 3, "character": 2}, "end": {"line": 3, "character": 5}}]}]},
+    {"id": "IN-MULTI-MEMBER-EMPTY-AND-NONEMPTY", "description": "relationship rows are retained independently from occurrence rows", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": []}, {"from": {"$ref": "#/items/callerC"}, "fromRanges": [{"start": {"line": 22, "character": 7}, "end": {"line": 22, "character": 9}}]}]},
+    {"id": "IN-FROMRANGES-SCALAR", "description": "fromRanges scalar is malformed", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": 1}]},
+    {"id": "IN-FROMRANGES-OBJECT", "description": "fromRanges object is malformed", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": {}}]},
+    {"id": "IN-CONTAINER-OBJECT", "description": "top-level object is not CallHierarchyIncomingCall[] or null", "response": {"from": {"$ref": "#/items/callerA"}, "fromRanges": []}},
+    {"id": "IN-RANGE-REVERSED", "description": "occurrence range start after end is malformed", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": [{"start": {"line": 5, "character": 4}, "end": {"line": 5, "character": 2}}]}]},
+    {"id": "IN-RANGE-NEGATIVE", "description": "occurrence range negative position is malformed", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": [{"start": {"line": -1, "character": 0}, "end": {"line": 0, "character": 1}}]}]},
+    {"id": "IN-MIXED-PREFIX-THEN-MALFORMED", "description": "valid prefix plus malformed later member refuses atomically; no prefix salvage", "response": [{"from": {"$ref": "#/items/callerA"}, "fromRanges": []}, {"from": {"$ref": "#/items/callerC"}, "fromRanges": null}]}
+  ]
+}
