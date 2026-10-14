@@ -1,0 +1,3 @@
+Content-Length: 408
+
+{"jsonrpc":"2.0","result":[{"name":"encodeCursor","kind":12,"detail":"lsp-trace/internal/sourceprojectionv3 • pager.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/sourceprojectionv3/pager.go","range":{"start":{"line":238,"character":5},"end":{"line":238,"character":17}},"selectionRange":{"start":{"line":238,"character":5},"end":{"line":238,"character":17}}}],"id":9798}

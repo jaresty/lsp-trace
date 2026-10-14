@@ -1,0 +1,3 @@
+Content-Length: 537
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/c_complete_frame_boundary_test.go","diagnostics":[{"range":{"start":{"line":40,"character":151},"end":{"line":40,"character":229}},"severity":2,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#fmtappendf"},"source":"fmtappendf","message":"Replace []byte(fmt.Sprintf...) with fmt.Appendf [windows,amd64]"}]}}

@@ -1,0 +1,3 @@
+Content-Length: 444
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/sourceposition/offset_test.go","diagnostics":[{"range":{"start":{"line":47,"character":2},"end":{"line":47,"character":24}},"severity":3,"code":"default","codeDescription":{"href":"https://staticcheck.dev/docs/checks/#QF1003"},"source":"QF1003","message":"could use tagged switch on encoding"}]}}

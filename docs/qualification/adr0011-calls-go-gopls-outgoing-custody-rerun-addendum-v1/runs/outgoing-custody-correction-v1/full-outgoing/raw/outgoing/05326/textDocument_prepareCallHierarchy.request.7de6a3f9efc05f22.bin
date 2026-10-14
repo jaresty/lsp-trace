@@ -1,0 +1,3 @@
+Content-Length: 270
+
+{"jsonrpc":"2.0","id":10593,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/qualification/program-c/candidates/gonum-leiden/inventory.go"},"position":{"line":137,"character":5}}}

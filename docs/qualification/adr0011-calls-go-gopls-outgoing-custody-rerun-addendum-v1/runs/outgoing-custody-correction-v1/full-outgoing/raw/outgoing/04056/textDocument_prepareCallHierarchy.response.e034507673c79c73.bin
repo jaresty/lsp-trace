@@ -1,0 +1,3 @@
+Content-Length: 389
+
+{"jsonrpc":"2.0","result":[{"name":"Execute","kind":12,"detail":"lsp-trace/internal/provider • runtime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/provider/runtime.go","range":{"start":{"line":114,"character":18},"end":{"line":114,"character":25}},"selectionRange":{"start":{"line":114,"character":18},"end":{"line":114,"character":25}}}],"id":8067}

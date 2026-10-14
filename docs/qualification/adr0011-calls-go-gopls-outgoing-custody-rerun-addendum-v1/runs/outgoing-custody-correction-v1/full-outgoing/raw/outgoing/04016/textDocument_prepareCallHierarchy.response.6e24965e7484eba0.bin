@@ -1,0 +1,3 @@
+Content-Length: 545
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/operation/inspect_hydrated.go","version":1,"diagnostics":[{"range":{"start":{"line":88,"character":4},"end":{"line":88,"character":13}},"severity":4,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#errorsastype"},"source":"errorsastype","message":"errors.As can be simplified using AsType[*artifactingress.Failure] [windows,amd64]"}]}}

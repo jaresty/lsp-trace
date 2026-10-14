@@ -1,0 +1,3 @@
+Content-Length: 449
+
+{"jsonrpc":"2.0","id":5022,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"semantic","kind":12,"detail":"lsp-trace/internal/describeworker \u2022 runner.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/runner.go","range":{"start":{"line":208,"character":22},"end":{"line":208,"character":30}},"selectionRange":{"start":{"line":208,"character":22},"end":{"line":208,"character":30}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 458
+
+{"jsonrpc":"2.0","id":7229,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Authority","kind":12,"detail":"lsp-trace/internal/programc \u2022 stage7c_coupling.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage7c_coupling.go","range":{"start":{"line":387,"character":40},"end":{"line":387,"character":49}},"selectionRange":{"start":{"line":387,"character":40},"end":{"line":387,"character":49}}}}}

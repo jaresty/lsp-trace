@@ -1,0 +1,3 @@
+Content-Length: 475
+
+{"jsonrpc":"2.0","id":7451,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"isZeroTypedComputationSeal","kind":12,"detail":"lsp-trace/internal/programc \u2022 typed_computation.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/typed_computation.go","range":{"start":{"line":227,"character":5},"end":{"line":227,"character":31}},"selectionRange":{"start":{"line":227,"character":5},"end":{"line":227,"character":31}}}}}

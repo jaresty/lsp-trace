@@ -1,0 +1,3 @@
+Content-Length: 469
+
+{"jsonrpc":"2.0","id":3663,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ChargeLogicalBufferBytesReserved","kind":12,"detail":"lsp-trace/internal/adr0011work \u2022 account.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011work/account.go","range":{"start":{"line":415,"character":18},"end":{"line":415,"character":50}},"selectionRange":{"start":{"line":415,"character":18},"end":{"line":415,"character":50}}}}}

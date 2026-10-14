@@ -1,0 +1,3 @@
+Content-Length: 468
+
+{"jsonrpc":"2.0","id":1061,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"SupportsDocumentSymbols","kind":12,"detail":"lsp-trace/cmd/lsp-trace \u2022 production_discovery.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/production_discovery.go","range":{"start":{"line":28,"character":35},"end":{"line":28,"character":58}},"selectionRange":{"start":{"line":28,"character":35},"end":{"line":28,"character":58}}}}}

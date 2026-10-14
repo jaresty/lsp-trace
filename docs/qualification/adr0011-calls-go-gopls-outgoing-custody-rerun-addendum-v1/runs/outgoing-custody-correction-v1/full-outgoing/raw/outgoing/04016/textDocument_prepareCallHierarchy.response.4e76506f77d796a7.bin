@@ -1,0 +1,3 @@
+Content-Length: 480
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcp/transport_test.go","diagnostics":[{"range":{"start":{"line":631,"character":27},"end":{"line":631,"character":27}},"severity":3,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/unusedwrite"},"source":"unusedwrite","message":"unused write to field Registry [windows,amd64]"}]}}

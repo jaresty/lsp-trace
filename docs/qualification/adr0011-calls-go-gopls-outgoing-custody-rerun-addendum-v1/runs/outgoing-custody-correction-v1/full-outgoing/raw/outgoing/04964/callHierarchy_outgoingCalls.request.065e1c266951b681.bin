@@ -1,0 +1,3 @@
+Content-Length: 454
+
+{"jsonrpc":"2.0","id":9875,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"cloneRepresentative","kind":12,"detail":"lsp-trace/internal/targetpacket \u2022 packet.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/targetpacket/packet.go","range":{"start":{"line":112,"character":5},"end":{"line":112,"character":24}},"selectionRange":{"start":{"line":112,"character":5},"end":{"line":112,"character":24}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":11720,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Execute","kind":12,"detail":"lsp-trace/structuralcontextsymbolops \u2022 executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/structuralcontextsymbolops/executor.go","range":{"start":{"line":99,"character":19},"end":{"line":99,"character":26}},"selectionRange":{"start":{"line":99,"character":19},"end":{"line":99,"character":26}}}}}

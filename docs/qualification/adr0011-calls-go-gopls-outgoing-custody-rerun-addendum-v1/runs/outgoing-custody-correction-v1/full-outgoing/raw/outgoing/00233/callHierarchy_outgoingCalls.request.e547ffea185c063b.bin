@@ -1,0 +1,3 @@
+Content-Length: 451
+
+{"jsonrpc":"2.0","id":466,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"acquire","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp \u2022 census_runtime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/census_runtime.go","range":{"start":{"line":226,"character":24},"end":{"line":226,"character":31}},"selectionRange":{"start":{"line":226,"character":24},"end":{"line":226,"character":31}}}}}

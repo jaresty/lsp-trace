@@ -1,0 +1,3 @@
+Content-Length: 450
+
+{"jsonrpc":"2.0","id":2472,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Acquire","kind":12,"detail":"lsp-trace/internal/adr0011acquisition \u2022 owner.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/owner.go","range":{"start":{"line":96,"character":16},"end":{"line":96,"character":23}},"selectionRange":{"start":{"line":96,"character":16},"end":{"line":96,"character":23}}}}}

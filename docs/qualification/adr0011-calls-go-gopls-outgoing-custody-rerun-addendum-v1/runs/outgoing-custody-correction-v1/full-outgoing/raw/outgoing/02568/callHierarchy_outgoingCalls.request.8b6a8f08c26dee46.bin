@@ -1,0 +1,3 @@
+Content-Length: 438
+
+{"jsonrpc":"2.0","id":5103,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Trust","kind":12,"detail":"lsp-trace/internal/execution \u2022 request.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/execution/request.go","range":{"start":{"line":145,"character":18},"end":{"line":145,"character":23}},"selectionRange":{"start":{"line":145,"character":18},"end":{"line":145,"character":23}}}}}

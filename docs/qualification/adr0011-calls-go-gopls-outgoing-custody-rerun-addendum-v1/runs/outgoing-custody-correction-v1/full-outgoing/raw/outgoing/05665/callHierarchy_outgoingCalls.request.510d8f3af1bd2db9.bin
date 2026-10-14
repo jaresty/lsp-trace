@@ -1,0 +1,3 @@
+Content-Length: 505
+
+{"jsonrpc":"2.0","id":11271,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"CommitPrivateC18RetentionForPair9Test","kind":12,"detail":"lsp-trace/sessionruntime \u2022 c18_pair_coordinator_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/c18_pair_coordinator_private.go","range":{"start":{"line":781,"character":41},"end":{"line":781,"character":78}},"selectionRange":{"start":{"line":781,"character":41},"end":{"line":781,"character":78}}}}}

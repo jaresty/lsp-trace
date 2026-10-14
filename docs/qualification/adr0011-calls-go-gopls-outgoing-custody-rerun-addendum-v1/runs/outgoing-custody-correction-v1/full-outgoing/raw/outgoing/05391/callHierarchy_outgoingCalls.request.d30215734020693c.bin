@@ -1,0 +1,3 @@
+Content-Length: 525
+
+{"jsonrpc":"2.0","id":10724,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"retirePrivateB4C15ContextLocked","kind":12,"detail":"lsp-trace/sessionruntime \u2022 adr0011_c17_c15_observer_contract_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/adr0011_c17_c15_observer_contract_private.go","range":{"start":{"line":395,"character":18},"end":{"line":395,"character":49}},"selectionRange":{"start":{"line":395,"character":18},"end":{"line":395,"character":49}}}}}

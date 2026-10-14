@@ -1,0 +1,3 @@
+Content-Length: 451
+
+{"jsonrpc":"2.0","id":7622,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Unwrap","kind":12,"detail":"lsp-trace/internal/programccompose \u2022 compose.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programccompose/compose.go","range":{"start":{"line":169,"character":22},"end":{"line":169,"character":28}},"selectionRange":{"start":{"line":169,"character":22},"end":{"line":169,"character":28}}}}}

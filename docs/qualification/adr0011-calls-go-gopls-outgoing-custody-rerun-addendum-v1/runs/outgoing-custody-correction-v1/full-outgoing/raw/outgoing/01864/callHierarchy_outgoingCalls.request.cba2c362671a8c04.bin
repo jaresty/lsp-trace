@@ -1,0 +1,3 @@
+Content-Length: 446
+
+{"jsonrpc":"2.0","id":3713,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"check","kind":12,"detail":"lsp-trace/internal/artifactingress \u2022 ingress.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/artifactingress/ingress.go","range":{"start":{"line":95,"character":16},"end":{"line":95,"character":21}},"selectionRange":{"start":{"line":95,"character":16},"end":{"line":95,"character":21}}}}}

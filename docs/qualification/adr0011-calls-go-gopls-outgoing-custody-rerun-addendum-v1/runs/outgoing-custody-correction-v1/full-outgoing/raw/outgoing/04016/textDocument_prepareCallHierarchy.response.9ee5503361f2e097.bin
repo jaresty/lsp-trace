@@ -1,0 +1,3 @@
+Content-Length: 524
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007sourcetextsearchv1/search.go","version":1,"diagnostics":[{"range":{"start":{"line":52,"character":6},"end":{"line":52,"character":29}},"severity":4,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#rangeint"},"source":"rangeint","message":"for loop can be modernized using range over int [windows,amd64]"}]}}

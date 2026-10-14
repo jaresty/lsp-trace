@@ -1,0 +1,3 @@
+Content-Length: 517
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011genericv5proposal/b4a.go","version":1,"diagnostics":[{"range":{"start":{"line":67,"character":22},"end":{"line":67,"character":33}},"severity":4,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#stringsseq"},"source":"stringsseq","message":"Ranging over SplitSeq is more efficient [windows,amd64]"}]}}

@@ -1,0 +1,3 @@
+Content-Length: 576
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/publication/root_owner_unix.go","languageId":"go","version":1,"text":"//go:build unix\n\npackage publication\n\nimport (\n\t\"errors\"\n\t\"os\"\n\t\"syscall\"\n)\n\nfunc validateRootOwner(info os.FileInfo) error {\n\tstat, ok := info.Sys().(*syscall.Stat_t)\n\tif !ok || stat.Uid != uint32(os.Geteuid()) {\n\t\treturn errors.New(\"publication root must be owned by the current effective user\")\n\t}\n\treturn nil\n}\n"}}}

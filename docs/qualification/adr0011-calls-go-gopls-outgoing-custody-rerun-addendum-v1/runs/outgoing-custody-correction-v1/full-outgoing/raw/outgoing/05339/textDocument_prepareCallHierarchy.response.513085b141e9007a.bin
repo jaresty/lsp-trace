@@ -1,0 +1,3 @@
+Content-Length: 386
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"2026/10/13 23:20:18 go/packages.Load #96\n\tview_id=\"7\"\n\tsnapshot=0\n\tdirectory=/private/tmp/adr0011-gopls-workload-study-v1/workspace\n\tquery=[/private/tmp/adr0011-gopls-workload-study-v1/workspace/qualification/program-c/candidates/gonum-louvain/... builtin]\n\tpackages=7\n\tduration=104.898125ms\n"}}

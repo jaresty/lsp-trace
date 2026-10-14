@@ -1,0 +1,3 @@
+Content-Length: 404
+
+{"jsonrpc":"2.0","result":[{"name":"Paginate","kind":12,"detail":"lsp-trace/internal/sourceprojectionv3 • pager.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/sourceprojectionv3/pager.go","range":{"start":{"line":111,"character":5},"end":{"line":111,"character":13}},"selectionRange":{"start":{"line":111,"character":5},"end":{"line":111,"character":13}}}],"id":9786}

@@ -1,0 +1,3 @@
+Content-Length: 451
+
+{"jsonrpc":"2.0","id":7383,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"RunPrivateWorker","kind":12,"detail":"lsp-trace/internal/programc \u2022 supervisor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/supervisor.go","range":{"start":{"line":115,"character":5},"end":{"line":115,"character":21}},"selectionRange":{"start":{"line":115,"character":5},"end":{"line":115,"character":21}}}}}

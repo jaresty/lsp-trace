@@ -1,0 +1,3 @@
+Content-Length: 485
+
+{"jsonrpc":"2.0","id":11179,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Release","kind":12,"detail":"lsp-trace/sessionruntime \u2022 b4_server_error_lease_c15_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_server_error_lease_c15_private.go","range":{"start":{"line":145,"character":26},"end":{"line":145,"character":33}},"selectionRange":{"start":{"line":145,"character":26},"end":{"line":145,"character":33}}}}}

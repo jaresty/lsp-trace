@@ -1,0 +1,3 @@
+Content-Length: 416
+
+{"jsonrpc":"2.0","result":[{"name":"FutureCensusSchemaJSON","kind":12,"detail":"lsp-trace/internal/mcpcontract • census_future.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcpcontract/census_future.go","range":{"start":{"line":96,"character":5},"end":{"line":96,"character":27}},"selectionRange":{"start":{"line":96,"character":5},"end":{"line":96,"character":27}}}],"id":6531}

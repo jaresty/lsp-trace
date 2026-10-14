@@ -1,0 +1,3 @@
+Content-Length: 263
+
+{"jsonrpc":"2.0","id":2713,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/selected_git_observation.go"},"position":{"line":70,"character":5}}}

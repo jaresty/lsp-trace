@@ -1,0 +1,3 @@
+Content-Length: 147
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"2026/10/13 23:19:18 background refresh finished after 223.017083ms\n"}}

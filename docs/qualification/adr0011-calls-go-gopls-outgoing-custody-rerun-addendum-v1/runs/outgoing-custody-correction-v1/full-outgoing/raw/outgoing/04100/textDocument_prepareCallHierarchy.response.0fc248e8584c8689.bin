@@ -1,0 +1,3 @@
+Content-Length: 419
+
+{"jsonrpc":"2.0","result":[{"name":"Parse","kind":12,"detail":"lsp-trace/internal/provisionalfeaturecatalog • catalog.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/provisionalfeaturecatalog/catalog.go","range":{"start":{"line":569,"character":5},"end":{"line":569,"character":10}},"selectionRange":{"start":{"line":569,"character":5},"end":{"line":569,"character":10}}}],"id":8154}

@@ -1,0 +1,3 @@
+Content-Length: 751
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/designverify/main.go","languageId":"go","version":1,"text":"package main\n\nimport (\n\t\"flag\"\n\t\"fmt\"\n\t\"os\"\n\n\t\"lsp-trace/internal/adr0007locationv5\"\n)\n\nfunc main() {\n\troot := flag.String(\"root\", \"\", \"freeze root\")\n\tflag.Parse()\n\tif *root == \"\" {\n\t\tfmt.Fprintln(os.Stderr, \"usage: designverify -root ROOT\")\n\t\tos.Exit(2)\n\t}\n\tf, err := adr0007locationv5.VerifyFreeze(*root)\n\tif err != nil {\n\t\tfmt.Fprintln(os.Stderr, err)\n\t\tos.Exit(1)\n\t}\n\tfmt.Printf(\"%s files=%d cases=%d\\n\", f.RootIdentity, f.Counts[\"files\"], f.Counts[\"inputCases\"])\n}\n"}}}

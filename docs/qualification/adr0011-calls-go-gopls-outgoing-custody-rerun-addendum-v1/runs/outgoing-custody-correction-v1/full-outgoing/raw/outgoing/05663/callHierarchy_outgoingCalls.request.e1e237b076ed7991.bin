@@ -1,0 +1,3 @@
+Content-Length: 507
+
+{"jsonrpc":"2.0","id":11267,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"CommitPrivateC18ObjectEventForPair8Test","kind":12,"detail":"lsp-trace/sessionruntime \u2022 c18_pair_coordinator_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/c18_pair_coordinator_private.go","range":{"start":{"line":773,"character":45},"end":{"line":773,"character":84}},"selectionRange":{"start":{"line":773,"character":45},"end":{"line":773,"character":84}}}}}

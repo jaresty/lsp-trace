@@ -1,0 +1,3 @@
+Content-Length: 430
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Sync","kind":12,"detail":"os • file_posix.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/os/file_posix.go","range":{"start":{"line":162,"character":15},"end":{"line":162,"character":19}},"selectionRange":{"start":{"line":162,"character":15},"end":{"line":162,"character":19}}},"fromRanges":[{"start":{"line":9,"character":12},"end":{"line":9,"character":16}}]}],"id":1154}

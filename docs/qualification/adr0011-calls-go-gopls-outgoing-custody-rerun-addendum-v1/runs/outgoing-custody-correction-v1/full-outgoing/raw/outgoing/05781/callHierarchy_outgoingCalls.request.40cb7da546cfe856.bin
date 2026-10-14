@@ -1,0 +1,3 @@
+Content-Length: 490
+
+{"jsonrpc":"2.0","id":11502,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"settleBackingIfUnownedLocked","kind":12,"detail":"lsp-trace/sessionruntime \u2022 readiness_history_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/readiness_history_private.go","range":{"start":{"line":137,"character":34},"end":{"line":137,"character":62}},"selectionRange":{"start":{"line":137,"character":34},"end":{"line":137,"character":62}}}}}

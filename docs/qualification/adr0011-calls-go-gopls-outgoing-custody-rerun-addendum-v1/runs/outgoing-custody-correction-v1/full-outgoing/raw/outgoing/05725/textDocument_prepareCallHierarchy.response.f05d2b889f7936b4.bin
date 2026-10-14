@@ -1,0 +1,3 @@
+Content-Length: 423
+
+{"jsonrpc":"2.0","result":[{"name":"DiagnosticSnapshotSetFor","kind":12,"detail":"lsp-trace/sessionruntime • diagnostic_runtime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/diagnostic_runtime.go","range":{"start":{"line":445,"character":18},"end":{"line":445,"character":42}},"selectionRange":{"start":{"line":445,"character":18},"end":{"line":445,"character":42}}}],"id":11390}

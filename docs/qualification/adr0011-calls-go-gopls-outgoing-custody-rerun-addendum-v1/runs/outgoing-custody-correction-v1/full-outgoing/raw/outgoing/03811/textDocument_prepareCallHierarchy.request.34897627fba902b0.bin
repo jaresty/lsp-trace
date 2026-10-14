@@ -1,0 +1,3 @@
+Content-Length: 252
+
+{"jsonrpc":"2.0","id":7581,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/relation_index.go"},"position":{"line":51,"character":5}}}

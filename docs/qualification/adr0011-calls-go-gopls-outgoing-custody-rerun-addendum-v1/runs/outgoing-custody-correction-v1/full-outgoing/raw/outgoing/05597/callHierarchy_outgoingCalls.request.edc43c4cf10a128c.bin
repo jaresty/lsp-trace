@@ -1,0 +1,3 @@
+Content-Length: 507
+
+{"jsonrpc":"2.0","id":11135,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"finishPrivateC18Release","kind":12,"detail":"lsp-trace/sessionruntime \u2022 b4_retained_notification_c15_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_retained_notification_c15_private.go","range":{"start":{"line":183,"character":45},"end":{"line":183,"character":68}},"selectionRange":{"start":{"line":183,"character":45},"end":{"line":183,"character":68}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 497
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/publication/root_owner_other.go","languageId":"go","version":1,"text":"//go:build !unix\n\npackage publication\n\nimport \"os\"\n\n// Portable ownership metadata is unavailable here; OpenRoot's descriptor\n// identity and private mode checks remain authoritative on this platform.\nfunc validateRootOwner(os.FileInfo) error { return nil }\n"}}}

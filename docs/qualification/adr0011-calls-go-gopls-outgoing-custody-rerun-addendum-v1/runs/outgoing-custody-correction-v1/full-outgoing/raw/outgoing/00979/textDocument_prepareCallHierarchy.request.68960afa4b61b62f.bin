@@ -1,0 +1,3 @@
+Content-Length: 245
+
+{"jsonrpc":"2.0","id":1949,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007locationv5/freeze.go"},"position":{"line":140,"character":5}}}

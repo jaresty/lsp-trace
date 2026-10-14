@@ -1,0 +1,3 @@
+Content-Length: 374
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"2026/10/13 23:19:04 go/packages.Load #16\n\tview_id=\"1\"\n\tsnapshot=241\n\tdirectory=/private/tmp/adr0011-gopls-workload-study-v1/workspace\n\tquery=[file=/private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/artifactingress/identity_unix.go]\n\tpackages=2\n\tduration=101.620625ms\n"}}

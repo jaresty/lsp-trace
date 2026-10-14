@@ -1,0 +1,3 @@
+Content-Length: 432
+
+{"jsonrpc":"2.0","result":[{"name":"completeDiagnosticOperationLocked","kind":12,"detail":"lsp-trace/sessionruntime • diagnostic_runtime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/diagnostic_runtime.go","range":{"start":{"line":256,"character":18},"end":{"line":256,"character":51}},"selectionRange":{"start":{"line":256,"character":18},"end":{"line":256,"character":51}}}],"id":11380}

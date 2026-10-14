@@ -1,0 +1,3 @@
+Content-Length: 400
+
+{"jsonrpc":"2.0","result":[{"name":"roundTrip","kind":12,"detail":"lsp-trace/sessionruntime • sessionruntime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/sessionruntime.go","range":{"start":{"line":788,"character":18},"end":{"line":788,"character":27}},"selectionRange":{"start":{"line":788,"character":18},"end":{"line":788,"character":27}}}],"id":11551}

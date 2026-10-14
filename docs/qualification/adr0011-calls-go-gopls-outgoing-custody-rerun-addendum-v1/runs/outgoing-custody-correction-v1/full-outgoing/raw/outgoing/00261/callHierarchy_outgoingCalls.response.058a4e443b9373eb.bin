@@ -1,0 +1,3 @@
+Content-Length: 504
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"SeedCustodyProvenance","kind":12,"detail":"lsp-trace/sessionruntime • sessionruntime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/sessionruntime.go","range":{"start":{"line":632,"character":18},"end":{"line":632,"character":39}},"selectionRange":{"start":{"line":632,"character":18},"end":{"line":632,"character":39}}},"fromRanges":[{"start":{"line":381,"character":35},"end":{"line":381,"character":56}}]}],"id":521}

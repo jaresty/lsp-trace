@@ -1,0 +1,3 @@
+Content-Length: 462
+
+{"jsonrpc":"2.0","id":9959,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Records","kind":12,"detail":"lsp-trace/internal/transientstructural \u2022 accounting.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/transientstructural/accounting.go","range":{"start":{"line":26,"character":26},"end":{"line":26,"character":33}},"selectionRange":{"start":{"line":26,"character":26},"end":{"line":26,"character":33}}}}}

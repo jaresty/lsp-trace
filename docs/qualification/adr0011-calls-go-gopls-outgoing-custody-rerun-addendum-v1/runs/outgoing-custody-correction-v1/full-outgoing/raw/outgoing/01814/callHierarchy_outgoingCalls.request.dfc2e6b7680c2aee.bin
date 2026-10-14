@@ -1,0 +1,3 @@
+Content-Length: 458
+
+{"jsonrpc":"2.0","id":3613,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Marshal","kind":12,"detail":"lsp-trace/internal/adr0011sourcecontext \u2022 context.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011sourcecontext/context.go","range":{"start":{"line":77,"character":18},"end":{"line":77,"character":25}},"selectionRange":{"start":{"line":77,"character":18},"end":{"line":77,"character":25}}}}}

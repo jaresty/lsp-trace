@@ -1,0 +1,3 @@
+Content-Length: 414
+
+{"jsonrpc":"2.0","result":[{"name":"Validate","kind":12,"detail":"lsp-trace/internal/featureattribution • contracts.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/featureattribution/contracts.go","range":{"start":{"line":152,"character":34},"end":{"line":152,"character":42}},"selectionRange":{"start":{"line":152,"character":34},"end":{"line":152,"character":42}}}],"id":5108}

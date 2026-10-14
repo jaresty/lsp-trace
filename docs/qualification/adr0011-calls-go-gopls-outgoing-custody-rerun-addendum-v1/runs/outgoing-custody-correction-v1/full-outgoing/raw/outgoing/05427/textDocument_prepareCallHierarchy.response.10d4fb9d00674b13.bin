@@ -1,0 +1,3 @@
+Content-Length: 425
+
+{"jsonrpc":"2.0","result":[{"name":"ObserveOriginalFrame","kind":12,"detail":"lsp-trace/sessionruntime • b4_definition_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_definition_private.go","range":{"start":{"line":326,"character":34},"end":{"line":326,"character":54}},"selectionRange":{"start":{"line":326,"character":34},"end":{"line":326,"character":54}}}],"id":10794}

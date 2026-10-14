@@ -1,0 +1,3 @@
+Content-Length: 446
+
+{"jsonrpc":"2.0","id":9351,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"decodeOne","kind":12,"detail":"lsp-trace/internal/seedbinding \u2022 semantic.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/seedbinding/semantic.go","range":{"start":{"line":231,"character":5},"end":{"line":231,"character":14}},"selectionRange":{"start":{"line":231,"character":5},"end":{"line":231,"character":14}}}}}

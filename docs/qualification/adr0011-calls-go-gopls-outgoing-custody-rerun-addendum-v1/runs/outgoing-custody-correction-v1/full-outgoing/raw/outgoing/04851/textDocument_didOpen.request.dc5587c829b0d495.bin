@@ -1,0 +1,3 @@
+Content-Length: 662
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/source/input_open_unix.go","languageId":"go","version":1,"text":"//go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris\n\npackage source\n\nimport (\n\t\"os\"\n\t\"syscall\"\n)\n\n// O_NONBLOCK applies during the scoped open itself. A concurrent replacement\n// with a FIFO cannot block before we inspect the opened handle's file type.\nfunc openInput(root *os.Root, name string) (*os.File, error) {\n\treturn root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)\n}\n"}}}

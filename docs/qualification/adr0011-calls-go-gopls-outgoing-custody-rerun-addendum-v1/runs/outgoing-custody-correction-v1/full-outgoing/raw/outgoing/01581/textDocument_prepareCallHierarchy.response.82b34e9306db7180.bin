@@ -1,0 +1,3 @@
+Content-Length: 423
+
+{"jsonrpc":"2.0","result":[{"name":"partialIdentity","kind":12,"detail":"lsp-trace/internal/adr0011lifecycle • partial_replay.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011lifecycle/partial_replay.go","range":{"start":{"line":66,"character":24},"end":{"line":66,"character":39}},"selectionRange":{"start":{"line":66,"character":24},"end":{"line":66,"character":39}}}],"id":3151}

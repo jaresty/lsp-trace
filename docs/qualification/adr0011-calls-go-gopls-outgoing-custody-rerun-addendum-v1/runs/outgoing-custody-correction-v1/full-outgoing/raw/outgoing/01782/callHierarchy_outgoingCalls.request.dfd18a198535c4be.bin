@@ -1,0 +1,3 @@
+Content-Length: 474
+
+{"jsonrpc":"2.0","id":3549,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"FailureText","kind":12,"detail":"lsp-trace/internal/adr0011methodtransport \u2022 transport.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodtransport/transport.go","range":{"start":{"line":110,"character":16},"end":{"line":110,"character":27}},"selectionRange":{"start":{"line":110,"character":16},"end":{"line":110,"character":27}}}}}

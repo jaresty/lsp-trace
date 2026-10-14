@@ -1,0 +1,3 @@
+Content-Length: 491
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/census_executor_test.go","diagnostics":[{"range":{"start":{"line":220,"character":16},"end":{"line":220,"character":16}},"severity":2,"code":"cond","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/nilness#cond"},"source":"nilness","message":"impossible condition: non-nil == nil [windows,amd64]"}]}}

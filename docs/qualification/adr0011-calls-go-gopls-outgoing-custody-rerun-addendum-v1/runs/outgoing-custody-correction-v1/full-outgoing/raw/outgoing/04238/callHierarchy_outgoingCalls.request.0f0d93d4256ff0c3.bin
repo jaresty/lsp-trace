@@ -1,0 +1,3 @@
+Content-Length: 503
+
+{"jsonrpc":"2.0","id":8430,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"programBMatrixDigestV2","kind":12,"detail":"lsp-trace/internal/qualificationpolicy \u2022 program_b_admission_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/qualificationpolicy/program_b_admission_v2.go","range":{"start":{"line":121,"character":5},"end":{"line":121,"character":27}},"selectionRange":{"start":{"line":121,"character":5},"end":{"line":121,"character":27}}}}}

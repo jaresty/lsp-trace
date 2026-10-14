@@ -1,0 +1,3 @@
+Content-Length: 449
+
+{"jsonrpc":"2.0","id":1369,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ranges","kind":12,"detail":"lsp-trace/internal/acquisition \u2022 coordinator.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/acquisition/coordinator.go","range":{"start":{"line":801,"character":5},"end":{"line":801,"character":11}},"selectionRange":{"start":{"line":801,"character":5},"end":{"line":801,"character":11}}}}}

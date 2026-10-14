@@ -1,0 +1,3 @@
+Content-Length: 557
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"runPrivateAttachedReferences","kind":12,"detail":"lsp-trace/internal/adr0011methodresult • references_private_attached.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/references_private_attached.go","range":{"start":{"line":56,"character":5},"end":{"line":56,"character":33}},"selectionRange":{"start":{"line":56,"character":5},"end":{"line":56,"character":33}}},"fromRanges":[{"start":{"line":24,"character":8},"end":{"line":24,"character":36}}]}],"id":3407}

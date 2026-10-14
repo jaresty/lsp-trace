@@ -1,0 +1,3 @@
+Content-Length: 211
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/hydratedevidence/coordinates.go","version":1,"diagnostics":[]}}

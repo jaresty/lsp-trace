@@ -1,0 +1,3 @@
+Content-Length: 413
+
+{"jsonrpc":"2.0","result":[{"name":"Receipt","kind":12,"detail":"lsp-trace/internal/describeworker • invocation_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/invocation_v2.go","range":{"start":{"line":129,"character":28},"end":{"line":129,"character":35}},"selectionRange":{"start":{"line":129,"character":28},"end":{"line":129,"character":35}}}],"id":4885}

@@ -1,0 +1,3 @@
+Content-Length: 485
+
+{"jsonrpc":"2.0","id":4163,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"RecordManagedPreparationDiagnostic","kind":12,"detail":"lsp-trace/internal/censuscontinuation \u2022 capture.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/capture.go","range":{"start":{"line":128,"character":50},"end":{"line":128,"character":84}},"selectionRange":{"start":{"line":128,"character":50},"end":{"line":128,"character":84}}}}}

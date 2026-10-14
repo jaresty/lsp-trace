@@ -1,0 +1,3 @@
+Content-Length: 508
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Query","kind":12,"detail":"lsp-trace/internal/manageddiagnostic • diagnostic.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/manageddiagnostic/diagnostic.go","range":{"start":{"line":379,"character":16},"end":{"line":379,"character":21}},"selectionRange":{"start":{"line":379,"character":16},"end":{"line":379,"character":21}}},"fromRanges":[{"start":{"line":2473,"character":22},"end":{"line":2473,"character":27}}]}],"id":11618}

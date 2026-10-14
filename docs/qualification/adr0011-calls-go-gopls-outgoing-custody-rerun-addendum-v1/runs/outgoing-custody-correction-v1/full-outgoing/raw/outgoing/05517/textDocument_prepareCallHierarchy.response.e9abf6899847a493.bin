@@ -1,0 +1,3 @@
+Content-Length: 759
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/retainedmanifest/v1.go","version":1,"diagnostics":[{"range":{"start":{"line":154,"character":45},"end":{"line":154,"character":72}},"severity":2,"code":"default","codeDescription":{"href":"https://staticcheck.dev/docs/checks/#SA4003"},"source":"SA4003","message":"no value of type uint64 is less than 0"},{"range":{"start":{"line":181,"character":1},"end":{"line":185,"character":2}},"severity":4,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#slicescontains"},"source":"slicescontains","message":"Loop can be simplified using slices.Contains"}]}}

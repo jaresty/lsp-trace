@@ -1,0 +1,3 @@
+Content-Length: 425
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Sprintf","kind":12,"detail":"fmt • print.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/fmt/print.go","range":{"start":{"line":236,"character":5},"end":{"line":236,"character":12}},"selectionRange":{"start":{"line":236,"character":5},"end":{"line":236,"character":12}}},"fromRanges":[{"start":{"line":51,"character":46},"end":{"line":51,"character":53}}]}],"id":9867}

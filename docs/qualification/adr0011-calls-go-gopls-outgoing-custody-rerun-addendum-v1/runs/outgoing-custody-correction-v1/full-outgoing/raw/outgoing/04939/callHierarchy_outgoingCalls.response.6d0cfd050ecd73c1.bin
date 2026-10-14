@@ -1,0 +1,3 @@
+Content-Length: 492
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"emit","kind":12,"detail":"lsp-trace/internal/stage2scenario • scenario.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/stage2scenario/scenario.go","range":{"start":{"line":457,"character":22},"end":{"line":457,"character":26}},"selectionRange":{"start":{"line":457,"character":22},"end":{"line":457,"character":26}}},"fromRanges":[{"start":{"line":463,"character":3},"end":{"line":463,"character":7}}]}],"id":9825}

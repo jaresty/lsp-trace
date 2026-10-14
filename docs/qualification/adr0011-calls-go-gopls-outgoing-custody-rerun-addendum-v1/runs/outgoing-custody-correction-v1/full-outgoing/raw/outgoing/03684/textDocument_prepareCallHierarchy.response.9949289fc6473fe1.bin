@@ -1,0 +1,3 @@
+Content-Length: 415
+
+{"jsonrpc":"2.0","result":[{"name":"Authority","kind":12,"detail":"lsp-trace/internal/programc • stage7c_instability.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage7c_instability.go","range":{"start":{"line":425,"character":38},"end":{"line":425,"character":47}},"selectionRange":{"start":{"line":425,"character":38},"end":{"line":425,"character":47}}}],"id":7328}

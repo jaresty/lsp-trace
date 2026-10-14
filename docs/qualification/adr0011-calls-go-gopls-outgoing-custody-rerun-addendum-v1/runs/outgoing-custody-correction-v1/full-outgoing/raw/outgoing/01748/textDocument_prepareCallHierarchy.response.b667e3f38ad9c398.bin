@@ -1,0 +1,3 @@
+Content-Length: 487
+
+{"jsonrpc":"2.0","result":[{"name":"produceDefinition","kind":12,"detail":"lsp-trace/internal/adr0011methodresult • restricted_definition_provenance_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/restricted_definition_provenance_private.go","range":{"start":{"line":853,"character":33},"end":{"line":853,"character":50}},"selectionRange":{"start":{"line":853,"character":33},"end":{"line":853,"character":50}}}],"id":3480}

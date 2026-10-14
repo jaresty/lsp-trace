@@ -1,0 +1,3 @@
+Content-Length: 471
+
+{"jsonrpc":"2.0","id":7601,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"isZeroSeal","kind":12,"detail":"lsp-trace/internal/programcadmission \u2022 typed_boundary.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/typed_boundary.go","range":{"start":{"line":339,"character":5},"end":{"line":339,"character":15}},"selectionRange":{"start":{"line":339,"character":5},"end":{"line":339,"character":15}}}}}

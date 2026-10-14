@@ -1,0 +1,3 @@
+Content-Length: 375
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"2026/10/13 23:19:00 go/packages.Load #11\n\tview_id=\"2\"\n\tsnapshot=114\n\tdirectory=/private/tmp/adr0011-gopls-workload-study-v1/workspace\n\tquery=[file=/private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011lifecycle/lock_unsupported.go]\n\tpackages=2\n\tduration=98.3995ms\n"}}

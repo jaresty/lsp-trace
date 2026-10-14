@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":8939,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Unwrap","kind":12,"detail":"lsp-trace/internal/retainedprojection \u2022 assemble.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/retainedprojection/assemble.go","range":{"start":{"line":40,"character":24},"end":{"line":40,"character":30}},"selectionRange":{"start":{"line":40,"character":24},"end":{"line":40,"character":30}}}}}

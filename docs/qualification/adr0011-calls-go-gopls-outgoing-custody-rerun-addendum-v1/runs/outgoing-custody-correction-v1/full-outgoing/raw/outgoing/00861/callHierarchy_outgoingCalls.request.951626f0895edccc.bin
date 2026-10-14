@@ -1,0 +1,3 @@
+Content-Length: 444
+
+{"jsonrpc":"2.0","id":1714,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"stopped","kind":12,"detail":"lsp-trace/internal/adr0007locationv2 \u2022 eval.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007locationv2/eval.go","range":{"start":{"line":25,"character":5},"end":{"line":25,"character":12}},"selectionRange":{"start":{"line":25,"character":5},"end":{"line":25,"character":12}}}}}

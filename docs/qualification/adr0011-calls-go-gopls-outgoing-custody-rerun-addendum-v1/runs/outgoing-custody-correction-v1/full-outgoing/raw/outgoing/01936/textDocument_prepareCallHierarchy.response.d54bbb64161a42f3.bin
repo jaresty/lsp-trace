@@ -1,0 +1,3 @@
+Content-Length: 435
+
+{"jsonrpc":"2.0","result":[{"name":"verifyManifestGenerationBytes","kind":12,"detail":"lsp-trace/internal/candidatepublication • adapter.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/candidatepublication/adapter.go","range":{"start":{"line":467,"character":18},"end":{"line":467,"character":47}},"selectionRange":{"start":{"line":467,"character":18},"end":{"line":467,"character":47}}}],"id":3856}

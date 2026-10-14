@@ -1,0 +1,3 @@
+Content-Length: 443
+
+{"jsonrpc":"2.0","id":5207,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"canonicalAnchors","kind":12,"detail":"lsp-trace/internal/graph \u2022 relations.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graph/relations.go","range":{"start":{"line":154,"character":5},"end":{"line":154,"character":21}},"selectionRange":{"start":{"line":154,"character":5},"end":{"line":154,"character":21}}}}}

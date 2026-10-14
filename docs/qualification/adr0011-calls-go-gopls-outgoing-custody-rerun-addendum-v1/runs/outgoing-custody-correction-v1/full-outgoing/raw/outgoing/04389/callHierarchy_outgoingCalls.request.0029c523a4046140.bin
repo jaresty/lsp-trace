@@ -1,0 +1,3 @@
+Content-Length: 472
+
+{"jsonrpc":"2.0","id":8731,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"CanonicalID","kind":12,"detail":"lsp-trace/internal/relations \u2022 observation_semantics.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/relations/observation_semantics.go","range":{"start":{"line":176,"character":29},"end":{"line":176,"character":40}},"selectionRange":{"start":{"line":176,"character":29},"end":{"line":176,"character":40}}}}}

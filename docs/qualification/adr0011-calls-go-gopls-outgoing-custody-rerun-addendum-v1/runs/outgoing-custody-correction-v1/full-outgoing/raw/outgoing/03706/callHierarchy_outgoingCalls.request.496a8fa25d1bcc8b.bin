@@ -1,0 +1,3 @@
+Content-Length: 480
+
+{"jsonrpc":"2.0","id":7373,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"TestOnlyMutatePublication","kind":12,"detail":"lsp-trace/internal/programc \u2022 stage7c_instability.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage7c_instability.go","range":{"start":{"line":673,"character":39},"end":{"line":673,"character":64}},"selectionRange":{"start":{"line":673,"character":39},"end":{"line":673,"character":64}}}}}

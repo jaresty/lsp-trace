@@ -1,0 +1,33 @@
+{
+  "artifact_count": 53640,
+  "artifact_inventory_digest": "967acce92cfac58e051f2f110aa274b3a151c79c31ab48453712b18867be0825",
+  "authority": 0,
+  "binds_to_generic_profile_id": "CALLS_LSP_OUTGOING_EXACT_V1",
+  "checksums_file": "full-outgoing.final-run.checksums.sha256",
+  "checksums_sha256": "b01bcfd5018432eed725af79a41ce049ac3ba2941d7d2f3a40077367047bb93b",
+  "contract_sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad",
+  "custody_private_sha256": "b7dea0ed6a76e86e6ab3be0cf772c83c8f366d767c9b1efe1fe8e980d4649912",
+  "final_counts": {
+    "final_disposition_counts": {
+      "FAILED_LSP_ERROR": 67,
+      "SUCCEEDED_EMPTY": 1455,
+      "SUCCEEDED_NON_EMPTY": 4378
+    },
+    "one_final_disposition_ordinals": 5900,
+    "ordinal_count": 5900
+  },
+  "plan_digest": "639e22a56cd7c352ea15d99b31a402e05c9fb53408f9b499cf9c856124e7ab27",
+  "popen_env_binding_sha256": "cf9e0779685a8f1ac90c2efc9369ef62f8f048ad886a84bae39c6df589c20202",
+  "producer_disposition": "OUTGOING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "profile_id": "CALLS_GO_GOPLS_OUTGOING_EXACT_V1",
+  "run_dir_name": "full-outgoing",
+  "run_dir_sha256": "ae9b8cad03dbf40ddb619e0e1c73150a58a9f50af0120c1f59cef4ec20260939",
+  "run_namespace": "lsp-trace.adr0011.calls.go.gopls.outgoing.custody_rerun.v1",
+  "runner_sha256": "10456c34a2b8c629b301c2ebfdafbbad7ba432db85ae33ac49b464906818f482",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.final-run-seal.v1",
+  "sealed_without_self_reference": true,
+  "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4",
+  "test_only_synthetic": false,
+  "verification_status": "RUN_VERIFICATION_PASSED"
+}

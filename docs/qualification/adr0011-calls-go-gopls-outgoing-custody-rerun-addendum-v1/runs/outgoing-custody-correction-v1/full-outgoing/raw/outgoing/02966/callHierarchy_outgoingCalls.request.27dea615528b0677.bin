@@ -1,0 +1,3 @@
+Content-Length: 468
+
+{"jsonrpc":"2.0","id":5897,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ResolveFullDefinition","kind":12,"detail":"lsp-trace/internal/liveprojection \u2022 v6_resolver.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/liveprojection/v6_resolver.go","range":{"start":{"line":18,"character":32},"end":{"line":18,"character":53}},"selectionRange":{"start":{"line":18,"character":32},"end":{"line":18,"character":53}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 553
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"reserveProcessingCaps","kind":12,"detail":"lsp-trace/internal/adr0011methodresult • restricted_owner_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/restricted_owner_private.go","range":{"start":{"line":246,"character":33},"end":{"line":246,"character":54}},"selectionRange":{"start":{"line":246,"character":33},"end":{"line":246,"character":54}}},"fromRanges":[{"start":{"line":243,"character":10},"end":{"line":243,"character":31}}]}],"id":3497}

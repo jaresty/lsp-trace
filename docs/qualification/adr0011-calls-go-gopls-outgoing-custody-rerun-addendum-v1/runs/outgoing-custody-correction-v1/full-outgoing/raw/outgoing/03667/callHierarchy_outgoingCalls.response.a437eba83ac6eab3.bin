@@ -1,0 +1,3 @@
+Content-Length: 508
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"DeepCopy","kind":12,"detail":"lsp-trace/internal/programc • stage7c_instability.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage7c_instability.go","range":{"start":{"line":439,"character":38},"end":{"line":439,"character":46}},"selectionRange":{"start":{"line":439,"character":38},"end":{"line":439,"character":46}}},"fromRanges":[{"start":{"line":390,"character":81},"end":{"line":390,"character":89}}]}],"id":7295}

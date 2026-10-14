@@ -1,0 +1,3 @@
+Content-Length: 437
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"SetFrac64","kind":12,"detail":"math/big • rat.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/math/big/rat.go","range":{"start":{"line":322,"character":14},"end":{"line":322,"character":23}},"selectionRange":{"start":{"line":322,"character":14},"end":{"line":322,"character":23}}},"fromRanges":[{"start":{"line":499,"character":21},"end":{"line":499,"character":30}}]}],"id":7126}

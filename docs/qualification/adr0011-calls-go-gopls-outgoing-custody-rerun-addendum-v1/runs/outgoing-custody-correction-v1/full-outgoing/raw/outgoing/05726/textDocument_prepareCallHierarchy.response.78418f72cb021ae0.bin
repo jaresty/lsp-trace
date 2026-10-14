@@ -1,0 +1,3 @@
+Content-Length: 432
+
+{"jsonrpc":"2.0","result":[{"name":"CompletedDocumentSymbolRequestFrame","kind":12,"detail":"lsp-trace/sessionruntime • document_symbol_frame.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/document_symbol_frame.go","range":{"start":{"line":4,"character":25},"end":{"line":4,"character":60}},"selectionRange":{"start":{"line":4,"character":25},"end":{"line":4,"character":60}}}],"id":11392}

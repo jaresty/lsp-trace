@@ -1,0 +1,3 @@
+Content-Length: 245
+
+{"jsonrpc":"2.0","id":9802,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/sourceprojectionv3/pager.go"},"position":{"line":271,"character":5}}}

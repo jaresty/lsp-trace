@@ -1,0 +1,3 @@
+Content-Length: 436
+
+{"jsonrpc":"2.0","result":[{"name":"retainedCallsAdmission","kind":12,"detail":"lsp-trace/internal/programcadmission • typed_boundary.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/typed_boundary.go","range":{"start":{"line":321,"character":21},"end":{"line":321,"character":43}},"selectionRange":{"start":{"line":321,"character":21},"end":{"line":321,"character":43}}}],"id":7596}

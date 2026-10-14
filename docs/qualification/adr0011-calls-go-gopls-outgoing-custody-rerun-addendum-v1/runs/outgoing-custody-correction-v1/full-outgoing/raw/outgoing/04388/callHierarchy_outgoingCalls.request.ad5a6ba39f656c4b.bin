@@ -1,0 +1,3 @@
+Content-Length: 469
+
+{"jsonrpc":"2.0","id":8729,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Validate","kind":12,"detail":"lsp-trace/internal/relations \u2022 observation_semantics.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/relations/observation_semantics.go","range":{"start":{"line":124,"character":29},"end":{"line":124,"character":37}},"selectionRange":{"start":{"line":124,"character":29},"end":{"line":124,"character":37}}}}}

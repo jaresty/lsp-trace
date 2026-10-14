@@ -1,0 +1,3 @@
+Content-Length: 446
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Int64","kind":12,"detail":"encoding/json • decode.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/encoding/json/decode.go","range":{"start":{"line":201,"character":16},"end":{"line":201,"character":21}},"selectionRange":{"start":{"line":201,"character":16},"end":{"line":201,"character":21}}},"fromRanges":[{"start":{"line":50,"character":17},"end":{"line":50,"character":22}}]}],"id":445}

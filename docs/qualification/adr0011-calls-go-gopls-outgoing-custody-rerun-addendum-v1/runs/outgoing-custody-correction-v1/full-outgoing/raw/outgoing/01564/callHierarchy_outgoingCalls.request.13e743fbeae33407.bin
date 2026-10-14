@@ -1,0 +1,3 @@
+Content-Length: 449
+
+{"jsonrpc":"2.0","id":3118,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"withLock","kind":12,"detail":"lsp-trace/internal/adr0011lifecycle \u2022 lock.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011lifecycle/lock.go","range":{"start":{"line":254,"character":24},"end":{"line":254,"character":32}},"selectionRange":{"start":{"line":254,"character":24},"end":{"line":254,"character":32}}}}}

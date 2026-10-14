@@ -1,0 +1,3 @@
+Content-Length: 468
+
+{"jsonrpc":"2.0","result":[{"name":"newPrivateB4C15CustodyContext","kind":12,"detail":"lsp-trace/sessionruntime • adr0011_c17_c15_observer_contract_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/adr0011_c17_c15_observer_contract_private.go","range":{"start":{"line":52,"character":5},"end":{"line":52,"character":34}},"selectionRange":{"start":{"line":52,"character":5},"end":{"line":52,"character":34}}}],"id":10683}

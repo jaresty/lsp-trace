@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":4752,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ResourceCategory","kind":12,"detail":"lsp-trace/internal/continuationhost \u2022 store.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/continuationhost/store.go","range":{"start":{"line":54,"character":27},"end":{"line":54,"character":43}},"selectionRange":{"start":{"line":54,"character":27},"end":{"line":54,"character":43}}}}}

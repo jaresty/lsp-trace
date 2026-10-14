@@ -1,0 +1,3 @@
+Content-Length: 468
+
+{"jsonrpc":"2.0","id":346,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"providerDeclarations","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp \u2022 bootstrap_provider.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/bootstrap_provider.go","range":{"start":{"line":50,"character":30},"end":{"line":50,"character":50}},"selectionRange":{"start":{"line":50,"character":30},"end":{"line":50,"character":50}}}}}
