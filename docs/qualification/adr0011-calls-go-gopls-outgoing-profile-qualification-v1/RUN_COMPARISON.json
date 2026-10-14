@@ -1,0 +1,308 @@
+{
+  "accepted": false,
+  "authority": 0,
+  "binds_to_generic_profile_id": "CALLS_LSP_OUTGOING_EXACT_V1",
+  "completeness": "UNKNOWN",
+  "differences": {
+    "all_ledger_timestamps_differ": 11800,
+    "ledger_sha256_differs_due_to_timestamps": true,
+    "outgoing_response_notification_count_fresh": 277,
+    "outgoing_response_notification_count_historical": 354,
+    "raw_checksum_inventories_are_not_equal": true,
+    "raw_outgoing_only_fresh_relative_paths": 1312,
+    "raw_outgoing_only_historical_relative_paths": 1096,
+    "raw_outgoing_relative_path_sets_equal": false,
+    "raw_outgoing_same_relative_path_different_digest_count": 25320,
+    "raw_outgoing_same_relative_path_same_digest_count": 25320,
+    "raw_sidecar_absolute_paths_are_run_root_specific": true
+  },
+  "direction": "outgoing",
+  "equality": {
+    "exact_counts_equal": true,
+    "failure_identities_equal": true,
+    "full_plan_file_sha256_equal": true,
+    "maxima_equal": true,
+    "outgoing_request_objects_equal": true,
+    "outgoing_response_objects_equal": true,
+    "prepare_request_objects_equal": true,
+    "refusals_equal_zero": true,
+    "target_order_equal": true,
+    "terminal_event_identities_excluding_timestamps_equal": true
+  },
+  "expected_exact_values": {
+    "final_counts": {
+      "FAILED_LSP_ERROR": 67,
+      "SUCCEEDED_EMPTY": 1455,
+      "SUCCEEDED_NON_EMPTY": 4378
+    },
+    "fresh_artifact_inventory_digest": "967acce92cfac58e051f2f110aa274b3a151c79c31ab48453712b18867be0825",
+    "fresh_failure_identity_digest": "74f3a91ac43a0f1cbdc95efe256c737c761abe03dda90d0a914edd9494ce078b",
+    "fresh_final_checksums_sha256": "b01bcfd5018432eed725af79a41ce049ac3ba2941d7d2f3a40077367047bb93b",
+    "fresh_final_seal_sha256": "a511c0f2ff435a30ba963f7b70671880959cf234bf37c7dc7a195b7886ba795c",
+    "fresh_raw_outgoing_file_count": 51952,
+    "fresh_target_order_digest": "0d60de8391c064000a63c27a06515bbb22bdbdba1a59bb6441d47d562d46dae2",
+    "fresh_terminal_event_digest_excluding_timestamps": "93530369298866ace70e0c56c37135b9ea8ee64353bf377976134903b5f55c25",
+    "historical_failure_identity_digest": "74f3a91ac43a0f1cbdc95efe256c737c761abe03dda90d0a914edd9494ce078b",
+    "historical_raw_aggregate_digest": "9cdbd26f6cd60887d5414b10c0f7d1fd67d2a185c83cb9aad44aab08c742427b",
+    "historical_raw_outgoing_file_count": 51736,
+    "historical_target_order_digest": "0d60de8391c064000a63c27a06515bbb22bdbdba1a59bb6441d47d562d46dae2",
+    "historical_terminal_event_digest_excluding_timestamps": "93530369298866ace70e0c56c37135b9ea8ee64353bf377976134903b5f55c25",
+    "target_count": 5900
+  },
+  "fresh_run": {
+    "artifact_inventory_digest": "967acce92cfac58e051f2f110aa274b3a151c79c31ab48453712b18867be0825",
+    "failure_identity_digest": "74f3a91ac43a0f1cbdc95efe256c737c761abe03dda90d0a914edd9494ce078b",
+    "final_checksums_sha256": "b01bcfd5018432eed725af79a41ce049ac3ba2941d7d2f3a40077367047bb93b",
+    "final_counts": {
+      "FAILED_LSP_ERROR": 67,
+      "SUCCEEDED_EMPTY": 1455,
+      "SUCCEEDED_NON_EMPTY": 4378
+    },
+    "final_seal_sha256": "a511c0f2ff435a30ba963f7b70671880959cf234bf37c7dc7a195b7886ba795c",
+    "ledger_sha256": "064d2f450edc3f824783ad32442a2fc1b9f4b5f65eda96582404b6c6776ee7f1",
+    "maxima": {
+      "actual_response_count": 5833,
+      "max_fromRanges_on_one_member": {
+        "file": "callHierarchy_outgoingCalls.response.109445fad5875c13.bin",
+        "member_ordinal": 3,
+        "ordinal": 712,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 57
+      },
+      "max_outgoing_request_bytes": {
+        "file": "callHierarchy_outgoingCalls.request.86c8ea7224e3e9dc.bin",
+        "ordinal": 1745,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 572
+      },
+      "max_outgoing_response_bytes": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 50166
+      },
+      "max_returned_to_members_per_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 95
+      },
+      "max_total_fromRanges_in_one_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 185
+      },
+      "response_shape_counts": {
+        "array_empty": 1455,
+        "array_nonempty": 4378
+      },
+      "total_fromRanges_occurrences_measured": 33619
+    },
+    "path": "docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/runs/outgoing-custody-correction-v1/full-outgoing",
+    "raw_outgoing_file_count": 51952,
+    "target_count": 5900,
+    "target_order_digest": "0d60de8391c064000a63c27a06515bbb22bdbdba1a59bb6441d47d562d46dae2",
+    "terminal_event_digest_excluding_timestamps": "93530369298866ace70e0c56c37135b9ea8ee64353bf377976134903b5f55c25"
+  },
+  "frontier": "UNKNOWN",
+  "historical_run": {
+    "failure_identity_digest": "74f3a91ac43a0f1cbdc95efe256c737c761abe03dda90d0a914edd9494ce078b",
+    "final_counts": {
+      "FAILED_LSP_ERROR": 67,
+      "SUCCEEDED_EMPTY": 1455,
+      "SUCCEEDED_NON_EMPTY": 4378
+    },
+    "final_summary_sha256": "e6c8798f57e020f4af3c8fc149acdc2d21a76039d427da241db62a5234858d46",
+    "ledger_sha256": "1442c679853e85866ec3070fe745c8f66d6eb26d60fb0c9a28ff9b0e0b66a897",
+    "maxima": {
+      "actual_response_count": 5833,
+      "max_fromRanges_on_one_member": {
+        "file": "callHierarchy_outgoingCalls.response.109445fad5875c13.bin",
+        "member_ordinal": 3,
+        "ordinal": 712,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 57
+      },
+      "max_outgoing_request_bytes": {
+        "file": "callHierarchy_outgoingCalls.request.86c8ea7224e3e9dc.bin",
+        "ordinal": 1745,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 572
+      },
+      "max_outgoing_response_bytes": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 50166
+      },
+      "max_returned_to_members_per_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 95
+      },
+      "max_total_fromRanges_in_one_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 185
+      },
+      "response_shape_counts": {
+        "array_empty": 1455,
+        "array_nonempty": 4378
+      },
+      "total_fromRanges_occurrences_measured": 33619
+    },
+    "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/runs/full-outgoing",
+    "raw_aggregate_digest": "9cdbd26f6cd60887d5414b10c0f7d1fd67d2a185c83cb9aad44aab08c742427b",
+    "raw_outgoing_file_count": 51736,
+    "sealed_manifest_sha256": "964fc12ff7e8633dd2efc57d574fefbe052cd3d227ce747f7d7064a4079aca2f",
+    "target_count": 5900,
+    "target_order_digest": "0d60de8391c064000a63c27a06515bbb22bdbdba1a59bb6441d47d562d46dae2",
+    "terminal_event_digest_excluding_timestamps": "93530369298866ace70e0c56c37135b9ea8ee64353bf377976134903b5f55c25"
+  },
+  "incoming_evidence_or_authority_used": false,
+  "incoming_profile_use": "FORBIDDEN",
+  "maxima_witnesses": {
+    "fresh": {
+      "actual_response_count": 5833,
+      "max_fromRanges_on_one_member": {
+        "file": "callHierarchy_outgoingCalls.response.109445fad5875c13.bin",
+        "member_ordinal": 3,
+        "ordinal": 712,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 57
+      },
+      "max_outgoing_request_bytes": {
+        "file": "callHierarchy_outgoingCalls.request.86c8ea7224e3e9dc.bin",
+        "ordinal": 1745,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 572
+      },
+      "max_outgoing_response_bytes": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 50166
+      },
+      "max_returned_to_members_per_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 95
+      },
+      "max_total_fromRanges_in_one_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 185
+      },
+      "response_shape_counts": {
+        "array_empty": 1455,
+        "array_nonempty": 4378
+      },
+      "total_fromRanges_occurrences_measured": 33619
+    },
+    "historical": {
+      "actual_response_count": 5833,
+      "max_fromRanges_on_one_member": {
+        "file": "callHierarchy_outgoingCalls.response.109445fad5875c13.bin",
+        "member_ordinal": 3,
+        "ordinal": 712,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 57
+      },
+      "max_outgoing_request_bytes": {
+        "file": "callHierarchy_outgoingCalls.request.86c8ea7224e3e9dc.bin",
+        "ordinal": 1745,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 572
+      },
+      "max_outgoing_response_bytes": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 50166
+      },
+      "max_returned_to_members_per_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 95
+      },
+      "max_total_fromRanges_in_one_response": {
+        "file": "callHierarchy_outgoingCalls.response.e001f6b3e1c5a98d.bin",
+        "ordinal": 5809,
+        "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling",
+        "value": 185
+      },
+      "response_shape_counts": {
+        "array_empty": 1455,
+        "array_nonempty": 4378
+      },
+      "total_fromRanges_occurrences_measured": 33619
+    },
+    "qualifier": "measured in the historical and fresh outgoing exact 5,900-target runs only; not a universal provider ceiling"
+  },
+  "occurrence_source_policy": "fromRanges only; to.range and to.selectionRange are endpoint identity/display only; D/R, source text, documentSymbol, incoming reverse evidence, provider heuristic, and raw endpoint display spans are not CALLS occurrence sources",
+  "outgoing_provider_go": false,
+  "producer_disposition": "CALLS_GO_GOPLS_OUTGOING_PROFILE_QUALIFICATION_AUTHORED_NOT_GO",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "production_go": false,
+  "profile_id": "CALLS_GO_GOPLS_OUTGOING_EXACT_V1",
+  "provider_go": false,
+  "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.profile-qualification.run-comparison.v1",
+  "semantic_difference_indicators": {
+    "counts_equal": true,
+    "failure_identities_equal": true,
+    "known_nonsemantic_differences": [
+      "ledger timestamps",
+      "ledger SHA",
+      "raw notification counts",
+      "raw sidecar absolute paths",
+      "raw file inventories/checksums"
+    ],
+    "maxima_equal": true,
+    "outgoing_request_objects_equal": true,
+    "outgoing_response_objects_equal": true,
+    "prepare_request_objects_equal": true,
+    "semantic_outgoing_payload_difference_found": false,
+    "target_order_equal": true,
+    "terminal_event_identities_excluding_timestamps_equal": true
+  },
+  "semantic_statement": "caller queried A -> callee B; to endpoint identity/display only; fromRanges sole occurrence source; null/empty/malformed from generic package",
+  "source_pins": {
+    "fresh_outgoing_evidence": {
+      "accepted": false,
+      "artifact_count": 53640,
+      "authority": 0,
+      "final_checksums_sha256": "b01bcfd5018432eed725af79a41ce049ac3ba2941d7d2f3a40077367047bb93b",
+      "final_seal_sha256": "a511c0f2ff435a30ba963f7b70671880959cf234bf37c7dc7a195b7886ba795c",
+      "head": "03359dc6344ee71c828cc3a22af42af6683333ae",
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+      "run_dir": "docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/runs/outgoing-custody-correction-v1/full-outgoing",
+      "run_id": "outgoing-custody-correction-v1",
+      "source_role": "fresh_outgoing_evidence_pin"
+    },
+    "generic_outgoing_semantics": {
+      "accepted": false,
+      "authority": 0,
+      "commit": "17057a8c53af8e8fe66be9c37788bbf59d10c5cd",
+      "path": "docs/qualification/adr0011-calls-lsp-outgoing-exact-v1-generic-semantics-v1/CHECKSUMS.sha256",
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+      "profile_id": "CALLS_LSP_OUTGOING_EXACT_V1",
+      "sha256": "8c0efb403147ff70ad4def97809c65ec026c4984fdd8c8b5f7e1f9d0e31de6db",
+      "source_role": "generic_outgoing_semantics_prerequisite"
+    },
+    "outgoing_custody_addendum": {
+      "accepted": false,
+      "authority": 0,
+      "commit": "03359dc6344ee71c828cc3a22af42af6683333ae",
+      "path": "docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/CHECKSUMS.sha256",
+      "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+      "sha256": "3ed97c1031986186e5da49e1488f46554314c2bf945f02bca73217146d6abeca",
+      "source_role": "outgoing_custody_addendum_prerequisite"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+TAMPER_TESTS_PASSED 58
+- manifest semantic statement mutation: MANIFEST semantic statement mismatch
+- result semantic statement mutation: RESULT semantic statement mismatch
+- role semantic statement mutation: ROLE_MATRIX semantic statement mismatch
+- semantic statement duplicate alias: MANIFEST.json unrecognized semantic-bearing duplicate key semantic_statement_duplicate
+- occurrence source policy duplicate alias: RESULT.json unrecognized occurrence-policy duplicate key occurrence_source_policy_duplicate
+- json duplicate semantic key: MANIFEST.json duplicate JSON key semantic_statement
+- occurrence source policy mutation: MANIFEST occurrence source policy mismatch
+- authority string mutation: RESULT authority must be numeric 0
+- nested authority nonzero mutation: ROLE_MATRIX $.custody_roles[0].authority authority must be numeric 0
+- accepted true mutation: RESULT accepted must be false bool
+- provider go true mutation: MANIFEST provider_go must be false
+- outgoing provider go true mutation: RESULT outgoing_provider_go must be false
+- production go true mutation: ROLE_MATRIX production_go must be false
+- production admission mutation: RESULT production refusal mismatch
+- completeness mutation: MANIFEST completeness must be UNKNOWN
+- frontier mutation: RUN_COMPARISON frontier must be UNKNOWN
+- direction incoming mutation: RUN_COMPARISON direction is not outgoing
+- incoming evidence flag mutation: RESULT $.incoming_evidence_or_authority_used incoming evidence/authority must be false
+- incoming profile use mutation: MANIFEST $.incoming_profile_use incoming_profile_use must be forbidden
+- incoming authority non-role mutation: ROLE_MATRIX non_roles must be exact canonical false set
+- composition authority non-role mutation: ROLE_MATRIX non_roles must be exact canonical false set
+- incoming ledger dependency mutation: MANIFEST $.forbidden_effects.incoming_ledger_dependency forbidden effect must be false
+- incoming raw dependency path mutation: RUN_COMPARISON $.fresh_run.path must not depend on incoming artifact
+- composition effect mutation: MANIFEST $.forbidden_effects.composition_change forbidden effect must be false
+- bidirectional effect mutation: MANIFEST $.forbidden_effects.bidirectional_composition forbidden effect must be false
+- adr0011 adr0007 effect mutation: MANIFEST $.forbidden_effects.adr0011_to_adr0007_composition forbidden effect must be false
+- stage8 effect mutation: MANIFEST $.forbidden_effects.stage8_change forbidden effect must be false
+- ceiling effect mutation: MANIFEST $.forbidden_effects.ceiling_change forbidden effect must be false
+- custody owner effect mutation: MANIFEST $.forbidden_effects.custody_owner_change forbidden effect must be false
+- runtime effect mutation: MANIFEST $.forbidden_effects.runtime_change forbidden effect must be false
+- public api schema cli mcp effect mutation: MANIFEST $.forbidden_effects.api_change forbidden effect must be false
+- integration push publication release deployment mutation: MANIFEST $.forbidden_effects.deployment forbidden effect must be false
+- generic prerequisite hash mutation: MANIFEST generic pin mismatch
+- provider binding role hash mutation: provider_binding_roles must exactly mirror canonical pins/current files
+- accepted prerequisite hash mutation: accepted prerequisites must exactly mirror canonical source pins
+- generic prerequisite commit mutation: MANIFEST generic pin mismatch
+- fresh evidence head mutation: RESULT fresh evidence head/run mismatch
+- accepted evidence head mutation: accepted prerequisites must exactly mirror canonical source pins
+- fresh run id mutation: RESULT fresh evidence head/run mismatch
+- final seal pin mutation: fresh final pins mismatch
+- final checksum pin mutation: fresh final pins mismatch
+- artifact count mutation: package static checksum inventory mismatch
+- target count mutation: fresh_run target_count mismatch
+- raw file count mutation: fresh_run raw outgoing file count mismatch
+- target order digest mutation: fresh_run target order digest mismatch
+- terminal event digest mutation: fresh_run terminal digest mismatch
+- failure digest mutation: fresh_run failure digest mismatch
+- semantic difference indicator mutation: semantic difference flag mismatch
+- result known differences mutation: result known nonsemantic differences mismatch
+- final counts mutation: fresh_run final_counts mismatch
+- raw aggregate mutation: historical raw aggregate mismatch
+- artifact inventory mutation: fresh artifact inventory mismatch
+- maxima witness value mutation: fresh maxima recompute mismatch
+- maxima qualifier mutation: fresh_run.max_outgoing_response_bytes qualifier mismatch
+- maxima witness file mutation: fresh_run.max_outgoing_response_bytes file witness missing
+- maxima witnesses mirror mutation: maxima witness qualifier mismatch
+- custody role historical source mutation: custody_roles[0] source mismatch
+- failure identity omission: failure identities TSV mismatch
