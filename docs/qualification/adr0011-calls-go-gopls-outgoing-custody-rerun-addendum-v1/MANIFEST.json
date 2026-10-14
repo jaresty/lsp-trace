@@ -1,0 +1,389 @@
+{
+  "actual_execution_head_provenance": {
+    "private": "full actual HEAD retained in private prelaunch repository_state.actual_head",
+    "public": "actual HEAD exposed only as 12-character token plus sha256 digest"
+  },
+  "binds_to_generic_profile_id": "CALLS_LSP_OUTGOING_EXACT_V1",
+  "custody_roles": [
+    {
+      "authority": 0,
+      "evidence": "private prelaunch record retains canonical path/length/hash/version; public summary carries only length/hash/version-output digests",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "gopls_canonical_path_length_digest_version",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "private prelaunch record plus popen-env-binding.private.json; wrapper source uses env=captured_env",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "exact_argv_cwd_complete_env_passed_to_popen",
+      "sensitive_handling": "PRIVATE_VALUES_RETAINED_NOT_PUBLIC",
+      "source": "env=captured_env",
+      "status": "PRESENT_FOR_TEST_ONLY_ENV_PROBE; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "prelaunch-custody.private.json retained privately with public deterministic digest/key count only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "prelaunch_complete_env_private_seal",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "construction": "ALLOWLIST_ONLY",
+      "evidence": "build_public_summary constructs allowlisted metadata only; verifier rejects forbidden keys and raw-looking path/env values",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "raw_environment_key_names_public": false,
+      "raw_environment_values_public": false,
+      "role": "allowlisted_public_summary_no_env_leakage",
+      "status": "PRESENT"
+    },
+    {
+      "authority": 0,
+      "evidence": "reserve_fresh_run_dir refuses existing run-dir/run-id dirs and uses mkdir(exist_ok=False) with symlink/confinement checks",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "retry_policy": "FRESH_ONLY_NO_RESUME",
+      "role": "atomic_fresh_run_namespace_reservation",
+      "status": "PRESENT"
+    },
+    {
+      "authority": 0,
+      "evidence": "private record retains exact initialize; public summary carries byte lengths/digests and root URI digest only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "initialize_bytes_root_workspace_capability",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "go resolved from exact captured PATH in private record; public metadata carries only length/hash/version-output digests",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "go_executable_from_exact_captured_path_length_digest_version",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "private record retains exact go env GOROOT/GOTOOLDIR inventory; public summary carries record counts/digests only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "closed_go_toolchain_inventory_from_goroot_gotooldir",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "private record retains python/source identity; public summary carries source/runtime digests and byte lengths only",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "runner_python_runtime_and_source_hashes",
+      "status": "PRESENT_FOR_TEST_ONLY; REQUIRED_FOR_FULL_RERUN"
+    },
+    {
+      "authority": 0,
+      "evidence": "package-owned finalize-run and verify-full-run modes; TEST_ONLY synthetic fixture and tamper tests cover changed/missing/extra/symlink artifacts",
+      "fail_closed_if_missing": true,
+      "full_run_executed_now": false,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "post_full_run_seal_and_verify",
+      "status": "PRESENT_TEST_ONLY_FIXTURE; REQUIRED_AFTER_FULL_RERUN",
+      "synthetic_tamper_tests": true
+    },
+    {
+      "authority": 0,
+      "evidence": "source pins to accepted v5 inputs only; addendum records no authority merge and preserves frontier UNKNOWN without reading any untracked provider candidate",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "historical_failure_refusal_frontier_preservation",
+      "status": "PRESERVED_BY_SOURCE_PINS_AND_NON_CLAIMS"
+    },
+    {
+      "authority": 0,
+      "evidence": "manifest/result/execution contract refuse GO, production admission, incoming-provider authority, composition/public/runtime changes",
+      "fail_closed_if_missing": true,
+      "mandatory": true,
+      "missing_disposition": "NO_GO_FAIL_CLOSED",
+      "role": "authority_non_merge_boundary",
+      "status": "PRESENT"
+    }
+  ],
+  "direction": "outgoing",
+  "estimate": {
+    "contractual_worst_case_request_timeout_only": "about 49.17 hours if every target consumed the 30s request timeout; not a forecast",
+    "historical_observed_max_elapsed_seconds_per_target": 1.950021,
+    "sequential_estimate_from_observed_max": "about 3.20 hours plus startup/filesystem overhead"
+  },
+  "execution": {
+    "finalize_after_full_run": "python3 docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/capture_outgoing_custody_rerun.py --finalize-run <fresh-run-dir>",
+    "full_rerun_command_after_review": "python3 docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/capture_outgoing_custody_rerun.py --run-full --direction outgoing --workspace <exact-reviewed-workspace> --gopls gopls --run-id <fresh-never-used-reviewed-run-id>",
+    "package_verification": "python3 docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/verify_outgoing_custody_rerun_addendum.py",
+    "verify_full_run": "python3 docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/capture_outgoing_custody_rerun.py --verify-full-run <fresh-run-dir>"
+  },
+  "failed_pre_effect_run_correction": {
+    "correction_scope": "committed addendum package only; no fullrun/retry/commit/delegation/provider/composition/public/runtime/custody-owner/ceiling change",
+    "not_replayed_from_incoming": true
+  },
+  "forbidden_effects": {
+    "authority_merge": false,
+    "composition_change": false,
+    "custody_policy_change": false,
+    "outgoing_execution": false,
+    "production_admission": false,
+    "profile_go_issued_by_producer": false,
+    "public_surface_change": false,
+    "runtime_code_change": false,
+    "runtime_memory_ceiling_change": false,
+    "schema_publication": false
+  },
+  "fresh_run_dir_policy": "MUST_NOT_EXIST_AT_ALL_AT_RESERVATION",
+  "fresh_run_namespace": "lsp-trace.adr0011.calls.go.gopls.outgoing.custody_rerun.v1",
+  "frontier_inference": "FORBIDDEN",
+  "frozen_outgoing_workload": {
+    "batch_count": 118,
+    "batch_size": 50,
+    "max_raw_response_bytes": 33554432,
+    "retry_policy": "RETRY_FREE_FRESH_RUN_ONLY",
+    "sequential_batches": true,
+    "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+    "target_count": 5900,
+    "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+  },
+  "full_campaign_executed_by_this_package": false,
+  "head_policy": {
+    "allows_addendum_only_descendant_heads": true,
+    "ignores_untracked_paths": true,
+    "rejects_dirty_tracked_changes": true,
+    "rejects_missing_or_extra_executable_contract_files": true,
+    "rejects_staged_changes": true,
+    "rejects_symlink_or_nonregular_package_files": true,
+    "rejects_unrelated_tracked_descendant_changes": true,
+    "requires_base_ancestor": true,
+    "requires_current_addendum_files_covered_by_checksums": true,
+    "untracked_provider_candidate_authorized": false
+  },
+  "historical_evidence_mutation": "FORBIDDEN",
+  "immutable_dependency_base": "17057a8c53af8e8fe66be9c37788bbf59d10c5cd",
+  "no_follow_path_resolution": {
+    "applies_to": [
+      "seal_refs",
+      "private_refs",
+      "checksum_inventory",
+      "finalize_run",
+      "verify_full_run"
+    ],
+    "bounded_nonregular_tests": [
+      "fifo",
+      "unix_socket",
+      "directory",
+      "device_node_or_nonregular_substitute"
+    ],
+    "discipline": "component_by_component_openat_no_follow_from_validated_run_root_descriptor",
+    "enabled": true,
+    "final_open_flags": "O_NONBLOCK|O_NOFOLLOW|O_CLOEXEC where available before fstat",
+    "read_before_regular_fstat": "FORBIDDEN",
+    "rejects": [
+      "absolute_paths",
+      "dot_components",
+      "dotdot_components",
+      "empty_components",
+      "ambiguous_components",
+      "intermediate_symlinks",
+      "final_symlinks",
+      "nonregular_required_files"
+    ]
+  },
+  "observed_test_only_public_tool_summaries": {
+    "go": {
+      "byte_length": 14481762,
+      "sha256": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 33,
+        "stdout_sha256": "278375c8a03c34bb0f855154850de7c4f217fd3b8cdf37986819e3f05d0a4c33"
+      }
+    },
+    "gopls": {
+      "byte_length": 41038194,
+      "sha256": "82600f8b7f6ad337120b27ab738a5e44897ff1701919bc4620836ff7d98c2f7a",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 33,
+        "stdout_sha256": "b90357f9cf20cb15327b21a90e8930a1cf93c7536c710198beade2dc9d821af9"
+      }
+    },
+    "initialize": {
+      "body_byte_length": 345,
+      "body_sha256": "d3e25bc1b866643d19dc36e0459c56035224133f65eabf1d03fe93399959f31b",
+      "client_call_hierarchy_dynamic_registration": false,
+      "framed_byte_length": 368,
+      "framed_sha256": "3e31a7fa93efdc8830ff0555f106ac9fa9a2223142e41480cf94e3d890b66d7b",
+      "root_uri_sha256": "fc2f95544831509858f1d36d15e16e34a4fa26f022ebc0567246abdecce4d00f",
+      "workspace_folder_count": 1
+    },
+    "python": {
+      "byte_length": 52448,
+      "sha256": "b502cb4c5b46b8d4192ec6bcb600ce8922f1afc396fcf646e8765c6eba74a0bf",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 14,
+        "stdout_sha256": "917601090ffb73a030e3eaa8b7a01c41400cad4b61366b4218d7756a5733b66c"
+      }
+    },
+    "toolchain_required_record_count": 14
+  },
+  "outgoing_run_authority": false,
+  "package": "adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1",
+  "package_integrity": {
+    "checksum_file": "CHECKSUMS.sha256",
+    "checksums_cover_current_addendum_files": true,
+    "excluded_generated_logs": [
+      "VERIFICATION.log",
+      "TAMPER_TESTS.log"
+    ],
+    "rejects_checksum_drift": true,
+    "rejects_missing_or_extra_executable_contract_files": true,
+    "rejects_symlink_or_nonregular_package_files": true
+  },
+  "package_owned_sources": {
+    "outgoing_verifier": {
+      "byte_length": 45571,
+      "path": "docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/verify_outgoing_custody_rerun_addendum.py",
+      "sha256": "e1a3c0fa274e583527127b6c2db291048801dc2bedd3133fc41ec4c8fc86efd9"
+    },
+    "outgoing_wrapper": {
+      "byte_length": 66800,
+      "path": "docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/capture_outgoing_custody_rerun.py",
+      "sha256": "434af57bc3c3b9861f5453b706723905158234dcfdb46acd14e1c3f7f15eb035"
+    }
+  },
+  "preserved_unknowns": [
+    "frontier remains UNKNOWN and must not be inferred",
+    "historical failures/refusals are preserved and not overwritten",
+    "no source graph completeness or production-runtime authority is claimed"
+  ],
+  "producer_disposition": "OUTGOING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
+  "producer_may_issue_go": false,
+  "profile_id": "CALLS_GO_GOPLS_OUTGOING_EXACT_V1",
+  "public_artifact_scanner": {
+    "enabled": true,
+    "private_values_location": "*.private.json only",
+    "rejects_absolute_paths": true,
+    "rejects_forbidden_public_fields": [
+      "record",
+      "binding_private_record",
+      "workspace",
+      "runner",
+      "original_runner",
+      "gopls_path",
+      "gopls_launch_argv",
+      "complete_env_private_record"
+    ],
+    "rejects_private_prefixes": true
+  },
+  "public_summary_policy": {
+    "allowed_public_fields": "structural counts, byte lengths, digests, booleans, dispositions",
+    "construction": "ALLOWLIST_ONLY",
+    "raw_environment_key_names_public": false,
+    "raw_environment_values_public": false,
+    "raw_paths_public": false
+  },
+  "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.custody-rerun-addendum.manifest.v6",
+  "source_pins": {
+    "outgoing_evidence_manifest": {
+      "byte_length": 12230,
+      "path": "docs/qualification/adr0011-calls-go-gopls-outgoing-evidence-manifest.json",
+      "sha256": "b1df161c6352ca111072037a0b133ec7539806849392ed0d7a8dc1209be59e0f"
+    },
+    "outgoing_plan": {
+      "byte_length": 10567,
+      "path": "docs/qualification/adr0011-calls-go-gopls-outgoing-profile-plan.md",
+      "sha256": "ed8ec9d30f7a8b668e47401b2e979d122cae0422e85a8ea69b00a73c3f7d9878"
+    },
+    "outgoing_review_v2": {
+      "byte_length": 4115,
+      "path": "docs/qualification/adr0011-calls-go-gopls-outgoing-review-v2.md",
+      "sha256": "ea2db18793f5ef9e9cbc7aff48476cac012036f34658bdc92222f2040278a376"
+    },
+    "target_tsv": {
+      "byte_length": 1685888,
+      "path": "docs/qualification/adr0011-callhierarchy-target-corpus-v1/targets.tsv",
+      "sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+    },
+    "workload_contract": {
+      "byte_length": 6449,
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/contract.json",
+      "sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad"
+    },
+    "workload_runner": {
+      "byte_length": 48312,
+      "path": "docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/adr0011_workload_runner.py",
+      "sha256": "10456c34a2b8c629b301c2ebfdafbbad7ba432db85ae33ac49b464906818f482"
+    }
+  },
+  "supplements_historical_evidence": true,
+  "test_only_artifacts": {
+    "dry_full_plan": {
+      "batches_digest": "c68e8948a4ef41afe3f9a18ea40269fa1f622b80c7ea8cb58a434986bdf7f0fb",
+      "mode": "DRY_FULL_PLAN",
+      "path": "runs/TEST_ONLY_OUTGOING_DRY5900_PLAN_V1/full-outgoing/full-plan.json",
+      "sha256": "af8d60baa9bf11b01afdc270b6cfbf8bc6f775a6958985943d88e8838f6fb3a5"
+    },
+    "popen_env_binding_private": {
+      "byte_length": 10826,
+      "path": "runs/TEST_ONLY_OUTGOING_ENV_PROBE_V1/full-outgoing/custody/popen-env-binding.private.json",
+      "sha256": "463bc55590378daf7533ce41fd56f24549b384046e12774bb3cda3565185a784",
+      "source": "env=captured_env"
+    },
+    "prelaunch_private_record": {
+      "byte_length": 24668,
+      "complete_env_sha256": "5605248bbaf2cbcf10366db925d69bf6fab6d90de0a54268b43021b3450554d7",
+      "path": "runs/TEST_ONLY_OUTGOING_ENV_PROBE_V1/full-outgoing/custody/prelaunch-custody.private.json",
+      "private_values_retained": true,
+      "sha256": "b79815db2d894443dbe7d7cc928ac7576c3f6dd49b999e3e5811cb4d5a221328"
+    },
+    "prelaunch_public_summary": {
+      "path": "runs/TEST_ONLY_OUTGOING_ENV_PROBE_V1/full-outgoing/custody/prelaunch-custody.summary.json",
+      "policy": "ALLOWLIST_ONLY_NO_RAW_ENV_VALUES",
+      "sha256": "e411861ae64ac8bb4b426366c1aff9dae4655f5d498d0fe9e8b3254e5ef7bc5b"
+    },
+    "synthetic_final_seal": {
+      "artifact_count": 17,
+      "checksums_sha256": "9e18c3c19d720e5bcaaf1538022f434dd302aed2877bec8b7b51a5fcc0822ff3",
+      "path": "runs/TEST_ONLY_OUTGOING_SEAL_FIXTURE_V1/full-outgoing.final-run.seal.json",
+      "sha256": "3daa44bca70ed88db16456bdb03fbc3049c334ef09d6ada68678478ec9a176d1",
+      "test_only_synthetic": true
+    }
+  },
+  "test_only_modes": {
+    "dry_plan_run_id": "TEST_ONLY_OUTGOING_DRY5900_PLAN_V1",
+    "env_probe_run_id": "TEST_ONLY_OUTGOING_ENV_PROBE_V1",
+    "gopls_launched_in_test_only_modes": false,
+    "may_masquerade_as_denominator_evidence": false,
+    "synthetic_seal_run_id": "TEST_ONLY_OUTGOING_SEAL_FIXTURE_V1"
+  }
+}

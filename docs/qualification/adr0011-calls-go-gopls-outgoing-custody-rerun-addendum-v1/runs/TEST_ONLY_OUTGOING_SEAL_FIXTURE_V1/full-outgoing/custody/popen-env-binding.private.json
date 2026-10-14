@@ -1,0 +1,4 @@
+{
+  "schema": "test-only-private-binding",
+  "source": "env=captured_env"
+}

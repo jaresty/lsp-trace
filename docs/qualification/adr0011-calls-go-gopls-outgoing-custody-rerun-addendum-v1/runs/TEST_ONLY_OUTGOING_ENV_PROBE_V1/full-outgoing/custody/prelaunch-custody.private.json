@@ -1,0 +1,522 @@
+{
+  "accepted": false,
+  "authority": 0,
+  "binds_to_generic_profile_id": "CALLS_LSP_OUTGOING_EXACT_V1",
+  "captured_at_unix": 1791958342.056649,
+  "completeness": "UNKNOWN",
+  "contract_invariants": {
+    "batch_count": 118,
+    "batch_size": 50,
+    "max_raw_response_bytes": 33554432,
+    "outgoing_inference_from_incoming_permitted": false,
+    "sequential_ordinals": true,
+    "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+    "strict_attempt_ordering": true,
+    "target_count": 5900,
+    "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+  },
+  "go_executable": {
+    "byte_length": 14481762,
+    "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/bin/go",
+    "role": "go_executable_from_captured_PATH",
+    "sha256": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0",
+    "version": {
+      "argv": [
+        "/opt/homebrew/Cellar/go/1.26.5/libexec/bin/go",
+        "version"
+      ],
+      "cwd": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+      "duration_seconds": 0.011892,
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "go version go1.26.5 darwin/arm64\n",
+      "stdout_sha256": "278375c8a03c34bb0f855154850de7c4f217fd3b8cdf37986819e3f05d0a4c33"
+    }
+  },
+  "go_toolchain_inventory": {
+    "closed_inventory_scope": [
+      "go executable resolved from exact captured PATH",
+      "go env GOROOT/VERSION file",
+      "all executable tools named by `go tool` that exist under exact go env GOTOOLDIR",
+      "nonempty behavior-relevant external executables named by go env keys CC, CXX, AR, PKG_CONFIG resolved from exact captured PATH or absolute path"
+    ],
+    "complete": true,
+    "go_env_command": {
+      "argv": [
+        "/opt/homebrew/Cellar/go/1.26.5/libexec/bin/go",
+        "env",
+        "-json"
+      ],
+      "cwd": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+      "duration_seconds": 0.122811,
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "{\n\t\"AR\": \"ar\",\n\t\"CC\": \"cc\",\n\t\"CGO_CFLAGS\": \"-O2 -g\",\n\t\"CGO_CPPFLAGS\": \"\",\n\t\"CGO_CXXFLAGS\": \"-O2 -g\",\n\t\"CGO_ENABLED\": \"1\",\n\t\"CGO_FFLAGS\": \"-O2 -g\",\n\t\"CGO_LDFLAGS\": \"-O2 -g\",\n\t\"CXX\": \"c++\",\n\t\"GCCGO\": \"gccgo\",\n\t\"GO111MODULE\": \"\",\n\t\"GOARCH\": \"arm64\",\n\t\"GOARM64\": \"v8.0\",\n\t\"GOAUTH\": \"netrc\",\n\t\"GOBIN\": \"\",\n\t\"GOCACHE\": \"/Users/schwa/Library/Caches/go-build\",\n\t\"GOCACHEPROG\": \"\",\n\t\"GODEBUG\": \"\",\n\t\"GOENV\": \"/Users/schwa/Library/Application Support/go/env\",\n\t\"GOEXE\": \"\",\n\t\"GOEXPERIMENT\": \"\",\n\t\"GOFIPS140\": \"off\",\n\t\"GOFLAGS\": \"\",\n\t\"GOGCCFLAGS\": \"-fPIC -arch arm64 -pthread -fno-caret-diagnostics -Qunused-arguments -fmessage-length=0 -ffile-prefix-map=/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/go-build1096717126=/tmp/go-build -gno-record-gcc-switches -fno-common\",\n\t\"GOHOSTARCH\": \"arm64\",\n\t\"GOHOSTOS\": \"darwin\",\n\t\"GOINSECURE\": \"\",\n\t\"GOMOD\": \"/private/tmp/adr0011-incoming-calls-v1-6yiY4m/go.mod\",\n\t\"GOMODCACHE\": \"/Users/schwa/go/pkg/mod\",\n\t\"GONOPROXY\": \"\",\n\t\"GONOSUMDB\": \"\",\n\t\"GOOS\": \"darwin\",\n\t\"GOPATH\": \"/Users/schwa/go\",\n\t\"GOPRIVATE\": \"\",\n\t\"GOPROXY\": \"https://proxy.golang.org,direct\",\n\t\"GOROOT\": \"/opt/homebrew/Cellar/go/1.26.5/libexec\",\n\t\"GOSUMDB\": \"sum.golang.org\",\n\t\"GOTELEMETRY\": \"local\",\n\t\"GOTELEMETRYDIR\": \"/Users/schwa/Library/Application Support/go/telemetry\",\n\t\"GOTMPDIR\": \"\",\n\t\"GOTOOLCHAIN\": \"auto\",\n\t\"GOTOOLDIR\": \"/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64\",\n\t\"GOVCS\": \"\",\n\t\"GOVERSION\": \"go1.26.5\",\n\t\"GOWORK\": \"\",\n\t\"PKG_CONFIG\": \"pkg-config\"\n}\n",
+      "stdout_sha256": "1a02e9e669645efd14151f56165d901c7ebc2c4fa7d30673616e0ea737bb7f04"
+    },
+    "go_env_json": {
+      "AR": "ar",
+      "CC": "cc",
+      "CGO_CFLAGS": "-O2 -g",
+      "CGO_CPPFLAGS": "",
+      "CGO_CXXFLAGS": "-O2 -g",
+      "CGO_ENABLED": "1",
+      "CGO_FFLAGS": "-O2 -g",
+      "CGO_LDFLAGS": "-O2 -g",
+      "CXX": "c++",
+      "GCCGO": "gccgo",
+      "GO111MODULE": "",
+      "GOARCH": "arm64",
+      "GOARM64": "v8.0",
+      "GOAUTH": "netrc",
+      "GOBIN": "",
+      "GOCACHE": "/Users/schwa/Library/Caches/go-build",
+      "GOCACHEPROG": "",
+      "GODEBUG": "",
+      "GOENV": "/Users/schwa/Library/Application Support/go/env",
+      "GOEXE": "",
+      "GOEXPERIMENT": "",
+      "GOFIPS140": "off",
+      "GOFLAGS": "",
+      "GOGCCFLAGS": "-fPIC -arch arm64 -pthread -fno-caret-diagnostics -Qunused-arguments -fmessage-length=0 -ffile-prefix-map=/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/go-build1096717126=/tmp/go-build -gno-record-gcc-switches -fno-common",
+      "GOHOSTARCH": "arm64",
+      "GOHOSTOS": "darwin",
+      "GOINSECURE": "",
+      "GOMOD": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/go.mod",
+      "GOMODCACHE": "/Users/schwa/go/pkg/mod",
+      "GONOPROXY": "",
+      "GONOSUMDB": "",
+      "GOOS": "darwin",
+      "GOPATH": "/Users/schwa/go",
+      "GOPRIVATE": "",
+      "GOPROXY": "https://proxy.golang.org,direct",
+      "GOROOT": "/opt/homebrew/Cellar/go/1.26.5/libexec",
+      "GOSUMDB": "sum.golang.org",
+      "GOTELEMETRY": "local",
+      "GOTELEMETRYDIR": "/Users/schwa/Library/Application Support/go/telemetry",
+      "GOTMPDIR": "",
+      "GOTOOLCHAIN": "auto",
+      "GOTOOLDIR": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64",
+      "GOVCS": "",
+      "GOVERSION": "go1.26.5",
+      "GOWORK": "",
+      "PKG_CONFIG": "pkg-config"
+    },
+    "go_tool_command": {
+      "argv": [
+        "/opt/homebrew/Cellar/go/1.26.5/libexec/bin/go",
+        "tool"
+      ],
+      "cwd": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+      "duration_seconds": 0.006264,
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "asm\ncgo\ncompile\ncover\nfix\nlink\npreprofile\nvet\n",
+      "stdout_sha256": "7fadfe1145c5d70ff05856d43d8026ef652fdd95f417222c71afd5e4312b6c48"
+    },
+    "goroot": "/opt/homebrew/Cellar/go/1.26.5/libexec",
+    "gotooldir": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64",
+    "invocable_tool_names_from_go_tool": [
+      "asm",
+      "cgo",
+      "compile",
+      "cover",
+      "fix",
+      "link",
+      "preprofile",
+      "vet"
+    ],
+    "non_claims": [
+      "does not claim an uncontrolled recursive GOROOT tree hash",
+      "does not claim files outside exact GOROOT/GOTOOLDIR/go-env executable closure are part of the closed inventory"
+    ],
+    "required_record_count": 14,
+    "required_records": [
+      {
+        "byte_length": 14481762,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/bin/go",
+        "inventory_source": "shutil.which('go', captured PATH)",
+        "role": "go_executable_from_captured_PATH",
+        "sha256": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0"
+      },
+      {
+        "byte_length": 35,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/VERSION",
+        "inventory_source": "go env GOROOT/VERSION",
+        "role": "go_env_GOROOT_VERSION_file",
+        "sha256": "11b4fb14680701f98ca60fd8464a836ca4374f17896a125f4510ab6ae8cecc9b"
+      },
+      {
+        "byte_length": 4901618,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/asm",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_asm",
+        "sha256": "6400bab034d6e70effa03c8a4844a0c602701d85f5e5726fbb6689ba2597e3b5"
+      },
+      {
+        "byte_length": 4232770,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/cgo",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_cgo",
+        "sha256": "20e66866eaf4deca72db8f29895df551dd013bbaf01792d8160eea56376a5d3a"
+      },
+      {
+        "byte_length": 24606802,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/compile",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_compile",
+        "sha256": "a4b63e08a3bba5029e9c638652e1678bf254490c7690d3906298f7a9f17f2a1e"
+      },
+      {
+        "byte_length": 5021186,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/cover",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_cover",
+        "sha256": "73046ca3c6798217d63ae19feea012b8f13cda9f3d30ef39c353b84be21e3c5e"
+      },
+      {
+        "byte_length": 8676770,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/fix",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_fix",
+        "sha256": "fa27c91379ecc8c51efda6fe784296a5dc0e999d141e91cd7523718c4f1d2c6b"
+      },
+      {
+        "byte_length": 6316866,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/link",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_link",
+        "sha256": "9bb5a9fb397bf302698a302b965ce39d9467b55529075aa09ac8a9eba16d5e98"
+      },
+      {
+        "byte_length": 2329874,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/preprofile",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_preprofile",
+        "sha256": "9ba7b870ffc6d6d7448a82284b6a8fa1a48c9ef948864bd0c7993d7042ac6e09"
+      },
+      {
+        "byte_length": 8491794,
+        "canonical_path": "/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64/vet",
+        "inventory_source": "go tool listing \u2229 go env GOTOOLDIR",
+        "role": "go_tool_vet",
+        "sha256": "33cc9f384af9b7c70ae985d3504431cb934c1dfa9f69077ae5fba44012d422f1"
+      },
+      {
+        "byte_length": 118928,
+        "canonical_path": "/usr/bin/cc",
+        "inventory_source": "go env CC resolved using captured PATH when relative",
+        "role": "go_env_CC",
+        "sha256": "179301dcb41ea78accc3fa0048a7e6f6710d891945a751a34addd622020c1818"
+      },
+      {
+        "byte_length": 118928,
+        "canonical_path": "/usr/bin/c++",
+        "inventory_source": "go env CXX resolved using captured PATH when relative",
+        "role": "go_env_CXX",
+        "sha256": "179301dcb41ea78accc3fa0048a7e6f6710d891945a751a34addd622020c1818"
+      },
+      {
+        "byte_length": 118928,
+        "canonical_path": "/usr/bin/ar",
+        "inventory_source": "go env AR resolved using captured PATH when relative",
+        "role": "go_env_AR",
+        "sha256": "179301dcb41ea78accc3fa0048a7e6f6710d891945a751a34addd622020c1818"
+      },
+      {
+        "byte_length": 74768,
+        "canonical_path": "/opt/homebrew/Cellar/pkgconf/3.0.6/bin/pkgconf",
+        "inventory_source": "go env PKG_CONFIG resolved using captured PATH when relative",
+        "role": "go_env_PKG_CONFIG",
+        "sha256": "2bbadda1d794c935622fa8c948ec0261c21ab41c28d8924d841b1cbba818d75f"
+      }
+    ],
+    "schema": "lsp-trace.adr0011.calls.go.gopls.closed-toolchain-inventory.v1"
+  },
+  "gopls_executable": {
+    "byte_length": 41038194,
+    "canonical_path": "/Users/schwa/.local/bin/gopls",
+    "role": "gopls_executable",
+    "sha256": "82600f8b7f6ad337120b27ab738a5e44897ff1701919bc4620836ff7d98c2f7a",
+    "version": {
+      "argv": [
+        "/Users/schwa/.local/bin/gopls",
+        "version"
+      ],
+      "cwd": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+      "duration_seconds": 0.028477,
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "golang.org/x/tools/gopls v0.23.0\n",
+      "stdout_sha256": "b90357f9cf20cb15327b21a90e8930a1cf93c7536c710198beade2dc9d821af9"
+    }
+  },
+  "historical_evidence_use": "FRESH_RERUN_ONLY_DO_NOT_REPRESENT_AS_OLD_RUN_EVIDENCE",
+  "initialize": {
+    "body_byte_length": 345,
+    "body_json": {
+      "id": 1,
+      "jsonrpc": "2.0",
+      "method": "initialize",
+      "params": {
+        "capabilities": {
+          "textDocument": {
+            "callHierarchy": {
+              "dynamicRegistration": false
+            }
+          }
+        },
+        "processId": null,
+        "rootUri": "file:///private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+        "workspaceFolders": [
+          {
+            "name": "adr0011-incoming-calls-v1-6yiY4m",
+            "uri": "file:///private/tmp/adr0011-incoming-calls-v1-6yiY4m"
+          }
+        ]
+      }
+    },
+    "body_sha256": "d3e25bc1b866643d19dc36e0459c56035224133f65eabf1d03fe93399959f31b",
+    "client_callHierarchy_capability": {
+      "dynamicRegistration": false
+    },
+    "framed_byte_length": 368,
+    "framed_sha256": "3e31a7fa93efdc8830ff0555f106ac9fa9a2223142e41480cf94e3d890b66d7b",
+    "method": "initialize",
+    "rootUri": "file:///private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+    "workspaceFolders": [
+      {
+        "name": "adr0011-incoming-calls-v1-6yiY4m",
+        "uri": "file:///private/tmp/adr0011-incoming-calls-v1-6yiY4m"
+      }
+    ]
+  },
+  "launch": {
+    "argv": [
+      "/Users/schwa/.local/bin/gopls",
+      "serve"
+    ],
+    "complete_env": {
+      "AI_AGENT": "pi",
+      "BUN_INSTALL": "/Users/schwa/.bun",
+      "CLOUDFLARE_ACCOUNT_ID": "c53a70d61c206af6bc434c7378dbb08f",
+      "CLOUDFLARE_API_KEY": "cfat_KnPffQom0lGY27GPbQRSMo3lafpj0s1MX9HIGaAXb28fe694",
+      "COLORTERM": "truecolor",
+      "COMMAND_MODE": "unix2003",
+      "CPPFLAGS": "-I/opt/homebrew/opt/capstone/include",
+      "DEEPINFRA_API_KEY": "TQCNUDDDXAswDV91PVd43Nql30JbulcL",
+      "DIRENV_DIFF": "eJxc0k2TojgAxvHvkq296QoEebFqDyEBBBV5F72kIAZppREEtbGrv_tUn3pm7v_fc3o-QQsWn18T0IDFJ8DrbUKsNQpNijDeJl5MHQIWgM1hrgpHRWSSoOSlUjAZykyFqnYsCkErweQP6jt0Ze6_XZkPdNX4ZRlc34Xa3kuq7RdBGG2usM7L9iz04ibTl46do6yQtJIrugwmgJim73hWiH7bigPsJYSQDPVPkuqinx5l6HU1FNziXrP1N3NC00spcUKwANNZ0vNbP-tZ9cxnR_74CSxnbYIF-DuY_cebx439dDsU46UZgQXg7sgE09oqLxR8PGyVWzDVhxPnsPMH2L5twne_Tqr2dF8Fp8qAoeSQru9sDF8KLShVp_lB1y129mF25HdphNV5R3fPgyhtY_ZyM48rschEa05dK-r2ct9cFT2GxZuq6p1Tthq7zeElbd6Fkqde0QpS9qSOdnvxwjKM1VNbHarpyiYYded4aXdIdJOnXHt9Gw27A1ahF1Sbqym7sf7Yt2w8ZfTWdcrDumRuVBnIKASUnI_IqbFt4jq6ZM0yxVY6oPWVGmisLnrL9tXwUdHrMMK2XLJSY5rvX27GdD42Z5kgRChVu3v1SP4HExAFa7whPoqi3Tb8PlE09v-IoqT_23MMvr5-BQAA__9D8sbO",
+      "DIRENV_DIR": "-/Users/schwa/dev",
+      "DIRENV_FILE": "/Users/schwa/dev/.envrc",
+      "DIRENV_WATCHES": "eJyc0EFO6zAQxvG7eF3V9tgee3qPt3piMRmPlUhpguKQghB3R2IDqsqGC3z6_b__7-aZ99FcjP3Xdeu2y3hjW_WwZ12OTczJXNe6T1c1F5_JFSqY4sno69T3bi779qIfp8cr53kVnm0feVNbp02Xw_I8rzebFBBKw8KZh-KGDCAqjTHGqA1JUw4lNspStWZC73NQhMoE4JT9vYpcygX_rqq6vFkXJShBABb0AUjdAIlCGEClSkXnHVCFVtALo_BAyhk9pcYhtxh_oty3pfHcf8c8PPkrB-5ynj4DAAD__7quhvU=",
+      "EDITOR": "nvim",
+      "FPATH": "/opt/homebrew/share/zsh/site-functions:/opt/homebrew/share/zsh/site-functions:/opt/homebrew/share/zsh/site-functions:/opt/homebrew/share/zsh/site-functions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions",
+      "GHOSTTY_BIN_DIR": "/Applications/Ghostty.app/Contents/MacOS",
+      "GHOSTTY_RESOURCES_DIR": "/Applications/Ghostty.app/Contents/Resources/ghostty",
+      "GHOSTTY_SHELL_FEATURES": "cursor:blink,path,title",
+      "HERDR_ENV": "1",
+      "HERDR_PANE_ID": "wF:pE",
+      "HERDR_SOCKET_PATH": "/Users/schwa/.config/herdr/herdr.sock",
+      "HERDR_TAB_ID": "wF:tA",
+      "HERDR_WORKSPACE_ID": "wF",
+      "HOME": "/Users/schwa",
+      "HOMEBREW_CELLAR": "/opt/homebrew/Cellar",
+      "HOMEBREW_PREFIX": "/opt/homebrew",
+      "HOMEBREW_REPOSITORY": "/opt/homebrew",
+      "INFOPATH": "/opt/homebrew/share/info:/opt/homebrew/share/info:",
+      "KUBE_CONFIG_PATH": "/Users/schwa/.kube/config",
+      "LANG": "en_US.UTF-8",
+      "LDFLAGS": "-L/opt/homebrew/opt/capstone/lib",
+      "LIBRARY_PATH": ":/opt/homebrew/opt/zstd/lib/:/opt/homebrew/opt/zstd/lib/",
+      "LOGNAME": "schwa",
+      "LaunchInstanceID": "49C41FB0-60A8-4EE6-B5BB-AB36D99028FA",
+      "MANPATH": ":/usr/share/man:/usr/local/share/man:/Applications/Ghostty.app/Contents/Resources/ghostty/../man",
+      "OLDPWD": "/Users/schwa/dev/lsp-trace",
+      "OSLogRateLimit": "64",
+      "PATH": "/Users/schwa/.pi/agent/bin:/Users/schwa/.bun/bin:/Users/tkma6d4/.codeium/windsurf/bin:/Users/schwa/.tfenv/bin:/opt/homebrew/bin:/Users/schwa/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Apple/usr/bin:/Users/schwa/.bun/bin:/Users/tkma6d4/.codeium/windsurf/bin:/Users/schwa/.tfenv/bin:/Users/schwa/.local/bin:/Applications/Ghostty.app/Contents/MacOS:/Users/schwa/go/bin:/Users/schwa/go/bin",
+      "PI_CODING_AGENT": "true",
+      "PI_MODEL": "gpt-5.5",
+      "PI_PROVIDER": "openai-codex",
+      "PI_REASONING_LEVEL": "high",
+      "PI_SESSION_FILE": "/Users/schwa/.pi/agent/sessions/--Users-schwa-dev-lsp-trace--/2026-10-14T06-09-08-560Z_01a13907-65d0-70d8-bf0c-cfc30cb9d81e.jsonl",
+      "PI_SESSION_ID": "01a13907-65d0-70d8-bf0c-cfc30cb9d81e",
+      "PWD": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "SECURITYSESSIONID": "186b9",
+      "SHELL": "/bin/zsh",
+      "SHLVL": "3",
+      "SQLCMDPASSWORD": "Sys#1129%seC",
+      "SSH_AUTH_SOCK": "/var/run/com.apple.launchd.yrm18R9JMT/Listeners",
+      "STARSHIP_SESSION_KEY": "1683553412596130",
+      "STARSHIP_SHELL": "zsh",
+      "TERM": "xterm-256color-italic",
+      "TERMINFO": "/Applications/Ghostty.app/Contents/Resources/terminfo",
+      "TERM_PROGRAM": "ghostty",
+      "TERM_PROGRAM_VERSION": "1.3.1",
+      "TMPDIR": "/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/",
+      "USER": "schwa",
+      "XDG_DATA_DIRS": "/usr/local/share:/usr/share:/Applications/Ghostty.app/Contents/Resources/ghostty/..",
+      "XPC_FLAGS": "0x0",
+      "XPC_SERVICE_NAME": "0",
+      "ZSH": "/Users/schwa/.oh-my-zsh",
+      "_": "/opt/homebrew/bin/python3",
+      "__CFBundleIdentifier": "com.mitchellh.ghostty",
+      "__CF_USER_TEXT_ENCODING": "0x1F5:0x0:0x0"
+    },
+    "complete_env_key_count": 65,
+    "complete_env_sha256": "5605248bbaf2cbcf10366db925d69bf6fab6d90de0a54268b43021b3450554d7",
+    "cwd": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+    "env_binding": {
+      "popen_call_requirement": "subprocess.Popen(..., env=captured_env, ...)",
+      "same_object_digest": "5605248bbaf2cbcf10366db925d69bf6fab6d90de0a54268b43021b3450554d7",
+      "source": "captured_env",
+      "source_assignment": "captured_env = cap['captured_env']"
+    },
+    "env_keys_sorted": [
+      "AI_AGENT",
+      "BUN_INSTALL",
+      "CLOUDFLARE_ACCOUNT_ID",
+      "CLOUDFLARE_API_KEY",
+      "COLORTERM",
+      "COMMAND_MODE",
+      "CPPFLAGS",
+      "DEEPINFRA_API_KEY",
+      "DIRENV_DIFF",
+      "DIRENV_DIR",
+      "DIRENV_FILE",
+      "DIRENV_WATCHES",
+      "EDITOR",
+      "FPATH",
+      "GHOSTTY_BIN_DIR",
+      "GHOSTTY_RESOURCES_DIR",
+      "GHOSTTY_SHELL_FEATURES",
+      "HERDR_ENV",
+      "HERDR_PANE_ID",
+      "HERDR_SOCKET_PATH",
+      "HERDR_TAB_ID",
+      "HERDR_WORKSPACE_ID",
+      "HOME",
+      "HOMEBREW_CELLAR",
+      "HOMEBREW_PREFIX",
+      "HOMEBREW_REPOSITORY",
+      "INFOPATH",
+      "KUBE_CONFIG_PATH",
+      "LANG",
+      "LDFLAGS",
+      "LIBRARY_PATH",
+      "LOGNAME",
+      "LaunchInstanceID",
+      "MANPATH",
+      "OLDPWD",
+      "OSLogRateLimit",
+      "PATH",
+      "PI_CODING_AGENT",
+      "PI_MODEL",
+      "PI_PROVIDER",
+      "PI_REASONING_LEVEL",
+      "PI_SESSION_FILE",
+      "PI_SESSION_ID",
+      "PWD",
+      "PYTHONDONTWRITEBYTECODE",
+      "SECURITYSESSIONID",
+      "SHELL",
+      "SHLVL",
+      "SQLCMDPASSWORD",
+      "SSH_AUTH_SOCK",
+      "STARSHIP_SESSION_KEY",
+      "STARSHIP_SHELL",
+      "TERM",
+      "TERMINFO",
+      "TERM_PROGRAM",
+      "TERM_PROGRAM_VERSION",
+      "TMPDIR",
+      "USER",
+      "XDG_DATA_DIRS",
+      "XPC_FLAGS",
+      "XPC_SERVICE_NAME",
+      "ZSH",
+      "_",
+      "__CFBundleIdentifier",
+      "__CF_USER_TEXT_ENCODING"
+    ],
+    "sensitive_handling": "PRIVATE_VALUES_RETAINED_NOT_PUBLIC"
+  },
+  "producer_disposition": "OUTGOING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "profile_id": "CALLS_GO_GOPLS_OUTGOING_EXACT_V1",
+  "repository_state": {
+    "actual_head": "17057a8c53af8e8fe66be9c37788bbf59d10c5cd",
+    "actual_head_sha256": "dd3b06e02cb435c6734efe2eb1fa9b0898220e409f477b396f906014f0fbe21c",
+    "actual_head_token": "17057a8c53af",
+    "addendum_package_relative": "docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1",
+    "base_is_ancestor": true,
+    "descendant_changed_path_count": 0,
+    "descendant_changed_paths_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "descendant_changes_confined_to_addendum_package": true,
+    "immutable_dependency_base": "17057a8c53af8e8fe66be9c37788bbf59d10c5cd",
+    "immutable_dependency_base_sha256": "dd3b06e02cb435c6734efe2eb1fa9b0898220e409f477b396f906014f0fbe21c",
+    "immutable_dependency_base_token": "17057a8c53af",
+    "package_integrity": {
+      "checksum_manifest_sha256": "57a03b31f0117ab47c755431b8bad3ec1423cfac00904e0dcc49af863efc819f",
+      "package_file_count": 268,
+      "package_file_list_sha256": "ab04964fc948e1866b0fe6dc0dc7950ab3b1e635dd47e2c7265ffc156debe547",
+      "required_executable_contract_files": [
+        "capture_outgoing_custody_rerun.py",
+        "verify_outgoing_custody_rerun_addendum.py"
+      ],
+      "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.addendum-package-integrity.v1"
+    },
+    "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.repository-execution-context.v1",
+    "tracked_dirty_paths": 0,
+    "tracked_staged_paths": 0,
+    "untracked_paths_authorized": false,
+    "untracked_provider_candidate_read": false
+  },
+  "run_id": "TEST_ONLY_OUTGOING_ENV_PROBE_V1",
+  "run_namespace": "lsp-trace.adr0011.calls.go.gopls.outgoing.custody_rerun.v1",
+  "runner_runtime": {
+    "original_contract": {
+      "byte_length": 6449,
+      "path": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/contract.json",
+      "sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad"
+    },
+    "original_runner_source": {
+      "byte_length": 48312,
+      "path": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/adr0011_workload_runner.py",
+      "sha256": "10456c34a2b8c629b301c2ebfdafbbad7ba432db85ae33ac49b464906818f482"
+    },
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "python_executable": {
+      "byte_length": 52448,
+      "canonical_path": "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/bin/python3.14",
+      "role": "python_executable",
+      "sha256": "b502cb4c5b46b8d4192ec6bcb600ce8922f1afc396fcf646e8765c6eba74a0bf",
+      "version": {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "--version"
+        ],
+        "cwd": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m",
+        "duration_seconds": 0.007422,
+        "exit_code": 0,
+        "stderr": "",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout": "Python 3.14.6\n",
+        "stdout_sha256": "917601090ffb73a030e3eaa8b7a01c41400cad4b61366b4218d7756a5733b66c"
+      }
+    },
+    "python_version": "3.14.6 (main, Jun 10 2026, 10:03:53) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "wrapper_source": {
+      "byte_length": 66800,
+      "path": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/adr0011-calls-go-gopls-outgoing-custody-rerun-addendum-v1/capture_outgoing_custody_rerun.py",
+      "sha256": "434af57bc3c3b9861f5453b706723905158234dcfdb46acd14e1c3f7f15eb035"
+    }
+  },
+  "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.custody-rerun-prelaunch.v3",
+  "worktree_head": "17057a8c53af8e8fe66be9c37788bbf59d10c5cd"
+}

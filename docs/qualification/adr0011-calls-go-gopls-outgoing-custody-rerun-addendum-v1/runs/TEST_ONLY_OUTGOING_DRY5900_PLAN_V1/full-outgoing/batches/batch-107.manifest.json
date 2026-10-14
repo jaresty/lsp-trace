@@ -1,0 +1,12 @@
+{
+  "batch_count": 118,
+  "batch_index": 107,
+  "direction": "outgoing",
+  "dry_run": true,
+  "end_ordinal_inclusive": 5399,
+  "input_digest": "ac2eea2bf0d75802009df9b1e3dd6c20bd32cb486022ac9c72b22676acaedd9b",
+  "output_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "start_ordinal": 5350,
+  "target_count": 50,
+  "target_ids_digest": "58959c71003dbf485aab7dfeb9f608e45df87d529f69c591b46ec4ac494fe945"
+}

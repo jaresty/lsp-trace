@@ -1,0 +1,5 @@
+{
+  "record_relative": "custody/prelaunch-custody.private.json",
+  "schema": "test-only-public-seal",
+  "test_only": true
+}

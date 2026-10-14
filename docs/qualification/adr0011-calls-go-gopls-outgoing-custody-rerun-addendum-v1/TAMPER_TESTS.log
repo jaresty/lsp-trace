@@ -1,0 +1,19 @@
+PASS TAMPER target_count
+PASS TAMPER batch_size
+PASS TAMPER batch_count
+PASS TAMPER raw_ceiling
+PASS TAMPER producer_go
+PASS TAMPER outgoing_authority
+PASS TAMPER history_overwrite
+PASS TAMPER fresh_policy_drift
+PASS TAMPER missing_complete_env_role
+PASS TAMPER missing_public_summary_role
+PASS TAMPER missing_fresh_reservation_role
+PASS TAMPER missing_seal_role
+PASS TAMPER env_public
+PASS TAMPER summary_allows_env
+PASS TAMPER seal_claims_full_run
+PASS TAMPER immutable_base
+PASS TAMPER head_policy_allows_unrelated
+PASS TAMPER package_checksums_disabled
+OUTGOING_CUSTODY_RERUN_ADDENDUM_TAMPER_TESTS_OK_FAIL_CLOSED

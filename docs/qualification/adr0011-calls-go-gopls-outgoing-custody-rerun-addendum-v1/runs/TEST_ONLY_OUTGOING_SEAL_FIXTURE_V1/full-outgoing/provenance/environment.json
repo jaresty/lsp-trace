@@ -1,0 +1,9 @@
+{
+  "profile_id": "CALLS_GO_GOPLS_OUTGOING_EXACT_V1",
+  "runner_source": {
+    "byte_length": 0,
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "schema": "test-only-public-provenance",
+  "test_only": true
+}

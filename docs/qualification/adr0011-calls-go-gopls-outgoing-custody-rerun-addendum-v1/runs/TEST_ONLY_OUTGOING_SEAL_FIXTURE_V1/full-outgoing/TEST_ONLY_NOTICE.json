@@ -1,0 +1,6 @@
+{
+  "gopls_launched": false,
+  "schema": "lsp-trace.adr0011.calls.go.gopls.outgoing.test-only-notice.v1",
+  "status": "TEST_ONLY_SYNTHETIC_SEAL_NOT_DENOMINATOR_EVIDENCE",
+  "target_denominator_evidence": false
+}
