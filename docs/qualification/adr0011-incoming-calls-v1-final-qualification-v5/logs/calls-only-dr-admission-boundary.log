@@ -1,0 +1,24 @@
+=== RUN   TestRelationIndexCallsOnlyCompatibilityAndAdmissionBoundary
+--- PASS: TestRelationIndexCallsOnlyCompatibilityAndAdmissionBoundary (0.01s)
+=== RUN   TestMethodsPresentButDisabledCannotAffectCallsAndRawCandidatesRemainRejected
+--- PASS: TestMethodsPresentButDisabledCannotAffectCallsAndRawCandidatesRemainRejected (0.01s)
+=== RUN   TestTypedMixedCallsReferencesAndDefinitionsPreservesCallsAndAddsMethods
+--- PASS: TestTypedMixedCallsReferencesAndDefinitionsPreservesCallsAndAddsMethods (0.01s)
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls/missing_selection
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls/D/R_selector
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls/definition_selector
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls/unknown_selector
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls/duplicate_selector
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls/unadmitted_reference
+=== RUN   TestTypedStagingOnlyProjectsAdmittedCalls/unadmitted_definition
+--- PASS: TestTypedStagingOnlyProjectsAdmittedCalls (0.01s)
+    --- PASS: TestTypedStagingOnlyProjectsAdmittedCalls/missing_selection (0.00s)
+    --- PASS: TestTypedStagingOnlyProjectsAdmittedCalls/D/R_selector (0.00s)
+    --- PASS: TestTypedStagingOnlyProjectsAdmittedCalls/definition_selector (0.00s)
+    --- PASS: TestTypedStagingOnlyProjectsAdmittedCalls/unknown_selector (0.00s)
+    --- PASS: TestTypedStagingOnlyProjectsAdmittedCalls/duplicate_selector (0.00s)
+    --- PASS: TestTypedStagingOnlyProjectsAdmittedCalls/unadmitted_reference (0.00s)
+    --- PASS: TestTypedStagingOnlyProjectsAdmittedCalls/unadmitted_definition (0.00s)
+PASS
+ok  	lsp-trace/internal/programcadmission	0.214s

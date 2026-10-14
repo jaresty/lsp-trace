@@ -1,6 +1,7 @@
 === RUN   TestV5CausalEarlyTerminalOnce
-    directional_v5_four_causal_private_test.go:450: ASSERT_C4_EARLY_RETURN
+    directional_v5_four_causal_private_test.go:487: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:490: ASSERT_C4_EARLY_RETURN
 --- FAIL: TestV5CausalEarlyTerminalOnce (0.00s)
 FAIL
-FAIL	lsp-trace/sessionruntime	0.313s
+FAIL	lsp-trace/sessionruntime	0.308s
 FAIL

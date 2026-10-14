@@ -1,0 +1,779 @@
+{
+  "authority": false,
+  "commands": [
+    {
+      "argv": [
+        "python3",
+        "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/adr0011-directional-raw-custody-c15-stageb-v5/verify_stageb_v5.py",
+        "--source",
+        "/private/tmp/adr0011-incoming-calls-v1-6yiY4m"
+      ],
+      "duration_seconds": 0.097,
+      "exit_code": 0,
+      "log": "logs/stageb-verifier.log",
+      "log_sha256": "11933ce10812e519922dacdb238ff62b3f2db34c42475e269ab7eff327f69151",
+      "name": "stageb-verifier"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalExact32MiB$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.818,
+      "exit_code": 0,
+      "log": "logs/witness-exact32-1.log",
+      "log_sha256": "c2271e99cb4d28bddb0335535d52933948aec4c6e9b0277e625db1a165b51f8d",
+      "name": "witness-exact32-1"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalExact32MiB$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.836,
+      "exit_code": 0,
+      "log": "logs/witness-exact32-2.log",
+      "log_sha256": "dbe795ebf5b6c296388496e670e0ffcb50044fdde4e271e3bc8694271b1da4f8",
+      "name": "witness-exact32-2"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalExact32MiB$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.794,
+      "exit_code": 0,
+      "log": "logs/witness-exact32-3.log",
+      "log_sha256": "519088bba8085665cb8bc73437f5bb7f3376d1d3140014b02f6b3bf3113ff725",
+      "name": "witness-exact32-3"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalOver32MiBPreEffect$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.828,
+      "exit_code": 0,
+      "log": "logs/witness-plus_one-1.log",
+      "log_sha256": "49d60cc8378bcffef6430bdeaa4fafc04260f816c8360b77f5f9f0786c60656f",
+      "name": "witness-plus_one-1"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalOver32MiBPreEffect$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.804,
+      "exit_code": 0,
+      "log": "logs/witness-plus_one-2.log",
+      "log_sha256": "6b8b8fa3a08f2d15bed5f140b74fd14d813ec927fe133f7dcf9f9bae7c649c90",
+      "name": "witness-plus_one-2"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalOver32MiBPreEffect$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.814,
+      "exit_code": 0,
+      "log": "logs/witness-plus_one-3.log",
+      "log_sha256": "41551b39b32ba8c372e162978fcc5191f11e867ba293e765f3c3a98c9ee00611",
+      "name": "witness-plus_one-3"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalPartialExternalFailure$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.499,
+      "exit_code": 0,
+      "log": "logs/witness-partial_external-1.log",
+      "log_sha256": "11fbf563519f2fa4c0e22fc5eaacb924b602ddd356ab0667959303f12d46b39d",
+      "name": "witness-partial_external-1"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalEarlyTerminalOnce$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.506,
+      "exit_code": 0,
+      "log": "logs/witness-early_terminal-1.log",
+      "log_sha256": "16a9a0458f4705a54b65df5f680ec0adfaf107843c534ffcb41ff93bbe4722ca",
+      "name": "witness-early_terminal-1"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-run",
+        "^$",
+        "./incomingops",
+        "./internal/acquisition",
+        "./internal/directionalraw",
+        "./internal/lspwire",
+        "./internal/slicer",
+        "./internal/traverse",
+        "./sessionruntime"
+      ],
+      "duration_seconds": 0.147,
+      "exit_code": 0,
+      "log": "logs/affected-compile.log",
+      "log_sha256": "3fabc2b7fe0444ec7d2df06ff1d57503a831c44f942bc0fd366efb522baba323",
+      "name": "affected-compile"
+    },
+    {
+      "argv": [
+        "go",
+        "vet",
+        "./incomingops",
+        "./internal/acquisition",
+        "./internal/directionalraw",
+        "./internal/lspwire",
+        "./internal/slicer",
+        "./internal/traverse",
+        "./sessionruntime"
+      ],
+      "duration_seconds": 0.143,
+      "exit_code": 0,
+      "log": "logs/affected-vet.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "affected-vet"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/lspwire",
+        "-run",
+        "^(TestReadWithFrameRetainsExactConsumedFrameNotDecodedReserialization|TestReadWithExactFrameReturnsBoundedExactBytes|TestReadWithExactFrameCapAndPreflight|TestReadWithExactFrameCapWithholdsOutput|TestReadWithExactFrameWithholdsFailedReads|TestReadWithFrameIfWithinPreservesOverCapMessageAndNextFrame|TestReadWithFrameIfWithinPreflightAndMalformedWithhold|TestReadWithFrameWithholdsIncompleteOrInvalidFrames|TestOrdinaryReadWithFrameCharacterizationUnchanged|TestSuccessorCaptureIsExplicitAndOnceBeforeDecode|TestSuccessorIngressOriginalFrameLeaseTransfersExactBacking|TestSuccessorIngressOriginalFrameRefusalPrecedesCapture|TestCloneSuccessorMessageOwnedReservesExactCapacityBeforeIndependentClone|TestCloneSuccessorMessageOwnedRefusalHasZeroClone)$",
+        "-count=1",
+        "-v"
+      ],
+      "duration_seconds": 0.285,
+      "exit_code": 0,
+      "log": "logs/lspwire-framing-allocation-regressions.log",
+      "log_sha256": "90b931b256ccb00d77215f434f732522cfee0c56b74c5b863e02afb2c64b290b",
+      "name": "lspwire-framing-allocation-regressions"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/traverse",
+        "-run",
+        "^(TestIncomingShuffledResponsesProduceIdenticalCanonicalJSON|TestIncomingExactGraphParityAndDeterminism|TestIncomingSchemaV1CompatibilityProjection|TestIncomingSchemaV2CompletenessTerminalProvenanceAndQuality)$",
+        "-count=1",
+        "-v"
+      ],
+      "duration_seconds": 0.284,
+      "exit_code": 0,
+      "log": "logs/traverse-ordinal-compatibility.log",
+      "log_sha256": "8fd626fd683aba06410f679506522245de6253f03e93c5091d8b2a3639c704a3",
+      "name": "traverse-ordinal-compatibility"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/slicer",
+        "-run",
+        "^(TestDiscoverPreparedUsesSameOutgoingBFS|TestDiscoverCanonicalizesAliasesAcrossOutgoingResponses|TestDiscoverExactDepthFrontierIsDeterministicAndDeduplicated)$",
+        "-count=1",
+        "-v"
+      ],
+      "duration_seconds": 0.268,
+      "exit_code": 0,
+      "log": "logs/slicer-ordinal-compatibility.log",
+      "log_sha256": "427b788c5dad8dc03fd692ffc9c2b77948bca92b8ea93dd8f5cb774c725672b4",
+      "name": "slicer-ordinal-compatibility"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^(TestCallHierarchyObservationAttachmentIgnoredByOrdinaryRoundTrip|TestOrdinaryRoundTripRetainedNotificationCompatibility|TestOrdinaryRoundTripServerErrorCompatibility|TestMethodRequestFrameWithheldUntilAcceptedSuccess|TestMethodFrameCaptureReferencesWithheldAndDefinitionParity|TestDefinitionFrameCaptureBindsOnlyAcceptedSuccessfulResponse)$",
+        "-count=1",
+        "-v"
+      ],
+      "duration_seconds": 0.703,
+      "exit_code": 0,
+      "log": "logs/ordinary-roundtrip-default-off-byte-effect.log",
+      "log_sha256": "d275f7d7b39d92b50ce3514f847f6b8f25c19205b71dd97e2b4f6277e61ade9b",
+      "name": "ordinary-roundtrip-default-off-byte-effect"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./cmd/lsp-trace",
+        "-run",
+        "^TestADR0011HistoricalOmittedCallsOnlyProcessByteBaseline$",
+        "-count=1",
+        "-v"
+      ],
+      "duration_seconds": 1.049,
+      "exit_code": 0,
+      "log": "logs/historical-calls-only-cli-baseline.log",
+      "log_sha256": "54452ab35ce88882e10c9b74c9ada369bf272fdbda1a97cdd866fa39434cab79",
+      "name": "historical-calls-only-cli-baseline"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/programcadmission",
+        "-run",
+        "^(TestRelationIndexCallsOnlyCompatibilityAndAdmissionBoundary|TestMethodsPresentButDisabledCannotAffectCallsAndRawCandidatesRemainRejected|TestTypedMixedCallsReferencesAndDefinitionsPreservesCallsAndAddsMethods|TestTypedStagingOnlyProjectsAdmittedCalls)$",
+        "-count=1",
+        "-v"
+      ],
+      "duration_seconds": 0.389,
+      "exit_code": 0,
+      "log": "logs/calls-only-dr-admission-boundary.log",
+      "log_sha256": "d1006bd3920bdb801217c6ad42458931b4c88f02bdea5ff8e9285a056ae75a64",
+      "name": "calls-only-dr-admission-boundary"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./internal/programc",
+        "-run",
+        "^(TestComputeTypedCallsDeepEqualHistoricalCompositeForTwoSeedsWithoutMutation|TestComputeTypedCarrierCallsEqualsHistoricalBytesForTwoSeedsWithoutMutation|TestStage4CallsComputeAndRecomputeRemainExactHistoricalBytesAndDelegateOnce)$",
+        "-count=1",
+        "-v"
+      ],
+      "duration_seconds": 0.419,
+      "exit_code": 0,
+      "log": "logs/historical-calls-only-programc.log",
+      "log_sha256": "bf14089985e953ab62147f19203eefa030aee6567db8b150922180607af5d57b",
+      "name": "historical-calls-only-programc"
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "duration_seconds": 0.026,
+      "exit_code": 0,
+      "log": "logs/git-diff-check.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "git-diff-check"
+    },
+    {
+      "argv": [
+        "git",
+        "status",
+        "--porcelain"
+      ],
+      "duration_seconds": 0.052,
+      "exit_code": 0,
+      "log": "logs/source-status-after.log",
+      "log_sha256": "b6d34f2eb8b1140c49016aa15bc82302153a9c172c211e2058ea7a8934a863b5",
+      "name": "source-status-after"
+    }
+  ],
+  "current_patch": {
+    "bytes": 160898,
+    "path": "current.patch",
+    "sha256": "e7823f5c6958b3b5fba3ed8fa0547416f68e1d92dbb7a6b02a13c0e2280134ed"
+  },
+  "diff_check_exit_code": 0,
+  "four_witnesses": {
+    "distinct_processes": 8,
+    "early_terminal_exact_once": true,
+    "early_terminal_runs": 1,
+    "exact32_runs": 3,
+    "partial_external_exact_once": true,
+    "partial_external_runs": 1,
+    "plus_one_runs": 3,
+    "plus_one_same_session_reuse_all": true,
+    "plus_one_zero_write_all": true,
+    "total_runs": 8
+  },
+  "head": "49334ce23de37c0094f50d21d57ab251a46130ca",
+  "known_deferred": [
+    "broad aggregate lifecycle/race/C15 scenarios beyond accepted StageB",
+    "production-server/authentication/semantic-completeness evidence"
+  ],
+  "production_go": false,
+  "self_go": false,
+  "source_post_hashes_exact14": {
+    "all_match_manifest": true,
+    "count": 14,
+    "path": "SOURCE_POST_HASHES_EXACT14.json"
+  },
+  "source_status_after": {
+    "argv": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "duration_seconds": 0.052,
+    "exit_code": 0,
+    "log": "logs/source-status-after.log",
+    "log_sha256": "b6d34f2eb8b1140c49016aa15bc82302153a9c172c211e2058ea7a8934a863b5",
+    "name": "source-status-after"
+  },
+  "source_status_before": {
+    "argv": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "duration_seconds": 0.053,
+    "exit_code": 0,
+    "log": "logs/source-status-before.log",
+    "log_sha256": "b6d34f2eb8b1140c49016aa15bc82302153a9c172c211e2058ea7a8934a863b5",
+    "name": "source-status-before"
+  },
+  "stageb_counts": {
+    "actual_rows": 91,
+    "duplicates": 0,
+    "false_positive": 2,
+    "necessary": 78,
+    "omissions": 0,
+    "reuse": 11,
+    "unresolved": 0
+  },
+  "status": "IMPLEMENTATION_QUALIFICATION_AUTHORED_NOT_GO",
+  "tamper_guard_self_test": {
+    "command": {
+      "argv": [
+        "python3",
+        "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/adr0011-incoming-calls-v1-final-qualification-v5/verify_final_qualification.py",
+        "--self-test",
+        "--allow-missing-tamper-record"
+      ],
+      "detected_checksum_tamper": true,
+      "duration_seconds": 0.042,
+      "exit_code": 0,
+      "log": "logs/package-verifier-self-test.log",
+      "log_sha256": "3947cb462fcb45723fac211b7846ba9e68f2b9d59ce3341e5ed280d13ce1ab02",
+      "name": "package-verifier-self-test"
+    },
+    "detected_checksum_tamper": true
+  },
+  "witness_runs": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalExact32MiB$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.818,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-exact32-1.log",
+      "log_sha256": "c2271e99cb4d28bddb0335535d52933948aec4c6e9b0277e625db1a165b51f8d",
+      "name": "witness-exact32-1",
+      "pid": 13042,
+      "production_go": false,
+      "receipt": "receipts/exact32-1.json",
+      "receipt_sha256": "e5f685d0392e2d4ed20bd44f9812b23f256628f2a939bb150550b0ee23af29ad",
+      "release": {
+        "cumulative": 33554432,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 33554432,
+        "object_creations": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1
+        },
+        "partition_releases": 1,
+        "retained_allocations": 2,
+        "terminal_wins": 1
+      },
+      "witness": "EXACT32"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalExact32MiB$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.836,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-exact32-2.log",
+      "log_sha256": "dbe795ebf5b6c296388496e670e0ffcb50044fdde4e271e3bc8694271b1da4f8",
+      "name": "witness-exact32-2",
+      "pid": 13049,
+      "production_go": false,
+      "receipt": "receipts/exact32-2.json",
+      "receipt_sha256": "561b1ad22d90f2d6015cd0b4efb181b8f236654343c669dcc5e3b8048c04c567",
+      "release": {
+        "cumulative": 33554432,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 33554432,
+        "object_creations": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1
+        },
+        "partition_releases": 1,
+        "retained_allocations": 2,
+        "terminal_wins": 1
+      },
+      "witness": "EXACT32"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalExact32MiB$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.794,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-exact32-3.log",
+      "log_sha256": "519088bba8085665cb8bc73437f5bb7f3376d1d3140014b02f6b3bf3113ff725",
+      "name": "witness-exact32-3",
+      "pid": 13059,
+      "production_go": false,
+      "receipt": "receipts/exact32-3.json",
+      "receipt_sha256": "cf16b6578db36f4eb35e76945bb2c3b98230933677459c624bd49b2894454cdd",
+      "release": {
+        "cumulative": 33554432,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 33554432,
+        "object_creations": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1
+        },
+        "partition_releases": 1,
+        "retained_allocations": 2,
+        "terminal_wins": 1
+      },
+      "witness": "EXACT32"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalOver32MiBPreEffect$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.828,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-plus_one-1.log",
+      "log_sha256": "49d60cc8378bcffef6430bdeaa4fafc04260f816c8360b77f5f9f0786c60656f",
+      "name": "witness-plus_one-1",
+      "pid": 13066,
+      "plus_one_same_session_reuse": true,
+      "plus_one_zero_write": true,
+      "production_go": false,
+      "receipt": "receipts/plus_one-1.json",
+      "receipt_sha256": "84f0018c501ece6127bc3b3218316773cc8bc746d0f233781160a43efab5cd6a",
+      "release": {
+        "cumulative": 0,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 0,
+        "object_creations": {
+          "c15-object-1": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1
+        },
+        "partition_releases": 0,
+        "retained_allocations": 0,
+        "terminal_wins": 1
+      },
+      "witness": "PLUS_ONE"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalOver32MiBPreEffect$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.804,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-plus_one-2.log",
+      "log_sha256": "6b8b8fa3a08f2d15bed5f140b74fd14d813ec927fe133f7dcf9f9bae7c649c90",
+      "name": "witness-plus_one-2",
+      "pid": 13073,
+      "plus_one_same_session_reuse": true,
+      "plus_one_zero_write": true,
+      "production_go": false,
+      "receipt": "receipts/plus_one-2.json",
+      "receipt_sha256": "18a7b9f627bc03b8754a68b4449a89a409726a8d5cb7df4c5998c5811ec593c6",
+      "release": {
+        "cumulative": 0,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 0,
+        "object_creations": {
+          "c15-object-1": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1
+        },
+        "partition_releases": 0,
+        "retained_allocations": 0,
+        "terminal_wins": 1
+      },
+      "witness": "PLUS_ONE"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalOver32MiBPreEffect$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.814,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-plus_one-3.log",
+      "log_sha256": "41551b39b32ba8c372e162978fcc5191f11e867ba293e765f3c3a98c9ee00611",
+      "name": "witness-plus_one-3",
+      "pid": 13080,
+      "plus_one_same_session_reuse": true,
+      "plus_one_zero_write": true,
+      "production_go": false,
+      "receipt": "receipts/plus_one-3.json",
+      "receipt_sha256": "d975f34fe2885f819fb027466e6f6e73532fd060da7915d658d1c8cf7095c3ee",
+      "release": {
+        "cumulative": 0,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 0,
+        "object_creations": {
+          "c15-object-1": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1
+        },
+        "partition_releases": 0,
+        "retained_allocations": 0,
+        "terminal_wins": 1
+      },
+      "witness": "PLUS_ONE"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalPartialExternalFailure$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.499,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-partial_external-1.log",
+      "log_sha256": "11fbf563519f2fa4c0e22fc5eaacb924b602ddd356ab0667959303f12d46b39d",
+      "name": "witness-partial_external-1",
+      "partial_external_typed_once": true,
+      "pid": 13087,
+      "production_go": false,
+      "receipt": "receipts/partial_external-1.json",
+      "receipt_sha256": "a1ad41b13bf222891a6a3a280c19ae9e1ad2bbbac75cc89697953d9fa89087eb",
+      "release": {
+        "cumulative": 1517,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 1517,
+        "object_creations": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1,
+          "c15-object-4": 1,
+          "c15-object-5": 1,
+          "c15-object-6": 1,
+          "c15-object-7": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1,
+          "c15-object-4": 1,
+          "c15-object-5": 1,
+          "c15-object-6": 1,
+          "c15-object-7": 1
+        },
+        "partition_releases": 1,
+        "retained_allocations": 6,
+        "terminal_wins": 1
+      },
+      "witness": "PARTIAL_EXTERNAL"
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "./sessionruntime",
+        "-run",
+        "^TestV5CausalEarlyTerminalOnce$",
+        "-count=1",
+        "-timeout",
+        "30s",
+        "-v"
+      ],
+      "duration_seconds": 0.506,
+      "early_terminal_once": true,
+      "entry": "incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
+      "exit_code": 0,
+      "log": "logs/witness-early_terminal-1.log",
+      "log_sha256": "16a9a0458f4705a54b65df5f680ec0adfaf107843c534ffcb41ff93bbe4722ca",
+      "name": "witness-early_terminal-1",
+      "pid": 13094,
+      "production_go": false,
+      "receipt": "receipts/early_terminal-1.json",
+      "receipt_sha256": "fd5267f19b3f3b612bd647443f7aa697260e92f39cbee500cb2f145f4a867468",
+      "release": {
+        "cumulative": 1099,
+        "general_table_live_before": 24600,
+        "generic_released": true,
+        "live_after": 0,
+        "live_before": 1099,
+        "object_creations": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1,
+          "c15-object-4": 1,
+          "c15-object-5": 1
+        },
+        "object_terminal_releases": {
+          "c15-object-1": 1,
+          "c15-object-2": 1,
+          "c15-object-3": 1,
+          "c15-object-4": 1,
+          "c15-object-5": 1
+        },
+        "partition_releases": 1,
+        "retained_allocations": 4,
+        "terminal_wins": 1
+      },
+      "witness": "EARLY_TERMINAL"
+    }
+  ]
+}

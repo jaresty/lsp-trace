@@ -1,0 +1,9 @@
+=== RUN   TestV5CausalExact32MiB
+    directional_v5_four_causal_private_test.go:361: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:366: ASSERT_C4_EXACT32_COMPLETE_CORRESPONDENCE PASS
+    directional_v5_four_causal_private_test.go:386: ASSERT_C4_REQUEST_ALLOCATION_BOUNDARY PASS
+    directional_v5_four_causal_private_test.go:386: ASSERT_C4_RESPONSE_ALLOCATION_BOUNDARY PASS
+    directional_v5_four_causal_private_test.go:390: ASSERT_C4_EXACT32 PASS
+--- PASS: TestV5CausalExact32MiB (0.34s)
+PASS
+ok  	lsp-trace/sessionruntime	0.568s

@@ -15,6 +15,12 @@
     "written_bytes": 0,
     "same_ready_session_reuse_required": true
   },
+  "phase2_causal_corrections": {
+    "allocation_boundary": "physical make; prior live/cumulative charge and ownership object per request/response",
+    "exact32_correspondence": "bijection with fixture request and response frames",
+    "partial_external_failure": "SESSION_POISONED, not RESOURCE_EXHAUSTED",
+    "admission_mutation": "skip actual Manager admission call; deterministic pre-pending missing-ownership rejection"
+  },
   "production_go": false,
   "entry": "production incomingops.SessionClient.call -> private Runtime -> actual Manager -> shared transport",
   "source_ordinal": 1,
@@ -25,9 +31,9 @@
     "combined": 67108864
   },
   "cases": {
-    "EXACT32": "one accepted prepare acquisition; reserved request + original response capacity exactly 32 MiB; source array ordinal 1; exact frame/element hashes; release",
+    "EXACT32": "one accepted prepare acquisition; reserved request + original response capacity exactly 32 MiB; reservation/ownership snapshots immediately before each physical allocation; complete bidirectional correspondence with both independently captured fixture frames; source array ordinal 1; exact frame/element hashes; release",
     "PLUS_ONE": "acquire/select and release an ordinal-1 source, then prospective incoming request frame exactly 32 MiB+1; zero new retained raw allocations; independent Manager stdin probe BEFORE frame decoding observes exactly zero Write calls, zero offered raw bytes and zero emitted bytes across refusal; proposed-not-acquired commitment and release; a valid subsequent incoming request succeeds on the SAME READY Manager/session/client/generation with positive raw transport receipt",
-    "PARTIAL_EXTERNAL": "real incoming transaction consumes notification + unmatched response + truncated response; acquired prefixes independently hashed; failed transaction; release",
+    "PARTIAL_EXTERNAL": "real incoming transaction consumes notification + unmatched response + truncated response; acquired prefixes independently hashed; exact typed Manager terminal SESSION_POISONED and identical observation labels, distinct from RESOURCE_EXHAUSTED refusal; release",
     "EARLY_TERMINAL": "real incoming null response takes SessionClient early return; generic release wins exactly once, invalidates view, releases every created object"
   }
 }

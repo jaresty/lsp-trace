@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
 )
@@ -143,7 +144,13 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	expanded := map[string]bool{}
 	edgeIndex := map[[2]string]int{}
 	queue := make([]queued, 0, len(items))
-	for _, item := range items {
+	for ordinal, item := range items {
+		if _, enabled := directionalraw.FromContext(ctx); enabled {
+			if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "textDocument/prepareCallHierarchy", Ordinal: uint64(ordinal)}); !ok || selection.View().Len() == 0 {
+				result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.InvalidServerResponse, Message: "directional prepare selection unavailable"})
+				return result
+			}
+		}
 		n := node(item, newNode)
 		if err := graph.ValidateItem(n.Item); err != nil {
 			result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.InvalidServerResponse, Message: err.Error()})
@@ -214,7 +221,13 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 			continue
 		}
 		omittedCallerIDs := make([]string, 0)
-		for _, call := range calls {
+		for ordinal, call := range calls {
+			if _, enabled := directionalraw.FromContext(ctx); enabled {
+				if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "callHierarchy/incomingCalls", Ordinal: uint64(ordinal)}); !ok || selection.View().Len() == 0 {
+					result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.InvalidServerResponse, Message: "directional incoming selection unavailable"})
+					return result
+				}
+			}
 			caller := node(call.From, newNode)
 			if err := graph.ValidateItem(caller.Item); err != nil {
 				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.InvalidServerResponse, Message: "rejected incoming caller " + caller.ID + ": " + err.Error()})

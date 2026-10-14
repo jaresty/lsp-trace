@@ -1,6 +1,7 @@
 === RUN   TestV5CausalOver32MiBPreEffect
-    directional_v5_four_causal_private_test.go:393: ASSERT_C4_PROPOSED_COMMITMENT
---- FAIL: TestV5CausalOver32MiBPreEffect (0.29s)
+    directional_v5_four_causal_private_test.go:395: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:426: ASSERT_C4_PROPOSED_COMMITMENT
+--- FAIL: TestV5CausalOver32MiBPreEffect (0.31s)
 FAIL
-FAIL	lsp-trace/sessionruntime	0.606s
+FAIL	lsp-trace/sessionruntime	0.624s
 FAIL

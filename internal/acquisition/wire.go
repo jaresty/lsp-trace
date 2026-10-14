@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/internal/lsp"
 )
 
@@ -28,7 +29,19 @@ type callScope struct {
 }
 type callScopeKey struct{}
 
-type WireClient struct{ roundTrip RoundTrip }
+type WireClient struct {
+	roundTrip   RoundTrip
+	directional func(context.Context, WireRequest) (directionalraw.Lease, error)
+}
+
+func (c *WireClient) SetDirectionalPrivate(fn func(context.Context, WireRequest) (directionalraw.Lease, error)) {
+	c.directional = fn
+}
+
+// BindDirectionalResponse captures lexical offsets before strict typed decode.
+func BindDirectionalResponse(lease directionalraw.Lease) error {
+	return lease.BindElementsPrivate()
+}
 
 func NewWireClient(roundTrip RoundTrip) *WireClient { return &WireClient{roundTrip: roundTrip} }
 func (c *WireClient) call(ctx context.Context, method string, params, target any) (bool, error) {
@@ -39,6 +52,25 @@ func (c *WireClient) call(ctx context.Context, method string, params, target any
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return false, err
+	}
+	if _, enabled := directionalraw.FromContext(ctx); enabled && directionalraw.Allowed(method) {
+		if c.directional == nil {
+			return false, errors.New("directional runtime unavailable")
+		}
+		lease, e := c.directional(ctx, WireRequest{Context: scope.context, Method: method, Params: raw, MaxBytes: scope.limits.MaxResponseBytes, MaxMessages: scope.limits.MaxMessages})
+		if e != nil {
+			return false, e
+		}
+		if e = BindDirectionalResponse(lease); e != nil {
+			return false, e
+		}
+		if lease.Null() {
+			return true, nil
+		}
+		if e = validateWireShapeReaders(method, lease.ReaderPrivate); e != nil {
+			return false, e
+		}
+		return false, lease.Decode(target)
 	}
 	response, err := c.roundTrip(ctx, WireRequest{Context: scope.context, Method: method, Params: raw, MaxBytes: scope.limits.MaxResponseBytes, MaxMessages: scope.limits.MaxMessages})
 	if err != nil {
@@ -169,7 +201,10 @@ func decodeStrict(raw []byte, target any) error {
 // are indistinguishable from a valid zero-based position. Bounded JSON nesting
 // is also enforced before recursive standard-library decoding or normalization.
 func validateWireShape(method string, raw []byte) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
+	return validateWireShapeReaders(method, func() io.Reader { return bytes.NewReader(raw) })
+}
+func validateWireShapeReaders(method string, reader func() io.Reader) error {
+	decoder := json.NewDecoder(reader())
 	depth := 0
 	for {
 		tok, e := decoder.Token()
@@ -192,7 +227,7 @@ func validateWireShape(method string, raw []byte) error {
 		}
 	}
 	var rows []map[string]json.RawMessage
-	if e := json.Unmarshal(raw, &rows); e != nil {
+	if e := json.NewDecoder(reader()).Decode(&rows); e != nil {
 		return e
 	}
 	type entry struct {

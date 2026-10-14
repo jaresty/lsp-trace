@@ -119,10 +119,11 @@ type privateB4ReservationC17 struct {
 }
 
 type privateB4Transaction struct {
-	legacy      *privateB4Reservation
-	c16         *privateB4ReservationC16
-	c17         *privateB4ReservationC17
-	workAccount *adr0011work.Account
+	directionalV5 *privateDirectionalCallV5
+	legacy        *privateB4Reservation
+	c16           *privateB4ReservationC16
+	c17           *privateB4ReservationC17
+	workAccount   *adr0011work.Account
 }
 
 type privateB4Reservation struct {

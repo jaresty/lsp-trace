@@ -1,0 +1,84 @@
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/CRITICAL_EDGE_MUTATIONS.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/PATH_MANIFEST.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/README.md
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/SELF_HASHES.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/SELF_HASHES.sha256
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/WITNESS_CONTRACT.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/union.patch
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EARLY_TERMINAL-restored.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EARLY_TERMINAL-restored.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EARLY_TERMINAL.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EARLY_TERMINAL.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EXACT32-restored.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EXACT32-restored.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EXACT32.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/EXACT32.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PARTIAL_EXTERNAL-restored.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PARTIAL_EXTERNAL-restored.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PARTIAL_EXTERNAL.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PARTIAL_EXTERNAL.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PLUS_ONE-restored.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PLUS_ONE-restored.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PLUS_ONE.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/PLUS_ONE.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/RESULT.json
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/RESULT.sha256
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/clone.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-early-null-return.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-external-partial-observation.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-frame-sha.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-generic-terminal-callback.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-generic-terminal-clearing.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-lexical-binding.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-manager-admission.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-manager-observation.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-noncopy-view.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-nonpoisoning-refusal.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-partial-prefix-not-planned.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-plus-one-bound.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-production-dispatch.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-proposed-refusal-observation.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-proposed-refusal-sha.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-provider-ordinal.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-refusal-incomplete-prefix-write.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-request-allocation.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-request-charge.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-reservation-object-record.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-response-allocation.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-response-charge.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-result-original-alias.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-runtime-context.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-selected-sha.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-shared-transaction.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-table-terminal-release.log
+ M docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verify.py
+ M incomingops/executor.go
+ M internal/acquisition/sessionclient/client.go
+ M internal/acquisition/wire.go
+ M internal/lspwire/read_frame.go
+ M internal/slicer/discover.go
+ M internal/traverse/traverse.go
+ M sessionruntime/b4_definition_private.go
+ M sessionruntime/b4_explicit_bytes_c15_private.go
+ M sessionruntime/b4_owned_method_pair_lease.go
+ M sessionruntime/sessionruntime.go
+?? docs/qualification/adr0011-directional-raw-custody-c15-stageb-v5/
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/fresh-union-diff.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-partial-external-observation-relabel.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-partial-external-resource-relabel.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-request-frame-before-reservation.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-request-frame-observation-omitted.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/mutation-response-frame-before-reservation.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-diff-after.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-diff.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-state-after.json
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-state.json
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-status-after.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-status.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-untracked-after.log
+?? docs/qualification/adr0011-directional-raw-custody-real-path-vertical-slice-v5/verification/source-untracked.log
+?? docs/qualification/adr0011-incoming-calls-v1-final-qualification-v5/
+?? incomingops/directional_private.go
+?? internal/directionalraw/
+?? sessionruntime/call_hierarchy_directional_raw_v5_private.go
+?? sessionruntime/directional_v5_four_causal_private_test.go

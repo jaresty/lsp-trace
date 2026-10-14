@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
 )
@@ -158,7 +159,13 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 		}
 		disposition.Status = "prepared"
 		result.PreparationAccounting.Prepared++
-		for _, item := range items {
+		for ordinal, item := range items {
+			if _, enabled := directionalraw.FromContext(ctx); enabled {
+				if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "textDocument/prepareCallHierarchy", Ordinal: uint64(ordinal)}); !ok || selection.View().Len() == 0 {
+					result.Complete = false
+					return result
+				}
+			}
 			n := node(item)
 			if err := graph.ValidateItem(n.Item); err != nil {
 				disposition.Message = err.Error()
@@ -226,7 +233,26 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 			result.OutgoingTerminalItems = append(result.OutgoingTerminalItems, q.item)
 			continue
 		}
-		sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
+		if _, enabled := directionalraw.FromContext(ctx); enabled {
+			type ordinalCall struct {
+				call    lsp.CallHierarchyOutgoingCall
+				ordinal uint64
+			}
+			ordered := make([]ordinalCall, len(calls))
+			for i, c := range calls {
+				ordered[i] = ordinalCall{c, uint64(i)}
+			}
+			sort.Slice(ordered, func(i, j int) bool { return node(ordered[i].call.To).ID < node(ordered[j].call.To).ID })
+			for i, bound := range ordered {
+				if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "callHierarchy/outgoingCalls", Ordinal: bound.ordinal}); !ok || selection.View().Len() == 0 {
+					result.Complete = false
+					return result
+				}
+				calls[i] = bound.call
+			}
+		} else {
+			sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
+		}
 		omittedCalleeIDs := make([]string, 0)
 		for itemIndex, call := range calls {
 			callee := node(call.To)

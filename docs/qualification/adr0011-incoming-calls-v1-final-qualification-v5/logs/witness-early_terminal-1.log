@@ -1,0 +1,6 @@
+=== RUN   TestV5CausalEarlyTerminalOnce
+    directional_v5_four_causal_private_test.go:487: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:494: ASSERT_C4_EARLY_TERMINAL PASS
+--- PASS: TestV5CausalEarlyTerminalOnce (0.00s)
+PASS
+ok  	lsp-trace/sessionruntime	0.228s

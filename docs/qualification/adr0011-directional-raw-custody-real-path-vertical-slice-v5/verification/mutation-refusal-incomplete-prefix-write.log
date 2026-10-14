@@ -1,6 +1,7 @@
 === RUN   TestV5CausalOver32MiBPreEffect
-    directional_v5_four_causal_private_test.go:383: ASSERT_C4_PLUS_ONE_ZERO_WIRE: calls=1 raw_bytes=1 written_bytes=1 raw_sha256=6b23c0d5f35d1b11f9b683f0b0a617355deb11277d91ae091d399c655b87940d
---- FAIL: TestV5CausalOver32MiBPreEffect (0.28s)
+    directional_v5_four_causal_private_test.go:395: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:416: ASSERT_C4_PLUS_ONE_ZERO_WIRE: calls=1 raw_bytes=1 written_bytes=1 raw_sha256=6b23c0d5f35d1b11f9b683f0b0a617355deb11277d91ae091d399c655b87940d
+--- FAIL: TestV5CausalOver32MiBPreEffect (0.27s)
 FAIL
-FAIL	lsp-trace/sessionruntime	0.573s
+FAIL	lsp-trace/sessionruntime	0.579s
 FAIL

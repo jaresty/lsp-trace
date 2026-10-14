@@ -83,23 +83,23 @@
     {
       "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
       "family": "session",
-      "role": "preserved actual Manager admission, byte authority, observations, generic/C15 terminal",
+      "role": "actual Manager admission, byte authority, physical allocation-boundary and typed-failure receipts, generic/C15 terminal",
       "base_sha256": null,
-      "sha256": "b7d7d2c835bd9148d94552d4192724b26d2da14571b513211564b109a122131a"
+      "sha256": "6f3701986abdfbeec44bf49fa690b0e3672fb35f7890e64175aa9f3cc2ea1138"
     },
     {
       "path": "sessionruntime/directional_v5_four_causal_private_test.go",
       "family": "test",
-      "role": "ONLY four independent fresh-process causal witnesses",
+      "role": "ONLY four independent fresh-process causal witnesses; Phase2 allocation/correspondence/typed-failure corrections",
       "base_sha256": null,
-      "sha256": "e12df90cf8c0be77a90c2cc0830dd2e30b64b0c7d7c8b7e26ab4b08e566f25f1"
+      "sha256": "a0b4d160227106c8c2b6f185aea201bb0c88fd9ceddab3f58938712706f52fd2"
     },
     {
       "path": "sessionruntime/sessionruntime.go",
       "family": "session",
-      "role": "preserved actual shared preflight/pending/transport/finish; required non-poisoning byte-refusal classification",
+      "role": "shared preflight/pending/transport/finish; deterministic missing-ownership guard after real admission; non-poisoning byte refusal",
       "base_sha256": "ad06c64bf3e267587dc94197a80ece1a03bc7933bd9263b4bb1ac78cad69fb8d",
-      "sha256": "2f80f971134bd59058421e554e1e382afb229fcc19fe2ec6a1aca06cd506c065"
+      "sha256": "502578d058fb6868da337ae799812d8d1b1b25ef2921c19f928c78ed3b125be4"
     }
   ]
 }

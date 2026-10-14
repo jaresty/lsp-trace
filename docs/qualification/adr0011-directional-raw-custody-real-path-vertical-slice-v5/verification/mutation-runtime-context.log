@@ -1,5 +1,5 @@
 === RUN   TestV5CausalExact32MiB
-    directional_v5_four_causal_private_test.go:350: ASSERT_C4_PRODUCTION_ENTRY: TOOL_NOT_IMPLEMENTED count=0
+    directional_v5_four_causal_private_test.go:361: ASSERT_C4_PRODUCTION_ENTRY: TOOL_NOT_IMPLEMENTED count=0
 --- FAIL: TestV5CausalExact32MiB (0.00s)
 FAIL
 FAIL	lsp-trace/sessionruntime	0.305s

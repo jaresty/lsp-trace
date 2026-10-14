@@ -1,0 +1,74 @@
+=== RUN   TestCallHierarchyObservationAttachmentIgnoredByOrdinaryRoundTrip
+--- PASS: TestCallHierarchyObservationAttachmentIgnoredByOrdinaryRoundTrip (0.00s)
+=== RUN   TestOrdinaryRoundTripRetainedNotificationCompatibility
+--- PASS: TestOrdinaryRoundTripRetainedNotificationCompatibility (0.00s)
+=== RUN   TestOrdinaryRoundTripServerErrorCompatibility
+--- PASS: TestOrdinaryRoundTripServerErrorCompatibility (0.00s)
+=== RUN   TestDefinitionFrameCaptureBindsOnlyAcceptedSuccessfulResponse
+    definition_response_frame_test.go:68: ASSERT_ADR0011_MANAGER_DEFINITION_ACCEPTED_RAW: PASS
+--- PASS: TestDefinitionFrameCaptureBindsOnlyAcceptedSuccessfulResponse (0.00s)
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/default-off
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/other-method
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/over-cap-interleaved
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/cap-minus-one
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/over-ceiling
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/server-error
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/malformed
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/timeout
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/unmatched-only
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/stale
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+=== RUN   TestMethodRequestFrameWithheldUntilAcceptedSuccess/response-byte-limit
+    method_request_frame_test.go:108: ASSERT_ADR0011_DR_OWNER_REQUEST_WITHHELD: PASS
+--- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess (0.11s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/default-off (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/other-method (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/over-cap-interleaved (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/cap-minus-one (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/over-ceiling (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/server-error (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/malformed (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/timeout (0.05s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/unmatched-only (0.05s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/stale (0.00s)
+    --- PASS: TestMethodRequestFrameWithheldUntilAcceptedSuccess/response-byte-limit (0.00s)
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/accepted-over-cap
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/default-off
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/wrong-method
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/server-error
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/byte-limit
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/malformed
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/timeout
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== RUN   TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/stale
+    method_response_frame_test.go:122: ASSERT_ADR0011_REFERENCES_WITHHELD: PASS
+=== NAME  TestMethodFrameCaptureReferencesWithheldAndDefinitionParity
+    method_response_frame_test.go:140: ASSERT_ADR0011_DEFINITION_CAPTURE_PARITY: PASS
+--- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity (0.06s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/accepted-over-cap (0.00s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/default-off (0.00s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/wrong-method (0.00s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/server-error (0.00s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/byte-limit (0.00s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/malformed (0.00s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/timeout (0.05s)
+    --- PASS: TestMethodFrameCaptureReferencesWithheldAndDefinitionParity/stale (0.00s)
+PASS
+ok  	lsp-trace/sessionruntime	0.416s

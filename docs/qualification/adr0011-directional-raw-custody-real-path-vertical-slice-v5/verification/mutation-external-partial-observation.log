@@ -1,6 +1,7 @@
 === RUN   TestV5CausalPartialExternalFailure
-    directional_v5_four_causal_private_test.go:439: ASSERT_C4_PARTIAL_EXTERNAL_SPANS
+    directional_v5_four_causal_private_test.go:457: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:473: ASSERT_C4_PARTIAL_EXTERNAL_SPANS
 --- FAIL: TestV5CausalPartialExternalFailure (0.00s)
 FAIL
-FAIL	lsp-trace/sessionruntime	0.307s
+FAIL	lsp-trace/sessionruntime	0.308s
 FAIL

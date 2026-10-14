@@ -1,5 +1,6 @@
 === RUN   TestV5CausalOver32MiBPreEffect
-    directional_v5_four_causal_private_test.go:413: ASSERT_C4_PLUS_ONE PASS
+    directional_v5_four_causal_private_test.go:395: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:446: ASSERT_C4_PLUS_ONE PASS
 --- PASS: TestV5CausalOver32MiBPreEffect (0.32s)
 PASS
-ok  	lsp-trace/sessionruntime	0.538s
+ok  	lsp-trace/sessionruntime	0.558s

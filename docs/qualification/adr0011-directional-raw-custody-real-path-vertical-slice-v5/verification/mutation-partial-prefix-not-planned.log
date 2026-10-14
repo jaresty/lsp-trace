@@ -1,6 +1,7 @@
 === RUN   TestV5CausalPartialExternalFailure
-    directional_v5_four_causal_private_test.go:429: ASSERT_C4_EXACT_ACQUIRED_DIGEST: {Method:callHierarchy/incomingCalls Ordinal:0 Length:307 SHA256:[146 181 177 226 3 111 101 94 120 35 117 3 168 113 111 212 33 177 194 215 176 142 187 121 107 242 91 200 253 102 0 27] Component:response-frame Selected:false RequestID:2 Generation:1 Failure:SESSION_POISONED}
+    directional_v5_four_causal_private_test.go:457: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:463: ASSERT_C4_EXACT_ACQUIRED_DIGEST: {Method:callHierarchy/incomingCalls Ordinal:0 Length:307 SHA256:[146 181 177 226 3 111 101 94 120 35 117 3 168 113 111 212 33 177 194 215 176 142 187 121 107 242 91 200 253 102 0 27] Component:response-frame Selected:false RequestID:2 Generation:1 Failure:SESSION_POISONED}
 --- FAIL: TestV5CausalPartialExternalFailure (0.00s)
 FAIL
-FAIL	lsp-trace/sessionruntime	0.307s
+FAIL	lsp-trace/sessionruntime	0.310s
 FAIL

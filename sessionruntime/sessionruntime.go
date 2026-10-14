@@ -26,6 +26,7 @@ import (
 	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/adr0011cobserve"
 	"lsp-trace/internal/adr0011work"
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
@@ -243,13 +244,14 @@ type Request struct {
 // RoundTripRequest describes one transport-neutral JSON-RPC transaction against
 // an exact session generation.
 type RoundTripRequest struct {
-	SessionID   string
-	Generation  uint64
-	Method      string
-	Params      json.RawMessage
-	Deadline    time.Time
-	MaxMessages int
-	MaxBytes    int64
+	directionalV5 *privateDirectionalCallV5
+	SessionID     string
+	Generation    uint64
+	Method        string
+	Params        json.RawMessage
+	Deadline      time.Time
+	MaxMessages   int
+	MaxBytes      int64
 	// Private default-off in-memory D/R query/result observation, not a receipt.
 	CaptureOwnedMethodPair            bool                                 `json:"-"`
 	callHierarchyLayer1               callHierarchyLayer1RequestAttachment `json:"-"`
@@ -700,6 +702,7 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 }
 
 type RoundTripResult struct {
+	directionalV5                     *privateDirectionalCallV5
 	Key                               lspwire.RequestKey
 	DiagnosticOperation               DiagnosticOperationHandle `json:"-"`
 	Result                            json.RawMessage
@@ -797,6 +800,9 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 }
 
 func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool, transaction *privateB4Transaction) RoundTripResult {
+	if req.directionalV5 != nil && (transaction == nil || transaction.directionalV5 != req.directionalV5) {
+		return RoundTripResult{Failure: session.ToolNotImplemented}
+	}
 	var private *privateB4Reservation
 	if transaction != nil {
 		private = transaction.legacy
@@ -890,7 +896,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			private.session = r
 		}
 	}
+	if failure := m.admitDirectionalV5Locked(req); failure != "" {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: failure}
+	}
+	// Do not begin an unowned directional transaction if admission installation
+	// is absent. This is a deterministic pre-pending guard, not a replacement
+	// admission path: only admitDirectionalV5Locked may install the authority.
+	if req.directionalV5 != nil && (req.directionalV5.execution.account == nil || req.directionalV5.execution.owner == nil || !req.directionalV5.execution.reservation.Attached()) {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.ToolNotImplemented}
+	}
 	key := r.pending.Begin(req.Generation)
+	if req.directionalV5 != nil {
+		req.directionalV5.admit(key, req.Method)
+	}
 	if attempt := req.callHierarchyLayer1GenericAttempt; attempt != nil {
 		attempt.admit(key, callHierarchyLayer1GenericBeforeSnapshot{ledger: req.callHierarchyLayer1.ledger})
 	}
@@ -922,7 +942,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	}
 	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
 	started := m.now()
-	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
+	result := RoundTripResult{directionalV5: req.directionalV5, Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
 	var privateRetainedNotifications []lspwire.Message
 	var privateRetainedResponses []lspwire.Message
 	maxMessages := req.MaxMessages
@@ -999,7 +1019,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	var marshalErr error
 	var outboundTransport privateB4ByteLeaseV2
 	owner := &ownedTransport{child: child}
-	if custodialPrivateB4 {
+	if req.directionalV5 != nil {
+		// Directional encoder reserves and writes one exact frame below.
+	} else if custodialPrivateB4 {
 		var failure session.Failure
 		requestBody, outboundTransport, failure, marshalErr = encodePrivateB4Request(requestMessage, private.explicitBytes, m.wire, m.b4OutboundHook)
 		if failure != "" || marshalErr != nil {
@@ -1035,7 +1057,18 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	if custodialPrivateB4 || req.callHierarchyLayer1GenericAttempt != nil {
 		writeRequest = func() error { return writer.WriteEncodedBodyPrivate(requestBody) }
 	}
+	if req.directionalV5 != nil {
+		writeRequest = func() error {
+			bodyBytes, frame, err := lspwire.WriteDirectionalReserved(checkedWriter{child.Stdin()}, id, req.Method, req.Params, req.directionalV5.lease, m.wire.MaxBodyBytes)
+			result.RequestBytes = bodyBytes
+			result.requestWrite = &RequestWriteObservation{SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method, FrameBytes: frame.FrameBytes, FrameSHA256: frame.FrameSHA256}
+			return err
+		}
+	}
 	if err := owner.run(ctx, writeRequest); err != nil {
+		if req.directionalV5 != nil && errors.Is(err, directionalraw.ErrReservationRefused) {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, false)
+		}
 		failure := contextFailure(ctx)
 		if failure == "" {
 			failure = session.SessionPoisoned
@@ -1049,9 +1082,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	if private != nil && !private.nonCustodial && m.b4AfterWriteHook != nil {
 		m.b4AfterWriteHook(private.explicitBytes)
 	}
-	result.requestWrite = &RequestWriteObservation{
-		SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
-		FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
+	if req.directionalV5 == nil {
+		result.requestWrite = &RequestWriteObservation{
+			SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
+			FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
+		}
 	}
 	if result.callHierarchyLayer1GenericAttempt != nil {
 		if raw, retained := writeCapture.retainedFrame(); retained {
@@ -1123,6 +1158,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 		}
 		go func() {
+			if req.directionalV5 != nil {
+				msg, frame, raw, err := reader.ReadDirectionalReserved(maxBytes, req.directionalV5.lease)
+				reads <- readResult{message: msg, frame: frame, raw: raw, bodyBytes: int64(len(raw)), retained: raw != nil, err: err}
+				return
+			}
 			if privateReader != nil {
 				msg, err := privateReader.ReadFrame()
 				if m.cWireObserver != nil {
@@ -1199,7 +1239,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				}
 			}
 			bodyBytes := read.bodyBytes
-			if privateReader == nil {
+			if privateReader == nil && req.directionalV5 == nil {
 				body, _ := json.Marshal(read.message)
 				bodyBytes = int64(len(body))
 			}
@@ -1330,6 +1370,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			if private != nil && !private.nonCustodial && private.resultOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
 				result.Result = private.capture.Result
+			} else if req.directionalV5 != nil {
+				if read.message.Kind() == lspwire.KindSuccessResponse && !req.directionalV5.lease.Result(read.message.Result) {
+					return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+				}
+				result.Result = nil
 			} else {
 				result.Result = append(json.RawMessage(nil), read.message.Result...)
 				if private != nil && read.message.Kind() == lspwire.KindSuccessResponse {
@@ -1501,6 +1546,10 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 		result, genericTerminal = m.publishCallHierarchyLayer1GenericOwnerLocked(result, newCallHierarchyLayer1GenericOwner(observation))
 	}
 	result.callHierarchyLayer1GenericAttempt = nil
+	if result.directionalV5 != nil {
+		result.directionalV5.finish(failure)
+		result.directionalV5 = nil
+	}
 	m.workers--
 	select {
 	case m.workerDone <- struct{}{}:
@@ -1562,6 +1611,7 @@ type privateB4DecodedTestHooks struct {
 }
 
 type Manager struct {
+	directionalV5                                *privateDirectionalV5
 	mu                                           sync.Mutex
 	limits                                       Limits
 	wire                                         lspwire.Limits

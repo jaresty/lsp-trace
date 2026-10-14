@@ -1,0 +1,7 @@
+=== RUN   TestV5CausalExact32MiB
+    directional_v5_four_causal_private_test.go:361: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:366: ASSERT_C4_EXACT32_COMPLETE_CORRESPONDENCE: missing packet 0 kind=request-frame
+--- FAIL: TestV5CausalExact32MiB (0.31s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.683s
+FAIL

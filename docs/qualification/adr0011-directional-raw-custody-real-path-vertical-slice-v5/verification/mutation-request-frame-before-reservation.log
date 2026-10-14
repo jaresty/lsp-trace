@@ -1,0 +1,8 @@
+=== RUN   TestV5CausalExact32MiB
+    directional_v5_four_causal_private_test.go:361: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:366: ASSERT_C4_EXACT32_COMPLETE_CORRESPONDENCE PASS
+    directional_v5_four_causal_private_test.go:384: ASSERT_C4_REQUEST_ALLOCATION_BOUNDARY: before make snapshot={Component:request-frame Length:190 Live:0 Cumulative:0 Allocations:0 OwnershipObjects:0 Occupied:false} expected_reserved=190 expected_objects=1
+--- FAIL: TestV5CausalExact32MiB (0.33s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.645s
+FAIL

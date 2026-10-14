@@ -495,6 +495,7 @@ type callHierarchyLayer1GenericAttemptLineage struct {
 	finished                    bool
 }
 type callHierarchyLayer1GenericOwner struct {
+	directionalV5                             *privateDirectionalV5
 	mu                                        sync.Mutex
 	cond                                      sync.Cond
 	observation                               callHierarchyLayer1GenericObservation
@@ -656,6 +657,9 @@ func (o *callHierarchyLayer1GenericOwner) releaseLocked() bool {
 		return false
 	}
 	o.releaseStarted = true
+	if o.directionalV5 != nil {
+		o.directionalV5.reservation.Terminate()
+	}
 	o.observation = callHierarchyLayer1GenericObservation{}
 	o.released = true
 	o.cond.Broadcast()

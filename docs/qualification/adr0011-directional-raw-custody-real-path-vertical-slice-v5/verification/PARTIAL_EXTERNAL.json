@@ -3,7 +3,9 @@
   "facts": {
     "external_plus_partial_frames": 3,
     "failed": true,
+    "failure": "SESSION_POISONED",
     "measurement_scope": "directional raw-frame custody; general bookkeeping is separately reported",
+    "refusal_failure": "RESOURCE_EXHAUSTED",
     "source_ordinal": 1
   },
   "observations": [
@@ -78,7 +80,7 @@
       "source_ordinal": null
     }
   ],
-  "pid": 94534,
+  "pid": 8002,
   "production_go": false,
   "release": {
     "cumulative": 1517,

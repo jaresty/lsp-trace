@@ -1151,10 +1151,10 @@ index 858172a5..6a1a2ef7 100644
  	o.cond.Broadcast()
 diff --git a/sessionruntime/call_hierarchy_directional_raw_v5_private.go b/sessionruntime/call_hierarchy_directional_raw_v5_private.go
 new file mode 100644
-index 00000000..433ede6a
+index 00000000..2e7d05c9
 --- /dev/null
 +++ b/sessionruntime/call_hierarchy_directional_raw_v5_private.go
-@@ -0,0 +1,268 @@
+@@ -0,0 +1,323 @@
 +package sessionruntime
 +
 +import (
@@ -1181,16 +1181,30 @@ index 00000000..433ede6a
 +	observations []directionalraw.Observation
 +	failure      session.Failure
 +}
++
++// Snapshots are captured at the physical allocation boundary, not reconstructed
++// from final accounting. They carry no raw backing or acceptance authority.
++type privateDirectionalAllocationV5 struct {
++	Component        string `json:"component"`
++	Length           int    `json:"length"`
++	Live             uint64 `json:"live"`
++	Cumulative       uint64 `json:"cumulative"`
++	Allocations      uint64 `json:"allocations"`
++	OwnershipObjects int    `json:"ownership_objects"`
++	Occupied         bool   `json:"occupied"`
++}
++
 +type privateDirectionalV5 struct {
-+	mu                 sync.Mutex
-+	reservation        directionalraw.Reservation
-+	account            *privateB4ByteAccountV2
-+	owner              *callHierarchyLayer1GenericOwner
-+	accepted           []acceptedV2
-+	c15Events          []privateB4C15Event
-+	frameObjects       map[uint64]string
-+	responseObjects    map[uint64]uint64
-+	lastResponseObject uint64
++	allocationBoundaries []privateDirectionalAllocationV5
++	mu                   sync.Mutex
++	reservation          directionalraw.Reservation
++	account              *privateB4ByteAccountV2
++	owner                *callHierarchyLayer1GenericOwner
++	accepted             []acceptedV2
++	c15Events            []privateB4C15Event
++	frameObjects         map[uint64]string
++	responseObjects      map[uint64]uint64
++	lastResponseObject   uint64
 +}
 +type privateDirectionalCallV5 struct {
 +	execution *privateDirectionalV5
@@ -1302,7 +1316,18 @@ index 00000000..433ede6a
 +	p.allocations++
 +	// Reservation is committed before the only retained allocation. Raw aliases
 +	// and provider-element Views add no charge and never copy this backing.
-+	return make([]byte, n), nil
++	return d.allocateBackingLocked(component, n), nil
++}
++
++// The only retained raw make. Called with account.mu held; observe the actual
++// quota charge and ownership installation immediately before allocating.
++func (d *privateDirectionalV5) allocateBackingLocked(component string, n int) []byte {
++	p := &d.account.directionalV5
++	d.allocationBoundaries = append(d.allocationBoundaries, privateDirectionalAllocationV5{
++		Component: component, Length: n, Live: p.live, Cumulative: p.cumulative,
++		Allocations: p.allocations, OwnershipObjects: len(d.frameObjects), Occupied: p.occupied,
++	})
++	return make([]byte, n)
 +}
 +func (d *privateDirectionalV5) observe(o directionalraw.Observation) {
 +	a := d.account
@@ -1387,6 +1412,24 @@ index 00000000..433ede6a
 +	}
 +	return out
 +}
++
++// DirectionalFailurePrivate retains the exact typed Manager terminal failure,
++// independently of the client's formatted error and observation string labels.
++func (m *Manager) DirectionalFailurePrivate() session.Failure {
++	m.mu.Lock()
++	d := m.directionalV5
++	m.mu.Unlock()
++	if d == nil {
++		return ""
++	}
++	d.mu.Lock()
++	defer d.mu.Unlock()
++	if len(d.accepted) == 0 {
++		return ""
++	}
++	return d.accepted[len(d.accepted)-1].failure
++}
++
 +func (m *Manager) DirectionalGenericTerminalPrivate() (active uint32, admissionClosed, releaseStarted, released bool) {
 +	m.mu.Lock()
 +	d := m.directionalV5
@@ -1410,6 +1453,18 @@ index 00000000..433ede6a
 +	defer d.mu.Unlock()
 +	return append([]privateB4C15Event(nil), d.c15Events...)
 +}
++func (m *Manager) DirectionalAllocationBoundariesPrivate() []privateDirectionalAllocationV5 {
++	m.mu.Lock()
++	d := m.directionalV5
++	m.mu.Unlock()
++	if d == nil {
++		return nil
++	}
++	d.account.mu.Lock()
++	defer d.account.mu.Unlock()
++	return append([]privateDirectionalAllocationV5(nil), d.allocationBoundaries...)
++}
++
 +func (m *Manager) DirectionalAccountingPrivate() (live, cumulative, allocations, releases, general uint64, occupied bool) {
 +	m.mu.Lock()
 +	d := m.directionalV5
@@ -1425,10 +1480,10 @@ index 00000000..433ede6a
 +}
 diff --git a/sessionruntime/directional_v5_four_causal_private_test.go b/sessionruntime/directional_v5_four_causal_private_test.go
 new file mode 100644
-index 00000000..19ed4f7a
+index 00000000..cd3e16eb
 --- /dev/null
 +++ b/sessionruntime/directional_v5_four_causal_private_test.go
-@@ -0,0 +1,455 @@
+@@ -0,0 +1,495 @@
 +package sessionruntime_test
 +
 +import (
@@ -1669,6 +1724,7 @@ index 00000000..19ed4f7a
 +	if err != nil || len(items) != 2 {
 +		t.Fatalf("ASSERT_C4_PRODUCTION_ENTRY: %v count=%d", err, len(items))
 +	}
++	t.Log("ASSERT_C4_PRODUCTION_ENTRY PASS")
 +	selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "textDocument/prepareCallHierarchy", Ordinal: 1})
 +	c.mu.Lock()
 +	source := c.source
@@ -1714,6 +1770,16 @@ index 00000000..19ed4f7a
 +		if !found {
 +			t.Fatal("ASSERT_C4_EXACT_PENDING_OBSERVATION")
 +		}
++	}
++	// Equality is bidirectional: a missing request observation must not pass
++	// merely because every remaining observation matches some provider packet.
++	if c.mode == "exact" {
++		for i := range packets {
++			if !used[i] {
++				t.Fatalf("ASSERT_C4_EXACT32_COMPLETE_CORRESPONDENCE: missing packet %d kind=%s", i, packets[i].kind)
++			}
++		}
++		t.Log("ASSERT_C4_EXACT32_COMPLETE_CORRESPONDENCE PASS")
 +	}
 +	return obs
 +}
@@ -1784,8 +1850,30 @@ index 00000000..19ed4f7a
 +		t.Fatalf("ASSERT_C4_EXACT32_RESERVATION: live=%d cumulative=%d allocations=%d", live, cumulative, allocations)
 +	}
 +	obs := c4Observe(t, m, c)
++	boundaries := m.DirectionalAllocationBoundariesPrivate()
++	c.mu.Lock()
++	packets := append([]c4Packet(nil), c.packets...)
++	c.mu.Unlock()
++	if len(boundaries) != len(packets) || len(boundaries) != 2 {
++		t.Fatal("ASSERT_C4_ALLOCATION_BOUNDARY")
++	}
++	var total uint64
++	frames := []map[string]any{}
++	for i, p := range packets {
++		total += uint64(len(p.raw))
++		b := boundaries[i]
++		assertion := "ASSERT_C4_REQUEST_ALLOCATION_BOUNDARY"
++		if p.kind == "response-frame" {
++			assertion = "ASSERT_C4_RESPONSE_ALLOCATION_BOUNDARY"
++		}
++		if b.Component != p.kind || b.Length != len(p.raw) || b.Live != total || b.Cumulative != total || b.Allocations != uint64(i+1) || b.OwnershipObjects != i+1 || !b.Occupied {
++			t.Fatalf("%s: before make snapshot=%+v expected_reserved=%d expected_objects=%d", assertion, b, total, i+1)
++		}
++		t.Logf("%s PASS", assertion)
++		frames = append(frames, map[string]any{"component": p.kind, "request_id": p.id, "length": len(p.raw), "sha256": fmt.Sprintf("%x", sha256.Sum256(p.raw))})
++	}
 +	release := c4Release(t, m, r, view)
-+	c4Receipt(t, "EXACT32", obs, release, map[string]any{"accepted": true, "limit": c4Budget})
++	c4Receipt(t, "EXACT32", obs, release, map[string]any{"accepted": true, "limit": c4Budget, "allocation_boundaries": boundaries, "actual_frames": frames})
 +}
 +func TestV5CausalOver32MiBPreEffect(t *testing.T) {
 +	m, s, c, client := c4Setup(t, "over")
@@ -1854,8 +1942,9 @@ index 00000000..19ed4f7a
 +	r := directionalraw.NewReservation("c4-partial")
 +	item, view := c4Prepare(t, m, c, client, r)
 +	_, _, err := client.IncomingCalls(r.Context(context.Background()), item)
-+	if err == nil {
-+		t.Fatal("ASSERT_C4_PARTIAL_EXTERNAL_FAILURE")
++	failure := m.DirectionalFailurePrivate()
++	if err == nil || err.Error() != string(session.SessionPoisoned) || failure != session.SessionPoisoned || failure == session.ResourceExhausted {
++		t.Fatalf("ASSERT_C4_PARTIAL_EXTERNAL_TYPED_FAILURE: client=%v typed=%q expected=%q (not %q)", err, failure, session.SessionPoisoned, session.ResourceExhausted)
 +	}
 +	obs := c4Observe(t, m, c)
 +	responseFrames := 0
@@ -1869,8 +1958,14 @@ index 00000000..19ed4f7a
 +	if responseFrames != 3 || !partial {
 +		t.Fatal("ASSERT_C4_PARTIAL_EXTERNAL_SPANS")
 +	}
++	for _, o := range obs {
++		if o.Method == "callHierarchy/incomingCalls" && o.Failure != string(session.SessionPoisoned) {
++			t.Fatalf("ASSERT_C4_PARTIAL_EXTERNAL_TYPED_FAILURE: component=%s label=%q expected=%q", o.Component, o.Failure, session.SessionPoisoned)
++		}
++	}
++	t.Log("ASSERT_C4_PARTIAL_EXTERNAL_TYPED_FAILURE PASS")
 +	release := c4Release(t, m, r, view)
-+	c4Receipt(t, "PARTIAL_EXTERNAL", obs, release, map[string]any{"failed": true, "external_plus_partial_frames": responseFrames})
++	c4Receipt(t, "PARTIAL_EXTERNAL", obs, release, map[string]any{"failed": true, "external_plus_partial_frames": responseFrames, "failure": failure, "refusal_failure": session.ResourceExhausted})
 +}
 +func TestV5CausalEarlyTerminalOnce(t *testing.T) {
 +	m, _, c, client := c4Setup(t, "early")
@@ -1885,7 +1980,7 @@ index 00000000..19ed4f7a
 +	c4Receipt(t, "EARLY_TERMINAL", obs, release, map[string]any{"null_early_return": null})
 +}
 diff --git a/sessionruntime/sessionruntime.go b/sessionruntime/sessionruntime.go
-index 76eada33..fa6ca762 100644
+index 76eada33..1a5154ba 100644
 --- a/sessionruntime/sessionruntime.go
 +++ b/sessionruntime/sessionruntime.go
 @@ -26,6 +26,7 @@ import (
@@ -1936,13 +2031,20 @@ index 76eada33..fa6ca762 100644
  	var private *privateB4Reservation
  	if transaction != nil {
  		private = transaction.legacy
-@@ -890,7 +896,14 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -890,7 +896,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  			private.session = r
  		}
  	}
 +	if failure := m.admitDirectionalV5Locked(req); failure != "" {
 +		m.mu.Unlock()
 +		return RoundTripResult{Failure: failure}
++	}
++	// Do not begin an unowned directional transaction if admission installation
++	// is absent. This is a deterministic pre-pending guard, not a replacement
++	// admission path: only admitDirectionalV5Locked may install the authority.
++	if req.directionalV5 != nil && (req.directionalV5.execution.account == nil || req.directionalV5.execution.owner == nil || !req.directionalV5.execution.reservation.Attached()) {
++		m.mu.Unlock()
++		return RoundTripResult{Failure: session.ToolNotImplemented}
 +	}
  	key := r.pending.Begin(req.Generation)
 +	if req.directionalV5 != nil {
@@ -1951,7 +2053,7 @@ index 76eada33..fa6ca762 100644
  	if attempt := req.callHierarchyLayer1GenericAttempt; attempt != nil {
  		attempt.admit(key, callHierarchyLayer1GenericBeforeSnapshot{ledger: req.callHierarchyLayer1.ledger})
  	}
-@@ -922,7 +935,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -922,7 +942,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  	}
  	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
  	started := m.now()
@@ -1960,7 +2062,7 @@ index 76eada33..fa6ca762 100644
  	var privateRetainedNotifications []lspwire.Message
  	var privateRetainedResponses []lspwire.Message
  	maxMessages := req.MaxMessages
-@@ -999,7 +1012,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -999,7 +1019,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  	var marshalErr error
  	var outboundTransport privateB4ByteLeaseV2
  	owner := &ownedTransport{child: child}
@@ -1971,7 +2073,7 @@ index 76eada33..fa6ca762 100644
  		var failure session.Failure
  		requestBody, outboundTransport, failure, marshalErr = encodePrivateB4Request(requestMessage, private.explicitBytes, m.wire, m.b4OutboundHook)
  		if failure != "" || marshalErr != nil {
-@@ -1035,7 +1050,18 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -1035,7 +1057,18 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  	if custodialPrivateB4 || req.callHierarchyLayer1GenericAttempt != nil {
  		writeRequest = func() error { return writer.WriteEncodedBodyPrivate(requestBody) }
  	}
@@ -1990,7 +2092,7 @@ index 76eada33..fa6ca762 100644
  		failure := contextFailure(ctx)
  		if failure == "" {
  			failure = session.SessionPoisoned
-@@ -1049,9 +1075,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -1049,9 +1082,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  	if private != nil && !private.nonCustodial && m.b4AfterWriteHook != nil {
  		m.b4AfterWriteHook(private.explicitBytes)
  	}
@@ -2005,7 +2107,7 @@ index 76eada33..fa6ca762 100644
  	}
  	if result.callHierarchyLayer1GenericAttempt != nil {
  		if raw, retained := writeCapture.retainedFrame(); retained {
-@@ -1123,6 +1151,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -1123,6 +1158,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
  		}
  		go func() {
@@ -2017,7 +2119,7 @@ index 76eada33..fa6ca762 100644
  			if privateReader != nil {
  				msg, err := privateReader.ReadFrame()
  				if m.cWireObserver != nil {
-@@ -1199,7 +1232,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -1199,7 +1239,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  				}
  			}
  			bodyBytes := read.bodyBytes
@@ -2026,7 +2128,7 @@ index 76eada33..fa6ca762 100644
  				body, _ := json.Marshal(read.message)
  				bodyBytes = int64(len(body))
  			}
-@@ -1330,6 +1363,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+@@ -1330,6 +1370,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
  			}
  			if private != nil && !private.nonCustodial && private.resultOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
  				result.Result = private.capture.Result
@@ -2038,7 +2140,7 @@ index 76eada33..fa6ca762 100644
  			} else {
  				result.Result = append(json.RawMessage(nil), read.message.Result...)
  				if private != nil && read.message.Kind() == lspwire.KindSuccessResponse {
-@@ -1501,6 +1539,10 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
+@@ -1501,6 +1546,10 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
  		result, genericTerminal = m.publishCallHierarchyLayer1GenericOwnerLocked(result, newCallHierarchyLayer1GenericOwner(observation))
  	}
  	result.callHierarchyLayer1GenericAttempt = nil
@@ -2049,7 +2151,7 @@ index 76eada33..fa6ca762 100644
  	m.workers--
  	select {
  	case m.workerDone <- struct{}{}:
-@@ -1562,6 +1604,7 @@ type privateB4DecodedTestHooks struct {
+@@ -1562,6 +1611,7 @@ type privateB4DecodedTestHooks struct {
  }
  
  type Manager struct {

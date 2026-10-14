@@ -132,6 +132,7 @@ type privateB4ByteAccountV2 struct {
 	c15BackingSiteID   string
 	c15Leases          map[privateB4ByteLease]privateB4C15LeaseState
 	c15ZeroLeases      []privateB4C15LeaseState
+	directionalV5      privateDirectionalPartitionV5
 }
 
 type privateB4ByteLeaseV2 struct {

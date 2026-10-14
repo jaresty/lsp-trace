@@ -2,35 +2,41 @@
 
 Binding: **ADR0011_V5_REFRAME**. Verdict ceiling: **AUTHORED_NOT_GO**, never GO.
 
-## Preserved implementation
+## Exact14 scope
 
-The complete connected v5 production implementation is retained: production executor SessionClient dispatch, neutral acquisition adapter, private Manager ingress, shared transaction, reserved original request/response transport, lexical aliases, provider ordinals through traverse/slicer, immutable noncopy views, actual SHA256 observations, separate 32 MiB raw/general partitions with combined 64 MiB authority, and existing generic/V2/C15 terminal convergence. Exactly six carrier types remain. Ordinary `Runtime.RoundTrip` is byte-for-byte unchanged and no CLI/MCP/schema activation is added.
+The connected production implementation remains: production executor SessionClient dispatch, neutral acquisition adapter, private Manager ingress, shared transaction, reserved original request/response transport, lexical aliases, provider ordinals through traverse/slicer, immutable noncopy views, actual SHA256 observations, separate 32 MiB raw/general partitions with combined 64 MiB authority, and generic/V2/C15 terminal convergence. Exactly six carrier types remain. Ordinary `Runtime.RoundTrip` is byte-for-byte unchanged; no CLI/MCP/schema activation is added.
 
-Only the required plus-one seam was corrected: allocation refusal now carries a **proposed, not acquired** frame commitment and returns `ResourceExhausted` without poisoning READY or performing request/response transport I/O. The measured pre-effect boundary is directional retained raw-frame allocation and transport effects; the inherited general ownership-table bookkeeping is separately recorded, not falsely reported as zero process allocation.
+`union.patch` contains exactly the 14 manifest paths: 13 connected production paths and one four-witness test file. This correction changes only two production paths (private Manager allocation/failure observation and shared transaction missing-ownership guard) plus that test file, relative to the previous union. Metadata and post-application hashes are regenerated. No additional production or test path is introduced.
 
-## The only frozen witnesses
+## The four witnesses
 
-1. **EXACT32:** actual production executor SessionClient prepare acquisition; request + original response retained capacity exactly 32 MiB; physical provider ordinal **1**; exact frame/element commitments; release.
-2. **PLUS_ONE:** actual ordinal-1 source acquisition/release, followed by a prospective incoming request frame exactly 32 MiB+1; refused before retained raw allocation or WRITE. An independent probe on Manager stdin records Write calls and offered raw bytes **before any provider frame decoding**, plus actual emitted bytes: all three deltas must be exactly zero. Decoded packets are only supplementary evidence. After refusal/release, a valid small incoming request must succeed on the **same READY Manager, client, session ID and generation**, with positive raw transport bytes matching the decoded request. Reservation/refusal, zero-wire, reuse and release receipts are retained.
-3. **PARTIAL_EXTERNAL:** actual incoming transaction consumes a notification, unmatched response, and truncated response; exact acquired prefix commitments; failure; release.
-4. **EARLY_TERMINAL:** actual incoming null response takes the production client's early return; generic terminal wins once, invalidates the source view, and releases every created object.
+1. **EXACT32:** production SessionClient prepare acquisition reserves request + original response capacity exactly 32 MiB. The sole retained raw `make` is in `allocateBackingLocked`; immediately before it, a snapshot captures live/cumulative charge, allocation count, ownership-object count, occupied state, component and length. The fixture independently supplies expected ordered request/response lengths. Both snapshots must show full prior reservation and ownership, not merely correct final totals. Every acquired fixture packet must correspond to exactly one Manager frame observation, and vice versa. Physical provider ordinal **1**, exact frame/element commitments and release remain checked.
+2. **PLUS_ONE:** ordinal-1 source acquisition/release precedes a prospective incoming request frame exactly 32 MiB+1. Quota refusal is **proposed, not acquired**, before retained raw allocation and WRITE. An independent Manager stdin probe measures Write calls and offered raw bytes before provider decoding, plus actually emitted bytes; all deltas must be zero. A small valid incoming request then succeeds on the **same READY Manager, client, session ID and generation**, with positive raw transport bytes matching its decoded request. General ownership-table bookkeeping remains separately reported.
+3. **PARTIAL_EXTERNAL:** a real incoming transaction consumes notification, unmatched response and truncated response. Acquired prefixes are independently hashed. The exact typed Manager terminal is `session.SessionPoisoned` (`SESSION_POISONED`), and the client error and all incoming-frame observation labels must agree. This is explicitly distinct from `session.ResourceExhausted` (`RESOURCE_EXHAUSTED`) quota refusal. Ownership releases normally.
+4. **EARLY_TERMINAL:** a real incoming null response takes the production client's early return. Generic release wins once, invalidates the source view, and releases every created object.
 
-Each witness creates a real Manager, completes its actual initialize/readiness protocol over the fixture's pipes, enters production `incomingops.SessionClient.call` with that Manager (not a replacement Runtime), and obtains ownership from Manager. The protocol provider is deliberately controlled test transport, not production-server/authentication/semantic evidence. Fixture-side bytes form an independent digest/length oracle. No manually constructed generic owner is used.
+Each witness starts a real Manager, completes its initialize/readiness exchange over fixture pipes, and enters production `incomingops.SessionClient.call` with that Manager. The controlled protocol provider is not production-server, authentication, or semantic-completeness evidence. Fixture-side bytes form an independent length/digest oracle. No manually constructed generic owner is substituted.
 
-The bounded PLUS_ONE correction changes only its test instrumentation/assertions and qualification metadata. The 13 connected production files and the other three witness bodies remain unchanged. The added `refusal-incomplete-prefix-write` mutation writes exactly one `C` byte after reservation refusal, without completing a frame; it must compile and fail `ASSERT_C4_PLUS_ONE_ZERO_WIRE`, then be restored before all four independent witnesses pass again. This closes the decoded-packet-only observation gap without expanding the witness count or deferred scope.
+## Independent Phase2 counterfactuals
 
-The direct frame-release loop remains preserved, but is not claimed as independently critical: its removal left the early-terminal witness passing because the inherited account terminal also freezes/releases remaining C15 objects. The matrix therefore gates the actual generic/account terminal rather than a redundant release route.
+The retained matrix preserves all prior gates, including request/response allocation bypass, charge omission, digests, provider ordinal, aliases, release, nonpoisoning refusal, proposed commitment and incomplete-prefix-write detection. The prior `manager-admission` gate is corrected: instead of injecting an unconditional `ResourceExhausted`, it skips the actual production admission call. An unowned directional transaction then deterministically returns before pending/I/O via the missing-ownership guard. Its production-entry assertion fails without timeout, panic, or compilation failure.
 
-The four witnesses execute as four **separate test-binary processes**, with distinct recorded PIDs and independent sessions; the partial-failure session cannot poison another witness. No aggregate 30-test package is frozen. Broader lifecycle, race, sorting, arithmetic-helper, and C15 scenario suites are deferred; existing production behavior is not discarded.
+Added independent gates:
 
-## Review and reproduction
+- Move the actual request allocation before quota/ownership checks, retaining that same backing: `ASSERT_C4_REQUEST_ALLOCATION_BOUNDARY` fails.
+- Independently move the actual response allocation before those checks: `ASSERT_C4_RESPONSE_ALLOCATION_BOUNDARY` fails.
+- Drop only request-frame observation: `ASSERT_C4_EXACT32_COMPLETE_CORRESPONDENCE` fails.
+- Relabel the actual acquired partial/external terminal as quota refusal: `ASSERT_C4_PARTIAL_EXTERNAL_TYPED_FAILURE` fails.
+- Independently relabel only observation failure strings, leaving typed Manager failure intact: the same typed-failure assertion fails.
 
-- `union.patch`: 13 preserved production paths and one four-witness test file.
-- `PATH_MANIFEST.json`: every actual path, authorized family, base hash, final hash.
-- `WITNESS_CONTRACT.json`: exactly four identities and their measurable contracts.
-- `CRITICAL_EDGE_MUTATIONS.json`: only critical edges exercised by those four witnesses.
-- `SELF_HASHES.json` / `.sha256`: package integrity envelope, not authenticity.
+Snapshots are private qualification receipts, not acceptance authority or a process-wide allocation audit. Moving the physical allocation and its immediately adjacent observation together is the counterfactual; a detached final-accounting sample is not substituted. The direct frame-release loop is retained but is not claimed independently critical because the inherited account terminal also releases remaining C15 objects.
+
+## Reproduction and authority limits
 
 Run `python3 verify.py --source /private/tmp/adr0011-incoming-calls-v1-6yiY4m`.
 
-The verifier clones exact clean base `04a4ca85ffbfd3916010897fb6fcc193ba47252d`, fresh-applies the whole connected patch, checks all hashes, and runs only the four witnesses independently. Each listed edge mutation must compile and fail its targeted causal assertion; compile errors are not witnesses. It restores the patch and independently reruns the same four witnesses. Receipts, logs and hashed `verification/RESULT.json` retain actual provenance. No semantic campaign RED/GREEN, broad regression/race/lifecycle campaign, delegation, commit, or campaign-source mutation occurs. A verdict is emitted only after complete verifier exit 0.
+The campaign may remain at `49334ce23de37c0094f50d21d57ab251a46130ca` with the old union applied. The verifier does not reset, clean, apply to, or otherwise mutate it. It records HEAD, status, tracked binary diff digest and every untracked-file digest before/after and requires exact equality. A source at clean patch base is also supported. Disposable clones are checked out at patch base `04a4ca85ffbfd3916010897fb6fcc193ba47252d`, base hashes checked, and the corrected union freshly applied.
+
+Only the four named witnesses run, each in its own test-binary process with recorded PID. Each critical-edge mutation is applied alone and must compile and fail its named assertion (not timeout/panic). Each edit is restored, post-hashes rechecked, then all four fresh-process witnesses pass again. Broader lifecycle, race, sorting, arithmetic-helper, C15 and semantic campaign scenarios are deferred. No delegation, commit, or campaign-source mutation occurs.
+
+`PATH_MANIFEST.json`, `WITNESS_CONTRACT.json`, `CRITICAL_EDGE_MUTATIONS.json` and `verify.py` describe the exact boundary. `SELF_HASHES.json` / `.sha256` seal those files plus this README and the union, not authenticity. `verification/RESULT.json` / `.sha256` bind actual logs, receipts, source state and mutation outcomes. No production GO is authorized.

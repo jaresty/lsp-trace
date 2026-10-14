@@ -1,0 +1,9 @@
+{
+  "files": 39,
+  "result_sha256": "18cf3784dc97e5c303d2b78046e206c1c33b72b174cfecd9662b7327cf439cde",
+  "self_test": {
+    "detected_checksum_tamper": true,
+    "error": "checksum mismatch: MANIFEST.json: 31075802b1455783651ca9289b85094566de4084ec4b6faddf53729fa55b16e0 != e5929f0ec69947f4998ea55d1a8322c9fb511b3e26f25a59d43fa8b1adfaf6c1"
+  },
+  "status": "VERIFIED"
+}

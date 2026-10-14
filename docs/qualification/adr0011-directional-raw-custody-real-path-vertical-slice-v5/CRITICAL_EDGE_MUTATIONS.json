@@ -30,10 +30,10 @@
     "id": "manager-admission",
     "path": "sessionruntime/sessionruntime.go",
     "old": "if failure := m.admitDirectionalV5Locked(req); failure != \"\" {",
-    "new": "if failure := session.ResourceExhausted; failure != \"\" {",
+    "new": "if failure := session.Failure(\"\"); failure != \"\" {",
     "witness": "EXACT32",
     "assertion": "ASSERT_C4_PRODUCTION_ENTRY",
-    "edge": "ordinary preflight -> real Manager admission"
+    "edge": "genuinely skip production Manager admission call; deterministic unowned pre-pending guard rejects, not injected denial or timeout"
   },
   {
     "id": "request-allocation",
@@ -241,5 +241,50 @@
     "witness": "EARLY_TERMINAL",
     "assertion": "ASSERT_C4_GENERIC_ACCOUNT_RELEASE",
     "edge": "generic terminal invokes inherited V2 table account release"
+  },
+  {
+    "id": "request-frame-before-reservation",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "\tp := &a.directionalV5\n\tif n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-p.live || p.cumulative > math.MaxUint64-uint64(n) || a.table.general.live > privateB4MaxOwnedBytes || a.table.general.live+p.live+uint64(n) > privateDirectionalCombinedMaxV5 {\n\t\treturn nil, directionalraw.ErrReservationRefused\n\t}\n\tsite := \"c15.directional.v5.\" + component\n\tobjectID, failure := a.c15.create(site, privateB4C15Operation(\"allocation\"))\n\tif failure != \"\" {\n\t\treturn nil, errors.New(string(failure))\n\t}\n\td.frameObjects[objectID] = site\n\tif component == \"response-frame\" {\n\t\td.lastResponseObject = objectID\n\t}\n\tp.occupied = true\n\tp.live += uint64(n)\n\tp.cumulative += uint64(n)\n\tp.allocations++\n\t// Reservation is committed before the only retained allocation. Raw aliases\n\t// and provider-element Views add no charge and never copy this backing.\n\treturn d.allocateBackingLocked(component, n), nil",
+    "new": "\tvar early []byte\n\tif component == \"request-frame\" { early = d.allocateBackingLocked(component, n) }\n\tp := &a.directionalV5\n\tif n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-p.live || p.cumulative > math.MaxUint64-uint64(n) || a.table.general.live > privateB4MaxOwnedBytes || a.table.general.live+p.live+uint64(n) > privateDirectionalCombinedMaxV5 {\n\t\treturn nil, directionalraw.ErrReservationRefused\n\t}\n\tsite := \"c15.directional.v5.\" + component\n\tobjectID, failure := a.c15.create(site, privateB4C15Operation(\"allocation\"))\n\tif failure != \"\" {\n\t\treturn nil, errors.New(string(failure))\n\t}\n\td.frameObjects[objectID] = site\n\tif component == \"response-frame\" {\n\t\td.lastResponseObject = objectID\n\t}\n\tp.occupied = true\n\tp.live += uint64(n)\n\tp.cumulative += uint64(n)\n\tp.allocations++\n\t// Reservation is committed before the only retained allocation. Raw aliases\n\t// and provider-element Views add no charge and never copy this backing.\n\tif component == \"request-frame\" { return early, nil }\n\treturn d.allocateBackingLocked(component, n), nil",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_REQUEST_ALLOCATION_BOUNDARY",
+    "edge": "move actual request-frame allocation before quota and ownership checks, retaining the same returned backing"
+  },
+  {
+    "id": "response-frame-before-reservation",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "\tp := &a.directionalV5\n\tif n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-p.live || p.cumulative > math.MaxUint64-uint64(n) || a.table.general.live > privateB4MaxOwnedBytes || a.table.general.live+p.live+uint64(n) > privateDirectionalCombinedMaxV5 {\n\t\treturn nil, directionalraw.ErrReservationRefused\n\t}\n\tsite := \"c15.directional.v5.\" + component\n\tobjectID, failure := a.c15.create(site, privateB4C15Operation(\"allocation\"))\n\tif failure != \"\" {\n\t\treturn nil, errors.New(string(failure))\n\t}\n\td.frameObjects[objectID] = site\n\tif component == \"response-frame\" {\n\t\td.lastResponseObject = objectID\n\t}\n\tp.occupied = true\n\tp.live += uint64(n)\n\tp.cumulative += uint64(n)\n\tp.allocations++\n\t// Reservation is committed before the only retained allocation. Raw aliases\n\t// and provider-element Views add no charge and never copy this backing.\n\treturn d.allocateBackingLocked(component, n), nil",
+    "new": "\tvar early []byte\n\tif component == \"response-frame\" { early = d.allocateBackingLocked(component, n) }\n\tp := &a.directionalV5\n\tif n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-p.live || p.cumulative > math.MaxUint64-uint64(n) || a.table.general.live > privateB4MaxOwnedBytes || a.table.general.live+p.live+uint64(n) > privateDirectionalCombinedMaxV5 {\n\t\treturn nil, directionalraw.ErrReservationRefused\n\t}\n\tsite := \"c15.directional.v5.\" + component\n\tobjectID, failure := a.c15.create(site, privateB4C15Operation(\"allocation\"))\n\tif failure != \"\" {\n\t\treturn nil, errors.New(string(failure))\n\t}\n\td.frameObjects[objectID] = site\n\tif component == \"response-frame\" {\n\t\td.lastResponseObject = objectID\n\t}\n\tp.occupied = true\n\tp.live += uint64(n)\n\tp.cumulative += uint64(n)\n\tp.allocations++\n\t// Reservation is committed before the only retained allocation. Raw aliases\n\t// and provider-element Views add no charge and never copy this backing.\n\tif component == \"response-frame\" { return early, nil }\n\treturn d.allocateBackingLocked(component, n), nil",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_RESPONSE_ALLOCATION_BOUNDARY",
+    "edge": "move actual response-frame allocation before quota and ownership checks, retaining the same returned backing"
+  },
+  {
+    "id": "request-frame-observation-omitted",
+    "path": "internal/lspwire/read_frame.go",
+    "old": "if !lease.Frame(\"request-frame\", n) {",
+    "new": "if false && !lease.Frame(\"request-frame\", n) {",
+    "witness": "EXACT32",
+    "assertion": "ASSERT_C4_EXACT32_COMPLETE_CORRESPONDENCE",
+    "edge": "dropping only the request observation breaks complete request/response correspondence"
+  },
+  {
+    "id": "partial-external-resource-relabel",
+    "path": "sessionruntime/sessionruntime.go",
+    "old": "if read.err != nil {\n\t\t\t\tfailure := session.SessionPoisoned",
+    "new": "if read.err != nil {\n\t\t\t\tfailure := session.ResourceExhausted",
+    "witness": "PARTIAL_EXTERNAL",
+    "assertion": "ASSERT_C4_PARTIAL_EXTERNAL_TYPED_FAILURE",
+    "edge": "relabel actual acquired truncated response failure as quota refusal"
+  },
+  {
+    "id": "partial-external-observation-relabel",
+    "path": "sessionruntime/call_hierarchy_directional_raw_v5_private.go",
+    "old": "o.Failure = string(a.failure)",
+    "new": "o.Failure = string(a.failure)\n\t\t\tif o.Method == \"callHierarchy/incomingCalls\" { o.Failure = string(session.ResourceExhausted) }",
+    "witness": "PARTIAL_EXTERNAL",
+    "assertion": "ASSERT_C4_PARTIAL_EXTERNAL_TYPED_FAILURE",
+    "edge": "relabel observation while typed Manager terminal remains SessionPoisoned"
   }
 ]

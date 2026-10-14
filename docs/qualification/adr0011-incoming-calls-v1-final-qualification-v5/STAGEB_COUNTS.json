@@ -1,0 +1,9 @@
+{
+  "actual_rows": 91,
+  "duplicates": 0,
+  "false_positive": 2,
+  "necessary": 78,
+  "omissions": 0,
+  "reuse": 11,
+  "unresolved": 0
+}

@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/sessionruntime"
 )
 
@@ -37,6 +38,21 @@ func New(runtime Runtime) acquisition.Client {
 		}
 		return result.Result, nil
 	})
+	if directional, ok := runtime.(interface {
+		RoundTripDirectionalPrivate(context.Context, sessionruntime.RoundTripRequest) (sessionruntime.RoundTripResult, directionalraw.Lease)
+	}); ok {
+		client.SetDirectionalPrivate(func(ctx context.Context, r acquisition.WireRequest) (directionalraw.Lease, error) {
+			deadline, _ := ctx.Deadline()
+			result, lease := directional.RoundTripDirectionalPrivate(ctx, sessionruntime.RoundTripRequest{SessionID: r.Context.SessionID, Generation: r.Context.Generation, Method: r.Method, Params: r.Params, Deadline: deadline, MaxMessages: r.MaxMessages, MaxBytes: int64(r.MaxBytes)})
+			if result.Failure != "" {
+				return lease, fmt.Errorf("%s", result.Failure)
+			}
+			if result.ServerError != nil {
+				return lease, fmt.Errorf("json-rpc error %d", result.ServerError.Code)
+			}
+			return lease, nil
+		})
+	}
 	supplier, ok := runtime.(documentRuntime)
 	if !ok {
 		return client

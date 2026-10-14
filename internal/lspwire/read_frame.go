@@ -3,8 +3,15 @@ package lspwire
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"hash"
+	"io"
+	"strconv"
+	"strings"
+
+	"lsp-trace/internal/directionalraw"
 )
 
 var (
@@ -117,4 +124,174 @@ func (r *Reader) ReadWithFrame() (Message, ReadFrameObservation, error) {
 		FrameBytes:  capture.bytes,
 		FrameSHA256: "sha256:" + hex.EncodeToString(capture.digest.Sum(nil)),
 	}, nil
+}
+
+// WriteDirectionalReserved builds exactly one owned frame. Prefix/header are
+// ephemeral encoding scratch; params is not re-marshaled. The lease allocator
+// reserves BEFORE the sole retained allocation, and body aliases that frame.
+func WriteDirectionalReserved(w io.Writer, id json.RawMessage, method string, params []byte, lease directionalraw.Lease, maxBodyBytes int64) (int64, ReadFrameObservation, error) {
+	if !json.Valid(params) || !directionalraw.Allowed(method) {
+		return 0, ReadFrameObservation{}, ErrInvalidMessage
+	}
+	prefix := `{"id":` + string(id) + `,"jsonrpc":"2.0","method":` + strconv.Quote(method) + `,"params":`
+	bodyLen := len(prefix) + len(params) + 1
+	if maxBodyBytes <= 0 {
+		maxBodyBytes = DefaultLimits().MaxBodyBytes
+	}
+	if int64(bodyLen) > maxBodyBytes {
+		return 0, ReadFrameObservation{}, ErrFrameTooLarge
+	}
+	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", bodyLen)
+	frame, err := lease.Allocate("request-frame", len(header)+bodyLen)
+	if err != nil {
+		h := sha256.New()
+		h.Write([]byte(header))
+		h.Write([]byte(prefix))
+		h.Write(params)
+		h.Write([]byte{'}'})
+		var sum [32]byte
+		copy(sum[:], h.Sum(nil))
+		lease.RefusedPrivate("request-frame", len(header)+bodyLen, sum)
+		return 0, ReadFrameObservation{}, err
+	}
+	copy(frame, header)
+	at := len(header)
+	at += copy(frame[at:], prefix)
+	at += copy(frame[at:], params)
+	frame[at] = '}'
+	n, err := w.Write(frame)
+	if n < 0 || n > len(frame) {
+		return 0, ReadFrameObservation{}, ErrInvalidMessage
+	}
+	if !lease.Frame("request-frame", n) {
+		return 0, ReadFrameObservation{}, ErrInvalidMessage
+	}
+	if err == nil && n != len(frame) {
+		err = io.ErrShortWrite
+	}
+	sum := sha256.Sum256(frame[:n])
+	writtenBody := n - len(header)
+	if writtenBody < 0 {
+		writtenBody = 0
+	}
+	return int64(writtenBody), ReadFrameObservation{FrameBytes: int64(n), FrameSHA256: fmt.Sprintf("sha256:%x", sum)}, err
+}
+
+// ReadDirectionalReserved uses bounded stack header scratch, then exactly one
+// Manager-reserved backing for original header+body. JSON fields are slices of
+// that backing, not RawMessage unmarshal copies. Malformed/partial bytes remain
+// owned until the generic terminal; ordinary Read is unchanged.
+func (r *Reader) ReadDirectionalReserved(maxBytes int64, lease directionalraw.Lease) (Message, ReadFrameObservation, []byte, error) {
+	var header [65536]byte
+	used := 0
+	length := -1
+	lineStart := 0
+	retainHeader := func(cause error) (Message, ReadFrameObservation, []byte, error) {
+		if used == 0 {
+			return Message{}, ReadFrameObservation{}, nil, cause
+		}
+		raw, e := lease.Allocate("response-frame", used)
+		if e != nil {
+			return Message{}, ReadFrameObservation{}, nil, e
+		}
+		copy(raw, header[:used])
+		lease.Frame("response-frame", used)
+		sum := sha256.Sum256(raw)
+		return Message{}, ReadFrameObservation{FrameBytes: int64(used), FrameSHA256: fmt.Sprintf("sha256:%x", sum)}, raw, cause
+	}
+	for {
+		if used >= len(header) || int64(used) >= r.limits.MaxHeaderBytes {
+			return retainHeader(ErrHeaderTooLarge)
+		}
+		c, err := r.r.ReadByte()
+		if err != nil {
+			return retainHeader(err)
+		}
+		header[used] = c
+		used++
+		if c != '\n' {
+			continue
+		}
+		line := strings.TrimRight(string(header[lineStart:used]), "\r\n")
+		lineStart = used
+		if line == "" {
+			break
+		}
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return retainHeader(ErrInvalidContentLength)
+		}
+		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
+			if length >= 0 {
+				return retainHeader(ErrDuplicateContentLength)
+			}
+			n, e := strconv.Atoi(strings.TrimSpace(value))
+			if e != nil || n < 0 {
+				return retainHeader(ErrInvalidContentLength)
+			}
+			length = n
+		}
+	}
+	if length < 0 {
+		return retainHeader(ErrMissingContentLength)
+	}
+	if int64(length) > r.limits.MaxBodyBytes || maxBytes <= int64(used) || int64(length) > maxBytes-int64(used) {
+		return retainHeader(ErrFrameTooLarge)
+	}
+	frame, err := lease.Allocate("response-frame", used+length)
+	if err != nil {
+		return Message{}, ReadFrameObservation{}, nil, err
+	}
+	copy(frame, header[:used])
+	n, err := io.ReadFull(r.r, frame[used:])
+	raw := frame[: used+n : used+n]
+	lease.Frame("response-frame", len(raw))
+	sum := sha256.Sum256(raw)
+	o := ReadFrameObservation{FrameBytes: int64(len(raw)), FrameSHA256: fmt.Sprintf("sha256:%x", sum)}
+	if err != nil {
+		return Message{}, o, raw, err
+	}
+	fields, err := directionalraw.Fields(frame[used:])
+	if err != nil {
+		return Message{}, o, raw, ErrMalformedJSON
+	}
+	var msg Message
+	for k, v := range fields {
+		switch k {
+		case "jsonrpc":
+			if json.Unmarshal(v, &msg.JSONRPC) != nil {
+				return Message{}, o, raw, ErrInvalidMessage
+			}
+		case "id":
+			msg.ID = v
+		case "method":
+			if json.Unmarshal(v, &msg.Method) != nil {
+				return Message{}, o, raw, ErrInvalidMessage
+			}
+		case "params":
+			msg.Params = v
+		case "result":
+			msg.Result = v
+		case "error":
+			var e RPCError
+			ef, er := directionalraw.Fields(v)
+			if er != nil {
+				return Message{}, o, raw, ErrInvalidMessage
+			}
+			if json.Unmarshal(ef["code"], &e.Code) != nil || json.Unmarshal(ef["message"], &e.Message) != nil {
+				return Message{}, o, raw, ErrInvalidMessage
+			}
+			e.Data = ef["data"]
+			msg.Error = &e
+		default:
+			return Message{}, o, raw, ErrInvalidMessage
+		}
+	}
+	if msg.JSONRPC != Version {
+		return Message{}, o, raw, ErrWrongVersion
+	}
+	if msg.Kind() == KindInvalid {
+		return Message{}, o, raw, ErrInvalidMessage
+	}
+	return msg, o, raw, nil
 }

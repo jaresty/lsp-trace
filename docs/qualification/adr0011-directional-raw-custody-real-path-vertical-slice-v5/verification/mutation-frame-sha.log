@@ -1,6 +1,7 @@
 === RUN   TestV5CausalExact32MiB
-    directional_v5_four_causal_private_test.go:355: ASSERT_C4_EXACT_ACQUIRED_DIGEST: {Method:textDocument/prepareCallHierarchy Ordinal:0 Length:190 SHA256:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] Component:request-frame Selected:false RequestID:1 Generation:1 Failure:}
---- FAIL: TestV5CausalExact32MiB (0.28s)
+    directional_v5_four_causal_private_test.go:361: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:366: ASSERT_C4_EXACT_ACQUIRED_DIGEST: {Method:textDocument/prepareCallHierarchy Ordinal:0 Length:190 SHA256:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] Component:request-frame Selected:false RequestID:1 Generation:1 Failure:}
+--- FAIL: TestV5CausalExact32MiB (0.32s)
 FAIL
-FAIL	lsp-trace/sessionruntime	0.597s
+FAIL	lsp-trace/sessionruntime	0.621s
 FAIL

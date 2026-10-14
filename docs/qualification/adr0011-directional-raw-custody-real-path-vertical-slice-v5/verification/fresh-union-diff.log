@@ -1,0 +1,653 @@
+diff --git a/incomingops/executor.go b/incomingops/executor.go
+index 15facd03..43150315 100644
+--- a/incomingops/executor.go
++++ b/incomingops/executor.go
+@@ -839,6 +839,9 @@ func (e *rpcError) Error() string {
+ }
+ 
+ func (c *SessionClient) call(parent context.Context, method string, params, target any) (bool, error) {
++	if directionalPrivateEnabled(parent, method) {
++		return c.callDirectionalPrivate(parent, method, params, target)
++	}
+ 	raw, err := json.Marshal(params)
+ 	if err != nil {
+ 		return false, err
+diff --git a/internal/acquisition/sessionclient/client.go b/internal/acquisition/sessionclient/client.go
+index 14cde030..df58aadc 100644
+--- a/internal/acquisition/sessionclient/client.go
++++ b/internal/acquisition/sessionclient/client.go
+@@ -10,6 +10,7 @@ import (
+ 	"sync/atomic"
+ 
+ 	"lsp-trace/internal/acquisition"
++	"lsp-trace/internal/directionalraw"
+ 	"lsp-trace/sessionruntime"
+ )
+ 
+@@ -37,6 +38,21 @@ func New(runtime Runtime) acquisition.Client {
+ 		}
+ 		return result.Result, nil
+ 	})
++	if directional, ok := runtime.(interface {
++		RoundTripDirectionalPrivate(context.Context, sessionruntime.RoundTripRequest) (sessionruntime.RoundTripResult, directionalraw.Lease)
++	}); ok {
++		client.SetDirectionalPrivate(func(ctx context.Context, r acquisition.WireRequest) (directionalraw.Lease, error) {
++			deadline, _ := ctx.Deadline()
++			result, lease := directional.RoundTripDirectionalPrivate(ctx, sessionruntime.RoundTripRequest{SessionID: r.Context.SessionID, Generation: r.Context.Generation, Method: r.Method, Params: r.Params, Deadline: deadline, MaxMessages: r.MaxMessages, MaxBytes: int64(r.MaxBytes)})
++			if result.Failure != "" {
++				return lease, fmt.Errorf("%s", result.Failure)
++			}
++			if result.ServerError != nil {
++				return lease, fmt.Errorf("json-rpc error %d", result.ServerError.Code)
++			}
++			return lease, nil
++		})
++	}
+ 	supplier, ok := runtime.(documentRuntime)
+ 	if !ok {
+ 		return client
+diff --git a/internal/acquisition/wire.go b/internal/acquisition/wire.go
+index 0d5871e9..4e7f2469 100644
+--- a/internal/acquisition/wire.go
++++ b/internal/acquisition/wire.go
+@@ -8,6 +8,7 @@ import (
+ 	"fmt"
+ 	"io"
+ 
++	"lsp-trace/internal/directionalraw"
+ 	"lsp-trace/internal/lsp"
+ )
+ 
+@@ -28,7 +29,19 @@ type callScope struct {
+ }
+ type callScopeKey struct{}
+ 
+-type WireClient struct{ roundTrip RoundTrip }
++type WireClient struct {
++	roundTrip   RoundTrip
++	directional func(context.Context, WireRequest) (directionalraw.Lease, error)
++}
++
++func (c *WireClient) SetDirectionalPrivate(fn func(context.Context, WireRequest) (directionalraw.Lease, error)) {
++	c.directional = fn
++}
++
++// BindDirectionalResponse captures lexical offsets before strict typed decode.
++func BindDirectionalResponse(lease directionalraw.Lease) error {
++	return lease.BindElementsPrivate()
++}
+ 
+ func NewWireClient(roundTrip RoundTrip) *WireClient { return &WireClient{roundTrip: roundTrip} }
+ func (c *WireClient) call(ctx context.Context, method string, params, target any) (bool, error) {
+@@ -40,6 +53,25 @@ func (c *WireClient) call(ctx context.Context, method string, params, target any
+ 	if err != nil {
+ 		return false, err
+ 	}
++	if _, enabled := directionalraw.FromContext(ctx); enabled && directionalraw.Allowed(method) {
++		if c.directional == nil {
++			return false, errors.New("directional runtime unavailable")
++		}
++		lease, e := c.directional(ctx, WireRequest{Context: scope.context, Method: method, Params: raw, MaxBytes: scope.limits.MaxResponseBytes, MaxMessages: scope.limits.MaxMessages})
++		if e != nil {
++			return false, e
++		}
++		if e = BindDirectionalResponse(lease); e != nil {
++			return false, e
++		}
++		if lease.Null() {
++			return true, nil
++		}
++		if e = validateWireShapeReaders(method, lease.ReaderPrivate); e != nil {
++			return false, e
++		}
++		return false, lease.Decode(target)
++	}
+ 	response, err := c.roundTrip(ctx, WireRequest{Context: scope.context, Method: method, Params: raw, MaxBytes: scope.limits.MaxResponseBytes, MaxMessages: scope.limits.MaxMessages})
+ 	if err != nil {
+ 		return false, err
+@@ -169,7 +201,10 @@ func decodeStrict(raw []byte, target any) error {
+ // are indistinguishable from a valid zero-based position. Bounded JSON nesting
+ // is also enforced before recursive standard-library decoding or normalization.
+ func validateWireShape(method string, raw []byte) error {
+-	decoder := json.NewDecoder(bytes.NewReader(raw))
++	return validateWireShapeReaders(method, func() io.Reader { return bytes.NewReader(raw) })
++}
++func validateWireShapeReaders(method string, reader func() io.Reader) error {
++	decoder := json.NewDecoder(reader())
+ 	depth := 0
+ 	for {
+ 		tok, e := decoder.Token()
+@@ -192,7 +227,7 @@ func validateWireShape(method string, raw []byte) error {
+ 		}
+ 	}
+ 	var rows []map[string]json.RawMessage
+-	if e := json.Unmarshal(raw, &rows); e != nil {
++	if e := json.NewDecoder(reader()).Decode(&rows); e != nil {
+ 		return e
+ 	}
+ 	type entry struct {
+diff --git a/internal/lspwire/read_frame.go b/internal/lspwire/read_frame.go
+index f83fe5e0..82bfc9ca 100644
+--- a/internal/lspwire/read_frame.go
++++ b/internal/lspwire/read_frame.go
+@@ -3,8 +3,15 @@ package lspwire
+ import (
+ 	"crypto/sha256"
+ 	"encoding/hex"
++	"encoding/json"
+ 	"errors"
++	"fmt"
+ 	"hash"
++	"io"
++	"strconv"
++	"strings"
++
++	"lsp-trace/internal/directionalraw"
+ )
+ 
+ var (
+@@ -118,3 +125,173 @@ func (r *Reader) ReadWithFrame() (Message, ReadFrameObservation, error) {
+ 		FrameSHA256: "sha256:" + hex.EncodeToString(capture.digest.Sum(nil)),
+ 	}, nil
+ }
++
++// WriteDirectionalReserved builds exactly one owned frame. Prefix/header are
++// ephemeral encoding scratch; params is not re-marshaled. The lease allocator
++// reserves BEFORE the sole retained allocation, and body aliases that frame.
++func WriteDirectionalReserved(w io.Writer, id json.RawMessage, method string, params []byte, lease directionalraw.Lease, maxBodyBytes int64) (int64, ReadFrameObservation, error) {
++	if !json.Valid(params) || !directionalraw.Allowed(method) {
++		return 0, ReadFrameObservation{}, ErrInvalidMessage
++	}
++	prefix := `{"id":` + string(id) + `,"jsonrpc":"2.0","method":` + strconv.Quote(method) + `,"params":`
++	bodyLen := len(prefix) + len(params) + 1
++	if maxBodyBytes <= 0 {
++		maxBodyBytes = DefaultLimits().MaxBodyBytes
++	}
++	if int64(bodyLen) > maxBodyBytes {
++		return 0, ReadFrameObservation{}, ErrFrameTooLarge
++	}
++	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", bodyLen)
++	frame, err := lease.Allocate("request-frame", len(header)+bodyLen)
++	if err != nil {
++		h := sha256.New()
++		h.Write([]byte(header))
++		h.Write([]byte(prefix))
++		h.Write(params)
++		h.Write([]byte{'}'})
++		var sum [32]byte
++		copy(sum[:], h.Sum(nil))
++		lease.RefusedPrivate("request-frame", len(header)+bodyLen, sum)
++		return 0, ReadFrameObservation{}, err
++	}
++	copy(frame, header)
++	at := len(header)
++	at += copy(frame[at:], prefix)
++	at += copy(frame[at:], params)
++	frame[at] = '}'
++	n, err := w.Write(frame)
++	if n < 0 || n > len(frame) {
++		return 0, ReadFrameObservation{}, ErrInvalidMessage
++	}
++	if !lease.Frame("request-frame", n) {
++		return 0, ReadFrameObservation{}, ErrInvalidMessage
++	}
++	if err == nil && n != len(frame) {
++		err = io.ErrShortWrite
++	}
++	sum := sha256.Sum256(frame[:n])
++	writtenBody := n - len(header)
++	if writtenBody < 0 {
++		writtenBody = 0
++	}
++	return int64(writtenBody), ReadFrameObservation{FrameBytes: int64(n), FrameSHA256: fmt.Sprintf("sha256:%x", sum)}, err
++}
++
++// ReadDirectionalReserved uses bounded stack header scratch, then exactly one
++// Manager-reserved backing for original header+body. JSON fields are slices of
++// that backing, not RawMessage unmarshal copies. Malformed/partial bytes remain
++// owned until the generic terminal; ordinary Read is unchanged.
++func (r *Reader) ReadDirectionalReserved(maxBytes int64, lease directionalraw.Lease) (Message, ReadFrameObservation, []byte, error) {
++	var header [65536]byte
++	used := 0
++	length := -1
++	lineStart := 0
++	retainHeader := func(cause error) (Message, ReadFrameObservation, []byte, error) {
++		if used == 0 {
++			return Message{}, ReadFrameObservation{}, nil, cause
++		}
++		raw, e := lease.Allocate("response-frame", used)
++		if e != nil {
++			return Message{}, ReadFrameObservation{}, nil, e
++		}
++		copy(raw, header[:used])
++		lease.Frame("response-frame", used)
++		sum := sha256.Sum256(raw)
++		return Message{}, ReadFrameObservation{FrameBytes: int64(used), FrameSHA256: fmt.Sprintf("sha256:%x", sum)}, raw, cause
++	}
++	for {
++		if used >= len(header) || int64(used) >= r.limits.MaxHeaderBytes {
++			return retainHeader(ErrHeaderTooLarge)
++		}
++		c, err := r.r.ReadByte()
++		if err != nil {
++			return retainHeader(err)
++		}
++		header[used] = c
++		used++
++		if c != '\n' {
++			continue
++		}
++		line := strings.TrimRight(string(header[lineStart:used]), "\r\n")
++		lineStart = used
++		if line == "" {
++			break
++		}
++		name, value, ok := strings.Cut(line, ":")
++		if !ok {
++			return retainHeader(ErrInvalidContentLength)
++		}
++		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
++			if length >= 0 {
++				return retainHeader(ErrDuplicateContentLength)
++			}
++			n, e := strconv.Atoi(strings.TrimSpace(value))
++			if e != nil || n < 0 {
++				return retainHeader(ErrInvalidContentLength)
++			}
++			length = n
++		}
++	}
++	if length < 0 {
++		return retainHeader(ErrMissingContentLength)
++	}
++	if int64(length) > r.limits.MaxBodyBytes || maxBytes <= int64(used) || int64(length) > maxBytes-int64(used) {
++		return retainHeader(ErrFrameTooLarge)
++	}
++	frame, err := lease.Allocate("response-frame", used+length)
++	if err != nil {
++		return Message{}, ReadFrameObservation{}, nil, err
++	}
++	copy(frame, header[:used])
++	n, err := io.ReadFull(r.r, frame[used:])
++	raw := frame[: used+n : used+n]
++	lease.Frame("response-frame", len(raw))
++	sum := sha256.Sum256(raw)
++	o := ReadFrameObservation{FrameBytes: int64(len(raw)), FrameSHA256: fmt.Sprintf("sha256:%x", sum)}
++	if err != nil {
++		return Message{}, o, raw, err
++	}
++	fields, err := directionalraw.Fields(frame[used:])
++	if err != nil {
++		return Message{}, o, raw, ErrMalformedJSON
++	}
++	var msg Message
++	for k, v := range fields {
++		switch k {
++		case "jsonrpc":
++			if json.Unmarshal(v, &msg.JSONRPC) != nil {
++				return Message{}, o, raw, ErrInvalidMessage
++			}
++		case "id":
++			msg.ID = v
++		case "method":
++			if json.Unmarshal(v, &msg.Method) != nil {
++				return Message{}, o, raw, ErrInvalidMessage
++			}
++		case "params":
++			msg.Params = v
++		case "result":
++			msg.Result = v
++		case "error":
++			var e RPCError
++			ef, er := directionalraw.Fields(v)
++			if er != nil {
++				return Message{}, o, raw, ErrInvalidMessage
++			}
++			if json.Unmarshal(ef["code"], &e.Code) != nil || json.Unmarshal(ef["message"], &e.Message) != nil {
++				return Message{}, o, raw, ErrInvalidMessage
++			}
++			e.Data = ef["data"]
++			msg.Error = &e
++		default:
++			return Message{}, o, raw, ErrInvalidMessage
++		}
++	}
++	if msg.JSONRPC != Version {
++		return Message{}, o, raw, ErrWrongVersion
++	}
++	if msg.Kind() == KindInvalid {
++		return Message{}, o, raw, ErrInvalidMessage
++	}
++	return msg, o, raw, nil
++}
+diff --git a/internal/slicer/discover.go b/internal/slicer/discover.go
+index bc3b2999..87769e90 100644
+--- a/internal/slicer/discover.go
++++ b/internal/slicer/discover.go
+@@ -9,6 +9,7 @@ import (
+ 	"fmt"
+ 	"sort"
+ 
++	"lsp-trace/internal/directionalraw"
+ 	"lsp-trace/internal/graph"
+ 	"lsp-trace/internal/lsp"
+ )
+@@ -158,7 +159,13 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
+ 		}
+ 		disposition.Status = "prepared"
+ 		result.PreparationAccounting.Prepared++
+-		for _, item := range items {
++		for ordinal, item := range items {
++			if _, enabled := directionalraw.FromContext(ctx); enabled {
++				if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "textDocument/prepareCallHierarchy", Ordinal: uint64(ordinal)}); !ok || selection.View().Len() == 0 {
++					result.Complete = false
++					return result
++				}
++			}
+ 			n := node(item)
+ 			if err := graph.ValidateItem(n.Item); err != nil {
+ 				disposition.Message = err.Error()
+@@ -226,7 +233,26 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
+ 			result.OutgoingTerminalItems = append(result.OutgoingTerminalItems, q.item)
+ 			continue
+ 		}
+-		sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
++		if _, enabled := directionalraw.FromContext(ctx); enabled {
++			type ordinalCall struct {
++				call    lsp.CallHierarchyOutgoingCall
++				ordinal uint64
++			}
++			ordered := make([]ordinalCall, len(calls))
++			for i, c := range calls {
++				ordered[i] = ordinalCall{c, uint64(i)}
++			}
++			sort.Slice(ordered, func(i, j int) bool { return node(ordered[i].call.To).ID < node(ordered[j].call.To).ID })
++			for i, bound := range ordered {
++				if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "callHierarchy/outgoingCalls", Ordinal: bound.ordinal}); !ok || selection.View().Len() == 0 {
++					result.Complete = false
++					return result
++				}
++				calls[i] = bound.call
++			}
++		} else {
++			sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
++		}
+ 		omittedCalleeIDs := make([]string, 0)
+ 		for itemIndex, call := range calls {
+ 			callee := node(call.To)
+diff --git a/internal/traverse/traverse.go b/internal/traverse/traverse.go
+index 2b7bde87..8a0e111c 100644
+--- a/internal/traverse/traverse.go
++++ b/internal/traverse/traverse.go
+@@ -9,6 +9,7 @@ import (
+ 	"fmt"
+ 	"sort"
+ 
++	"lsp-trace/internal/directionalraw"
+ 	"lsp-trace/internal/graph"
+ 	"lsp-trace/internal/lsp"
+ )
+@@ -143,7 +144,13 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
+ 	expanded := map[string]bool{}
+ 	edgeIndex := map[[2]string]int{}
+ 	queue := make([]queued, 0, len(items))
+-	for _, item := range items {
++	for ordinal, item := range items {
++		if _, enabled := directionalraw.FromContext(ctx); enabled {
++			if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "textDocument/prepareCallHierarchy", Ordinal: uint64(ordinal)}); !ok || selection.View().Len() == 0 {
++				result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.InvalidServerResponse, Message: "directional prepare selection unavailable"})
++				return result
++			}
++		}
+ 		n := node(item, newNode)
+ 		if err := graph.ValidateItem(n.Item); err != nil {
+ 			result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.InvalidServerResponse, Message: err.Error()})
+@@ -214,7 +221,13 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
+ 			continue
+ 		}
+ 		omittedCallerIDs := make([]string, 0)
+-		for _, call := range calls {
++		for ordinal, call := range calls {
++			if _, enabled := directionalraw.FromContext(ctx); enabled {
++				if selection, ok := directionalraw.Select(ctx, directionalraw.Request{Method: "callHierarchy/incomingCalls", Ordinal: uint64(ordinal)}); !ok || selection.View().Len() == 0 {
++					result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.InvalidServerResponse, Message: "directional incoming selection unavailable"})
++					return result
++				}
++			}
+ 			caller := node(call.From, newNode)
+ 			if err := graph.ValidateItem(caller.Item); err != nil {
+ 				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.InvalidServerResponse, Message: "rejected incoming caller " + caller.ID + ": " + err.Error()})
+diff --git a/sessionruntime/b4_definition_private.go b/sessionruntime/b4_definition_private.go
+index 58925914..8d476933 100644
+--- a/sessionruntime/b4_definition_private.go
++++ b/sessionruntime/b4_definition_private.go
+@@ -119,10 +119,11 @@ type privateB4ReservationC17 struct {
+ }
+ 
+ type privateB4Transaction struct {
+-	legacy      *privateB4Reservation
+-	c16         *privateB4ReservationC16
+-	c17         *privateB4ReservationC17
+-	workAccount *adr0011work.Account
++	directionalV5 *privateDirectionalCallV5
++	legacy        *privateB4Reservation
++	c16           *privateB4ReservationC16
++	c17           *privateB4ReservationC17
++	workAccount   *adr0011work.Account
+ }
+ 
+ type privateB4Reservation struct {
+diff --git a/sessionruntime/b4_explicit_bytes_c15_private.go b/sessionruntime/b4_explicit_bytes_c15_private.go
+index 05018649..01e81230 100644
+--- a/sessionruntime/b4_explicit_bytes_c15_private.go
++++ b/sessionruntime/b4_explicit_bytes_c15_private.go
+@@ -132,6 +132,7 @@ type privateB4ByteAccountV2 struct {
+ 	c15BackingSiteID   string
+ 	c15Leases          map[privateB4ByteLease]privateB4C15LeaseState
+ 	c15ZeroLeases      []privateB4C15LeaseState
++	directionalV5      privateDirectionalPartitionV5
+ }
+ 
+ type privateB4ByteLeaseV2 struct {
+diff --git a/sessionruntime/b4_owned_method_pair_lease.go b/sessionruntime/b4_owned_method_pair_lease.go
+index 858172a5..6a1a2ef7 100644
+--- a/sessionruntime/b4_owned_method_pair_lease.go
++++ b/sessionruntime/b4_owned_method_pair_lease.go
+@@ -495,6 +495,7 @@ type callHierarchyLayer1GenericAttemptLineage struct {
+ 	finished                    bool
+ }
+ type callHierarchyLayer1GenericOwner struct {
++	directionalV5                             *privateDirectionalV5
+ 	mu                                        sync.Mutex
+ 	cond                                      sync.Cond
+ 	observation                               callHierarchyLayer1GenericObservation
+@@ -656,6 +657,9 @@ func (o *callHierarchyLayer1GenericOwner) releaseLocked() bool {
+ 		return false
+ 	}
+ 	o.releaseStarted = true
++	if o.directionalV5 != nil {
++		o.directionalV5.reservation.Terminate()
++	}
+ 	o.observation = callHierarchyLayer1GenericObservation{}
+ 	o.released = true
+ 	o.cond.Broadcast()
+diff --git a/sessionruntime/sessionruntime.go b/sessionruntime/sessionruntime.go
+index 76eada33..1a5154ba 100644
+--- a/sessionruntime/sessionruntime.go
++++ b/sessionruntime/sessionruntime.go
+@@ -26,6 +26,7 @@ import (
+ 	"lsp-trace/internal/adr0011c18"
+ 	"lsp-trace/internal/adr0011cobserve"
+ 	"lsp-trace/internal/adr0011work"
++	"lsp-trace/internal/directionalraw"
+ 	"lsp-trace/internal/lspwire"
+ 	"lsp-trace/internal/manageddiagnostic"
+ 	"lsp-trace/internal/managedprocess"
+@@ -243,13 +244,14 @@ type Request struct {
+ // RoundTripRequest describes one transport-neutral JSON-RPC transaction against
+ // an exact session generation.
+ type RoundTripRequest struct {
+-	SessionID   string
+-	Generation  uint64
+-	Method      string
+-	Params      json.RawMessage
+-	Deadline    time.Time
+-	MaxMessages int
+-	MaxBytes    int64
++	directionalV5 *privateDirectionalCallV5
++	SessionID     string
++	Generation    uint64
++	Method        string
++	Params        json.RawMessage
++	Deadline      time.Time
++	MaxMessages   int
++	MaxBytes      int64
+ 	// Private default-off in-memory D/R query/result observation, not a receipt.
+ 	CaptureOwnedMethodPair            bool                                 `json:"-"`
+ 	callHierarchyLayer1               callHierarchyLayer1RequestAttachment `json:"-"`
+@@ -700,6 +702,7 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
+ }
+ 
+ type RoundTripResult struct {
++	directionalV5                     *privateDirectionalCallV5
+ 	Key                               lspwire.RequestKey
+ 	DiagnosticOperation               DiagnosticOperationHandle `json:"-"`
+ 	Result                            json.RawMessage
+@@ -797,6 +800,9 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
+ }
+ 
+ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool, transaction *privateB4Transaction) RoundTripResult {
++	if req.directionalV5 != nil && (transaction == nil || transaction.directionalV5 != req.directionalV5) {
++		return RoundTripResult{Failure: session.ToolNotImplemented}
++	}
+ 	var private *privateB4Reservation
+ 	if transaction != nil {
+ 		private = transaction.legacy
+@@ -890,7 +896,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 			private.session = r
+ 		}
+ 	}
++	if failure := m.admitDirectionalV5Locked(req); failure != "" {
++		m.mu.Unlock()
++		return RoundTripResult{Failure: failure}
++	}
++	// Do not begin an unowned directional transaction if admission installation
++	// is absent. This is a deterministic pre-pending guard, not a replacement
++	// admission path: only admitDirectionalV5Locked may install the authority.
++	if req.directionalV5 != nil && (req.directionalV5.execution.account == nil || req.directionalV5.execution.owner == nil || !req.directionalV5.execution.reservation.Attached()) {
++		m.mu.Unlock()
++		return RoundTripResult{Failure: session.ToolNotImplemented}
++	}
+ 	key := r.pending.Begin(req.Generation)
++	if req.directionalV5 != nil {
++		req.directionalV5.admit(key, req.Method)
++	}
+ 	if attempt := req.callHierarchyLayer1GenericAttempt; attempt != nil {
+ 		attempt.admit(key, callHierarchyLayer1GenericBeforeSnapshot{ledger: req.callHierarchyLayer1.ledger})
+ 	}
+@@ -922,7 +942,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 	}
+ 	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
+ 	started := m.now()
+-	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
++	result := RoundTripResult{directionalV5: req.directionalV5, Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
+ 	var privateRetainedNotifications []lspwire.Message
+ 	var privateRetainedResponses []lspwire.Message
+ 	maxMessages := req.MaxMessages
+@@ -999,7 +1019,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 	var marshalErr error
+ 	var outboundTransport privateB4ByteLeaseV2
+ 	owner := &ownedTransport{child: child}
+-	if custodialPrivateB4 {
++	if req.directionalV5 != nil {
++		// Directional encoder reserves and writes one exact frame below.
++	} else if custodialPrivateB4 {
+ 		var failure session.Failure
+ 		requestBody, outboundTransport, failure, marshalErr = encodePrivateB4Request(requestMessage, private.explicitBytes, m.wire, m.b4OutboundHook)
+ 		if failure != "" || marshalErr != nil {
+@@ -1035,7 +1057,18 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 	if custodialPrivateB4 || req.callHierarchyLayer1GenericAttempt != nil {
+ 		writeRequest = func() error { return writer.WriteEncodedBodyPrivate(requestBody) }
+ 	}
++	if req.directionalV5 != nil {
++		writeRequest = func() error {
++			bodyBytes, frame, err := lspwire.WriteDirectionalReserved(checkedWriter{child.Stdin()}, id, req.Method, req.Params, req.directionalV5.lease, m.wire.MaxBodyBytes)
++			result.RequestBytes = bodyBytes
++			result.requestWrite = &RequestWriteObservation{SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method, FrameBytes: frame.FrameBytes, FrameSHA256: frame.FrameSHA256}
++			return err
++		}
++	}
+ 	if err := owner.run(ctx, writeRequest); err != nil {
++		if req.directionalV5 != nil && errors.Is(err, directionalraw.ErrReservationRefused) {
++			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, false)
++		}
+ 		failure := contextFailure(ctx)
+ 		if failure == "" {
+ 			failure = session.SessionPoisoned
+@@ -1049,9 +1082,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 	if private != nil && !private.nonCustodial && m.b4AfterWriteHook != nil {
+ 		m.b4AfterWriteHook(private.explicitBytes)
+ 	}
+-	result.requestWrite = &RequestWriteObservation{
+-		SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
+-		FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
++	if req.directionalV5 == nil {
++		result.requestWrite = &RequestWriteObservation{
++			SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
++			FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
++		}
+ 	}
+ 	if result.callHierarchyLayer1GenericAttempt != nil {
+ 		if raw, retained := writeCapture.retainedFrame(); retained {
+@@ -1123,6 +1158,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+ 		}
+ 		go func() {
++			if req.directionalV5 != nil {
++				msg, frame, raw, err := reader.ReadDirectionalReserved(maxBytes, req.directionalV5.lease)
++				reads <- readResult{message: msg, frame: frame, raw: raw, bodyBytes: int64(len(raw)), retained: raw != nil, err: err}
++				return
++			}
+ 			if privateReader != nil {
+ 				msg, err := privateReader.ReadFrame()
+ 				if m.cWireObserver != nil {
+@@ -1199,7 +1239,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 				}
+ 			}
+ 			bodyBytes := read.bodyBytes
+-			if privateReader == nil {
++			if privateReader == nil && req.directionalV5 == nil {
+ 				body, _ := json.Marshal(read.message)
+ 				bodyBytes = int64(len(body))
+ 			}
+@@ -1330,6 +1370,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
+ 			}
+ 			if private != nil && !private.nonCustodial && private.resultOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
+ 				result.Result = private.capture.Result
++			} else if req.directionalV5 != nil {
++				if read.message.Kind() == lspwire.KindSuccessResponse && !req.directionalV5.lease.Result(read.message.Result) {
++					return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
++				}
++				result.Result = nil
+ 			} else {
+ 				result.Result = append(json.RawMessage(nil), read.message.Result...)
+ 				if private != nil && read.message.Kind() == lspwire.KindSuccessResponse {
+@@ -1501,6 +1546,10 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
+ 		result, genericTerminal = m.publishCallHierarchyLayer1GenericOwnerLocked(result, newCallHierarchyLayer1GenericOwner(observation))
+ 	}
+ 	result.callHierarchyLayer1GenericAttempt = nil
++	if result.directionalV5 != nil {
++		result.directionalV5.finish(failure)
++		result.directionalV5 = nil
++	}
+ 	m.workers--
+ 	select {
+ 	case m.workerDone <- struct{}{}:
+@@ -1562,6 +1611,7 @@ type privateB4DecodedTestHooks struct {
+ }
+ 
+ type Manager struct {
++	directionalV5                                *privateDirectionalV5
+ 	mu                                           sync.Mutex
+ 	limits                                       Limits
+ 	wire                                         lspwire.Limits

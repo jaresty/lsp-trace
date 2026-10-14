@@ -1,0 +1,27 @@
+{
+  "authority": false,
+  "binding": "ADR0011_V5_REFRAME",
+  "deferred_not_required": [
+    "broad aggregate/race/C15 scenarios beyond accepted StageB and four witnesses"
+  ],
+  "files": [
+    "README.md",
+    "REVIEW_REQUEST.md",
+    "MANIFEST.json",
+    "RESULT.json",
+    "SOURCE_POST_HASHES_EXACT14.json",
+    "STAGEB_COUNTS.json",
+    "current.patch",
+    "CHECKSUMS.sha256",
+    "run_final_qualification.py",
+    "verify_final_qualification.py",
+    "logs/",
+    "receipts/"
+  ],
+  "head": "49334ce23de37c0094f50d21d57ab251a46130ca",
+  "implementation_go": false,
+  "package": "adr0011-incoming-calls-v1-final-qualification-v5",
+  "production_go": false,
+  "self_go": false,
+  "source": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m"
+}

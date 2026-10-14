@@ -1,0 +1,9 @@
+{
+  "detects_deleted_row": true,
+  "detects_duplicated_row": true,
+  "detects_extra_unclassified_candidate": true,
+  "detects_missing_actual_candidate": true,
+  "detects_missing_required_invariant": true,
+  "detects_reclassification": true,
+  "detects_source_drift": true
+}

@@ -1,0 +1,4 @@
+=== RUN   TestADR0011HistoricalOmittedCallsOnlyProcessByteBaseline
+--- PASS: TestADR0011HistoricalOmittedCallsOnlyProcessByteBaseline (0.55s)
+PASS
+ok  	lsp-trace/cmd/lsp-trace	0.767s

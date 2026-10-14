@@ -839,6 +839,9 @@ func (e *rpcError) Error() string {
 }
 
 func (c *SessionClient) call(parent context.Context, method string, params, target any) (bool, error) {
+	if directionalPrivateEnabled(parent, method) {
+		return c.callDirectionalPrivate(parent, method, params, target)
+	}
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return false, err

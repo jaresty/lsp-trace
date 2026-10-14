@@ -1,0 +1,15 @@
+=== RUN   TestIncomingShuffledResponsesProduceIdenticalCanonicalJSON
+--- PASS: TestIncomingShuffledResponsesProduceIdenticalCanonicalJSON (0.00s)
+=== RUN   TestIncomingExactGraphParityAndDeterminism
+    traverse_test.go:186: GUARD_PROCEDURE: TestIncomingExactGraphParityAndDeterminism
+    traverse_test.go:187: ASSERT_EXACT_GRAPH_ORDERING_PARITY
+    traverse_test.go:188: ASSERT_EXACT_GRAPH_ACCOUNTING_PARITY
+    traverse_test.go:189: ASSERT_EXACT_TERMINAL_PARITY
+    traverse_test.go:190: ASSERT_EXACT_CALLSITE_PARITY
+--- PASS: TestIncomingExactGraphParityAndDeterminism (0.00s)
+=== RUN   TestIncomingSchemaV2CompletenessTerminalProvenanceAndQuality
+--- PASS: TestIncomingSchemaV2CompletenessTerminalProvenanceAndQuality (0.00s)
+=== RUN   TestIncomingSchemaV1CompatibilityProjection
+--- PASS: TestIncomingSchemaV1CompatibilityProjection (0.00s)
+PASS
+ok  	lsp-trace/internal/traverse	0.149s

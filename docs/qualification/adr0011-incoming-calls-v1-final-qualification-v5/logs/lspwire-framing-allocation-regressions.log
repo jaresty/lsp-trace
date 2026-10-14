@@ -1,0 +1,60 @@
+=== RUN   TestOrdinaryReadWithFrameCharacterizationUnchanged
+--- PASS: TestOrdinaryReadWithFrameCharacterizationUnchanged (0.00s)
+=== RUN   TestSuccessorCaptureIsExplicitAndOnceBeforeDecode
+--- PASS: TestSuccessorCaptureIsExplicitAndOnceBeforeDecode (0.00s)
+=== RUN   TestReadWithFrameRetainsExactConsumedFrameNotDecodedReserialization
+    read_frame_test.go:36: ASSERT_LSP_READ_EXACT_FRAME: PASS variant=0
+    read_frame_test.go:36: ASSERT_LSP_READ_EXACT_FRAME: PASS variant=1
+--- PASS: TestReadWithFrameRetainsExactConsumedFrameNotDecodedReserialization (0.00s)
+=== RUN   TestReadWithExactFrameReturnsBoundedExactBytes
+    read_frame_test.go:53: ASSERT_ADR0011_EXACT_FRAME_SUCCESS: PASS variant=0
+    read_frame_test.go:53: ASSERT_ADR0011_EXACT_FRAME_SUCCESS: PASS variant=1
+--- PASS: TestReadWithExactFrameReturnsBoundedExactBytes (0.00s)
+=== RUN   TestReadWithExactFrameCapAndPreflight
+    read_frame_test.go:69: ASSERT_ADR0011_EXACT_FRAME_PREFLIGHT: PASS
+    read_frame_test.go:69: ASSERT_ADR0011_EXACT_FRAME_PREFLIGHT: PASS
+--- PASS: TestReadWithExactFrameCapAndPreflight (0.00s)
+=== RUN   TestReadWithExactFrameCapWithholdsOutput
+    read_frame_test.go:80: ASSERT_ADR0011_EXACT_FRAME_BOUND: PASS
+    read_frame_test.go:80: ASSERT_ADR0011_EXACT_FRAME_BOUND: PASS
+--- PASS: TestReadWithExactFrameCapWithholdsOutput (0.00s)
+=== RUN   TestReadWithExactFrameWithholdsFailedReads
+    read_frame_test.go:90: ASSERT_ADR0011_EXACT_FRAME_FAILED_READ: PASS
+    read_frame_test.go:90: ASSERT_ADR0011_EXACT_FRAME_FAILED_READ: PASS
+--- PASS: TestReadWithExactFrameWithholdsFailedReads (0.00s)
+=== RUN   TestReadWithFrameIfWithinPreservesOverCapMessageAndNextFrame
+    read_frame_test.go:108: ASSERT_ADR0011_DEFERRED_UNSELECTED_MESSAGE: PASS
+    read_frame_test.go:113: ASSERT_ADR0011_DEFERRED_SELECTED_FRAME: PASS
+--- PASS: TestReadWithFrameIfWithinPreservesOverCapMessageAndNextFrame (0.00s)
+=== RUN   TestReadWithFrameIfWithinPreflightAndMalformedWithhold
+    read_frame_test.go:127: ASSERT_ADR0011_DEFERRED_PREFLIGHT: PASS
+    read_frame_test.go:133: ASSERT_ADR0011_DEFERRED_FAILED_READ: PASS
+    read_frame_test.go:133: ASSERT_ADR0011_DEFERRED_FAILED_READ: PASS
+--- PASS: TestReadWithFrameIfWithinPreflightAndMalformedWithhold (0.00s)
+=== RUN   TestReadWithFrameWithholdsIncompleteOrInvalidFrames
+=== RUN   TestReadWithFrameWithholdsIncompleteOrInvalidFrames/bad-header
+    read_frame_test.go:150: ASSERT_LSP_READ_NO_FAILED_FRAME: PASS
+=== RUN   TestReadWithFrameWithholdsIncompleteOrInvalidFrames/short-body
+    read_frame_test.go:150: ASSERT_LSP_READ_NO_FAILED_FRAME: PASS
+=== RUN   TestReadWithFrameWithholdsIncompleteOrInvalidFrames/malformed-json
+    read_frame_test.go:150: ASSERT_LSP_READ_NO_FAILED_FRAME: PASS
+=== RUN   TestReadWithFrameWithholdsIncompleteOrInvalidFrames/wrong-version
+    read_frame_test.go:150: ASSERT_LSP_READ_NO_FAILED_FRAME: PASS
+=== RUN   TestReadWithFrameWithholdsIncompleteOrInvalidFrames/invalid-message
+    read_frame_test.go:150: ASSERT_LSP_READ_NO_FAILED_FRAME: PASS
+--- PASS: TestReadWithFrameWithholdsIncompleteOrInvalidFrames (0.00s)
+    --- PASS: TestReadWithFrameWithholdsIncompleteOrInvalidFrames/bad-header (0.00s)
+    --- PASS: TestReadWithFrameWithholdsIncompleteOrInvalidFrames/short-body (0.00s)
+    --- PASS: TestReadWithFrameWithholdsIncompleteOrInvalidFrames/malformed-json (0.00s)
+    --- PASS: TestReadWithFrameWithholdsIncompleteOrInvalidFrames/wrong-version (0.00s)
+    --- PASS: TestReadWithFrameWithholdsIncompleteOrInvalidFrames/invalid-message (0.00s)
+=== RUN   TestCloneSuccessorMessageOwnedReservesExactCapacityBeforeIndependentClone
+--- PASS: TestCloneSuccessorMessageOwnedReservesExactCapacityBeforeIndependentClone (0.00s)
+=== RUN   TestCloneSuccessorMessageOwnedRefusalHasZeroClone
+--- PASS: TestCloneSuccessorMessageOwnedRefusalHasZeroClone (0.00s)
+=== RUN   TestSuccessorIngressOriginalFrameLeaseTransfersExactBacking
+--- PASS: TestSuccessorIngressOriginalFrameLeaseTransfersExactBacking (0.00s)
+=== RUN   TestSuccessorIngressOriginalFrameRefusalPrecedesCapture
+--- PASS: TestSuccessorIngressOriginalFrameRefusalPrecedesCapture (0.00s)
+PASS
+ok  	lsp-trace/internal/lspwire	0.165s

@@ -1,0 +1,8 @@
+=== RUN   TestDiscoverPreparedUsesSameOutgoingBFS
+--- PASS: TestDiscoverPreparedUsesSameOutgoingBFS (0.00s)
+=== RUN   TestDiscoverCanonicalizesAliasesAcrossOutgoingResponses
+--- PASS: TestDiscoverCanonicalizesAliasesAcrossOutgoingResponses (0.00s)
+=== RUN   TestDiscoverExactDepthFrontierIsDeterministicAndDeduplicated
+--- PASS: TestDiscoverExactDepthFrontierIsDeterministicAndDeduplicated (0.00s)
+PASS
+ok  	lsp-trace/internal/slicer	0.138s

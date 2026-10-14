@@ -1,0 +1,7 @@
+=== RUN   TestV5CausalPartialExternalFailure
+    directional_v5_four_causal_private_test.go:457: ASSERT_C4_PRODUCTION_ENTRY PASS
+    directional_v5_four_causal_private_test.go:477: ASSERT_C4_PARTIAL_EXTERNAL_TYPED_FAILURE: component=request-frame label="RESOURCE_EXHAUSTED" expected="SESSION_POISONED"
+--- FAIL: TestV5CausalPartialExternalFailure (0.00s)
+FAIL
+FAIL	lsp-trace/sessionruntime	0.312s
+FAIL
