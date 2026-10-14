@@ -1,0 +1,3 @@
+Content-Length: 166
+
+{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-incoming-calls-v1-6yiY4m/acquisitionops/executor.go"}}}

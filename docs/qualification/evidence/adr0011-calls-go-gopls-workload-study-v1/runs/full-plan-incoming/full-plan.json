@@ -1,0 +1,12 @@
+{
+  "authority": 0,
+  "batch_count": 118,
+  "batch_size": 50,
+  "batches_digest": "c68e8948a4ef41afe3f9a18ea40269fa1f622b80c7ea8cb58a434986bdf7f0fb",
+  "direction": "incoming",
+  "mode": "DRY_FULL_PLAN",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.full-plan.v1",
+  "target_count": 5900,
+  "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+}

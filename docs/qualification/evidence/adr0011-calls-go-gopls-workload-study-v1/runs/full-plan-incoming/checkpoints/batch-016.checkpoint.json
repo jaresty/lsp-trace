@@ -1,0 +1,9 @@
+{
+  "batch_index": 16,
+  "direction": "incoming",
+  "finalized": false,
+  "input_digest": "3336bcd0baff8131b9d308ad340b5b5d3d4ce99a0035ab6491b4f66ba4a1bd25",
+  "output_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.batch-checkpoint.v1",
+  "status": "PLANNED"
+}

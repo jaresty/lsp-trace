@@ -1,0 +1,3 @@
+Content-Length: 319
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"2026/10/13 19:23:22 go/packages.Load #1\n\tview_id=\"1\"\n\tsnapshot=0\n\tdirectory=/private/tmp/adr0011-incoming-calls-v1-6yiY4m\n\tquery=[/private/tmp/adr0011-incoming-calls-v1-6yiY4m/... builtin]\n\tpackages=553\n\tduration=388.98375ms\n"}}

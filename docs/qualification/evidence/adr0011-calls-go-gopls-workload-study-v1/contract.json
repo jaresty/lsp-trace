@@ -1,0 +1,191 @@
+{
+  "schema": "lsp-trace.adr0011.calls.go.gopls.workload_study.contract.v1",
+  "package_id": "adr0011-calls-go-gopls-workload-study-v1",
+  "status": "CONTRACT_AUTHORED_FULL_WORKLOAD_NOT_RUN",
+  "authority": {
+    "manager_custody_claimed": false,
+    "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+    "profile_go": "NOT_REQUESTED",
+    "evidence_authority": 0,
+    "completeness": "UNKNOWN"
+  },
+  "corpus_identity": {
+    "qualification_corpus_commit": "7f09e5357b117d20449fc16097631e32d4eead7f",
+    "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+    "target_corpus_manifest_sha256": "316afe2501aebe4195894d1334be566ae49eb32c88276ebee7b2e4d86062f44d",
+    "target_count": 5900,
+    "target_order": "TSV_ROW_ORDER_AFTER_HEADER_IS_ORDINAL_ORDER",
+    "target_json": {
+      "path": "docs/qualification/adr0011-callhierarchy-target-corpus-v1/targets.json",
+      "sha256": "301fdff765cb31a47900c9fc3bf6af8a02d27c91c7e027bfb5e3f3ebabadc16e"
+    },
+    "target_tsv": {
+      "path": "docs/qualification/adr0011-callhierarchy-target-corpus-v1/targets.tsv",
+      "sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4",
+      "line_count_including_header": 5901
+    }
+  },
+  "position_mapping": {
+    "function": "UTF16Position(source_bytes, first symbol occurrence within verified target byte range)",
+    "source_hash_required_before_mapping": true,
+    "zero_based_lsp": true,
+    "first_target": {
+      "id": "931e3eb151c212c8ceaee1371cb26fb2b0688196b1e15452890c64bb52ff2d9e",
+      "source_path": "acquisitionops/executor.go",
+      "byte_start": 1117,
+      "symbol_byte_offset": 1122,
+      "range_start_lsp_position": {
+        "line": 35,
+        "character": 0
+      },
+      "expected_lsp_position": {
+        "line": 35,
+        "character": 5
+      },
+      "expected_identifier": "DecodeManifest"
+    }
+  },
+  "prepared_selection": {
+    "required_match": [
+      "uri",
+      "symbol",
+      "target_position_contained_by_selectionRange_or_range"
+    ],
+    "zero_match_disposition": "REFUSED_SELECTED_ITEM_TARGET_MISMATCH",
+    "multi_match_disposition": "REFUSED_PREPARE_AMBIGUOUS"
+  },
+  "namespaces": {
+    "generic": "lsp-trace.adr0011.calls.generic.workload.v1",
+    "provider": "lsp-trace.adr0011.calls.go.gopls.provider.v1",
+    "incoming": "lsp-trace.adr0011.calls.go.gopls.incoming.workload.v1",
+    "outgoing": "lsp-trace.adr0011.calls.go.gopls.outgoing.workload.v1"
+  },
+  "lsp_methods": {
+    "prepare": "textDocument/prepareCallHierarchy",
+    "incoming": "callHierarchy/incomingCalls",
+    "outgoing": "callHierarchy/outgoingCalls"
+  },
+  "directions": {
+    "incoming": {
+      "ledger": "ledgers/incoming.attempts.jsonl",
+      "raw_namespace": "raw/incoming",
+      "authority_inheritance_from_outgoing": false,
+      "inference_from_outgoing_permitted": false
+    },
+    "outgoing": {
+      "ledger": "ledgers/outgoing.attempts.jsonl",
+      "raw_namespace": "raw/outgoing",
+      "authority_inheritance_from_incoming": false,
+      "inference_from_incoming_permitted": false
+    }
+  },
+  "limits": {
+    "max_targets_full": 5900,
+    "batch_size": 50,
+    "smoke_max_targets_default": 1,
+    "smoke_max_targets_hard": 5,
+    "request_timeout_seconds": 30,
+    "initialize_timeout_seconds": 60,
+    "max_raw_response_bytes": 33554432,
+    "existing_ceilings_changed": false
+  },
+  "document_lifecycle": {
+    "did_open_cache": "PER_URI_VERSION_NO_DUPLICATE_DIDOPEN",
+    "did_close": "DETERMINISTIC_ON_SHUTDOWN_OR_BOUNDARY",
+    "duplicate_did_open_per_uri_version_permitted": false
+  },
+  "dispositions": [
+    "STARTED",
+    "ABANDONED",
+    "SUCCEEDED_EMPTY",
+    "SUCCEEDED_NON_EMPTY",
+    "REFUSED_SOURCE_HASH_MISMATCH",
+    "REFUSED_PREPARE_EMPTY",
+    "REFUSED_PREPARE_AMBIGUOUS",
+    "REFUSED_SELECTED_ITEM_TARGET_MISMATCH",
+    "REFUSED_GOPLS_UNAVAILABLE",
+    "FAILED_LSP_ERROR",
+    "FAILED_TIMEOUT",
+    "FAILED_EXCEPTION"
+  ],
+  "terminal_attempt_dispositions": [
+    "ABANDONED",
+    "SUCCEEDED_EMPTY",
+    "SUCCEEDED_NON_EMPTY",
+    "REFUSED_SOURCE_HASH_MISMATCH",
+    "REFUSED_PREPARE_EMPTY",
+    "REFUSED_PREPARE_AMBIGUOUS",
+    "REFUSED_SELECTED_ITEM_TARGET_MISMATCH",
+    "REFUSED_GOPLS_UNAVAILABLE",
+    "FAILED_LSP_ERROR",
+    "FAILED_TIMEOUT",
+    "FAILED_EXCEPTION"
+  ],
+  "final_ordinal_dispositions": [
+    "SUCCEEDED_EMPTY",
+    "SUCCEEDED_NON_EMPTY",
+    "REFUSED_SOURCE_HASH_MISMATCH",
+    "REFUSED_PREPARE_EMPTY",
+    "REFUSED_PREPARE_AMBIGUOUS",
+    "REFUSED_SELECTED_ITEM_TARGET_MISMATCH",
+    "REFUSED_GOPLS_UNAVAILABLE",
+    "FAILED_LSP_ERROR",
+    "FAILED_TIMEOUT",
+    "FAILED_EXCEPTION"
+  ],
+  "accounting": {
+    "exactly_one_final_disposition_per_ordinal": true,
+    "started_without_terminal_must_be_abandoned_before_retry": true,
+    "reject_any_append_after_final_disposition": true,
+    "append_only_attempts": true,
+    "strict_attempt_ordering": true,
+    "sequential_ordinals": true,
+    "batch_size": 50,
+    "checkpoint_restart_permitted": true,
+    "abandoned_is_terminal_attempt_not_final_ordinal_when_retrying": true
+  },
+  "storage": {
+    "raw_bytes_preferred": true,
+    "immutable_digest_offset_reference_allowed": true,
+    "digest": "sha256",
+    "request_response_bytes_are_directional": true,
+    "timeout_and_over_limit_partial_bytes_preserved": true
+  },
+  "smoke": {
+    "fixture_tsv": "fixtures/targets.smoke.tsv",
+    "fixture_json": "fixtures/targets.smoke.json",
+    "full_workload_execution_permitted": false,
+    "first_target_expected_if_environment_stable": {
+      "incoming_result_count": 2,
+      "outgoing_result_count": 1
+    }
+  },
+  "full_workload": {
+    "run_full_requires_explicit_flag": true,
+    "dry_full_plan_supported": true,
+    "direction_required": true,
+    "allowed_directions": [
+      "incoming",
+      "outgoing"
+    ],
+    "target_count": 5900,
+    "batch_size": 50,
+    "batch_count": 118,
+    "uses_smoke_hard_limit": false,
+    "batch_manifest_dir": "batches",
+    "checkpoint_dir": "checkpoints",
+    "resume_requires_verified_checkpoint": true,
+    "crash_started_to_abandoned_before_retry": true,
+    "per_batch_input_output_digests_required": true
+  },
+  "semantic_invariants": {
+    "max_raw_response_bytes": 33554432,
+    "request_timeout_seconds": 30,
+    "initialize_timeout_seconds": 60,
+    "smoke_max_targets_hard": 5,
+    "batch_size": 50,
+    "target_count": 5900,
+    "batch_count": 118
+  }
+}

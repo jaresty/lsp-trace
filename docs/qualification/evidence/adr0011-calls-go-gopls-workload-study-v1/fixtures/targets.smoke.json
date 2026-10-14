@@ -1,0 +1,24 @@
+[
+  {
+    "ordinal": 0,
+    "id": "931e3eb151c212c8ceaee1371cb26fb2b0688196b1e15452890c64bb52ff2d9e",
+    "workspace_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_path": "acquisitionops/executor.go",
+    "source_sha256": "ee9c628822977134baf33dab8bdf9af39629117d96f63afada1c4880ff86a6df",
+    "start_line": 35,
+    "start_utf16": 0,
+    "symbol": "DecodeManifest",
+    "binding_mode": "DIRECT_POSITION"
+  },
+  {
+    "ordinal": 1,
+    "id": "72b0e2750ffb93b4085ff9a2b1e0d78f35ce3855d919b7181ab255e969c2dfa1",
+    "workspace_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_path": "acquisitionops/executor.go",
+    "source_sha256": "ee9c628822977134baf33dab8bdf9af39629117d96f63afada1c4880ff86a6df",
+    "start_line": 41,
+    "start_utf16": 0,
+    "symbol": "NewExecutor",
+    "binding_mode": "DIRECT_POSITION"
+  }
+]

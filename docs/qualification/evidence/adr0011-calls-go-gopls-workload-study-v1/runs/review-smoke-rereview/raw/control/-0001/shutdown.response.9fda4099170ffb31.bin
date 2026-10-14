@@ -1,0 +1,3 @@
+Content-Length: 176
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-incoming-calls-v1-6yiY4m/acquisitionops/executor.go","diagnostics":[]}}

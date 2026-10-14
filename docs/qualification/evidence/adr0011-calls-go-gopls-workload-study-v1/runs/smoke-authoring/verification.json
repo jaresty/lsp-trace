@@ -1,0 +1,28 @@
+{
+  "directions": {
+    "incoming": {
+      "0": {
+        "events": 2,
+        "finals": [
+          "SUCCEEDED_NON_EMPTY"
+        ],
+        "terminal_attempts": [
+          "SUCCEEDED_NON_EMPTY"
+        ]
+      }
+    },
+    "outgoing": {
+      "0": {
+        "events": 2,
+        "finals": [
+          "SUCCEEDED_NON_EMPTY"
+        ],
+        "terminal_attempts": [
+          "SUCCEEDED_NON_EMPTY"
+        ]
+      }
+    }
+  },
+  "errors": [],
+  "status": "RUN_VERIFICATION_PASSED"
+}
