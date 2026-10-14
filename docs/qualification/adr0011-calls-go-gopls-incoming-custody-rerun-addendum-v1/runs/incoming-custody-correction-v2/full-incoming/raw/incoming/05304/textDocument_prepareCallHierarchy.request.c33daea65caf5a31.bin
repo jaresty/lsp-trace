@@ -1,0 +1,3 @@
+Content-Length: 239
+
+{"jsonrpc":"2.0","id":10549,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/lifecycleops/lifecycleops.go"},"position":{"line":127,"character":18}}}

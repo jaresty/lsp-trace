@@ -1,0 +1,3 @@
+Content-Length: 396
+
+{"jsonrpc":"2.0","result":[{"name":"PrepareCallHierarchy","kind":12,"detail":"lsp-trace/internal/slicer • discover.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/slicer/discover.go","range":{"start":{"line":93,"character":29},"end":{"line":93,"character":49}},"selectionRange":{"start":{"line":93,"character":29},"end":{"line":93,"character":49}}}],"id":9594}

@@ -1,0 +1,3 @@
+Content-Length: 469
+
+{"jsonrpc":"2.0","id":385,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Close","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp \u2022 census_continuation_host.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/census_continuation_host.go","range":{"start":{"line":198,"character":43},"end":{"line":198,"character":48}},"selectionRange":{"start":{"line":198,"character":43},"end":{"line":198,"character":48}}}}}

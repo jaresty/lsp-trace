@@ -1,0 +1,3 @@
+Content-Length: 472
+
+{"jsonrpc":"2.0","id":9193,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"operationForCause","kind":12,"detail":"lsp-trace/internal/searchqualificationv11 \u2022 freeze.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/searchqualificationv11/freeze.go","range":{"start":{"line":179,"character":5},"end":{"line":179,"character":22}},"selectionRange":{"start":{"line":179,"character":5},"end":{"line":179,"character":22}}}}}

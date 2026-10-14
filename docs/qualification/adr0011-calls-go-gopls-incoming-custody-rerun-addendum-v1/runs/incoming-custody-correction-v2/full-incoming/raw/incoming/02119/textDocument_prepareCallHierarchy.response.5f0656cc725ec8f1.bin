@@ -1,0 +1,3 @@
+Content-Length: 416
+
+{"jsonrpc":"2.0","result":[{"name":"CensusID","kind":12,"detail":"lsp-trace/internal/censuscontinuation • checkpoint.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/checkpoint.go","range":{"start":{"line":110,"character":20},"end":{"line":110,"character":28}},"selectionRange":{"start":{"line":110,"character":20},"end":{"line":110,"character":28}}}],"id":4215}

@@ -1,0 +1,3 @@
+Content-Length: 614
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/source/input_open_other.go","languageId":"go","version":1,"text":"//go:build !aix && !darwin && !dragonfly && !freebsd && !linux && !netbsd && !openbsd && !solaris && !windows\n\npackage source\n\nimport (\n\t\"errors\"\n\t\"os\"\n)\n\n// Fail closed where this adapter has no qualified race-safe nonblocking open.\nfunc openInput(_ *os.Root, _ string) (*os.File, error) {\n\treturn nil, errors.New(\"regular file acquisition unavailable on platform\")\n}\n"}}}

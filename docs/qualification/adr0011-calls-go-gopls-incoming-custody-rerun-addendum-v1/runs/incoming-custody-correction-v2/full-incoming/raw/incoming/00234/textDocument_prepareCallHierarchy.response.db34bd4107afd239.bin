@@ -1,0 +1,3 @@
+Content-Length: 404
+
+{"jsonrpc":"2.0","result":[{"name":"Enumerate","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • census_runtime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/census_runtime.go","range":{"start":{"line":273,"character":33},"end":{"line":273,"character":42}},"selectionRange":{"start":{"line":273,"character":33},"end":{"line":273,"character":42}}}],"id":467}

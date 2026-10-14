@@ -1,0 +1,3 @@
+Content-Length: 477
+
+{"jsonrpc":"2.0","id":3170,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"provisionPartial","kind":12,"detail":"lsp-trace/internal/adr0011lifecycle \u2022 partial_replay.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011lifecycle/partial_replay.go","range":{"start":{"line":333,"character":24},"end":{"line":333,"character":40}},"selectionRange":{"start":{"line":333,"character":24},"end":{"line":333,"character":40}}}}}

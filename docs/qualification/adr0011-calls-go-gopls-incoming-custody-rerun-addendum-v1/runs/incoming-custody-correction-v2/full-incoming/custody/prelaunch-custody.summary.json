@@ -1,0 +1,143 @@
+{
+  "accepted": false,
+  "artifact_digests": {
+    "environment_digest": "21fe317ba06ab7dc9fbc0758dd1561945860a2471ffd133835db8d2b62f1d72c",
+    "environment_key_count": 64,
+    "private_prelaunch_record_byte_length": 24651,
+    "private_prelaunch_record_sha256": "32789e7ec3efde32db09e83c7e7dd5b080fc0564f3b2bb28fa6134454a62f48d",
+    "private_record_path_sha256": "d23fec3995735ceebe01ba88e35440afd9cdd68638b0a68cdbccd2d1b5c7ca2a"
+  },
+  "authority": 0,
+  "binds_to_generic_profile_id": "CALLS_LSP_INCOMING_EXACT_V1",
+  "completeness": "UNKNOWN",
+  "contract_invariants": {
+    "batch_count": 118,
+    "batch_size": 50,
+    "incoming_inference_from_outgoing_permitted": false,
+    "max_raw_response_bytes": 33554432,
+    "sequential_ordinals": true,
+    "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+    "strict_attempt_ordering": true,
+    "target_count": 5900,
+    "target_tsv_sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+  },
+  "executable_summaries": {
+    "go": {
+      "byte_length": 14481762,
+      "sha256": "3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 33,
+        "stdout_sha256": "278375c8a03c34bb0f855154850de7c4f217fd3b8cdf37986819e3f05d0a4c33"
+      }
+    },
+    "gopls": {
+      "byte_length": 41038194,
+      "sha256": "82600f8b7f6ad337120b27ab738a5e44897ff1701919bc4620836ff7d98c2f7a",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 33,
+        "stdout_sha256": "b90357f9cf20cb15327b21a90e8930a1cf93c7536c710198beade2dc9d821af9"
+      }
+    },
+    "python": {
+      "byte_length": 52448,
+      "sha256": "b502cb4c5b46b8d4192ec6bcb600ce8922f1afc396fcf646e8765c6eba74a0bf",
+      "version": {
+        "exception_sha256": null,
+        "exit_code": 0,
+        "stderr_byte_length": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_byte_length": 14,
+        "stdout_sha256": "917601090ffb73a030e3eaa8b7a01c41400cad4b61366b4218d7756a5733b66c"
+      }
+    }
+  },
+  "historical_evidence_use": "FRESH_RERUN_ONLY_DO_NOT_REPRESENT_AS_OLD_RUN_EVIDENCE",
+  "immutable_dependency_base_sha256": "03a877b08ccd9bc2b2dabbb617d75f32e5054996b56f3a0d095d5b9e0b78b14b",
+  "immutable_dependency_base_token": "c3d77247f5a2",
+  "initialize_summary": {
+    "body_byte_length": 340,
+    "body_sha256": "42b55cdbaa10d982936f9ba98880d77b66a73a77ebc6b48e0cc216341ee5cebf",
+    "client_call_hierarchy_dynamic_registration": false,
+    "framed_byte_length": 363,
+    "framed_sha256": "e5e733e15e2df9098f0bd0168c449e707c2785cd878fd08c8e83addb4d9e09f6",
+    "root_uri_sha256": "4c0156b3fd5f5c4774c900181365bf725f1e33b20f73f023a81d821d862cbbcb",
+    "workspace_folder_count": 1
+  },
+  "launch_summary": {
+    "argv_count": 2,
+    "argv_sha256": "2c18ebe2caf8fd4dd7ab9973de8faab265ab6019c55703050d0044818452a401",
+    "cwd_sha256": "f81c8f84ab2a3c92fc4c0a14a613186ae001dd6dc3be39c2067f52165c5defba",
+    "env_binding_source": "captured_env",
+    "environment_digest": "21fe317ba06ab7dc9fbc0758dd1561945860a2471ffd133835db8d2b62f1d72c",
+    "environment_key_count": 64
+  },
+  "producer_disposition": "INCOMING_CUSTODY_RERUN_ADDENDUM_AUTHORED_NOT_GO",
+  "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+  "profile_id": "CALLS_GO_GOPLS_INCOMING_EXACT_V1",
+  "public_summary_policy": {
+    "construction": "ALLOWLIST_ONLY",
+    "raw_environment_key_names_present": false,
+    "raw_environment_values_present": false,
+    "raw_paths_present": false
+  },
+  "repository_state_policy": {
+    "base_is_ancestor": true,
+    "descendant_changed_path_count": 276,
+    "descendant_changed_paths_sha256": "154ad65766b62c64b0888e8c0907c0c01b226f93db9d48aa178913cfbb54530a",
+    "descendant_changes_confined_to_addendum_package": true,
+    "package_integrity_schema": "lsp-trace.adr0011.calls.go.gopls.incoming.addendum-package-integrity.v1",
+    "untracked_paths_authorized": false
+  },
+  "run_id": "incoming-custody-correction-v2",
+  "run_namespace": "lsp-trace.adr0011.calls.go.gopls.incoming.custody_rerun.v1",
+  "runner_runtime_summary": {
+    "original_contract_byte_length": 6449,
+    "original_contract_sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad",
+    "original_runner_source_byte_length": 48312,
+    "original_runner_source_sha256": "10456c34a2b8c629b301c2ebfdafbbad7ba432db85ae33ac49b464906818f482",
+    "platform_sha256": "77d6febeb690fbada6189fbfd0ab929225c5482358f8766cbbfbd749a0b9d839",
+    "python_version_sha256": "2300abd1e7736074d58ed69d05150a2b507bf75ff955509f30af4bde2c66de93",
+    "wrapper_source_byte_length": 66774,
+    "wrapper_source_sha256": "8c3367477de0c96d8df8f57a67488d7fd7eee4dda4c843feb365400d99289155"
+  },
+  "schema": "lsp-trace.adr0011.calls.go.gopls.incoming.custody-rerun-public-summary.v3",
+  "toolchain_summary": {
+    "closed_inventory_scope_count": 4,
+    "complete": true,
+    "go_env_command": {
+      "exception_sha256": null,
+      "exit_code": 0,
+      "stderr_byte_length": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_length": 1486,
+      "stdout_sha256": "ffbc46e8fec5a77b47b606c9b0dcae45170c28cfa487a36be36d7e979d51550b"
+    },
+    "go_environment_digest": "2f94aabcb21f8899212403efa0bf83c8f8e12419a2653be53dc7b7181968f8fd",
+    "go_environment_key_count": 46,
+    "go_tool_command": {
+      "exception_sha256": null,
+      "exit_code": 0,
+      "stderr_byte_length": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_length": 46,
+      "stdout_sha256": "7fadfe1145c5d70ff05856d43d8026ef652fdd95f417222c71afd5e4312b6c48"
+    },
+    "go_tool_name_count": 8,
+    "go_tool_names_digest": "5f554eee93bb860d4232e070de81e642e91accda1bedf632adf30baab4fe61da",
+    "non_claim_count": 2,
+    "required_record_count": 14,
+    "required_records_digest": "f1031a52261250e43d14c40206a51f39a603112b732f9130133b1f67c0e0d784",
+    "schema": "lsp-trace.adr0011.calls.go.gopls.closed-toolchain-inventory.v1"
+  },
+  "worktree_head_sha256": "0192de2c9cbf0876aa6611c2fd8b8d6d7878ad74598099594dd1665ad51b6c9a",
+  "worktree_head_token": "82b45bc3261c"
+}

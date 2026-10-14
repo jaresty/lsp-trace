@@ -1,0 +1,3 @@
+Content-Length: 507
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/transientstructural/diagnostic.go","version":1,"diagnostics":[{"range":{"start":{"line":58,"character":4},"end":{"line":58,"character":23}},"severity":4,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#minmax"},"source":"minmax","message":"if statement can be modernized using min [aix,ppc64]"}]}}

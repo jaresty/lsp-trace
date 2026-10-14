@@ -1,0 +1,3 @@
+Content-Length: 481
+
+{"jsonrpc":"2.0","id":2534,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"publishPrivacyPolicy","kind":12,"detail":"lsp-trace/internal/adr0011acquisition \u2022 policy_record.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/policy_record.go","range":{"start":{"line":239,"character":5},"end":{"line":239,"character":25}},"selectionRange":{"start":{"line":239,"character":5},"end":{"line":239,"character":25}}}}}

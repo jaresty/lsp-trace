@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":4420,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"ID","kind":12,"detail":"lsp-trace/internal/censuscontinuation \u2022 pipeline.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/pipeline.go","range":{"start":{"line":178,"character":19},"end":{"line":178,"character":21}},"selectionRange":{"start":{"line":178,"character":19},"end":{"line":178,"character":21}}}}}

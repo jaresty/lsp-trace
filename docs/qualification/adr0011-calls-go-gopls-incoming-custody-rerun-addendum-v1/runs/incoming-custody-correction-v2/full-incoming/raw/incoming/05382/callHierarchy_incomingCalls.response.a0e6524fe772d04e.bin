@@ -1,0 +1,3 @@
+Content-Length: 525
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"transfer","kind":12,"detail":"lsp-trace/sessionruntime • b4_explicit_bytes_c15_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_explicit_bytes_c15_private.go","range":{"start":{"line":458,"character":31},"end":{"line":458,"character":39}},"selectionRange":{"start":{"line":458,"character":31},"end":{"line":458,"character":39}}},"fromRanges":[{"start":{"line":477,"character":22},"end":{"line":477,"character":30}}]}],"id":10706}

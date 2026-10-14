@@ -1,0 +1,3 @@
+Content-Length: 388
+
+{"jsonrpc":"2.0","result":[{"name":"WorkspaceSymbols","kind":12,"detail":"lsp-trace/incomingops • executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/incomingops/executor.go","range":{"start":{"line":725,"character":24},"end":{"line":725,"character":40}},"selectionRange":{"start":{"line":725,"character":24},"end":{"line":725,"character":40}}}],"id":1299}

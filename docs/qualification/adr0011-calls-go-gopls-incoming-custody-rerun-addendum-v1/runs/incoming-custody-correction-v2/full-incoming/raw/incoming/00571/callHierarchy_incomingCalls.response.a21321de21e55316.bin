@@ -1,0 +1,3 @@
+Content-Length: 624
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"Load","kind":12,"detail":"lsp-trace/cmd/lsp-trace • custody_command.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/custody_command.go","range":{"start":{"line":19,"character":24},"end":{"line":19,"character":28}},"selectionRange":{"start":{"line":19,"character":24},"end":{"line":19,"character":28}}},"fromRanges":[{"start":{"line":32,"character":23},"end":{"line":32,"character":46}},{"start":{"line":45,"character":18},"end":{"line":45,"character":41}},{"start":{"line":49,"character":17},"end":{"line":49,"character":40}}]}],"id":1136}

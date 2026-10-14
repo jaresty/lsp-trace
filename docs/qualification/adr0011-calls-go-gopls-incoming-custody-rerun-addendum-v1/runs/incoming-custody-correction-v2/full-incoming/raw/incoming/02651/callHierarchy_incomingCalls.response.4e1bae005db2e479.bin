@@ -1,0 +1,3 @@
+Content-Length: 554
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"Canonicalize","kind":12,"detail":"lsp-trace/internal/graph • result.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graph/result.go","range":{"start":{"line":656,"character":17},"end":{"line":656,"character":29}},"selectionRange":{"start":{"line":656,"character":17},"end":{"line":656,"character":29}}},"fromRanges":[{"start":{"line":793,"character":54},"end":{"line":793,"character":66}},{"start":{"line":794,"character":53},"end":{"line":794,"character":65}}]}],"id":5269}

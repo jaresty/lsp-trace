@@ -1,0 +1,3 @@
+Content-Length: 458
+
+{"jsonrpc":"2.0","id":3775,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"UnmarshalJSON","kind":12,"detail":"lsp-trace/internal/boundedanalysis \u2022 preflight.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/boundedanalysis/preflight.go","range":{"start":{"line":55,"character":23},"end":{"line":55,"character":36}},"selectionRange":{"start":{"line":55,"character":23},"end":{"line":55,"character":36}}}}}

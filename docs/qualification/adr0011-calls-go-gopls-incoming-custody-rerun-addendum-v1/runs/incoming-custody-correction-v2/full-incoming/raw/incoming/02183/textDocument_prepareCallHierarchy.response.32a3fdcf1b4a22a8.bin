@@ -1,0 +1,3 @@
+Content-Length: 412
+
+{"jsonrpc":"2.0","result":[{"name":"ProgramCSeed","kind":12,"detail":"lsp-trace/internal/censuscontinuation • contract.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/contract.go","range":{"start":{"line":75,"character":30},"end":{"line":75,"character":42}},"selectionRange":{"start":{"line":75,"character":30},"end":{"line":75,"character":42}}}],"id":4342}

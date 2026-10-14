@@ -1,0 +1,3 @@
+Content-Length: 465
+
+{"jsonrpc":"2.0","id":11626,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"ObserveInitialization","kind":12,"detail":"lsp-trace/sessionruntime \u2022 sessionruntime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/sessionruntime.go","range":{"start":{"line":2515,"character":18},"end":{"line":2515,"character":39}},"selectionRange":{"start":{"line":2515,"character":18},"end":{"line":2515,"character":39}}}}}

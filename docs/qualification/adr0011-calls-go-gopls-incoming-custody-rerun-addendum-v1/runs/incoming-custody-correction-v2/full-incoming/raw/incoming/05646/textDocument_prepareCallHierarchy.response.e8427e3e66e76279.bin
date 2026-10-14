@@ -1,0 +1,3 @@
+Content-Length: 443
+
+{"jsonrpc":"2.0","result":[{"name":"privateC18MetadataLocked","kind":12,"detail":"lsp-trace/sessionruntime • c18_pair_coordinator_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/c18_pair_coordinator_private.go","range":{"start":{"line":463,"character":41},"end":{"line":463,"character":65}},"selectionRange":{"start":{"line":463,"character":41},"end":{"line":463,"character":65}}}],"id":11232}

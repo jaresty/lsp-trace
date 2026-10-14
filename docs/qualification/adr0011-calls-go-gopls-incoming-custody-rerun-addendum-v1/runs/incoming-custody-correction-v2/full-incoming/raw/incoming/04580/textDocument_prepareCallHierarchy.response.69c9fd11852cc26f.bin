@@ -1,0 +1,3 @@
+Content-Length: 403
+
+{"jsonrpc":"2.0","result":[{"name":"compiledSchemaFor","kind":12,"detail":"lsp-trace/internal/schema • compiled_cache.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/schema/compiled_cache.go","range":{"start":{"line":18,"character":5},"end":{"line":18,"character":22}},"selectionRange":{"start":{"line":18,"character":5},"end":{"line":18,"character":22}}}],"id":9108}

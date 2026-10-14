@@ -1,0 +1,3 @@
+Content-Length: 534
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/supervisor_unsupported.go","languageId":"go","version":1,"text":"//go:build !darwin || !arm64\n\npackage programc\n\nimport \"context\"\n\nfunc computeSupervised(context.Context, []byte, uint64) (Outcome, SupervisionObservation, *SupervisionFailure) {\n\treturn Outcome{}, SupervisionObservation{Ceiling: ObservationCeiling}, failure(CodePlatformUnsupported, nil)\n}\n"}}}

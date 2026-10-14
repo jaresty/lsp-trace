@@ -1,0 +1,3 @@
+Content-Length: 429
+
+{"jsonrpc":"2.0","result":[{"name":"CompletedMethodResponseFrame","kind":12,"detail":"lsp-trace/sessionruntime • method_response_frame.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/method_response_frame.go","range":{"start":{"line":14,"character":25},"end":{"line":14,"character":53}},"selectionRange":{"start":{"line":14,"character":25},"end":{"line":14,"character":53}}}],"id":11406}

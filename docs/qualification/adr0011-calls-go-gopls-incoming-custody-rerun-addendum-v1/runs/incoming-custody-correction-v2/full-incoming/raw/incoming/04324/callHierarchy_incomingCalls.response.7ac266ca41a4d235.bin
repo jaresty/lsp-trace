@@ -1,0 +1,3 @@
+Content-Length: 505
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"Contributions","kind":12,"detail":"lsp-trace/internal/referencegrouping • input.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/input.go","range":{"start":{"line":156,"character":18},"end":{"line":156,"character":31}},"selectionRange":{"start":{"line":156,"character":18},"end":{"line":156,"character":31}}},"fromRanges":[{"start":{"line":156,"character":63},"end":{"line":156,"character":82}}]}],"id":8602}

@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":8536,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Accounting","kind":12,"detail":"lsp-trace/internal/referencegrouping \u2022 input.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/input.go","range":{"start":{"line":178,"character":23},"end":{"line":178,"character":33}},"selectionRange":{"start":{"line":178,"character":23},"end":{"line":178,"character":33}}}}}

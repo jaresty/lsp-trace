@@ -1,0 +1,3 @@
+Content-Length: 469
+
+{"jsonrpc":"2.0","id":8169,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"ID","kind":12,"detail":"lsp-trace/internal/provisionalfeaturecatalog \u2022 catalog_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/provisionalfeaturecatalog/catalog_v2.go","range":{"start":{"line":46,"character":19},"end":{"line":46,"character":21}},"selectionRange":{"start":{"line":46,"character":19},"end":{"line":46,"character":21}}}}}

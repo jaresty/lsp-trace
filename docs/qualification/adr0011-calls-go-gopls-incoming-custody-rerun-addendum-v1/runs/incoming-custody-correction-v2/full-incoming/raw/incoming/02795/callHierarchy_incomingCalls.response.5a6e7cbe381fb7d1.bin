@@ -1,0 +1,3 @@
+Content-Length: 582
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"freezeSchemas","kind":12,"detail":"lsp-trace/internal/groupqualificationv1 • freeze.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/groupqualificationv1/freeze.go","range":{"start":{"line":879,"character":5},"end":{"line":879,"character":18}},"selectionRange":{"start":{"line":879,"character":5},"end":{"line":879,"character":18}}},"fromRanges":[{"start":{"line":886,"character":2},"end":{"line":886,"character":25}},{"start":{"line":890,"character":27},"end":{"line":890,"character":50}}]}],"id":5556}

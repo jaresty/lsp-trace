@@ -1,0 +1,3 @@
+Content-Length: 500
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"execute","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • census_executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/census_executor.go","range":{"start":{"line":121,"character":25},"end":{"line":121,"character":32}},"selectionRange":{"start":{"line":121,"character":25},"end":{"line":121,"character":32}}},"fromRanges":[{"start":{"line":144,"character":12},"end":{"line":144,"character":42}}]}],"id":445}

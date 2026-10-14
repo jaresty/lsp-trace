@@ -1,0 +1,3 @@
+Content-Length: 394
+
+{"jsonrpc":"2.0","result":[{"name":"orderedRecords","kind":12,"detail":"lsp-trace/internal/session • manager.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/session/manager.go","range":{"start":{"line":958,"character":18},"end":{"line":958,"character":32}},"selectionRange":{"start":{"line":958,"character":18},"end":{"line":958,"character":32}}}],"id":9564}

@@ -1,0 +1,3 @@
+Content-Length: 448
+
+{"jsonrpc":"2.0","id":8269,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"syncDirectory","kind":12,"detail":"lsp-trace/internal/publication \u2022 directory.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/publication/directory.go","range":{"start":{"line":19,"character":5},"end":{"line":19,"character":18}},"selectionRange":{"start":{"line":19,"character":5},"end":{"line":19,"character":18}}}}}

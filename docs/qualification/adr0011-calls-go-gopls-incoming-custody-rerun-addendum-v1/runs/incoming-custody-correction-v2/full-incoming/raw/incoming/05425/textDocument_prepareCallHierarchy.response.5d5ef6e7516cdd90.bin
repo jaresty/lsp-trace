@@ -1,0 +1,3 @@
+Content-Length: 412
+
+{"jsonrpc":"2.0","result":[{"name":"Release","kind":12,"detail":"lsp-trace/sessionruntime • b4_definition_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_definition_private.go","range":{"start":{"line":314,"character":44},"end":{"line":314,"character":51}},"selectionRange":{"start":{"line":314,"character":44},"end":{"line":314,"character":51}}}],"id":10791}

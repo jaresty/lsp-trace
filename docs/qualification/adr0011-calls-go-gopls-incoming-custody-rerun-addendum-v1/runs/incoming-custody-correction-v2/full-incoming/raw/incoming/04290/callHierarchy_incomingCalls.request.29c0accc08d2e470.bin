@@ -1,0 +1,3 @@
+Content-Length: 462
+
+{"jsonrpc":"2.0","id":8534,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"CandidateOutcomes","kind":12,"detail":"lsp-trace/internal/referencegrouping \u2022 input.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/input.go","range":{"start":{"line":177,"character":23},"end":{"line":177,"character":40}},"selectionRange":{"start":{"line":177,"character":23},"end":{"line":177,"character":40}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 445
+
+{"jsonrpc":"2.0","id":521,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"SeedCustodyProvenance","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp \u2022 main.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/main.go","range":{"start":{"line":380,"character":30},"end":{"line":380,"character":51}},"selectionRange":{"start":{"line":380,"character":30},"end":{"line":380,"character":51}}}}}

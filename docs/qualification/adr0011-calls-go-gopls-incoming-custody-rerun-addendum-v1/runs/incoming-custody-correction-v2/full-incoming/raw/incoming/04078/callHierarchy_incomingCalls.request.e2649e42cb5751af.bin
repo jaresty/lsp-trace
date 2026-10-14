@@ -1,0 +1,3 @@
+Content-Length: 480
+
+{"jsonrpc":"2.0","id":8111,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"CanonicalCapabilities","kind":12,"detail":"lsp-trace/internal/providerconformance \u2022 conformance.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/providerconformance/conformance.go","range":{"start":{"line":259,"character":5},"end":{"line":259,"character":26}},"selectionRange":{"start":{"line":259,"character":5},"end":{"line":259,"character":26}}}}}

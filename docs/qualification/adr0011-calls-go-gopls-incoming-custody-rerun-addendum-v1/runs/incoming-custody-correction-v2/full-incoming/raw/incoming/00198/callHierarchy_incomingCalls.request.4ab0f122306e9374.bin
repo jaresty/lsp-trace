@@ -1,0 +1,3 @@
+Content-Length: 459
+
+{"jsonrpc":"2.0","id":397,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"censusFailureDetail","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp \u2022 census_executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/census_executor.go","range":{"start":{"line":63,"character":5},"end":{"line":63,"character":24}},"selectionRange":{"start":{"line":63,"character":5},"end":{"line":63,"character":24}}}}}

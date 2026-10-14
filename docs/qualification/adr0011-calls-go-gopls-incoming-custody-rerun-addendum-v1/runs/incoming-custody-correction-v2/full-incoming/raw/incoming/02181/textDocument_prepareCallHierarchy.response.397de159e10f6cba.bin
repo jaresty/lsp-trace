@@ -1,0 +1,3 @@
+Content-Length: 402
+
+{"jsonrpc":"2.0","result":[{"name":"ID","kind":12,"detail":"lsp-trace/internal/censuscontinuation • contract.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/contract.go","range":{"start":{"line":73,"character":30},"end":{"line":73,"character":32}},"selectionRange":{"start":{"line":73,"character":30},"end":{"line":73,"character":32}}}],"id":4338}

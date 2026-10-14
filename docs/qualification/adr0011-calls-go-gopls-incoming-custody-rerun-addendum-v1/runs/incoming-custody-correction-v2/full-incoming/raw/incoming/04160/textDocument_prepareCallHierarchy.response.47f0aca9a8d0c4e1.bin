@@ -1,0 +1,3 @@
+Content-Length: 210
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/publication/root_owner_unix.go","version":1,"diagnostics":[]}}

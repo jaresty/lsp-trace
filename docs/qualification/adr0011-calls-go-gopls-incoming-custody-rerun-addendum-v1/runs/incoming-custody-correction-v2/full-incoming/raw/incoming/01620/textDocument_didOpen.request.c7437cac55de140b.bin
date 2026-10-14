@@ -1,0 +1,3 @@
+Content-Length: 556
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/c_observation.go","languageId":"go","version":1,"text":"package adr0011methodresult\n\n// notifyPrivateCEntry is a test-only notification with no return channel.\n// Panics from diagnostic code cannot alter the private candidate decision.\nfunc notifyPrivateCEntry(observer func()) {\n\tif observer == nil {\n\t\treturn\n\t}\n\tdefer func() { _ = recover() }()\n\tobserver()\n}\n"}}}

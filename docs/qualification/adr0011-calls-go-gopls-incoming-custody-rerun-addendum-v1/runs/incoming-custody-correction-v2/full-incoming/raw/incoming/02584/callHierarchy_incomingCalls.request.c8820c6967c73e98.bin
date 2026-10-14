@@ -1,0 +1,3 @@
+Content-Length: 432
+
+{"jsonrpc":"2.0","id":5135,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"MarshalJSON","kind":12,"detail":"lsp-trace/internal/filter \u2022 filter.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/filter/filter.go","range":{"start":{"line":25,"character":24},"end":{"line":25,"character":35}},"selectionRange":{"start":{"line":25,"character":24},"end":{"line":25,"character":35}}}}}

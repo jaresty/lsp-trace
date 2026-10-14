@@ -1,0 +1,3 @@
+Content-Length: 434
+
+{"jsonrpc":"2.0","id":9121,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Admit","kind":12,"detail":"lsp-trace/internal/schema \u2022 host_trust.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/schema/host_trust.go","range":{"start":{"line":50,"character":25},"end":{"line":50,"character":30}},"selectionRange":{"start":{"line":50,"character":25},"end":{"line":50,"character":30}}}}}

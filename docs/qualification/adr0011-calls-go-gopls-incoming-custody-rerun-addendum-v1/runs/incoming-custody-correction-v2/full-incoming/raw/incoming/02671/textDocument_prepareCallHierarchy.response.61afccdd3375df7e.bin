@@ -1,0 +1,3 @@
+Content-Length: 384
+
+{"jsonrpc":"2.0","result":[{"name":"ValidateReferences","kind":12,"detail":"lsp-trace/internal/graph • v3.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graph/v3.go","range":{"start":{"line":488,"character":16},"end":{"line":488,"character":34}},"selectionRange":{"start":{"line":488,"character":16},"end":{"line":488,"character":34}}}],"id":5308}

@@ -1,0 +1,3 @@
+Content-Length: 593
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"PrepareManagedDocuments","kind":12,"detail":"lsp-trace/internal/censuscontinuation • capture.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/capture.go","range":{"start":{"line":215,"character":25},"end":{"line":215,"character":48}},"selectionRange":{"start":{"line":215,"character":25},"end":{"line":215,"character":48}}},"fromRanges":[{"start":{"line":229,"character":19},"end":{"line":229,"character":53}},{"start":{"line":241,"character":18},"end":{"line":241,"character":52}}]}],"id":4163}

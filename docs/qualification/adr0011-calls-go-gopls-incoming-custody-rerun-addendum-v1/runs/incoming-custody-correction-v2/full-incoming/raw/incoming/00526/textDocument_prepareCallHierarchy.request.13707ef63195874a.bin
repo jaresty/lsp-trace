@@ -1,0 +1,3 @@
+Content-Length: 251
+
+{"jsonrpc":"2.0","id":1046,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/private_request_diagnostic.go"},"position":{"line":82,"character":5}}}

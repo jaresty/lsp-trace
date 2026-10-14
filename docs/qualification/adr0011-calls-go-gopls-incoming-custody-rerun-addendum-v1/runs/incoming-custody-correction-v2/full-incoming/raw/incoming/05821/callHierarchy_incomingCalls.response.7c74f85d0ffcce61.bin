@@ -1,0 +1,3 @@
+Content-Length: 704
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"TestSessionLanguageIDRequiresExactGenerationAndNonEmptyStoredIdentity","kind":12,"detail":"lsp-trace/sessionruntime • session_language_id_test.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/session_language_id_test.go","range":{"start":{"line":7,"character":5},"end":{"line":7,"character":74}},"selectionRange":{"start":{"line":7,"character":5},"end":{"line":7,"character":74}}},"fromRanges":[{"start":{"line":13,"character":26},"end":{"line":13,"character":43}},{"start":{"line":24,"character":27},"end":{"line":24,"character":44}},{"start":{"line":34,"character":21},"end":{"line":34,"character":38}}]}],"id":11578}

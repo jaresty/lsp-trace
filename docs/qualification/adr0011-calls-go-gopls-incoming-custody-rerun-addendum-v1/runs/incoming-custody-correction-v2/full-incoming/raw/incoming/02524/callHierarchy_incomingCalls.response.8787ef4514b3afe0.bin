@@ -1,0 +1,3 @@
+Content-Length: 559
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"Run","kind":12,"detail":"lsp-trace/internal/describeworker • runner.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/runner.go","range":{"start":{"line":52,"character":17},"end":{"line":52,"character":20}},"selectionRange":{"start":{"line":52,"character":17},"end":{"line":52,"character":20}}},"fromRanges":[{"start":{"line":131,"character":58},"end":{"line":131,"character":70}},{"start":{"line":139,"character":71},"end":{"line":139,"character":83}}]}],"id":5016}

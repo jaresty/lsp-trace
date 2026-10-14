@@ -1,0 +1,3 @@
+Content-Length: 415
+
+{"jsonrpc":"2.0","result":[{"name":"replayDocumentSymbols","kind":12,"detail":"lsp-trace/internal/acquisition • record_replay.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/acquisition/record_replay.go","range":{"start":{"line":54,"character":5},"end":{"line":54,"character":26}},"selectionRange":{"start":{"line":54,"character":5},"end":{"line":54,"character":26}}}],"id":1400}

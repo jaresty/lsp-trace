@@ -1,0 +1,3 @@
+Content-Length: 391
+
+{"jsonrpc":"2.0","result":[{"name":"contains","kind":12,"detail":"lsp-trace/cmd/locationv5precheck • main.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/locationv5precheck/main.go","range":{"start":{"line":295,"character":5},"end":{"line":295,"character":13}},"selectionRange":{"start":{"line":295,"character":5},"end":{"line":295,"character":13}}}],"id":303}

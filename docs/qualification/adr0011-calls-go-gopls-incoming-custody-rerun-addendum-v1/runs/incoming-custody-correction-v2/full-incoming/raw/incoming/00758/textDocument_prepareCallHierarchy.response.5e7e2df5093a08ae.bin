@@ -1,0 +1,3 @@
+Content-Length: 424
+
+{"jsonrpc":"2.0","result":[{"name":"validatePreparedDocument","kind":12,"detail":"lsp-trace/internal/acquisitionengine • executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/acquisitionengine/executor.go","range":{"start":{"line":734,"character":5},"end":{"line":734,"character":29}},"selectionRange":{"start":{"line":734,"character":5},"end":{"line":734,"character":29}}}],"id":1507}

@@ -1,0 +1,3 @@
+Content-Length: 406
+
+{"jsonrpc":"2.0","result":[{"name":"ByteLength","kind":12,"detail":"lsp-trace/internal/referencegrouping • input.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/input.go","range":{"start":{"line":173,"character":23},"end":{"line":173,"character":33}},"selectionRange":{"start":{"line":173,"character":23},"end":{"line":173,"character":33}}}],"id":8525}

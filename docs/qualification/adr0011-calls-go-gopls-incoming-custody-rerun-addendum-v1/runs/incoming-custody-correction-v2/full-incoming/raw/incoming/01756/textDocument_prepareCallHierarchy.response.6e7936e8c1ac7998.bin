@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","result":[{"name":"reserveProcessing","kind":12,"detail":"lsp-trace/internal/adr0011methodresult • restricted_owner_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/restricted_owner_private.go","range":{"start":{"line":238,"character":33},"end":{"line":238,"character":50}},"selectionRange":{"start":{"line":238,"character":33},"end":{"line":238,"character":50}}}],"id":3496}

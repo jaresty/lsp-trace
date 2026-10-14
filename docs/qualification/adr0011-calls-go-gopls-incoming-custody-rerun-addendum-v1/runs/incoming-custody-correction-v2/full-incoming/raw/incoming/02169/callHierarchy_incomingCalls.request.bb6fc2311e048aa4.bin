@@ -1,0 +1,3 @@
+Content-Length: 471
+
+{"jsonrpc":"2.0","id":4315,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Projection","kind":12,"detail":"lsp-trace/internal/censuscontinuation \u2022 continuation.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/continuation.go","range":{"start":{"line":242,"character":26},"end":{"line":242,"character":36}},"selectionRange":{"start":{"line":242,"character":26},"end":{"line":242,"character":36}}}}}

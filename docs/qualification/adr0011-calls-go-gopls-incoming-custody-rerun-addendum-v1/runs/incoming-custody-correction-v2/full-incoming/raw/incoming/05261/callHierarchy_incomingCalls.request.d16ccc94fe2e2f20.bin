@@ -1,0 +1,3 @@
+Content-Length: 461
+
+{"jsonrpc":"2.0","id":10464,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Close","kind":12,"detail":"lsp-trace/internal/vcssymbolsidecar \u2022 lsp_session.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/vcssymbolsidecar/lsp_session.go","range":{"start":{"line":125,"character":27},"end":{"line":125,"character":32}},"selectionRange":{"start":{"line":125,"character":27},"end":{"line":125,"character":32}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 469
+
+{"jsonrpc":"2.0","id":9151,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"AdmitTrust","kind":12,"detail":"lsp-trace/internal/schema \u2022 trust_provisioning_receipt.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/schema/trust_provisioning_receipt.go","range":{"start":{"line":47,"character":5},"end":{"line":47,"character":15}},"selectionRange":{"start":{"line":47,"character":5},"end":{"line":47,"character":15}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 522
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/skill_publish_linux.go","languageId":"go","version":1,"text":"//go:build linux\n\npackage main\n\nimport (\n\t\"os\"\n\n\t\"golang.org/x/sys/unix\"\n)\n\nfunc renameDirectoryNoReplace(parent, container, _ *os.File, _, payload, newName string) error {\n\treturn unix.Renameat2(int(container.Fd()), payload, int(parent.Fd()), newName, unix.RENAME_NOREPLACE)\n}\n"}}}

@@ -1,0 +1,3 @@
+Content-Length: 472
+
+{"jsonrpc":"2.0","id":5887,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"normalizeDocumentPreparationFailure","kind":12,"detail":"lsp-trace/internal/liveprojection \u2022 prepare.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/liveprojection/prepare.go","range":{"start":{"line":68,"character":5},"end":{"line":68,"character":40}},"selectionRange":{"start":{"line":68,"character":5},"end":{"line":68,"character":40}}}}}

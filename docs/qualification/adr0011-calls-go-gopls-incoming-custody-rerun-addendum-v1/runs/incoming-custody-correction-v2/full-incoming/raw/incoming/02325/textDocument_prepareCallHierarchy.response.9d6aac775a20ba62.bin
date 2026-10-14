@@ -1,0 +1,3 @@
+Content-Length: 448
+
+{"jsonrpc":"2.0","result":[{"name":"validConstructionAttribution","kind":12,"detail":"lsp-trace/internal/censusresult • continuation_diagnostic.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censusresult/continuation_diagnostic.go","range":{"start":{"line":218,"character":5},"end":{"line":218,"character":33}},"selectionRange":{"start":{"line":218,"character":5},"end":{"line":218,"character":33}}}],"id":4622}

@@ -1,0 +1,3 @@
+Content-Length: 451
+
+{"jsonrpc":"2.0","id":3715,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Inline","kind":12,"detail":"lsp-trace/internal/artifactingress \u2022 ingress.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/artifactingress/ingress.go","range":{"start":{"line":102,"character":16},"end":{"line":102,"character":22}},"selectionRange":{"start":{"line":102,"character":16},"end":{"line":102,"character":22}}}}}

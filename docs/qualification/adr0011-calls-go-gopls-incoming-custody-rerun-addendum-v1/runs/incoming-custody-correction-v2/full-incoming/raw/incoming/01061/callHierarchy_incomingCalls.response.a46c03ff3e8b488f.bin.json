@@ -1,0 +1,11 @@
+{
+  "byte_length": 2813,
+  "direction": "incoming",
+  "label": "callHierarchy_incomingCalls.response",
+  "method": null,
+  "ordinal": 1061,
+  "partial": false,
+  "path": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/adr0011-calls-go-gopls-incoming-custody-rerun-addendum-v1/runs/incoming-custody-correction-v2/full-incoming/raw/incoming/01061/callHierarchy_incomingCalls.response.a46c03ff3e8b488f.bin",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.raw-message.v1",
+  "sha256": "a46c03ff3e8b488ff84e4e44ed31cf2e46893b454576f1a1b72c5e3c6be473ff"
+}

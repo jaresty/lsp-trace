@@ -1,0 +1,3 @@
+Content-Length: 651
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/artifactingress/identity_unix.go","languageId":"go","version":1,"text":"//go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris\n\npackage artifactingress\n\nimport (\n\t\"os\"\n\t\"syscall\"\n)\n\nfunc ambiguousIdentity(rootInfo, fileInfo os.FileInfo) bool {\n\trootStat, rootOK := rootInfo.Sys().(*syscall.Stat_t)\n\tfileStat, fileOK := fileInfo.Sys().(*syscall.Stat_t)\n\treturn !rootOK || !fileOK || fileStat.Nlink != 1 || fileStat.Uid != rootStat.Uid\n}\n"}}}

@@ -1,0 +1,3 @@
+Content-Length: 481
+
+{"jsonrpc":"2.0","id":7957,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Digest","kind":12,"detail":"lsp-trace/internal/programcrepresentative \u2022 stage7b_custody.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcrepresentative/stage7b_custody.go","range":{"start":{"line":621,"character":25},"end":{"line":621,"character":31}},"selectionRange":{"start":{"line":621,"character":25},"end":{"line":621,"character":31}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 106
+
+{"jsonrpc":"2.0","error":{"code":0,"message":"referenceTransitionReplayRead is not a function"},"id":3434}

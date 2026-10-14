@@ -1,0 +1,3 @@
+Content-Length: 506
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"acquireEvidence","kind":12,"detail":"lsp-trace/internal/acquisition • coordinator.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/acquisition/coordinator.go","range":{"start":{"line":132,"character":17},"end":{"line":132,"character":32}},"selectionRange":{"start":{"line":132,"character":17},"end":{"line":132,"character":32}}},"fromRanges":[{"start":{"line":171,"character":4},"end":{"line":171,"character":25}}]}],"id":1365}

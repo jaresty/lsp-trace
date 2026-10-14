@@ -1,0 +1,3 @@
+Content-Length: 492
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/traverse/traverse_benchmark_test.go","diagnostics":[{"range":{"start":{"line":24,"character":13},"end":{"line":24,"character":20}},"severity":2,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#bloop"},"source":"bloop","message":"b.N can be modernized using b.Loop() [aix,ppc64]"}]}}

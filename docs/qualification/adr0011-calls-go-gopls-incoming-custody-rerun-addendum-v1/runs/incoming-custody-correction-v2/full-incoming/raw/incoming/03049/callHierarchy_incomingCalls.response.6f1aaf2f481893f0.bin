@@ -1,0 +1,3 @@
+Content-Length: 649
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"ReadFrame","kind":12,"detail":"lsp-trace/internal/lspwire • successor_ingress.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/lspwire/successor_ingress.go","range":{"start":{"line":552,"character":33},"end":{"line":552,"character":42}},"selectionRange":{"start":{"line":552,"character":33},"end":{"line":552,"character":42}}},"fromRanges":[{"start":{"line":607,"character":15},"end":{"line":607,"character":23}},{"start":{"line":619,"character":14},"end":{"line":619,"character":22}},{"start":{"line":665,"character":12},"end":{"line":665,"character":20}}]}],"id":6063}

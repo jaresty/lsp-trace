@@ -1,0 +1,3 @@
+Content-Length: 579
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"TestCallHierarchyObservationOwnerTerminalDrainsCallback","kind":12,"detail":"lsp-trace/sessionruntime • b4_owned_method_pair_lease_test.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_owned_method_pair_lease_test.go","range":{"start":{"line":1436,"character":5},"end":{"line":1436,"character":60}},"selectionRange":{"start":{"line":1436,"character":5},"end":{"line":1436,"character":60}}},"fromRanges":[{"start":{"line":1450,"character":7},"end":{"line":1450,"character":22}}]}],"id":11031}

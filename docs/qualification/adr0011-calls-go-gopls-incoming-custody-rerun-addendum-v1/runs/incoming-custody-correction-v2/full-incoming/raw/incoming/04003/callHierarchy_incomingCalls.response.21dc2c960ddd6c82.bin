@@ -1,0 +1,3 @@
+Content-Length: 518
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/private_body_slice.go","version":1,"diagnostics":[{"range":{"start":{"line":36,"character":10},"end":{"line":36,"character":70}},"severity":2,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#fmtappendf"},"source":"fmtappendf","message":"Replace []byte(fmt.Sprintf...) with fmt.Appendf"}]}}

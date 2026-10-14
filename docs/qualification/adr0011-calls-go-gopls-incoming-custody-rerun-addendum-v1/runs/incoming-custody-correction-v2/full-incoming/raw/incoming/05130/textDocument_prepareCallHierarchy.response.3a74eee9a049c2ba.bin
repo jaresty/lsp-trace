@@ -1,0 +1,3 @@
+Content-Length: 395
+
+{"jsonrpc":"2.0","result":[{"name":"IncomingPrepared","kind":12,"detail":"lsp-trace/internal/traverse • traverse.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/traverse/traverse.go","range":{"start":{"line":67,"character":5},"end":{"line":67,"character":21}},"selectionRange":{"start":{"line":67,"character":5},"end":{"line":67,"character":21}}}],"id":10205}

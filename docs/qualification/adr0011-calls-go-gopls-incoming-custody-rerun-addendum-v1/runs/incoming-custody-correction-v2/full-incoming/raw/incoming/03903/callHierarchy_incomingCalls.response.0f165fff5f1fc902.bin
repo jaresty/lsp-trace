@@ -1,0 +1,3 @@
+Content-Length: 538
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"ComputeSourceContext","kind":12,"detail":"lsp-trace/internal/programcrepresentative • source_context.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcrepresentative/source_context.go","range":{"start":{"line":212,"character":5},"end":{"line":212,"character":25}},"selectionRange":{"start":{"line":212,"character":5},"end":{"line":212,"character":25}}},"fromRanges":[{"start":{"line":289,"character":17},"end":{"line":289,"character":32}}]}],"id":7763}

@@ -1,0 +1,3 @@
+Content-Length: 462
+
+{"jsonrpc":"2.0","id":1556,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"inc","kind":12,"detail":"lsp-trace/internal/adr0007locationoraclev5 \u2022 oracle.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007locationoraclev5/oracle.go","range":{"start":{"line":172,"character":20},"end":{"line":172,"character":23}},"selectionRange":{"start":{"line":172,"character":20},"end":{"line":172,"character":23}}}}}

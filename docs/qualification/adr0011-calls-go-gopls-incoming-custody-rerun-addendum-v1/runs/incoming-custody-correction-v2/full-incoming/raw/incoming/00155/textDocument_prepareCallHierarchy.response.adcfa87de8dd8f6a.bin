@@ -1,0 +1,3 @@
+Content-Length: 406
+
+{"jsonrpc":"2.0","result":[{"name":"stopAfterDescribeRequests","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • bootstrap.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/bootstrap.go","range":{"start":{"line":59,"character":37},"end":{"line":59,"character":62}},"selectionRange":{"start":{"line":59,"character":37},"end":{"line":59,"character":62}}}],"id":311}

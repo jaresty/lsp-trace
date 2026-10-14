@@ -1,0 +1,3 @@
+Content-Length: 248
+
+{"jsonrpc":"2.0","id":6737,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcpcontract/structural_delta.go"},"position":{"line":49,"character":5}}}

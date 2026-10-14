@@ -1,0 +1,3 @@
+Content-Length: 408
+
+{"jsonrpc":"2.0","result":[{"name":"addNormalizedProviderInputProperties","kind":12,"detail":"lsp-trace/internal/mcp • registry.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcp/registry.go","range":{"start":{"line":614,"character":5},"end":{"line":614,"character":41}},"selectionRange":{"start":{"line":614,"character":5},"end":{"line":614,"character":41}}}],"id":6358}

@@ -1,0 +1,3 @@
+Content-Length: 409
+
+{"jsonrpc":"2.0","result":[{"name":"OutgoingCalls","kind":12,"detail":"lsp-trace/cmd/lsp-trace • production_discovery.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/production_discovery.go","range":{"start":{"line":61,"character":35},"end":{"line":61,"character":48}},"selectionRange":{"start":{"line":61,"character":35},"end":{"line":61,"character":48}}}],"id":1068}

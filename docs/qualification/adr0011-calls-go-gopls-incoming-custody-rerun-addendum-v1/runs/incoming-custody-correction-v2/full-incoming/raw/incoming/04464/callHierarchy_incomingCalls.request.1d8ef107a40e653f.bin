@@ -1,0 +1,3 @@
+Content-Length: 460
+
+{"jsonrpc":"2.0","id":8880,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Release","kind":12,"detail":"lsp-trace/internal/retainedlifecycle \u2022 lifecycle.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/retainedlifecycle/lifecycle.go","range":{"start":{"line":141,"character":26},"end":{"line":141,"character":33}},"selectionRange":{"start":{"line":141,"character":26},"end":{"line":141,"character":33}}}}}

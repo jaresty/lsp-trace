@@ -1,0 +1,3 @@
+Content-Length: 494
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"prepare","kind":12,"detail":"lsp-trace/internal/boundedranking • ranking.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/boundedranking/ranking.go","range":{"start":{"line":149,"character":5},"end":{"line":149,"character":12}},"selectionRange":{"start":{"line":149,"character":5},"end":{"line":149,"character":12}}},"fromRanges":[{"start":{"line":150,"character":6},"end":{"line":150,"character":11}}]}],"id":3809}

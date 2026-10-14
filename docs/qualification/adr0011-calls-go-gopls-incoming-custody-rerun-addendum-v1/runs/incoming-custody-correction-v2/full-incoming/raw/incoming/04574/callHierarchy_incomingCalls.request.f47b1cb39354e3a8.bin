@@ -1,0 +1,3 @@
+Content-Length: 449
+
+{"jsonrpc":"2.0","id":9097,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"String","kind":12,"detail":"lsp-trace/internal/runtimeprofile \u2022 profile.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/runtimeprofile/profile.go","range":{"start":{"line":106,"character":27},"end":{"line":106,"character":33}},"selectionRange":{"start":{"line":106,"character":27},"end":{"line":106,"character":33}}}}}

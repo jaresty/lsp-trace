@@ -1,0 +1,3 @@
+Content-Length: 530
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"PreparationFailures","kind":12,"detail":"lsp-trace/internal/provisionalfeaturecatalog • catalog_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/provisionalfeaturecatalog/catalog_v2.go","range":{"start":{"line":49,"character":19},"end":{"line":49,"character":38}},"selectionRange":{"start":{"line":49,"character":19},"end":{"line":49,"character":38}}},"fromRanges":[{"start":{"line":50,"character":8},"end":{"line":50,"character":32}}]}],"id":8189}

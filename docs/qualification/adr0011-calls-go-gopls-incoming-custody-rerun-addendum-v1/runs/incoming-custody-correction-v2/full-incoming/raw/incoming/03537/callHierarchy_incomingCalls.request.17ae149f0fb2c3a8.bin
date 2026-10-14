@@ -1,0 +1,3 @@
+Content-Length: 426
+
+{"jsonrpc":"2.0","id":7036,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Error","kind":12,"detail":"lsp-trace/internal/programc \u2022 core.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/core.go","range":{"start":{"line":46,"character":18},"end":{"line":46,"character":23}},"selectionRange":{"start":{"line":46,"character":18},"end":{"line":46,"character":23}}}}}

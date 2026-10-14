@@ -1,0 +1,3 @@
+Content-Length: 493
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"RegisterLifecycle","kind":12,"detail":"lsp-trace/internal/session • manager.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/session/manager.go","range":{"start":{"line":217,"character":18},"end":{"line":217,"character":35}},"selectionRange":{"start":{"line":217,"character":18},"end":{"line":217,"character":35}}},"fromRanges":[{"start":{"line":220,"character":43},"end":{"line":220,"character":62}}]}],"id":9515}

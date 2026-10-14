@@ -1,0 +1,3 @@
+Content-Length: 524
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"BuildSuccessor","kind":12,"detail":"lsp-trace/internal/provisionalfeaturecatalog • catalog.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/provisionalfeaturecatalog/catalog.go","range":{"start":{"line":630,"character":5},"end":{"line":630,"character":19}},"selectionRange":{"start":{"line":630,"character":5},"end":{"line":630,"character":19}}},"fromRanges":[{"start":{"line":677,"character":73},"end":{"line":677,"character":84}}]}],"id":8163}

@@ -1,0 +1,3 @@
+Content-Length: 387
+
+{"jsonrpc":"2.0","result":[{"name":"Sensitivity","kind":12,"detail":"lsp-trace/internal/programc • core.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/core.go","range":{"start":{"line":139,"character":23},"end":{"line":139,"character":34}},"selectionRange":{"start":{"line":139,"character":23},"end":{"line":139,"character":34}}}],"id":7043}

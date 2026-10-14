@@ -1,0 +1,3 @@
+Content-Length: 468
+
+{"jsonrpc":"2.0","id":6081,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"rawMessageEncodedSize","kind":12,"detail":"lsp-trace/internal/lspwire \u2022 successor_ingress.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/lspwire/successor_ingress.go","range":{"start":{"line":835,"character":5},"end":{"line":835,"character":26}},"selectionRange":{"start":{"line":835,"character":5},"end":{"line":835,"character":26}}}}}

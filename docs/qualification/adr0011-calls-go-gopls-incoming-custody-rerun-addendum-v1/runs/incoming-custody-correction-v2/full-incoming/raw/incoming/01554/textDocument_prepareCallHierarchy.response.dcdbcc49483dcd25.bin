@@ -1,0 +1,3 @@
+Content-Length: 413
+
+{"jsonrpc":"2.0","result":[{"name":"SameValue","kind":12,"detail":"lsp-trace/internal/adr0011genericv5proposal • id.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011genericv5proposal/id.go","range":{"start":{"line":100,"character":13},"end":{"line":100,"character":22}},"selectionRange":{"start":{"line":100,"character":13},"end":{"line":100,"character":22}}}],"id":3097}

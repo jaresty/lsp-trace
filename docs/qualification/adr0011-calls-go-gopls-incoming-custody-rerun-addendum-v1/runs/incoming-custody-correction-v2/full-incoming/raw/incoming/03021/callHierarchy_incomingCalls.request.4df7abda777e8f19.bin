@@ -1,0 +1,3 @@
+Content-Length: 422
+
+{"jsonrpc":"2.0","id":6007,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"DidOpen","kind":12,"detail":"lsp-trace/internal/lsp \u2022 client.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/lsp/client.go","range":{"start":{"line":54,"character":17},"end":{"line":54,"character":24}},"selectionRange":{"start":{"line":54,"character":17},"end":{"line":54,"character":24}}}}}

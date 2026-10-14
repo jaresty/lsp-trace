@@ -1,0 +1,3 @@
+Content-Length: 410
+
+{"jsonrpc":"2.0","result":[{"name":"CanonicalBytes","kind":12,"detail":"lsp-trace/internal/stage2scenario • scenario.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/stage2scenario/scenario.go","range":{"start":{"line":326,"character":18},"end":{"line":326,"character":32}},"selectionRange":{"start":{"line":326,"character":18},"end":{"line":326,"character":32}}}],"id":9818}

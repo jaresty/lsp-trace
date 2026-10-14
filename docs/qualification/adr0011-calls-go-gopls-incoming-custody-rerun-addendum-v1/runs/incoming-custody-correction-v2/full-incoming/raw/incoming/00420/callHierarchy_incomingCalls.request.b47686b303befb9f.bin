@@ -1,0 +1,3 @@
+Content-Length: 457
+
+{"jsonrpc":"2.0","id":837,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Error","kind":12,"detail":"lsp-trace/cmd/lsp-trace \u2022 census_discovery_adapter.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/census_discovery_adapter.go","range":{"start":{"line":22,"character":32},"end":{"line":22,"character":37}},"selectionRange":{"start":{"line":22,"character":32},"end":{"line":22,"character":37}}}}}
