@@ -1,0 +1,3 @@
+Content-Length: 545
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"freeze","kind":12,"detail":"lsp-trace/sessionruntime • adr0011_c17_c15_observer_contract_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/adr0011_c17_c15_observer_contract_private.go","range":{"start":{"line":289,"character":37},"end":{"line":289,"character":43}},"selectionRange":{"start":{"line":289,"character":37},"end":{"line":289,"character":43}}},"fromRanges":[{"start":{"line":401,"character":10},"end":{"line":401,"character":16}}]}],"id":10724}

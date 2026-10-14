@@ -1,0 +1,3 @@
+Content-Length: 518
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"roundTripWithPrivateTransaction","kind":12,"detail":"lsp-trace/sessionruntime • sessionruntime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/sessionruntime.go","range":{"start":{"line":798,"character":18},"end":{"line":798,"character":49}},"selectionRange":{"start":{"line":798,"character":18},"end":{"line":798,"character":49}}},"fromRanges":[{"start":{"line":894,"character":10},"end":{"line":894,"character":15}}]}],"id":11039}

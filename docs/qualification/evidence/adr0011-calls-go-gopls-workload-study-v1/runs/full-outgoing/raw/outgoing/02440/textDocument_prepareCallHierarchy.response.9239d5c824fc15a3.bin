@@ -1,0 +1,3 @@
+Content-Length: 395
+
+{"jsonrpc":"2.0","result":[{"name":"Subcode","kind":12,"detail":"lsp-trace/internal/describeworker • config.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/config.go","range":{"start":{"line":40,"character":18},"end":{"line":40,"character":25}},"selectionRange":{"start":{"line":40,"character":18},"end":{"line":40,"character":25}}}],"id":4850}

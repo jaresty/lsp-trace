@@ -1,0 +1,3 @@
+Content-Length: 456
+
+{"jsonrpc":"2.0","id":9617,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ReadInput","kind":12,"detail":"lsp-trace/internal/source \u2022 contributing_inputs.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/source/contributing_inputs.go","range":{"start":{"line":72,"character":24},"end":{"line":72,"character":33}},"selectionRange":{"start":{"line":72,"character":24},"end":{"line":72,"character":33}}}}}

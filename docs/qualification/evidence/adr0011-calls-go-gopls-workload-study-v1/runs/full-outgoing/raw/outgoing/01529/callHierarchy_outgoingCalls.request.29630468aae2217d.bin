@@ -1,0 +1,3 @@
+Content-Length: 458
+
+{"jsonrpc":"2.0","id":3048,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"b4bID","kind":12,"detail":"lsp-trace/internal/adr0011genericv5proposal \u2022 b4b.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011genericv5proposal/b4b.go","range":{"start":{"line":640,"character":5},"end":{"line":640,"character":10}},"selectionRange":{"start":{"line":640,"character":5},"end":{"line":640,"character":10}}}}}

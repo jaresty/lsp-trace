@@ -1,0 +1,3 @@
+Content-Length: 523
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"resume","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • structural_context_executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/structural_context_executor.go","range":{"start":{"line":291,"character":45},"end":{"line":291,"character":51}},"selectionRange":{"start":{"line":291,"character":45},"end":{"line":291,"character":51}}},"fromRanges":[{"start":{"line":307,"character":18},"end":{"line":307,"character":50}}]}],"id":611}

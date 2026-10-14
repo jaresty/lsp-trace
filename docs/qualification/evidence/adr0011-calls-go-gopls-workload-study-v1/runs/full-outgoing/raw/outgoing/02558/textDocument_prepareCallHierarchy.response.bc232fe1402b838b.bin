@@ -1,0 +1,3 @@
+Content-Length: 404
+
+{"jsonrpc":"2.0","result":[{"name":"productionDigest","kind":12,"detail":"lsp-trace/internal/execution • production.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/execution/production.go","range":{"start":{"line":214,"character":5},"end":{"line":214,"character":21}},"selectionRange":{"start":{"line":214,"character":5},"end":{"line":214,"character":21}}}],"id":5083}

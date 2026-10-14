@@ -1,0 +1,3 @@
+Content-Length: 471
+
+{"jsonrpc":"2.0","id":7551,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Accepted","kind":12,"detail":"lsp-trace/internal/programcadmission \u2022 method_admission.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/method_admission.go","range":{"start":{"line":84,"character":33},"end":{"line":84,"character":41}},"selectionRange":{"start":{"line":84,"character":33},"end":{"line":84,"character":41}}}}}

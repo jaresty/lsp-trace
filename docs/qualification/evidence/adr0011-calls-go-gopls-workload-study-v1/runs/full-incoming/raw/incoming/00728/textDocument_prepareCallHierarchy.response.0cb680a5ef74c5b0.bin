@@ -1,0 +1,3 @@
+Content-Length: 413
+
+{"jsonrpc":"2.0","result":[{"name":"consume","kind":12,"detail":"lsp-trace/internal/acquisitionauthority • authority.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/acquisitionauthority/authority.go","range":{"start":{"line":64,"character":19},"end":{"line":64,"character":26}},"selectionRange":{"start":{"line":64,"character":19},"end":{"line":64,"character":26}}}],"id":1448}

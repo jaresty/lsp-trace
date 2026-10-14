@@ -1,0 +1,3 @@
+Content-Length: 340
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace","capabilities":{"textDocument":{"callHierarchy":{"dynamicRegistration":false}}},"workspaceFolders":[{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace","name":"workspace"}]}}

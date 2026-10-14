@@ -1,0 +1,3 @@
+Content-Length: 498
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Release","kind":12,"detail":"lsp-trace/internal/lspwire • successor_ingress.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/lspwire/successor_ingress.go","range":{"start":{"line":43,"character":41},"end":{"line":43,"character":48}},"selectionRange":{"start":{"line":43,"character":41},"end":{"line":43,"character":48}}},"fromRanges":[{"start":{"line":128,"character":11},"end":{"line":128,"character":18}}]}],"id":11103}

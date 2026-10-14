@@ -1,0 +1,3 @@
+Content-Length: 435
+
+{"jsonrpc":"2.0","result":[{"name":"beginPublication","kind":12,"detail":"lsp-trace/sessionruntime • b4_event_account_c17_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_event_account_c17_private.go","range":{"start":{"line":398,"character":35},"end":{"line":398,"character":51}},"selectionRange":{"start":{"line":398,"character":35},"end":{"line":398,"character":51}}}],"id":10880}

@@ -1,0 +1,3 @@
+Content-Length: 599
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/source/input_open_windows.go","languageId":"go","version":1,"text":"package source\n\nimport \"os\"\n\n// Windows has no filesystem FIFO nodes. os.Root disallows reserved device names\n// and escape to the named-pipe namespace; the opened handle is still checked for\n// regular-file type before reading. Windows runtime qualification is separate.\nfunc openInput(root *os.Root, name string) (*os.File, error) {\n\treturn root.Open(name)\n}\n"}}}

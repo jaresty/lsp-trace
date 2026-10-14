@@ -1,0 +1,3 @@
+Content-Length: 476
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/hydratedevidence/coordinates.go","version":1,"diagnostics":[{"range":{"start":{"line":36,"character":3},"end":{"line":36,"character":28}},"severity":3,"code":"default","codeDescription":{"href":"https://staticcheck.dev/docs/checks/#QF1003"},"source":"QF1003","message":"could use tagged switch on content[start] [aix,ppc64]"}]}}

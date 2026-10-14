@@ -1,0 +1,3 @@
+Content-Length: 424
+
+{"jsonrpc":"2.0","result":[{"name":"PairWeightDigest","kind":12,"detail":"lsp-trace/internal/referencegrouping • composition.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/composition.go","range":{"start":{"line":130,"character":28},"end":{"line":130,"character":44}},"selectionRange":{"start":{"line":130,"character":28},"end":{"line":130,"character":44}}}],"id":8451}

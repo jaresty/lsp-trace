@@ -1,0 +1,41 @@
+{
+  "batch_count_verified": true,
+  "contract_sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad",
+  "counts": {
+    "attempted": 5900,
+    "cancel": 0,
+    "denominator": 5900,
+    "empty": 225,
+    "fail": 67,
+    "malformed": 0,
+    "nonempty": 5608,
+    "one_final_disposition_ordinals": 5900,
+    "partial": 0,
+    "refused": 0,
+    "timeout": 0,
+    "unattempted": 0,
+    "unsupported": 0
+  },
+  "denominator_verified": true,
+  "direction": "incoming",
+  "environment_sha256": "4df2881d8d2e26ac9869bfead093497fce6487894bf5b366c7606c065f8c5221",
+  "failure_count": 67,
+  "final_disposition_counts": {
+    "FAILED_LSP_ERROR": 67,
+    "SUCCEEDED_EMPTY": 225,
+    "SUCCEEDED_NON_EMPTY": 5608
+  },
+  "ledger_sha256": "5c181ac1304547ba8f9e915aa512f3c4e93ca1fd8594da381f7f61b165d7139f",
+  "not_granted": [
+    "production_admission",
+    "profileGO",
+    "manager_custody",
+    "completeness"
+  ],
+  "one_final_disposition_per_ordinal_verified": true,
+  "raw_aggregate_digest": "dfedbc400dcdb7315143fd0479e791a67dda79331112bd922446e4f770c717bc",
+  "refusal_count": 0,
+  "run_dir": "runs/full-incoming",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.final-summary.v1",
+  "status": "NUMERIC_BOUNDS_AUTHORED_NOT_GO"
+}

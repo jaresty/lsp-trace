@@ -1,0 +1,3 @@
+Content-Length: 586
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"MatchString","kind":12,"detail":"regexp • regexp.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/regexp/regexp.go","range":{"start":{"line":505,"character":18},"end":{"line":505,"character":29}},"selectionRange":{"start":{"line":505,"character":18},"end":{"line":505,"character":29}}},"fromRanges":[{"start":{"line":325,"character":17},"end":{"line":325,"character":28}},{"start":{"line":330,"character":18},"end":{"line":330,"character":29}},{"start":{"line":340,"character":18},"end":{"line":340,"character":29}}]}],"id":10166}

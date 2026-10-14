@@ -1,0 +1,3 @@
+Content-Length: 495
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"Render","kind":12,"detail":"lsp-trace/internal/presentation • presentation.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/presentation/presentation.go","range":{"start":{"line":67,"character":5},"end":{"line":67,"character":11}},"selectionRange":{"start":{"line":67,"character":5},"end":{"line":67,"character":11}}},"fromRanges":[{"start":{"line":112,"character":9},"end":{"line":112,"character":19}}]}],"id":6958}

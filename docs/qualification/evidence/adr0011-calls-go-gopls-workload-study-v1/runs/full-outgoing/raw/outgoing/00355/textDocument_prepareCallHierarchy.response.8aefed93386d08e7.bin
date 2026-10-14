@@ -1,0 +1,3 @@
+Content-Length: 388
+
+{"jsonrpc":"2.0","result":[{"name":"Set","kind":12,"detail":"lsp-trace/cmd/lsp-trace • bounded_ranking.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/bounded_ranking.go","range":{"start":{"line":19,"character":23},"end":{"line":19,"character":26}},"selectionRange":{"start":{"line":19,"character":23},"end":{"line":19,"character":26}}}],"id":708}

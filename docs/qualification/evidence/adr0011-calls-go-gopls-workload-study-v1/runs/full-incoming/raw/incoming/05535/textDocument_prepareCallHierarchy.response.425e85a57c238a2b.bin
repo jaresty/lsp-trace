@@ -1,0 +1,3 @@
+Content-Length: 438
+
+{"jsonrpc":"2.0","result":[{"name":"PrivateOwnedMethodPairLease","kind":12,"detail":"lsp-trace/sessionruntime • b4_owned_method_pair_lease.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_owned_method_pair_lease.go","range":{"start":{"line":52,"character":25},"end":{"line":52,"character":52}},"selectionRange":{"start":{"line":52,"character":25},"end":{"line":52,"character":52}}}],"id":11010}

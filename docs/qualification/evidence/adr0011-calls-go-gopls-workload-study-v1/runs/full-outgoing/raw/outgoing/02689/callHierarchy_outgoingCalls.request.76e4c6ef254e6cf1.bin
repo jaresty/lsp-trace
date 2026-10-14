@@ -1,0 +1,3 @@
+Content-Length: 433
+
+{"jsonrpc":"2.0","id":5345,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"To","kind":12,"detail":"lsp-trace/internal/graphkernel \u2022 kernel.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graphkernel/kernel.go","range":{"start":{"line":40,"character":22},"end":{"line":40,"character":24}},"selectionRange":{"start":{"line":40,"character":22},"end":{"line":40,"character":24}}}}}

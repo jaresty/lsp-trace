@@ -1,0 +1,3 @@
+Content-Length: 435
+
+{"jsonrpc":"2.0","result":[{"name":"NewCollector","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • provider_lifecycle_composition.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/provider_lifecycle_composition.go","range":{"start":{"line":19,"character":42},"end":{"line":19,"character":54}},"selectionRange":{"start":{"line":19,"character":42},"end":{"line":19,"character":54}}}],"id":544}

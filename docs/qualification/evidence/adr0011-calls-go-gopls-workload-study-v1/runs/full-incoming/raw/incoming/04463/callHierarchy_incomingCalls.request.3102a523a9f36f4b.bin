@@ -1,0 +1,3 @@
+Content-Length: 460
+
+{"jsonrpc":"2.0","id":8878,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Acquire","kind":12,"detail":"lsp-trace/internal/retainedlifecycle \u2022 lifecycle.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/retainedlifecycle/lifecycle.go","range":{"start":{"line":119,"character":26},"end":{"line":119,"character":33}},"selectionRange":{"start":{"line":119,"character":26},"end":{"line":119,"character":33}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 434
+
+{"jsonrpc":"2.0","result":[{"name":"deriveSourceID","kind":12,"detail":"lsp-trace/internal/adr0007v4contractvalidator • validator.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007v4contractvalidator/validator.go","range":{"start":{"line":875,"character":5},"end":{"line":875,"character":19}},"selectionRange":{"start":{"line":875,"character":5},"end":{"line":875,"character":19}}}],"id":2297}

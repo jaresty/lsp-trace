@@ -1,0 +1,3 @@
+Content-Length: 584
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"CheckB4a","kind":12,"detail":"lsp-trace/internal/adr0011genericv5proposal • b4a.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011genericv5proposal/b4a.go","range":{"start":{"line":188,"character":5},"end":{"line":188,"character":13}},"selectionRange":{"start":{"line":188,"character":5},"end":{"line":188,"character":13}}},"fromRanges":[{"start":{"line":287,"character":448},"end":{"line":287,"character":462}},{"start":{"line":287,"character":509},"end":{"line":287,"character":523}}]}],"id":3030}

@@ -1,0 +1,3 @@
+Content-Length: 460
+
+{"jsonrpc":"2.0","id":6151,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Clone","kind":12,"detail":"lsp-trace/internal/manageddiagnostic \u2022 diagnostic.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/manageddiagnostic/diagnostic.go","range":{"start":{"line":111,"character":16},"end":{"line":111,"character":21}},"selectionRange":{"start":{"line":111,"character":16},"end":{"line":111,"character":21}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 457
+
+{"jsonrpc":"2.0","id":753,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"batchFail","kind":12,"detail":"lsp-trace/cmd/lsp-trace \u2022 census_batch_acquirer.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/census_batch_acquirer.go","range":{"start":{"line":124,"character":5},"end":{"line":124,"character":14}},"selectionRange":{"start":{"line":124,"character":5},"end":{"line":124,"character":14}}}}}

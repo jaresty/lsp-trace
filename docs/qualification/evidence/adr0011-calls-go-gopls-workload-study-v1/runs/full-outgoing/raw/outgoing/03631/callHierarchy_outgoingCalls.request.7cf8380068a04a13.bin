@@ -1,0 +1,3 @@
+Content-Length: 465
+
+{"jsonrpc":"2.0","id":7224,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ProjectionSchema","kind":12,"detail":"lsp-trace/internal/programc \u2022 stage7c_coupling.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage7c_coupling.go","range":{"start":{"line":384,"character":40},"end":{"line":384,"character":56}},"selectionRange":{"start":{"line":384,"character":40},"end":{"line":384,"character":56}}}}}

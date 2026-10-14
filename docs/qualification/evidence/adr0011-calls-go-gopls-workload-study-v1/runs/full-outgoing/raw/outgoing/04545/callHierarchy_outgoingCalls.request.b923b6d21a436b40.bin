@@ -1,0 +1,3 @@
+Content-Length: 440
+
+{"jsonrpc":"2.0","id":9040,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Get","kind":12,"detail":"lsp-trace/internal/retainedreplay \u2022 replay.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/retainedreplay/replay.go","range":{"start":{"line":99,"character":22},"end":{"line":99,"character":25}},"selectionRange":{"start":{"line":99,"character":22},"end":{"line":99,"character":25}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 477
+
+{"jsonrpc":"2.0","id":4375,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Validate","kind":12,"detail":"lsp-trace/internal/censuscontinuation \u2022 endpoint_outcome.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/endpoint_outcome.go","range":{"start":{"line":131,"character":28},"end":{"line":131,"character":36}},"selectionRange":{"start":{"line":131,"character":28},"end":{"line":131,"character":36}}}}}

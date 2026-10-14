@@ -1,0 +1,3 @@
+Content-Length: 432
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/containment/platform_linux.go","languageId":"go","version":1,"text":"//go:build linux\n\npackage containment\n\nfunc platformProbe() runtimeResult {\n\tresult := unavailable(reasonUnsupportedPlatform, checkPlatformSupport)\n\tresult.platform = \"linux\"\n\treturn result\n}\n"}}}

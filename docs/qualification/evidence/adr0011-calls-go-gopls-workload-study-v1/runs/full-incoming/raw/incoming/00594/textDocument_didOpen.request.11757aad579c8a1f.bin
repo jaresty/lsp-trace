@@ -1,0 +1,3 @@
+Content-Length: 483
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/skill_publish_unsupported.go","languageId":"go","version":1,"text":"//go:build !darwin && !linux && !windows\n\npackage main\n\nimport (\n\t\"errors\"\n\t\"os\"\n)\n\nfunc renameDirectoryNoReplace(_, _, _ *os.File, _, _, _ string) error {\n\treturn errors.New(\"skill directory export unsupported on this platform\")\n}\n"}}}

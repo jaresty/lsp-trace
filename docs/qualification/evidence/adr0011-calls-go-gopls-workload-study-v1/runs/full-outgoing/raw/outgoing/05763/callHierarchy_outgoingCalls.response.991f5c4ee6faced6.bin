@@ -1,0 +1,3 @@
+Content-Length: 498
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"permits","kind":12,"detail":"lsp-trace/sessionruntime • owned_method_pair.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/owned_method_pair.go","range":{"start":{"line":463,"character":36},"end":{"line":463,"character":43}},"selectionRange":{"start":{"line":463,"character":36},"end":{"line":463,"character":43}}},"fromRanges":[{"start":{"line":473,"character":15},"end":{"line":473,"character":22}}]}],"id":11467}

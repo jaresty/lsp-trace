@@ -1,0 +1,3 @@
+Content-Length: 402
+
+{"jsonrpc":"2.0","result":[{"name":"acquireCaller","kind":12,"detail":"lsp-trace/sessionruntime • b4_result_lease.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_result_lease.go","range":{"start":{"line":99,"character":31},"end":{"line":99,"character":44}},"selectionRange":{"start":{"line":99,"character":31},"end":{"line":99,"character":44}}}],"id":11112}

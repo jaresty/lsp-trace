@@ -1,0 +1,3 @@
+Content-Length: 496
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"parseCensusCLIOptions","kind":12,"detail":"lsp-trace/cmd/lsp-trace • census_command.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/census_command.go","range":{"start":{"line":72,"character":5},"end":{"line":72,"character":26}},"selectionRange":{"start":{"line":72,"character":5},"end":{"line":72,"character":26}}},"fromRanges":[{"start":{"line":77,"character":17},"end":{"line":77,"character":39}}]}],"id":820}

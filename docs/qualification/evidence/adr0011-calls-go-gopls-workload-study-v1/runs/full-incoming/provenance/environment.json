@@ -1,0 +1,47 @@
+{
+  "authority": {
+    "completeness": "UNKNOWN",
+    "evidence_authority": 0,
+    "manager_custody_claimed": false,
+    "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+    "profile_go": "NOT_REQUESTED"
+  },
+  "captured_at_unix": 1791944857.608795,
+  "contract_sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad",
+  "go_env_json": {
+    "argv": [
+      "go",
+      "env",
+      "-json"
+    ],
+    "duration_seconds": 0.019889,
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "{\n\t\"AR\": \"ar\",\n\t\"CC\": \"cc\",\n\t\"CGO_CFLAGS\": \"-O2 -g\",\n\t\"CGO_CPPFLAGS\": \"\",\n\t\"CGO_CXXFLAGS\": \"-O2 -g\",\n\t\"CGO_ENABLED\": \"1\",\n\t\"CGO_FFLAGS\": \"-O2 -g\",\n\t\"CGO_LDFLAGS\": \"-O2 -g\",\n\t\"CXX\": \"c++\",\n\t\"GCCGO\": \"gccgo\",\n\t\"GO111MODULE\": \"\",\n\t\"GOARCH\": \"arm64\",\n\t\"GOARM64\": \"v8.0\",\n\t\"GOAUTH\": \"netrc\",\n\t\"GOBIN\": \"\",\n\t\"GOCACHE\": \"/Users/schwa/Library/Caches/go-build\",\n\t\"GOCACHEPROG\": \"\",\n\t\"GODEBUG\": \"\",\n\t\"GOENV\": \"/Users/schwa/Library/Application Support/go/env\",\n\t\"GOEXE\": \"\",\n\t\"GOEXPERIMENT\": \"\",\n\t\"GOFIPS140\": \"off\",\n\t\"GOFLAGS\": \"\",\n\t\"GOGCCFLAGS\": \"-fPIC -arch arm64 -pthread -fno-caret-diagnostics -Qunused-arguments -fmessage-length=0 -ffile-prefix-map=/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/go-build4165472776=/tmp/go-build -gno-record-gcc-switches -fno-common\",\n\t\"GOHOSTARCH\": \"arm64\",\n\t\"GOHOSTOS\": \"darwin\",\n\t\"GOINSECURE\": \"\",\n\t\"GOMOD\": \"/private/tmp/adr0011-gopls-workload-study-v1/workspace/go.mod\",\n\t\"GOMODCACHE\": \"/Users/schwa/go/pkg/mod\",\n\t\"GONOPROXY\": \"\",\n\t\"GONOSUMDB\": \"\",\n\t\"GOOS\": \"darwin\",\n\t\"GOPATH\": \"/Users/schwa/go\",\n\t\"GOPRIVATE\": \"\",\n\t\"GOPROXY\": \"https://proxy.golang.org,direct\",\n\t\"GOROOT\": \"/opt/homebrew/Cellar/go/1.26.5/libexec\",\n\t\"GOSUMDB\": \"sum.golang.org\",\n\t\"GOTELEMETRY\": \"local\",\n\t\"GOTELEMETRYDIR\": \"/Users/schwa/Library/Application Support/go/telemetry\",\n\t\"GOTMPDIR\": \"\",\n\t\"GOTOOLCHAIN\": \"auto\",\n\t\"GOTOOLDIR\": \"/opt/homebrew/Cellar/go/1.26.5/libexec/pkg/tool/darwin_arm64\",\n\t\"GOVCS\": \"\",\n\t\"GOVERSION\": \"go1.26.5\",\n\t\"GOWORK\": \"\",\n\t\"PKG_CONFIG\": \"pkg-config\"\n}\n"
+  },
+  "go_version": {
+    "argv": [
+      "go",
+      "version"
+    ],
+    "duration_seconds": 0.006118,
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "go version go1.26.5 darwin/arm64\n"
+  },
+  "gopls_binary_sha256": "82600f8b7f6ad337120b27ab738a5e44897ff1701919bc4620836ff7d98c2f7a",
+  "gopls_path": "/Users/schwa/.local/bin/gopls",
+  "gopls_version": {
+    "argv": [
+      "/Users/schwa/.local/bin/gopls",
+      "version"
+    ],
+    "duration_seconds": 0.029342,
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "golang.org/x/tools/gopls v0.23.0\n"
+  },
+  "runner": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/adr0011_workload_runner.py",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.environment.v1",
+  "workspace": "/private/tmp/adr0011-gopls-workload-study-v1/workspace"
+}

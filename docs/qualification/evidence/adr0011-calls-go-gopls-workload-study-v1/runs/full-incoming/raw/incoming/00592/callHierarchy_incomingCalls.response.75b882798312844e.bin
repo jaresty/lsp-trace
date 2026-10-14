@@ -1,0 +1,3 @@
+Content-Length: 472
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"init","kind":13,"detail":"lsp-trace/cmd/lsp-trace • skill_publish.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/skill_publish.go","range":{"start":{"line":9,"character":1},"end":{"line":9,"character":22}},"selectionRange":{"start":{"line":9,"character":1},"end":{"line":9,"character":22}}},"fromRanges":[{"start":{"line":9,"character":29},"end":{"line":9,"character":53}}]}],"id":1178}

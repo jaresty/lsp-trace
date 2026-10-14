@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":2840,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"SealTerminal","kind":12,"detail":"lsp-trace/internal/adr0011c18 \u2022 coordinator.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011c18/coordinator.go","range":{"start":{"line":278,"character":18},"end":{"line":278,"character":30}},"selectionRange":{"start":{"line":278,"character":18},"end":{"line":278,"character":30}}}}}

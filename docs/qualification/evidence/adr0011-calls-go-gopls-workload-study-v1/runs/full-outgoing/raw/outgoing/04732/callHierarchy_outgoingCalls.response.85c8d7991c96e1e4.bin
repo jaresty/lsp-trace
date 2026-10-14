@@ -1,0 +1,3 @@
+Content-Length: 428
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"String","kind":12,"detail":"bytes • buffer.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/bytes/buffer.go","range":{"start":{"line":71,"character":17},"end":{"line":71,"character":23}},"selectionRange":{"start":{"line":71,"character":17},"end":{"line":71,"character":23}}},"fromRanges":[{"start":{"line":44,"character":52},"end":{"line":44,"character":58}}]}],"id":9413}

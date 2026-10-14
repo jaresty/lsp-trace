@@ -1,0 +1,3 @@
+Content-Length: 479
+
+{"jsonrpc":"2.0","id":7523,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"MethodAccepted","kind":12,"detail":"lsp-trace/internal/programcadmission \u2022 leiden_projection.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/leiden_projection.go","range":{"start":{"line":77,"character":33},"end":{"line":77,"character":47}},"selectionRange":{"start":{"line":77,"character":33},"end":{"line":77,"character":47}}}}}

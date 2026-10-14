@@ -1,0 +1,3 @@
+Content-Length: 476
+
+{"jsonrpc":"2.0","id":8123,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Corrections","kind":12,"detail":"lsp-trace/internal/provisionalfeaturecatalog \u2022 catalog.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/provisionalfeaturecatalog/catalog.go","range":{"start":{"line":212,"character":17},"end":{"line":212,"character":28}},"selectionRange":{"start":{"line":212,"character":17},"end":{"line":212,"character":28}}}}}

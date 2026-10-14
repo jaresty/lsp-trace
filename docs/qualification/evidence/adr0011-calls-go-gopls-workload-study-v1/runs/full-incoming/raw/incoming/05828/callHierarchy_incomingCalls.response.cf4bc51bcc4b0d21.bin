@@ -1,0 +1,3 @@
+Content-Length: 504
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"runReadiness","kind":12,"detail":"lsp-trace/sessionruntime • sessionruntime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/sessionruntime.go","range":{"start":{"line":2122,"character":18},"end":{"line":2122,"character":30}},"selectionRange":{"start":{"line":2122,"character":18},"end":{"line":2122,"character":30}}},"fromRanges":[{"start":{"line":2271,"character":4},"end":{"line":2271,"character":31}}]}],"id":11592}

@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":5028,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"RecordV2","kind":12,"detail":"lsp-trace/internal/describeworker \u2022 runner_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/runner_v2.go","range":{"start":{"line":163,"character":17},"end":{"line":163,"character":25}},"selectionRange":{"start":{"line":163,"character":17},"end":{"line":163,"character":25}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 513
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"evaluateLocalObserved","kind":12,"detail":"lsp-trace/internal/normativeanalytics • local.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/normativeanalytics/local.go","range":{"start":{"line":390,"character":5},"end":{"line":390,"character":26}},"selectionRange":{"start":{"line":390,"character":5},"end":{"line":390,"character":26}}},"fromRanges":[{"start":{"line":435,"character":16},"end":{"line":435,"character":25}}]}],"id":6800}

@@ -1,0 +1,3 @@
+Content-Length: 739
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"Validate","kind":12,"detail":"lsp-trace/internal/transientstructuralresult • result.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/transientstructuralresult/result.go","range":{"start":{"line":187,"character":20},"end":{"line":187,"character":28}},"selectionRange":{"start":{"line":187,"character":20},"end":{"line":187,"character":28}}},"fromRanges":[{"start":{"line":188,"character":20},"end":{"line":188,"character":32}},{"start":{"line":188,"character":63},"end":{"line":188,"character":75}},{"start":{"line":188,"character":103},"end":{"line":188,"character":115}},{"start":{"line":188,"character":149},"end":{"line":188,"character":161}}]}],"id":10150}

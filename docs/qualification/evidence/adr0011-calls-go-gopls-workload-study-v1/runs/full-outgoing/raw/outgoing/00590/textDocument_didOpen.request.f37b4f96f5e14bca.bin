@@ -1,0 +1,3 @@
+Content-Length: 397
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/skill_payload_open_nonwindows.go","languageId":"go","version":1,"text":"//go:build !windows\n\npackage main\n\nimport \"os\"\n\nfunc openSkillPayloadDirectory(_ *os.File, _, path string) (*os.File, error) {\n\treturn os.Open(path)\n}\n"}}}

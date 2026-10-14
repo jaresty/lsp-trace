@@ -1,0 +1,3 @@
+Content-Length: 484
+
+{"jsonrpc":"2.0","id":2095,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"associate","kind":12,"detail":"lsp-trace/internal/adr0007sourcetextsearchv4oracle \u2022 oracle.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007sourcetextsearchv4oracle/oracle.go","range":{"start":{"line":555,"character":22},"end":{"line":555,"character":31}},"selectionRange":{"start":{"line":555,"character":22},"end":{"line":555,"character":31}}}}}

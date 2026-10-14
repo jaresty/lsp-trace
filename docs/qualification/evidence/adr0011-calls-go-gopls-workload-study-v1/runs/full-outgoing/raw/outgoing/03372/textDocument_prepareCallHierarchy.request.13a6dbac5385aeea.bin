@@ -1,0 +1,3 @@
+Content-Length: 267
+
+{"jsonrpc":"2.0","id":6705,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcpcontract/structural_context_future_semantic.go"},"position":{"line":493,"character":5}}}

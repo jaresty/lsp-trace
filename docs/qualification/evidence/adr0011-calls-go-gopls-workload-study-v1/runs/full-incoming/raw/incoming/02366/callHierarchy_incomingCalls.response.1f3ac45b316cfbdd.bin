@@ -1,0 +1,3 @@
+Content-Length: 523
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"TestClosedReasons","kind":12,"detail":"lsp-trace/internal/containment/reference • containment_test.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/containment/containment_test.go","range":{"start":{"line":91,"character":5},"end":{"line":91,"character":22}},"selectionRange":{"start":{"line":91,"character":5},"end":{"line":91,"character":22}}},"fromRanges":[{"start":{"line":103,"character":32},"end":{"line":103,"character":39}}]}],"id":4705}

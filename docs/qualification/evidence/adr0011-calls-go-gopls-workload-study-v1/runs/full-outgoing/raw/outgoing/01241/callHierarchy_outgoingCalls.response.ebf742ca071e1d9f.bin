@@ -1,0 +1,3 @@
+Content-Length: 504
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"acquireManaged","kind":12,"detail":"lsp-trace/internal/adr0011acquisition • owner.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/owner.go","range":{"start":{"line":117,"character":16},"end":{"line":117,"character":30}},"selectionRange":{"start":{"line":117,"character":16},"end":{"line":117,"character":30}}},"fromRanges":[{"start":{"line":97,"character":18},"end":{"line":97,"character":32}}]}],"id":2472}

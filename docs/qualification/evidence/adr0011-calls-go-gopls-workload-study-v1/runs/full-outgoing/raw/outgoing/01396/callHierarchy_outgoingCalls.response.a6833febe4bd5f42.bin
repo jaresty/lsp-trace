@@ -1,0 +1,3 @@
+Content-Length: 572
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"ReadFile","kind":12,"detail":"embed • embed.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/embed/embed.go","range":{"start":{"line":321,"character":12},"end":{"line":321,"character":20}},"selectionRange":{"start":{"line":321,"character":12},"end":{"line":321,"character":20}}},"fromRanges":[{"start":{"line":41,"character":19},"end":{"line":41,"character":27}},{"start":{"line":42,"character":24},"end":{"line":42,"character":32}},{"start":{"line":43,"character":24},"end":{"line":43,"character":32}}]}],"id":2782}

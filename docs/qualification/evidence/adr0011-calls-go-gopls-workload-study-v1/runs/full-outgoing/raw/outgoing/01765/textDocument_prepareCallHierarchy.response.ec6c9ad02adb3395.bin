@@ -1,0 +1,3 @@
+Content-Length: 452
+
+{"jsonrpc":"2.0","result":[{"name":"recordTerminal","kind":12,"detail":"lsp-trace/internal/adr0011methodresult • restricted_owner_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/restricted_owner_private.go","range":{"start":{"line":537,"character":33},"end":{"line":537,"character":47}},"selectionRange":{"start":{"line":537,"character":33},"end":{"line":537,"character":47}}}],"id":3514}

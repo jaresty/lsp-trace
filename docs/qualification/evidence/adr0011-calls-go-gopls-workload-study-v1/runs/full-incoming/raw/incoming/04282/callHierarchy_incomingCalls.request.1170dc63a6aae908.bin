@@ -1,0 +1,3 @@
+Content-Length: 457
+
+{"jsonrpc":"2.0","id":8518,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Predecessors","kind":12,"detail":"lsp-trace/internal/referencegrouping \u2022 input.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/input.go","range":{"start":{"line":163,"character":18},"end":{"line":163,"character":30}},"selectionRange":{"start":{"line":163,"character":18},"end":{"line":163,"character":30}}}}}

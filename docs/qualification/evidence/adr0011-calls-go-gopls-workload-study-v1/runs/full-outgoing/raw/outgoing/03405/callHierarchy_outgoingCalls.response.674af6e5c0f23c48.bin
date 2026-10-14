@@ -1,0 +1,3 @@
+Content-Length: 446
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Decode","kind":12,"detail":"encoding/json • stream.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/encoding/json/stream.go","range":{"start":{"line":50,"character":20},"end":{"line":50,"character":26}},"selectionRange":{"start":{"line":50,"character":20},"end":{"line":50,"character":26}}},"fromRanges":[{"start":{"line":198,"character":13},"end":{"line":198,"character":19}}]}],"id":6772}

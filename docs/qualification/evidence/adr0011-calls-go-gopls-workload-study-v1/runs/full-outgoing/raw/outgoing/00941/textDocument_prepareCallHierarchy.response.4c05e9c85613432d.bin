@@ -1,0 +1,3 @@
+Content-Length: 415
+
+{"jsonrpc":"2.0","result":[{"name":"MarshalJSON","kind":12,"detail":"lsp-trace/internal/adr0007locationv5 • evaluator.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007locationv5/evaluator.go","range":{"start":{"line":148,"character":18},"end":{"line":148,"character":29}},"selectionRange":{"start":{"line":148,"character":18},"end":{"line":148,"character":29}}}],"id":1873}

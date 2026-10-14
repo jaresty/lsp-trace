@@ -1,0 +1,3 @@
+Content-Length: 498
+
+{"jsonrpc":"2.0","id":3337,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"WithObjectAdmission","kind":12,"detail":"lsp-trace/internal/adr0011methodresult \u2022 private_c16_projection.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/private_c16_projection.go","range":{"start":{"line":53,"character":28},"end":{"line":53,"character":47}},"selectionRange":{"start":{"line":53,"character":28},"end":{"line":53,"character":47}}}}}

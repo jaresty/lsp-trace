@@ -1,0 +1,3 @@
+Content-Length: 450
+
+{"jsonrpc":"2.0","id":695,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"String","kind":12,"detail":"lsp-trace/cmd/lsp-trace \u2022 bounded_analytics_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/bounded_analytics_v2.go","range":{"start":{"line":16,"character":26},"end":{"line":16,"character":32}},"selectionRange":{"start":{"line":16,"character":26},"end":{"line":16,"character":32}}}}}

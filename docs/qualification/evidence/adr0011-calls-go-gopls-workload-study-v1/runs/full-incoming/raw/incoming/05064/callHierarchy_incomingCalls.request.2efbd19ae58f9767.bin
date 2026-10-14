@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":10075,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Error","kind":12,"detail":"lsp-trace/internal/transientstructural \u2022 types.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/transientstructural/types.go","range":{"start":{"line":416,"character":24},"end":{"line":416,"character":29}},"selectionRange":{"start":{"line":416,"character":24},"end":{"line":416,"character":29}}}}}

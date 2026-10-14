@@ -1,0 +1,3 @@
+Content-Length: 748
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graphprovenance/evidence_test.go","diagnostics":[{"range":{"start":{"line":24,"character":31},"end":{"line":24,"character":83}},"severity":2,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#fmtappendf"},"source":"fmtappendf","message":"Replace []byte(fmt.Sprintf...) with fmt.Appendf"},{"range":{"start":{"line":238,"character":2},"end":{"line":238,"character":27}},"severity":3,"code":"default","codeDescription":{"href":"https://staticcheck.dev/docs/checks/#QF1003"},"source":"QF1003","message":"could use tagged switch on r.Status"}]}}

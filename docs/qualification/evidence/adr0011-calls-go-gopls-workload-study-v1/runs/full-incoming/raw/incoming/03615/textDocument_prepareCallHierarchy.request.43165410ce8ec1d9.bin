@@ -1,0 +1,3 @@
+Content-Length: 246
+
+{"jsonrpc":"2.0","id":7191,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage7c_coupling.go"},"position":{"line":205,"character":5}}}

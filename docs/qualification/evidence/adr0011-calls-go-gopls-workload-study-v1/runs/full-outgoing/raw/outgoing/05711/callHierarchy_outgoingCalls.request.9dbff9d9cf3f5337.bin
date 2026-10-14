@@ -1,0 +1,3 @@
+Content-Length: 453
+
+{"jsonrpc":"2.0","id":11363,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Certified","kind":12,"detail":"lsp-trace/sessionruntime \u2022 diagnostic_runtime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/diagnostic_runtime.go","range":{"start":{"line":63,"character":31},"end":{"line":63,"character":40}},"selectionRange":{"start":{"line":63,"character":31},"end":{"line":63,"character":40}}}}}

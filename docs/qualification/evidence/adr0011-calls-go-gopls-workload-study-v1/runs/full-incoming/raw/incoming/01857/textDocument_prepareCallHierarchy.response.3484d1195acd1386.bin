@@ -1,0 +1,3 @@
+Content-Length: 418
+
+{"jsonrpc":"2.0","result":[{"name":"Reassemble","kind":12,"detail":"lsp-trace/internal/ancillaryinspection • inspection.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/ancillaryinspection/inspection.go","range":{"start":{"line":326,"character":5},"end":{"line":326,"character":15}},"selectionRange":{"start":{"line":326,"character":5},"end":{"line":326,"character":15}}}],"id":3698}

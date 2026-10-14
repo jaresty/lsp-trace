@@ -1,0 +1,3 @@
+Content-Length: 397
+
+{"jsonrpc":"2.0","result":[{"name":"CompleteLifecycle","kind":12,"detail":"lsp-trace/internal/session • manager.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/session/manager.go","range":{"start":{"line":359,"character":18},"end":{"line":359,"character":35}},"selectionRange":{"start":{"line":359,"character":18},"end":{"line":359,"character":35}}}],"id":9506}

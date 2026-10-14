@@ -1,0 +1,3 @@
+Content-Length: 434
+
+{"jsonrpc":"2.0","result":[{"name":"privateCallHierarchyLayer1WithEnabled","kind":12,"detail":"lsp-trace/sessionruntime • owned_method_pair.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/owned_method_pair.go","range":{"start":{"line":490,"character":55},"end":{"line":490,"character":92}},"selectionRange":{"start":{"line":490,"character":55},"end":{"line":490,"character":92}}}],"id":11470}

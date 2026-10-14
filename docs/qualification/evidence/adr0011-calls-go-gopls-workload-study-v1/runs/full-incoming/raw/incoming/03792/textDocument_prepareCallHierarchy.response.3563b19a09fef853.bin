@@ -1,0 +1,3 @@
+Content-Length: 430
+
+{"jsonrpc":"2.0","result":[{"name":"CommitmentDigest","kind":12,"detail":"lsp-trace/internal/programcadmission • method_admission.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/method_admission.go","range":{"start":{"line":79,"character":35},"end":{"line":79,"character":51}},"selectionRange":{"start":{"line":79,"character":35},"end":{"line":79,"character":51}}}],"id":7544}

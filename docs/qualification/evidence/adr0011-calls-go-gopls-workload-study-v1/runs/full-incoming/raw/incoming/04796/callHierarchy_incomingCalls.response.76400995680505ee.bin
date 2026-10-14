@@ -1,0 +1,3 @@
+Content-Length: 562
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"reprocessWaiters","kind":12,"detail":"lsp-trace/internal/session • manager.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/session/manager.go","range":{"start":{"line":729,"character":18},"end":{"line":729,"character":34}},"selectionRange":{"start":{"line":729,"character":18},"end":{"line":729,"character":34}}},"fromRanges":[{"start":{"line":740,"character":9},"end":{"line":740,"character":35}},{"start":{"line":746,"character":9},"end":{"line":746,"character":35}}]}],"id":9541}

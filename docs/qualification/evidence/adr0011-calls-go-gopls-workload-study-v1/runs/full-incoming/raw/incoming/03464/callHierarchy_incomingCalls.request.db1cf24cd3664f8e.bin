@@ -1,0 +1,3 @@
+Content-Length: 443
+
+{"jsonrpc":"2.0","id":6890,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"ExecuteInspect","kind":12,"detail":"lsp-trace/internal/operation \u2022 offline.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/operation/offline.go","range":{"start":{"line":35,"character":18},"end":{"line":35,"character":32}},"selectionRange":{"start":{"line":35,"character":18},"end":{"line":35,"character":32}}}}}

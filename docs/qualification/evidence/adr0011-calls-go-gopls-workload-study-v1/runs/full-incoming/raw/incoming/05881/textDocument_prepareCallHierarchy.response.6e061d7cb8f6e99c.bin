@@ -1,0 +1,3 @@
+Content-Length: 385
+
+{"jsonrpc":"2.0","result":[{"name":"executeComposition","kind":12,"detail":"lsp-trace/sliceops • executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sliceops/executor.go","range":{"start":{"line":284,"character":19},"end":{"line":284,"character":37}},"selectionRange":{"start":{"line":284,"character":19},"end":{"line":284,"character":37}}}],"id":11697}

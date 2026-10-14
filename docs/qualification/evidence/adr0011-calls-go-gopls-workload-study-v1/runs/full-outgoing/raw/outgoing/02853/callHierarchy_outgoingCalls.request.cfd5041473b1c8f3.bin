@@ -1,0 +1,3 @@
+Content-Length: 461
+
+{"jsonrpc":"2.0","id":5672,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Ingest","kind":12,"detail":"lsp-trace/internal/groupqualificationv1 \u2022 group.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/groupqualificationv1/group.go","range":{"start":{"line":1022,"character":23},"end":{"line":1022,"character":29}},"selectionRange":{"start":{"line":1022,"character":23},"end":{"line":1022,"character":29}}}}}

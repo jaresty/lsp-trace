@@ -1,0 +1,3 @@
+Content-Length: 386
+
+{"jsonrpc":"2.0","result":[{"name":"Run","kind":12,"detail":"lsp-trace/cmd/lsp-trace • census_catalog.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/census_catalog.go","range":{"start":{"line":87,"character":34},"end":{"line":87,"character":37}},"selectionRange":{"start":{"line":87,"character":34},"end":{"line":87,"character":37}}}],"id":772}

@@ -1,0 +1,3 @@
+Content-Length: 394
+
+{"jsonrpc":"2.0","result":[{"name":"ReversedEdge","kind":12,"detail":"lsp-trace/internal/graphkernel • kernel.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graphkernel/kernel.go","range":{"start":{"line":41,"character":22},"end":{"line":41,"character":34}},"selectionRange":{"start":{"line":41,"character":22},"end":{"line":41,"character":34}}}],"id":5346}

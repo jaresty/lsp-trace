@@ -1,0 +1,9 @@
+{
+  "batch_index": 56,
+  "direction": "incoming",
+  "finalized": true,
+  "input_digest": "c2f1df2b34b208bb7c80e2b14a16001c079c6f7da459db87b33c7853b470e820",
+  "output_digest": "39e61f7fc0bf9787ca36118446fc6cd33fe3cbe80886f148bd44064b6bfdaa93",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.batch-checkpoint.v1",
+  "status": "BATCH_RECORDED"
+}

@@ -1,0 +1,3 @@
+Content-Length: 451
+
+{"jsonrpc":"2.0","id":9321,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Verify","kind":12,"detail":"lsp-trace/internal/seedbinding \u2022 seedbinding.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/seedbinding/seedbinding.go","range":{"start":{"line":361,"character":30},"end":{"line":361,"character":36}},"selectionRange":{"start":{"line":361,"character":30},"end":{"line":361,"character":36}}}}}

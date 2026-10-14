@@ -1,0 +1,3 @@
+Content-Length: 663
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"typedInputSeal","kind":12,"detail":"lsp-trace/internal/programcadmission • typed_boundary.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/typed_boundary.go","range":{"start":{"line":344,"character":5},"end":{"line":344,"character":19}},"selectionRange":{"start":{"line":344,"character":5},"end":{"line":344,"character":19}}},"fromRanges":[{"start":{"line":358,"character":1},"end":{"line":358,"character":15}},{"start":{"line":359,"character":1},"end":{"line":359,"character":15}},{"start":{"line":386,"character":1},"end":{"line":386,"character":15}}]}],"id":7611}

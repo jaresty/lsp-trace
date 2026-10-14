@@ -1,0 +1,3 @@
+Content-Length: 486
+
+{"jsonrpc":"2.0","id":7813,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Representatives","kind":12,"detail":"lsp-trace/internal/programcrepresentative \u2022 stage6_result.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcrepresentative/stage6_result.go","range":{"start":{"line":106,"character":30},"end":{"line":106,"character":45}},"selectionRange":{"start":{"line":106,"character":30},"end":{"line":106,"character":45}}}}}

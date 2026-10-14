@@ -1,0 +1,3 @@
+Content-Length: 483
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/sourceprojection/crossmode_fixture_test.go","diagnostics":[{"range":{"start":{"line":508,"character":2},"end":{"line":508,"character":75}},"severity":2,"code":"default","codeDescription":{"href":"https://staticcheck.dev/docs/checks/#S1038"},"source":"S1038","message":"should use t.Fatalf(...) instead of t.Fatal(fmt.Sprintf(...))"}]}}

@@ -1,0 +1,3 @@
+Content-Length: 503
+
+{"jsonrpc":"2.0","id":6694,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"validatePolicy","kind":12,"detail":"lsp-trace/internal/mcpcontract \u2022 structural_context_future_semantic.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcpcontract/structural_context_future_semantic.go","range":{"start":{"line":330,"character":5},"end":{"line":330,"character":19}},"selectionRange":{"start":{"line":330,"character":5},"end":{"line":330,"character":19}}}}}

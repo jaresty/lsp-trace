@@ -1,0 +1,3 @@
+Content-Length: 385
+
+{"jsonrpc":"2.0","result":[{"name":"Admit","kind":12,"detail":"lsp-trace/internal/schema • host_trust.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/schema/host_trust.go","range":{"start":{"line":50,"character":25},"end":{"line":50,"character":30}},"selectionRange":{"start":{"line":50,"character":25},"end":{"line":50,"character":30}}}],"id":9120}

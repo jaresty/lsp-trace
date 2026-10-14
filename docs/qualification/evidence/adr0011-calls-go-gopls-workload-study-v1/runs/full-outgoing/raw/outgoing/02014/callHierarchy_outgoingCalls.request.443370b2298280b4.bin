@@ -1,0 +1,3 @@
+Content-Length: 445
+
+{"jsonrpc":"2.0","id":4011,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Select","kind":12,"detail":"lsp-trace/internal/censusacquisition \u2022 core.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censusacquisition/core.go","range":{"start":{"line":75,"character":17},"end":{"line":75,"character":23}},"selectionRange":{"start":{"line":75,"character":17},"end":{"line":75,"character":23}}}}}

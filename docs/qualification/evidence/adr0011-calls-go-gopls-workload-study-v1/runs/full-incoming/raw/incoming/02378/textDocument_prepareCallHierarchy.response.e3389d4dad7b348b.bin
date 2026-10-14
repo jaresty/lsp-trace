@@ -1,0 +1,3 @@
+Content-Length: 399
+
+{"jsonrpc":"2.0","result":[{"name":"Stage","kind":12,"detail":"lsp-trace/internal/continuationhost • factory.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/continuationhost/factory.go","range":{"start":{"line":27,"character":18},"end":{"line":27,"character":23}},"selectionRange":{"start":{"line":27,"character":18},"end":{"line":27,"character":23}}}],"id":4728}

@@ -1,0 +1,3 @@
+Content-Length: 248
+
+{"jsonrpc":"2.0","id":6633,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcpcontract/program_c_leiden.go"},"position":{"line":28,"character":5}}}

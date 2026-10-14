@@ -1,0 +1,3 @@
+Content-Length: 482
+
+{"jsonrpc":"2.0","id":1820,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Cancelled","kind":12,"detail":"lsp-trace/internal/adr0007locationv4/cmd/designverify \u2022 main.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007locationv4/cmd/designverify/main.go","range":{"start":{"line":18,"character":17},"end":{"line":18,"character":26}},"selectionRange":{"start":{"line":18,"character":17},"end":{"line":18,"character":26}}}}}

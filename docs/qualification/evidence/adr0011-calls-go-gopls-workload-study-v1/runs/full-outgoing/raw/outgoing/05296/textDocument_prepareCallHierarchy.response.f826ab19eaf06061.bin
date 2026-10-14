@@ -1,0 +1,3 @@
+Content-Length: 385
+
+{"jsonrpc":"2.0","result":[{"name":"decodeClosed","kind":12,"detail":"lsp-trace/lifecycleops • executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/lifecycleops/executor.go","range":{"start":{"line":235,"character":5},"end":{"line":235,"character":17}},"selectionRange":{"start":{"line":235,"character":5},"end":{"line":235,"character":17}}}],"id":10533}

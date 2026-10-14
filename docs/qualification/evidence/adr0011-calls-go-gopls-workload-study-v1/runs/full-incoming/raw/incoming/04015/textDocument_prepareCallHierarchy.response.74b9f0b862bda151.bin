@@ -1,0 +1,3 @@
+Content-Length: 546
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censusacquisition/discovery.go","version":1,"diagnostics":[{"range":{"start":{"line":366,"character":6},"end":{"line":366,"character":42}},"severity":4,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#slicesbackward"},"source":"slicesbackward","message":"backward loop over slice can be modernized using slices.Backward [aix,ppc64]"}]}}

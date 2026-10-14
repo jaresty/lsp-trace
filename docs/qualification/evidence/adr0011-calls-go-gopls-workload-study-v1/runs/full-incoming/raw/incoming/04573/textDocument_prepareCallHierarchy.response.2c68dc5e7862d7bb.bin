@@ -1,0 +1,3 @@
+Content-Length: 404
+
+{"jsonrpc":"2.0","result":[{"name":"SessionKey","kind":12,"detail":"lsp-trace/internal/runtimeprofile • profile.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/runtimeprofile/profile.go","range":{"start":{"line":105,"character":23},"end":{"line":105,"character":33}},"selectionRange":{"start":{"line":105,"character":23},"end":{"line":105,"character":33}}}],"id":9094}

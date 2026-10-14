@@ -1,0 +1,3 @@
+Content-Length: 592
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Unmarshal","kind":12,"detail":"encoding/json • decode.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/encoding/json/decode.go","range":{"start":{"line":101,"character":5},"end":{"line":101,"character":14}},"selectionRange":{"start":{"line":101,"character":5},"end":{"line":101,"character":14}}},"fromRanges":[{"start":{"line":103,"character":9},"end":{"line":103,"character":18}},{"start":{"line":108,"character":9},"end":{"line":108,"character":18}},{"start":{"line":112,"character":24},"end":{"line":112,"character":33}}]}],"id":589}

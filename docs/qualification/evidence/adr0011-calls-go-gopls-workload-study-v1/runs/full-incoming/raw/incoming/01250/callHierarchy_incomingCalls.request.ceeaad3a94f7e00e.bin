@@ -1,0 +1,3 @@
+Content-Length: 500
+
+{"jsonrpc":"2.0","id":2490,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"acquirePrivateBuiltin","kind":12,"detail":"lsp-trace/internal/adr0011acquisition \u2022 owner_private_builtin.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/owner_private_builtin.go","range":{"start":{"line":112,"character":30},"end":{"line":112,"character":51}},"selectionRange":{"start":{"line":112,"character":30},"end":{"line":112,"character":51}}}}}

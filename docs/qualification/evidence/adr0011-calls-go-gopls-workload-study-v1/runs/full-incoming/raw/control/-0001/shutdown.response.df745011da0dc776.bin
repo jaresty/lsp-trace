@@ -1,0 +1,3 @@
+Content-Length: 738
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"2026/10/13 19:29:52 Created View (#10)\n\tdirectory=/private/tmp/adr0011-gopls-workload-study-v1/workspace\n\tview_type=\"GoMod\"\n\troot_dir=\"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace\"\n\tgo_version=\"go version go1.26.5 darwin/arm64\"\n\tbuild_flags=[]\n\tenv={GOOS:darwin GOARCH:arm64 GOCACHE:/Users/schwa/Library/Caches/go-build GOMODCACHE:/Users/schwa/go/pkg/mod GOPATH:/Users/schwa/go GOPRIVATE: GOFLAGS: GO111MODULE: GOTOOLCHAIN:auto GOROOT:/opt/homebrew/Cellar/go/1.26.5/libexec GoVersion:26 GoVersionOutput:go version go1.26.5 darwin/arm64\n ExplicitGOWORK: EffectiveGOPACKAGESDRIVER:}\n\tenv_overlay=[GOARCH=amd64 GOOS=linux]\n"}}

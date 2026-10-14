@@ -1,0 +1,3 @@
+Content-Length: 450
+
+{"jsonrpc":"2.0","id":4919,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Receipt","kind":12,"detail":"lsp-trace/internal/describeworker \u2022 records.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/records.go","range":{"start":{"line":128,"character":26},"end":{"line":128,"character":33}},"selectionRange":{"start":{"line":128,"character":26},"end":{"line":128,"character":33}}}}}

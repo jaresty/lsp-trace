@@ -1,0 +1,3 @@
+Content-Length: 630
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/adr0007-source-text-search-v4-private-oracle/main.go","languageId":"go","version":1,"text":"package main\n\nimport (\n\t\"fmt\"\n\toracle \"lsp-trace/internal/adr0007sourcetextsearchv4oracle\"\n\t\"os\"\n)\n\nfunc main() {\n\tif len(os.Args) != 2 {\n\t\tfmt.Fprintln(os.Stderr, \"usage: oracle <attempt.json>\")\n\t\tos.Exit(2)\n\t}\n\tb, err := oracle.EvaluateFile(os.Args[1])\n\tif err != nil {\n\t\tfmt.Fprintln(os.Stderr, err)\n\t\tos.Exit(1)\n\t}\n\tos.Stdout.Write(b)\n}\n"}}}

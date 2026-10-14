@@ -1,0 +1,3 @@
+Content-Length: 415
+
+{"jsonrpc":"2.0","result":[{"name":"RawStdoutDigest","kind":12,"detail":"lsp-trace/internal/describeworker • records_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/records_v2.go","range":{"start":{"line":364,"character":26},"end":{"line":364,"character":41}},"selectionRange":{"start":{"line":364,"character":26},"end":{"line":364,"character":41}}}],"id":4994}

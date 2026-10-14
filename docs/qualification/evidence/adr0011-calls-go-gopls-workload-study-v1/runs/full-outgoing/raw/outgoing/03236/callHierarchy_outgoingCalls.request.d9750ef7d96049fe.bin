@@ -1,0 +1,3 @@
+Content-Length: 436
+
+{"jsonrpc":"2.0","id":6434,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"callContext","kind":12,"detail":"lsp-trace/internal/mcp \u2022 transport.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcp/transport.go","range":{"start":{"line":470,"character":17},"end":{"line":470,"character":28}},"selectionRange":{"start":{"line":470,"character":17},"end":{"line":470,"character":28}}}}}

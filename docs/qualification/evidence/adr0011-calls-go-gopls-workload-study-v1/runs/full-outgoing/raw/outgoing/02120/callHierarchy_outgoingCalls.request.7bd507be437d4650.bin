@@ -1,0 +1,3 @@
+Content-Length: 466
+
+{"jsonrpc":"2.0","id":4218,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"HandoffID","kind":12,"detail":"lsp-trace/internal/censuscontinuation \u2022 checkpoint.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/checkpoint.go","range":{"start":{"line":111,"character":20},"end":{"line":111,"character":29}},"selectionRange":{"start":{"line":111,"character":20},"end":{"line":111,"character":29}}}}}

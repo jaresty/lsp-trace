@@ -1,0 +1,3 @@
+Content-Length: 485
+
+{"jsonrpc":"2.0","id":7533,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"CombinedClaimCeiling","kind":12,"detail":"lsp-trace/internal/programcadmission \u2022 leiden_projection.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcadmission/leiden_projection.go","range":{"start":{"line":88,"character":33},"end":{"line":88,"character":53}},"selectionRange":{"start":{"line":88,"character":33},"end":{"line":88,"character":53}}}}}

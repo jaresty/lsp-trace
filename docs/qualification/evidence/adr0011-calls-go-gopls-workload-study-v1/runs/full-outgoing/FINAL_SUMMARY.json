@@ -1,0 +1,41 @@
+{
+  "batch_count_verified": true,
+  "contract_sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad",
+  "counts": {
+    "attempted": 5900,
+    "cancel": 0,
+    "denominator": 5900,
+    "empty": 1455,
+    "fail": 67,
+    "malformed": 0,
+    "nonempty": 4378,
+    "one_final_disposition_ordinals": 5900,
+    "partial": 0,
+    "refused": 0,
+    "timeout": 0,
+    "unattempted": 0,
+    "unsupported": 0
+  },
+  "denominator_verified": true,
+  "direction": "outgoing",
+  "environment_sha256": "733f03ec980bd83f9decf1781e44f5982a1aebe20daeb20c6a8655708c2b6c76",
+  "failure_count": 67,
+  "final_disposition_counts": {
+    "FAILED_LSP_ERROR": 67,
+    "SUCCEEDED_EMPTY": 1455,
+    "SUCCEEDED_NON_EMPTY": 4378
+  },
+  "ledger_sha256": "1442c679853e85866ec3070fe745c8f66d6eb26d60fb0c9a28ff9b0e0b66a897",
+  "not_granted": [
+    "production_admission",
+    "profileGO",
+    "manager_custody",
+    "completeness"
+  ],
+  "one_final_disposition_per_ordinal_verified": true,
+  "raw_aggregate_digest": "9cdbd26f6cd60887d5414b10c0f7d1fd67d2a185c83cb9aad44aab08c742427b",
+  "refusal_count": 0,
+  "run_dir": "runs/full-outgoing",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.final-summary.v1",
+  "status": "NUMERIC_BOUNDS_AUTHORED_NOT_GO"
+}

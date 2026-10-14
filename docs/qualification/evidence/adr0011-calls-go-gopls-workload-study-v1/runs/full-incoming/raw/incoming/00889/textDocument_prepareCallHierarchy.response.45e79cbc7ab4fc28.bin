@@ -1,0 +1,3 @@
+Content-Length: 440
+
+{"jsonrpc":"2.0","result":[{"name":"DeadlineExceeded","kind":12,"detail":"lsp-trace/internal/adr0007locationv3/cmd/designverify • main.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007locationv3/cmd/designverify/main.go","range":{"start":{"line":19,"character":17},"end":{"line":19,"character":33}},"selectionRange":{"start":{"line":19,"character":17},"end":{"line":19,"character":33}}}],"id":1769}

@@ -1,0 +1,3 @@
+Content-Length: 452
+
+{"jsonrpc":"2.0","result":[{"name":"registerPrivateB4C15LeaseLocked","kind":12,"detail":"lsp-trace/sessionruntime • b4_explicit_bytes_c15_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_explicit_bytes_c15_private.go","range":{"start":{"line":344,"character":33},"end":{"line":344,"character":64}},"selectionRange":{"start":{"line":344,"character":33},"end":{"line":344,"character":64}}}],"id":10918}

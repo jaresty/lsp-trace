@@ -1,0 +1,3 @@
+Content-Length: 413
+
+{"jsonrpc":"2.0","result":[{"name":"str","kind":12,"detail":"lsp-trace/internal/adr0011acquisition • raw_scanner.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/raw_scanner.go","range":{"start":{"line":102,"character":20},"end":{"line":102,"character":23}},"selectionRange":{"start":{"line":102,"character":20},"end":{"line":102,"character":23}}}],"id":2651}

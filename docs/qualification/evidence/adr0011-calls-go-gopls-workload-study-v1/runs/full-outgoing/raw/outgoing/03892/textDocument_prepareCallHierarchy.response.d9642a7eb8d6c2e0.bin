@@ -1,0 +1,3 @@
+Content-Length: 429
+
+{"jsonrpc":"2.0","result":[{"name":"Spans","kind":12,"detail":"lsp-trace/internal/programcrepresentative • source_context.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcrepresentative/source_context.go","range":{"start":{"line":187,"character":29},"end":{"line":187,"character":34}},"selectionRange":{"start":{"line":187,"character":29},"end":{"line":187,"character":34}}}],"id":7740}

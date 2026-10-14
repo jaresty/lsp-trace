@@ -1,0 +1,3 @@
+Content-Length: 441
+
+{"jsonrpc":"2.0","id":9547,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"removeWaiter","kind":12,"detail":"lsp-trace/internal/session \u2022 manager.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/session/manager.go","range":{"start":{"line":794,"character":18},"end":{"line":794,"character":30}},"selectionRange":{"start":{"line":794,"character":18},"end":{"line":794,"character":30}}}}}

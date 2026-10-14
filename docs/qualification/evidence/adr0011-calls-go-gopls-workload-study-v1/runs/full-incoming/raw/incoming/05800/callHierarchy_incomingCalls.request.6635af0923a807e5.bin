@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":11538,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"prepareDocument","kind":12,"detail":"lsp-trace/sessionruntime \u2022 sessionruntime.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/sessionruntime.go","range":{"start":{"line":418,"character":18},"end":{"line":418,"character":33}},"selectionRange":{"start":{"line":418,"character":18},"end":{"line":418,"character":33}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 510
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"page","kind":12,"detail":"lsp-trace/internal/ancillaryinspection • inspection.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/ancillaryinspection/inspection.go","range":{"start":{"line":249,"character":19},"end":{"line":249,"character":23}},"selectionRange":{"start":{"line":249,"character":19},"end":{"line":249,"character":23}}},"fromRanges":[{"start":{"line":252,"character":10},"end":{"line":252,"character":16}}]}],"id":3687}

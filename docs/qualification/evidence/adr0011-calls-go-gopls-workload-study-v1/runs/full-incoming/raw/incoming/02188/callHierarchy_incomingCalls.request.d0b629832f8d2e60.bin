@@ -1,0 +1,3 @@
+Content-Length: 467
+
+{"jsonrpc":"2.0","id":4353,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"DescribeDeadlineMS","kind":12,"detail":"lsp-trace/internal/censuscontinuation \u2022 contract.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/contract.go","range":{"start":{"line":84,"character":30},"end":{"line":84,"character":48}},"selectionRange":{"start":{"line":84,"character":30},"end":{"line":84,"character":48}}}}}

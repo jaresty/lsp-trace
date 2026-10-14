@@ -1,0 +1,3 @@
+Content-Length: 426
+
+{"jsonrpc":"2.0","result":[{"name":"Accounting","kind":12,"detail":"lsp-trace/internal/provisionalfeaturecatalog • catalog.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/provisionalfeaturecatalog/catalog.go","range":{"start":{"line":209,"character":17},"end":{"line":209,"character":27}},"selectionRange":{"start":{"line":209,"character":17},"end":{"line":209,"character":27}}}],"id":8116}

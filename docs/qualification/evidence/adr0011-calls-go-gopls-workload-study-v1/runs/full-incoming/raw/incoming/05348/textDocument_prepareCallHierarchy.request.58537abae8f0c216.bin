@@ -1,0 +1,3 @@
+Content-Length: 277
+
+{"jsonrpc":"2.0","id":10637,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/qualification/program-c/candidates/gonum-louvain/cmd/qualify/main.go"},"position":{"line":52,"character":5}}}

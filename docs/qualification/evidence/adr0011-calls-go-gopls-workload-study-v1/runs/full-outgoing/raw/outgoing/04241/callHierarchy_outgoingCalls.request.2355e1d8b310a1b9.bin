@@ -1,0 +1,3 @@
+Content-Length: 459
+
+{"jsonrpc":"2.0","id":8436,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ID","kind":12,"detail":"lsp-trace/internal/referencegrouping \u2022 composition.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/composition.go","range":{"start":{"line":114,"character":28},"end":{"line":114,"character":30}},"selectionRange":{"start":{"line":114,"character":28},"end":{"line":114,"character":30}}}}}

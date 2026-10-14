@@ -1,0 +1,3 @@
+Content-Length: 374
+
+{"jsonrpc":"2.0","result":[{"name":"emit","kind":12,"detail":"lsp-trace/internal/lspwire • wire.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/lspwire/wire.go","range":{"start":{"line":124,"character":5},"end":{"line":124,"character":9}},"selectionRange":{"start":{"line":124,"character":5},"end":{"line":124,"character":9}}}],"id":6104}

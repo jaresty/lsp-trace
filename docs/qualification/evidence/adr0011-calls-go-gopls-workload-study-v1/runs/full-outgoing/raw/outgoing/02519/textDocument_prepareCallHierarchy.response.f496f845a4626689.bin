@@ -1,0 +1,3 @@
+Content-Length: 419
+
+{"jsonrpc":"2.0","result":[{"name":"CitationSuggestions","kind":12,"detail":"lsp-trace/internal/describeworker • records_v2.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/describeworker/records_v2.go","range":{"start":{"line":376,"character":26},"end":{"line":376,"character":45}},"selectionRange":{"start":{"line":376,"character":26},"end":{"line":376,"character":45}}}],"id":5006}

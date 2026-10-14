@@ -1,0 +1,3 @@
+Content-Length: 421
+
+{"jsonrpc":"2.0","result":[{"name":"decodeSuccessorSnapshot","kind":12,"detail":"lsp-trace/internal/programc • stage5_successor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage5_successor.go","range":{"start":{"line":104,"character":5},"end":{"line":104,"character":28}},"selectionRange":{"start":{"line":104,"character":5},"end":{"line":104,"character":28}}}],"id":7163}

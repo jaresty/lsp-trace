@@ -1,0 +1,3 @@
+Content-Length: 502
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_definition_private.go","version":1,"diagnostics":[{"range":{"start":{"line":248,"character":2},"end":{"line":248,"character":14}},"severity":4,"code":"default","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#mapsloop"},"source":"mapsloop","message":"Replace m[k]=v loop with maps.Copy [js,wasm]"}]}}

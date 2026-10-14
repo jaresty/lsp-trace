@@ -1,0 +1,3 @@
+Content-Length: 488
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_c16_activation_compile_test.go","diagnostics":[{"range":{"start":{"line":26,"character":12},"end":{"line":26,"character":12}},"severity":2,"code":"cond","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/nilness#cond"},"source":"nilness","message":"impossible condition: nil != nil [aix,ppc64]"}]}}

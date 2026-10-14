@@ -1,0 +1,3 @@
+Content-Length: 440
+
+{"jsonrpc":"2.0","result":[{"name":"CanonicalBytes","kind":12,"detail":"lsp-trace/internal/programcrepresentative • stage7b_custody.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programcrepresentative/stage7b_custody.go","range":{"start":{"line":344,"character":20},"end":{"line":344,"character":34}},"selectionRange":{"start":{"line":344,"character":20},"end":{"line":344,"character":34}}}],"id":7898}

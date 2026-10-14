@@ -1,0 +1,3 @@
+Content-Length: 702
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/adr0007-source-text-search-designverify/main.go","languageId":"go","version":1,"text":"package main\n\nimport (\n\t\"encoding/json\"\n\t\"fmt\"\n\tsts \"lsp-trace/internal/adr0007sourcetextsearchv1\"\n\t\"os\"\n)\n\nfunc main() {\n\tif len(os.Args) != 2 {\n\t\tfmt.Fprintln(os.Stderr, \"usage: adr0007-source-text-search-designverify ROOT\")\n\t\tos.Exit(2)\n\t}\n\tf, err := sts.Census(os.Args[1])\n\tif err != nil {\n\t\tfmt.Fprintln(os.Stderr, err)\n\t\tos.Exit(1)\n\t}\n\tb, _ := json.MarshalIndent(f, \"\", \"  \")\n\tfmt.Println(string(b))\n}\n"}}}

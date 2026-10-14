@@ -1,0 +1,3 @@
+Content-Length: 524
+
+{"jsonrpc":"2.0","id":3446,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"exact","kind":12,"detail":"lsp-trace/internal/adr0011methodresult \u2022 restricted_definition_provenance_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/restricted_definition_provenance_private.go","range":{"start":{"line":160,"character":41},"end":{"line":160,"character":46}},"selectionRange":{"start":{"line":160,"character":41},"end":{"line":160,"character":46}}}}}

@@ -1,0 +1,87 @@
+{
+  "authority_policy": {
+    "composition_admission": "NOT_REQUESTED_NOT_GRANTED",
+    "direction_authority_merged": false,
+    "directions_are_separate_authority_streams": true,
+    "evidence_authority": 0,
+    "production_admission": "REFUSED_NOT_REQUESTED_NOT_GRANTED",
+    "profile_go": "NOT_REQUESTED"
+  },
+  "corpus_identity": {
+    "qualification_corpus_commit": "7f09e5357b117d20449fc16097631e32d4eead7f",
+    "source_revision": "4b910fc0c517cb7801fb51d17d295897230d11fa",
+    "source_tree": "761474bf5d90bbe3468df62b1a68a1fa26dc2c82",
+    "target_corpus_manifest_sha256": "316afe2501aebe4195894d1334be566ae49eb32c88276ebee7b2e4d86062f44d",
+    "target_count": 5900,
+    "target_json": {
+      "path": "docs/qualification/adr0011-callhierarchy-target-corpus-v1/targets.json",
+      "sha256": "301fdff765cb31a47900c9fc3bf6af8a02d27c91c7e027bfb5e3f3ebabadc16e"
+    },
+    "target_order": "TSV_ROW_ORDER_AFTER_HEADER_IS_ORDINAL_ORDER",
+    "target_tsv": {
+      "line_count_including_header": 5901,
+      "path": "docs/qualification/adr0011-callhierarchy-target-corpus-v1/targets.tsv",
+      "sha256": "8aa361546ab5245ae0ac2f945e3d19b36a48b745bfe7187e5baef6d6d9a14bd4"
+    }
+  },
+  "direction_refs": {
+    "incoming": {
+      "bounds_path": "runs/full-incoming/NUMERIC_BOUNDS.json",
+      "bounds_sha256": "46a484d004dfcf8c019290aa8d8a724e1a1a1682982c5460c1976c68c47b6397",
+      "run_dir": "runs/full-incoming",
+      "summary_path": "runs/full-incoming/FINAL_SUMMARY.json",
+      "summary_sha256": "7bab05495d489f4e12f2e25a9ab16ba9206ca7eb74f62f9d947f92498f55066f",
+      "verification": {
+        "batch_count": 118,
+        "denominator": 5900,
+        "direction": "incoming",
+        "failure_count": 67,
+        "refusal_count": 0,
+        "run_dir": "runs/full-incoming",
+        "status": "NUMERIC_BOUNDS_VERIFIED"
+      }
+    },
+    "outgoing": {
+      "bounds_path": "runs/full-outgoing/NUMERIC_BOUNDS.json",
+      "bounds_sha256": "abe46e255bad7b0b2838f7152a4acf5d5bb8016c4cfeb1852ec3b5be3eceadb4",
+      "run_dir": "runs/full-outgoing",
+      "summary_path": "runs/full-outgoing/FINAL_SUMMARY.json",
+      "summary_sha256": "e6c8798f57e020f4af3c8fc149acdc2d21a76039d427da241db62a5234858d46",
+      "verification": {
+        "batch_count": 118,
+        "denominator": 5900,
+        "direction": "outgoing",
+        "failure_count": 67,
+        "refusal_count": 0,
+        "run_dir": "runs/full-outgoing",
+        "status": "NUMERIC_BOUNDS_VERIFIED"
+      }
+    }
+  },
+  "environment_and_gopls_identity_refs": {
+    "incoming_environment_path": "runs/full-incoming/provenance/environment.json",
+    "incoming_environment_sha256": "4df2881d8d2e26ac9869bfead093497fce6487894bf5b366c7606c065f8c5221",
+    "outgoing_environment_path": "runs/full-outgoing/provenance/environment.json",
+    "outgoing_environment_sha256": "733f03ec980bd83f9decf1781e44f5982a1aebe20daeb20c6a8655708c2b6c76"
+  },
+  "evidence_contract_hashes": {
+    "contract_json_sha256": "61470ebf49ac137ed2b3476bfcf2f466f8fa1c0282ee534484176c5739d046ad",
+    "contract_schema_sha256": "023cbc70f9d495f2931dc23a95d0e05acbfdd0aa44732707888691ffabdbfebf",
+    "numeric_deriver_sha256": "09b0a3e86725a77b35427b86fc0017bff25fcdb35eb81bf0db7981646eacfa7b",
+    "runner_sha256": "10456c34a2b8c629b301c2ebfdafbbad7ba432db85ae33ac49b464906818f482"
+  },
+  "forbidden_or_not_granted": [
+    "profileGO",
+    "production admission",
+    "composition admission",
+    "merged bidirectional authority"
+  ],
+  "recursive_presumption_ledger": {
+    "ledger_rows_ref": "README.md#Presumed / Revised-if / Depends-on ledger",
+    "presumptions_are_references_not_new_authority": true,
+    "readme_path": "README.md",
+    "readme_sha256": "dc97f9b66bc33d523bdc5e03073b4f5739aeba946284b17e45883d6a154a76d4"
+  },
+  "schema": "lsp-trace.adr0011.calls.go.gopls.workload-review-package.v1",
+  "status": "WORKLOAD_BOUNDS_AUTHORED_NOT_GO"
+}

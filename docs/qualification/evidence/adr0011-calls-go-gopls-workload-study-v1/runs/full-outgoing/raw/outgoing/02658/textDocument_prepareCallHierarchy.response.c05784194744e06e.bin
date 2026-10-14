@@ -1,0 +1,3 @@
+Content-Length: 375
+
+{"jsonrpc":"2.0","result":[{"name":"marshalV5","kind":12,"detail":"lsp-trace/internal/graph • v3.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graph/v3.go","range":{"start":{"line":179,"character":16},"end":{"line":179,"character":25}},"selectionRange":{"start":{"line":179,"character":16},"end":{"line":179,"character":25}}}],"id":5282}

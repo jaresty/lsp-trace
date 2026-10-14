@@ -1,0 +1,3 @@
+Content-Length: 388
+
+{"jsonrpc":"2.0","result":[{"name":"Bind","kind":12,"detail":"lsp-trace/internal/session • lifecycle.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/session/lifecycle.go","range":{"start":{"line":114,"character":21},"end":{"line":114,"character":25}},"selectionRange":{"start":{"line":114,"character":21},"end":{"line":114,"character":25}}}],"id":9484}

@@ -1,0 +1,3 @@
+Content-Length: 436
+
+{"jsonrpc":"2.0","result":[{"name":"Release","kind":12,"detail":"lsp-trace/sessionruntime • b4_server_error_lease_c15_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_server_error_lease_c15_private.go","range":{"start":{"line":145,"character":26},"end":{"line":145,"character":33}},"selectionRange":{"start":{"line":145,"character":26},"end":{"line":145,"character":33}}}],"id":11178}

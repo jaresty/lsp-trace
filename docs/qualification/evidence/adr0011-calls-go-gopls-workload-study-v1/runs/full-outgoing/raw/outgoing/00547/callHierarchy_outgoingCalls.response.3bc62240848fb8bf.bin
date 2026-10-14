@@ -1,0 +1,3 @@
+Content-Length: 425
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Visit","kind":12,"detail":"flag • flag.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/flag/flag.go","range":{"start":{"line":469,"character":18},"end":{"line":469,"character":23}},"selectionRange":{"start":{"line":469,"character":18},"end":{"line":469,"character":23}}},"fromRanges":[{"start":{"line":252,"character":4},"end":{"line":252,"character":9}}]}],"id":1089}

@@ -1,0 +1,3 @@
+Content-Length: 550
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/adr0007-source-text-search-v4-private-mutations/main.go","version":1,"diagnostics":[{"range":{"start":{"line":167,"character":9},"end":{"line":167,"character":26}},"severity":4,"code":"stringscut","codeDescription":{"href":"https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#stringscut"},"source":"stringscut","message":"strings.IndexByte can be simplified using strings.Cut [aix,ppc64]"}]}}

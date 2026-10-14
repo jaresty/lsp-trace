@@ -1,0 +1,3 @@
+Content-Length: 229
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011methodresult/references_transition_sink.go","version":1,"diagnostics":[]}}

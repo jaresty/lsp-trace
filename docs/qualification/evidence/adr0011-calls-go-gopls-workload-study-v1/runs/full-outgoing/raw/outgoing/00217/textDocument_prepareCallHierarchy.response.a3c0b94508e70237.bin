@@ -1,0 +1,3 @@
+Content-Length: 430
+
+{"jsonrpc":"2.0","result":[{"name":"censusMappingResultDiagnostic","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • census_mcp_binding.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/census_mcp_binding.go","range":{"start":{"line":301,"character":5},"end":{"line":301,"character":34}},"selectionRange":{"start":{"line":301,"character":5},"end":{"line":301,"character":34}}}],"id":434}

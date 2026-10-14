@@ -1,0 +1,3 @@
+Content-Length: 405
+
+{"jsonrpc":"2.0","result":[{"name":"unavailableOutcomes","kind":12,"detail":"lsp-trace/internal/targetpacket • packet.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/targetpacket/packet.go","range":{"start":{"line":325,"character":5},"end":{"line":325,"character":24}},"selectionRange":{"start":{"line":325,"character":5},"end":{"line":325,"character":24}}}],"id":9884}

@@ -1,0 +1,3 @@
+Content-Length: 411
+
+{"jsonrpc":"2.0","result":[{"name":"DocumentSymbols","kind":12,"detail":"lsp-trace/cmd/lsp-trace • production_discovery.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/production_discovery.go","range":{"start":{"line":51,"character":35},"end":{"line":51,"character":50}},"selectionRange":{"start":{"line":51,"character":35},"end":{"line":51,"character":50}}}],"id":1064}

@@ -1,0 +1,3 @@
+Content-Length: 447
+
+{"jsonrpc":"2.0","id":1844,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Census","kind":12,"detail":"lsp-trace/internal/adr0007locationv4 \u2022 freeze.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0007locationv4/freeze.go","range":{"start":{"line":39,"character":5},"end":{"line":39,"character":11}},"selectionRange":{"start":{"line":39,"character":5},"end":{"line":39,"character":11}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 451
+
+{"jsonrpc":"2.0","id":8285,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"ReadSelector","kind":12,"detail":"lsp-trace/internal/publication \u2022 selector.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/publication/selector.go","range":{"start":{"line":128,"character":15},"end":{"line":128,"character":27}},"selectionRange":{"start":{"line":128,"character":15},"end":{"line":128,"character":27}}}}}

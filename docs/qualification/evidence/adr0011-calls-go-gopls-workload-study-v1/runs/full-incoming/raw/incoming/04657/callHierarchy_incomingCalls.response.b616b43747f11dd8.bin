@@ -1,0 +1,3 @@
+Content-Length: 509
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"Ingest","kind":12,"detail":"lsp-trace/internal/searchqualificationv11 • search.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/searchqualificationv11/search.go","range":{"start":{"line":500,"character":17},"end":{"line":500,"character":23}},"selectionRange":{"start":{"line":500,"character":17},"end":{"line":500,"character":23}}},"fromRanges":[{"start":{"line":521,"character":6},"end":{"line":521,"character":11}}]}],"id":9263}

@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":3935,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"Record","kind":12,"detail":"lsp-trace/internal/captureset \u2022 failure_ledger.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/captureset/failure_ledger.go","range":{"start":{"line":100,"character":24},"end":{"line":100,"character":30}},"selectionRange":{"start":{"line":100,"character":24},"end":{"line":100,"character":30}}}}}

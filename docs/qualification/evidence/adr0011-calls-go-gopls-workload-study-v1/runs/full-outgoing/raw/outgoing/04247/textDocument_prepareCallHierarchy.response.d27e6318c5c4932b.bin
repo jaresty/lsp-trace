@@ -1,0 +1,3 @@
+Content-Length: 434
+
+{"jsonrpc":"2.0","result":[{"name":"SeparateLayerContributions","kind":12,"detail":"lsp-trace/internal/referencegrouping • composition.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/referencegrouping/composition.go","range":{"start":{"line":124,"character":28},"end":{"line":124,"character":54}},"selectionRange":{"start":{"line":124,"character":28},"end":{"line":124,"character":54}}}],"id":8447}

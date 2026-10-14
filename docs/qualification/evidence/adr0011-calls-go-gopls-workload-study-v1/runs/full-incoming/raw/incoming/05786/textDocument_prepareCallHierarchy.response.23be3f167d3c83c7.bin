@@ -1,0 +1,3 @@
+Content-Length: 440
+
+{"jsonrpc":"2.0","result":[{"name":"appendReadinessHistoryFrame","kind":12,"detail":"lsp-trace/sessionruntime • readiness_history_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/readiness_history_private.go","range":{"start":{"line":175,"character":18},"end":{"line":175,"character":45}},"selectionRange":{"start":{"line":175,"character":18},"end":{"line":175,"character":45}}}],"id":11511}

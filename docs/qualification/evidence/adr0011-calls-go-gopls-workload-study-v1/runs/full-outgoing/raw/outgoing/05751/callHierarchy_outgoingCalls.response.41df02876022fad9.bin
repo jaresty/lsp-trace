@@ -1,0 +1,3 @@
+Content-Length: 595
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"Sum256","kind":12,"detail":"crypto/sha256 • sha256.go","uri":"file:///opt/homebrew/Cellar/go/1.26.5/libexec/src/crypto/sha256/sha256.go","range":{"start":{"line":52,"character":5},"end":{"line":52,"character":11}},"selectionRange":{"start":{"line":52,"character":5},"end":{"line":52,"character":11}}},"fromRanges":[{"start":{"line":418,"character":152},"end":{"line":418,"character":158}},{"start":{"line":418,"character":234},"end":{"line":418,"character":240}},{"start":{"line":418,"character":362},"end":{"line":418,"character":368}}]}],"id":11443}

@@ -1,0 +1,3 @@
+Content-Length: 619
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"TestCaptureReplayOwnsAllLiveReadsAndIsWorkspaceIndependent","kind":12,"detail":"lsp-trace/internal/v5sourcesnapshotv3 • v3_test.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/v5sourcesnapshotv3/v3_test.go","range":{"start":{"line":24,"character":5},"end":{"line":24,"character":63}},"selectionRange":{"start":{"line":24,"character":5},"end":{"line":24,"character":63}}},"fromRanges":[{"start":{"line":42,"character":23},"end":{"line":42,"character":29}},{"start":{"line":49,"character":23},"end":{"line":49,"character":29}}]}],"id":10273}

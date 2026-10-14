@@ -1,0 +1,3 @@
+Content-Length: 425
+
+{"jsonrpc":"2.0","result":[{"name":"publishRecord","kind":12,"detail":"lsp-trace/internal/adr0011lifecycle • v2_publication.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011lifecycle/v2_publication.go","range":{"start":{"line":233,"character":20},"end":{"line":233,"character":33}},"selectionRange":{"start":{"line":233,"character":20},"end":{"line":233,"character":33}}}],"id":3211}

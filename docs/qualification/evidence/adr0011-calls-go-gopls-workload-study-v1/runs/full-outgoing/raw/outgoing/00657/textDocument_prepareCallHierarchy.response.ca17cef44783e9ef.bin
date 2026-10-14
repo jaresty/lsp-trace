@@ -1,0 +1,3 @@
+Content-Length: 382
+
+{"jsonrpc":"2.0","result":[{"name":"normalized","kind":12,"detail":"lsp-trace/incomingops • executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/incomingops/executor.go","range":{"start":{"line":772,"character":28},"end":{"line":772,"character":38}},"selectionRange":{"start":{"line":772,"character":28},"end":{"line":772,"character":38}}}],"id":1307}

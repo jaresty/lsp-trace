@@ -1,0 +1,3 @@
+Content-Length: 264
+
+{"jsonrpc":"2.0","id":4531,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/private_community_handoff.go"},"position":{"line":53,"character":5}}}

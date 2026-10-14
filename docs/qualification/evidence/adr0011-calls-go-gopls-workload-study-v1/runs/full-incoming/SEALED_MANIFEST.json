@@ -1,0 +1,38 @@
+{
+  "batch_count": 118,
+  "denominator": 5900,
+  "derived_artifacts": [
+    {
+      "byte_length": 11765839,
+      "path": "runs/full-incoming/NUMERIC_BOUNDS.json",
+      "sha256": "46a484d004dfcf8c019290aa8d8a724e1a1a1682982c5460c1976c68c47b6397"
+    },
+    {
+      "byte_length": 1238,
+      "path": "runs/full-incoming/FINAL_SUMMARY.json",
+      "sha256": "7bab05495d489f4e12f2e25a9ab16ba9206ca7eb74f62f9d947f92498f55066f"
+    },
+    {
+      "byte_length": 197227,
+      "path": "runs/full-incoming/FAILURES.jsonl",
+      "sha256": "ad2785c3690f1ce104cd803058c9dace7fbb379ad65bd18d8ebc87ab7cef345f"
+    },
+    {
+      "byte_length": 0,
+      "path": "runs/full-incoming/REFUSALS.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "byte_length": 16593004,
+      "path": "runs/full-incoming/PROVENANCE.json",
+      "sha256": "765527e71ccb38471e66061671be123422af8508e2d5aecf5810ffdb93b35454"
+    }
+  ],
+  "direction": "incoming",
+  "failure_count": 67,
+  "ledger_sha256": "5c181ac1304547ba8f9e915aa512f3c4e93ca1fd8594da381f7f61b165d7139f",
+  "raw_aggregate_digest": "dfedbc400dcdb7315143fd0479e791a67dda79331112bd922446e4f770c717bc",
+  "refusal_count": 0,
+  "run_dir": "runs/full-incoming",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.sealed-manifest.v1"
+}

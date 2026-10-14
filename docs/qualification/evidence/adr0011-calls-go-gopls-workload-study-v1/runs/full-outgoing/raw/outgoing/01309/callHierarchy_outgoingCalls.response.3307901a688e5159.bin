@@ -1,0 +1,3 @@
+Content-Length: 218
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011acquisition/proposal_context.go","version":1,"diagnostics":[]}}

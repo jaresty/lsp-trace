@@ -1,0 +1,3 @@
+Content-Length: 339
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"type":3,"message":"2026/10/13 19:29:50 go/packages.Load #84\n\tview_id=\"9\"\n\tsnapshot=0\n\tdirectory=/private/tmp/adr0011-gopls-workload-study-v1/workspace\n\tquery=[/private/tmp/adr0011-gopls-workload-study-v1/workspace/... builtin]\n\tpackages=551\n\tduration=550.404875ms\n"}}

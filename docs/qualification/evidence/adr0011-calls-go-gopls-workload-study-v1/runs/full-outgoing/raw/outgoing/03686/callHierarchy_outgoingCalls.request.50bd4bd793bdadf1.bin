@@ -1,0 +1,3 @@
+Content-Length: 467
+
+{"jsonrpc":"2.0","id":7333,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Completeness","kind":12,"detail":"lsp-trace/internal/programc \u2022 stage7c_instability.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/programc/stage7c_instability.go","range":{"start":{"line":427,"character":38},"end":{"line":427,"character":50}},"selectionRange":{"start":{"line":427,"character":38},"end":{"line":427,"character":50}}}}}

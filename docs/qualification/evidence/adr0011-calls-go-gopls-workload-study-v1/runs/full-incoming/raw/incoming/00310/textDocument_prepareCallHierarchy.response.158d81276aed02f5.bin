@@ -1,0 +1,3 @@
+Content-Length: 420
+
+{"jsonrpc":"2.0","result":[{"name":"Execute","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • structural_delta_executor.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/structural_delta_executor.go","range":{"start":{"line":13,"character":31},"end":{"line":13,"character":38}},"selectionRange":{"start":{"line":13,"character":31},"end":{"line":13,"character":38}}}],"id":618}

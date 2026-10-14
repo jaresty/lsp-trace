@@ -1,0 +1,3 @@
+Content-Length: 531
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"TestExpiredLeaseSweepAllowsGC","kind":12,"detail":"lsp-trace/internal/retainedlifecycle • lifecycle_test.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/retainedlifecycle/lifecycle_test.go","range":{"start":{"line":78,"character":5},"end":{"line":78,"character":34}},"selectionRange":{"start":{"line":78,"character":5},"end":{"line":78,"character":34}}},"fromRanges":[{"start":{"line":90,"character":28},"end":{"line":90,"character":40}}]}],"id":8882}

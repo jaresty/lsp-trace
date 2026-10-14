@@ -1,0 +1,3 @@
+Content-Length: 380
+
+{"jsonrpc":"2.0","result":[{"name":"Stderr","kind":12,"detail":"lsp-trace/internal/server • process.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/server/process.go","range":{"start":{"line":44,"character":18},"end":{"line":44,"character":24}},"selectionRange":{"start":{"line":44,"character":18},"end":{"line":44,"character":24}}}],"id":9412}

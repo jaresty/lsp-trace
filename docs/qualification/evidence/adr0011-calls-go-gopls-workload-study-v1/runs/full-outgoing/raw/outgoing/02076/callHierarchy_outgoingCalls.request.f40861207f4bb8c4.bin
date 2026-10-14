@@ -1,0 +1,3 @@
+Content-Length: 472
+
+{"jsonrpc":"2.0","id":4134,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Bytes","kind":12,"detail":"lsp-trace/internal/censuscontinuation \u2022 candidate_group.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censuscontinuation/candidate_group.go","range":{"start":{"line":217,"character":32},"end":{"line":217,"character":37}},"selectionRange":{"start":{"line":217,"character":32},"end":{"line":217,"character":37}}}}}

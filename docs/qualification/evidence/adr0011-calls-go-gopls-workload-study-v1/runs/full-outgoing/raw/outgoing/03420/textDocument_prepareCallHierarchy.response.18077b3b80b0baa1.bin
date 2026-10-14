@@ -1,0 +1,3 @@
+Content-Length: 407
+
+{"jsonrpc":"2.0","result":[{"name":"localSchema","kind":12,"detail":"lsp-trace/internal/normativeanalytics • local.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/normativeanalytics/local.go","range":{"start":{"line":542,"character":5},"end":{"line":542,"character":16}},"selectionRange":{"start":{"line":542,"character":5},"end":{"line":542,"character":16}}}],"id":6801}

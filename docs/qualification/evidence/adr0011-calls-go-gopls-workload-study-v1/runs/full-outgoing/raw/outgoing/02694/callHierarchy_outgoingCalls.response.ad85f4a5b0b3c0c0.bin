@@ -1,0 +1,3 @@
+Content-Length: 562
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"nonSelfCount","kind":12,"detail":"lsp-trace/internal/graphkernel • kernel.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/graphkernel/kernel.go","range":{"start":{"line":127,"character":5},"end":{"line":127,"character":17}},"selectionRange":{"start":{"line":127,"character":5},"end":{"line":127,"character":17}}},"fromRanges":[{"start":{"line":117,"character":12},"end":{"line":117,"character":24}},{"start":{"line":117,"character":40},"end":{"line":117,"character":52}}]}],"id":5355}

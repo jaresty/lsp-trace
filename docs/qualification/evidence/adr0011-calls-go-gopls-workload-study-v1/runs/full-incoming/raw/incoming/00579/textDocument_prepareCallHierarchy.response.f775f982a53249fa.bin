@@ -1,0 +1,3 @@
+Content-Length: 389
+
+{"jsonrpc":"2.0","result":[{"name":"runVerify","kind":12,"detail":"lsp-trace/cmd/lsp-trace • publication.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/publication.go","range":{"start":{"line":481,"character":5},"end":{"line":481,"character":14}},"selectionRange":{"start":{"line":481,"character":5},"end":{"line":481,"character":14}}}],"id":1151}

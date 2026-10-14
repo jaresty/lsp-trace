@@ -1,0 +1,3 @@
+Content-Length: 494
+
+{"jsonrpc":"2.0","result":[{"from":{"name":"ValidateResult","kind":12,"detail":"lsp-trace/internal/acquisition • validate.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/acquisition/validate.go","range":{"start":{"line":15,"character":5},"end":{"line":15,"character":19}},"selectionRange":{"start":{"line":15,"character":5},"end":{"line":15,"character":19}}},"fromRanges":[{"start":{"line":341,"character":11},"end":{"line":341,"character":30}}]}],"id":1391}

@@ -1,0 +1,3 @@
+Content-Length: 436
+
+{"jsonrpc":"2.0","id":4673,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"sum","kind":12,"detail":"lsp-trace/internal/censusresult \u2022 result.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censusresult/result.go","range":{"start":{"line":182,"character":5},"end":{"line":182,"character":8}},"selectionRange":{"start":{"line":182,"character":5},"end":{"line":182,"character":8}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 214
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/adr0007-source-text-search-v4-private-check/main.go","diagnostics":[]}}

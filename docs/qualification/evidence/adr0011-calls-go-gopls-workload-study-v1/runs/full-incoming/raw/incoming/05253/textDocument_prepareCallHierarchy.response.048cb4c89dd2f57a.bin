@@ -1,0 +1,3 @@
+Content-Length: 394
+
+{"jsonrpc":"2.0","result":[{"name":"Collect","kind":12,"detail":"lsp-trace/internal/vcssymbolsidecar • git.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/vcssymbolsidecar/git.go","range":{"start":{"line":48,"character":17},"end":{"line":48,"character":24}},"selectionRange":{"start":{"line":48,"character":17},"end":{"line":48,"character":24}}}],"id":10447}

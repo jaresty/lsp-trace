@@ -1,0 +1,11 @@
+{
+  "byte_length": 236,
+  "direction": "control",
+  "label": "shutdown.response",
+  "method": null,
+  "ordinal": -1,
+  "partial": false,
+  "path": "/private/tmp/adr0011-incoming-calls-v1-6yiY4m/docs/qualification/evidence/adr0011-calls-go-gopls-workload-study-v1/runs/full-outgoing/raw/control/-0001/shutdown.response.2a4805f3d74b6d1e.bin",
+  "schema": "lsp-trace.adr0011.calls.go.gopls.raw-message.v1",
+  "sha256": "2a4805f3d74b6d1efbd6be6f90f2884e9974affadf65aa2628f80d26ed0ab03e"
+}

@@ -1,0 +1,3 @@
+Content-Length: 461
+
+{"jsonrpc":"2.0","id":11433,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"copyCommitments","kind":12,"detail":"lsp-trace/sessionruntime \u2022 owned_method_pair.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/owned_method_pair.go","range":{"start":{"line":393,"character":43},"end":{"line":393,"character":58}},"selectionRange":{"start":{"line":393,"character":43},"end":{"line":393,"character":58}}}}}

@@ -1,0 +1,3 @@
+Content-Length: 519
+
+{"jsonrpc":"2.0","result":[{"to":{"name":"entry","kind":12,"detail":"lsp-trace/sessionruntime • b4_explicit_bytes_c15_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_explicit_bytes_c15_private.go","range":{"start":{"line":772,"character":38},"end":{"line":772,"character":43}},"selectionRange":{"start":{"line":772,"character":38},"end":{"line":772,"character":43}}},"fromRanges":[{"start":{"line":787,"character":8},"end":{"line":787,"character":13}}]}],"id":10963}

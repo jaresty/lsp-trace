@@ -1,0 +1,3 @@
+Content-Length: 535
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/artifactingress/identity_other.go","languageId":"go","version":1,"text":"//go:build !aix && !darwin && !dragonfly && !freebsd && !linux && !netbsd && !openbsd && !solaris && !windows\n\npackage artifactingress\n\nimport \"os\"\n\n// Unknown platforms fail closed because link-count custody is unavailable.\nfunc ambiguousIdentity(os.FileInfo, os.FileInfo) bool { return true }\n"}}}

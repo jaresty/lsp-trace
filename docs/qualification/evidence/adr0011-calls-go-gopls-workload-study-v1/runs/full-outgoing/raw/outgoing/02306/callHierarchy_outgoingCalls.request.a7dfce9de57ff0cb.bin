@@ -1,0 +1,3 @@
+Content-Length: 465
+
+{"jsonrpc":"2.0","id":4585,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"cloneAndValidateEvidence","kind":12,"detail":"lsp-trace/internal/censusprogramc \u2022 adapter.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/censusprogramc/adapter.go","range":{"start":{"line":293,"character":5},"end":{"line":293,"character":29}},"selectionRange":{"start":{"line":293,"character":5},"end":{"line":293,"character":29}}}}}

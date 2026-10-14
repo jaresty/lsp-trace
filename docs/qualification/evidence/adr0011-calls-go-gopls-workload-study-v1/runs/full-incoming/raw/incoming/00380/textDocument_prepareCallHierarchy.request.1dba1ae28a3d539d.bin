@@ -1,0 +1,3 @@
+Content-Length: 247
+
+{"jsonrpc":"2.0","id":758,"method":"textDocument/prepareCallHierarchy","params":{"textDocument":{"uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace/census_batch_acquirer.go"},"position":{"line":142,"character":30}}}

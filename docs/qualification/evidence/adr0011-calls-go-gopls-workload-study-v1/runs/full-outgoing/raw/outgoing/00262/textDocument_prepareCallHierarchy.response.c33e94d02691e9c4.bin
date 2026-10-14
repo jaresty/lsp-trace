@@ -1,0 +1,3 @@
+Content-Length: 397
+
+{"jsonrpc":"2.0","result":[{"name":"ResolveSessionSelector","kind":12,"detail":"lsp-trace/cmd/lsp-trace-mcp • main.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/lsp-trace-mcp/main.go","range":{"start":{"line":389,"character":30},"end":{"line":389,"character":52}},"selectionRange":{"start":{"line":389,"character":30},"end":{"line":389,"character":52}}}],"id":522}

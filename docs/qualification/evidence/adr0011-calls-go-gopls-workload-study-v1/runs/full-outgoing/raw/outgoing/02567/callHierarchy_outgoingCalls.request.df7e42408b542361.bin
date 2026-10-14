@@ -1,0 +1,3 @@
+Content-Length: 447
+
+{"jsonrpc":"2.0","id":5101,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ManifestInputs","kind":12,"detail":"lsp-trace/internal/execution \u2022 request.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/execution/request.go","range":{"start":{"line":141,"character":18},"end":{"line":141,"character":32}},"selectionRange":{"start":{"line":141,"character":18},"end":{"line":141,"character":32}}}}}

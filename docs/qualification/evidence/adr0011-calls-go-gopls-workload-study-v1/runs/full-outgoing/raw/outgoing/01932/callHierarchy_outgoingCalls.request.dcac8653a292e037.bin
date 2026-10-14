@@ -1,0 +1,3 @@
+Content-Length: 480
+
+{"jsonrpc":"2.0","id":3849,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"verifyCandidateGeneration","kind":12,"detail":"lsp-trace/internal/candidatepublication \u2022 adapter.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/candidatepublication/adapter.go","range":{"start":{"line":350,"character":18},"end":{"line":350,"character":43}},"selectionRange":{"start":{"line":350,"character":18},"end":{"line":350,"character":43}}}}}

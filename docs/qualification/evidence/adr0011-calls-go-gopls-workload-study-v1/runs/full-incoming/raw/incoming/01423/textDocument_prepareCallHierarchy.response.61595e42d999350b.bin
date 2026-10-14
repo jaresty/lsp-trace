@@ -1,0 +1,3 @@
+Content-Length: 405
+
+{"jsonrpc":"2.0","result":[{"name":"SealRuntime","kind":12,"detail":"lsp-trace/internal/adr0011c18 • coordinator.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/adr0011c18/coordinator.go","range":{"start":{"line":246,"character":18},"end":{"line":246,"character":29}},"selectionRange":{"start":{"line":246,"character":18},"end":{"line":246,"character":29}}}],"id":2835}

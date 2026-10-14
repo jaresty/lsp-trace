@@ -1,0 +1,3 @@
+Content-Length: 83
+
+{"jsonrpc":"2.0","error":{"code":0,"message":"Writer is not a function"},"id":6121}

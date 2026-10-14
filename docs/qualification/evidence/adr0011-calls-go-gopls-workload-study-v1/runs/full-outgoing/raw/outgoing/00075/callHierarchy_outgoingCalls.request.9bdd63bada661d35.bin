@@ -1,0 +1,3 @@
+Content-Length: 495
+
+{"jsonrpc":"2.0","id":153,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"allowed","kind":12,"detail":"lsp-trace/cmd/adr0007-source-text-search-v4-successor-freeze \u2022 main.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/cmd/adr0007-source-text-search-v4-successor-freeze/main.go","range":{"start":{"line":230,"character":5},"end":{"line":230,"character":12}},"selectionRange":{"start":{"line":230,"character":5},"end":{"line":230,"character":12}}}}}

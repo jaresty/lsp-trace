@@ -1,0 +1,3 @@
+Content-Length: 455
+
+{"jsonrpc":"2.0","id":10391,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"ResourceLimit","kind":12,"detail":"lsp-trace/internal/v5sourcesnapshotv6 \u2022 v6.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/v5sourcesnapshotv6/v6.go","range":{"start":{"line":191,"character":21},"end":{"line":191,"character":34}},"selectionRange":{"start":{"line":191,"character":21},"end":{"line":191,"character":34}}}}}

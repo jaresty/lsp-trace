@@ -1,0 +1,3 @@
+Content-Length: 440
+
+{"jsonrpc":"2.0","id":6339,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"SetServerIdentity","kind":12,"detail":"lsp-trace/internal/mcp \u2022 registry.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/internal/mcp/registry.go","range":{"start":{"line":485,"character":19},"end":{"line":485,"character":36}},"selectionRange":{"start":{"line":485,"character":19},"end":{"line":485,"character":36}}}}}

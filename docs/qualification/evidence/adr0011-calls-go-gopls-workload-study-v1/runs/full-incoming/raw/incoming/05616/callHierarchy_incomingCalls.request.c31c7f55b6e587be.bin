@@ -1,0 +1,3 @@
+Content-Length: 492
+
+{"jsonrpc":"2.0","id":11173,"method":"callHierarchy/incomingCalls","params":{"item":{"name":"bindRetirement","kind":12,"detail":"lsp-trace/sessionruntime \u2022 b4_server_error_lease_c15_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_server_error_lease_c15_private.go","range":{"start":{"line":117,"character":36},"end":{"line":117,"character":50}},"selectionRange":{"start":{"line":117,"character":36},"end":{"line":117,"character":50}}}}}

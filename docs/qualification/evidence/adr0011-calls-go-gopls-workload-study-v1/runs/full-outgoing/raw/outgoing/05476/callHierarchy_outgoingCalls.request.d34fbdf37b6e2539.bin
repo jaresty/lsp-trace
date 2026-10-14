@@ -1,0 +1,3 @@
+Content-Length: 481
+
+{"jsonrpc":"2.0","id":10893,"method":"callHierarchy/outgoingCalls","params":{"item":{"name":"eventSnapshot","kind":12,"detail":"lsp-trace/sessionruntime \u2022 b4_event_account_c17_private.go","uri":"file:///private/tmp/adr0011-gopls-workload-study-v1/workspace/sessionruntime/b4_event_account_c17_private.go","range":{"start":{"line":596,"character":35},"end":{"line":596,"character":48}},"selectionRange":{"start":{"line":596,"character":35},"end":{"line":596,"character":48}}}}}
