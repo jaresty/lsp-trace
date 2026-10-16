@@ -307,7 +307,7 @@ func c4Release(t *testing.T, m *sessionruntime.Manager, r directionalraw.Reserva
 			created[e.ObjectID]++
 		}
 	}
-	if len(created) != int(allocs)+1 {
+	if len(created) != len(m.DirectionalAllocationBoundariesPrivate())+1 {
 		t.Fatal("ASSERT_C4_RESERVATION_OBJECT_RECORD")
 	}
 	if !r.Release() || r.Release() {
@@ -359,7 +359,8 @@ func TestV5CausalExact32MiB(t *testing.T) {
 	m, _, c, client := c4Setup(t, "exact")
 	r := directionalraw.NewReservation("c4-exact")
 	_, view := c4Prepare(t, m, c, client, r)
-	live, cumulative, allocations, _, general, occupied := m.DirectionalAccountingPrivate()
+	live, cumulative, allocations, _, occupied := m.DirectionalPreparationAccountingPrivate()
+	_, _, _, _, general, _ := m.DirectionalAccountingPrivate()
 	if live != c4Budget || cumulative != c4Budget || allocations != 2 || general != 24600 || !occupied {
 		t.Fatalf("ASSERT_C4_EXACT32_RESERVATION: live=%d cumulative=%d allocations=%d", live, cumulative, allocations)
 	}

@@ -20,6 +20,12 @@ type PreparedSelection struct {
 	view        View
 	observation Observation
 }
+
+type CompletionMetadataPrivate struct {
+	RequestIDPrivate, GenerationPrivate                              uint64
+	RequestLengthPrivate, ResponseLengthPrivate, ResultLengthPrivate uint64
+	RequestSHA256Private, ResponseSHA256Private, ResultSHA256Private [32]byte
+}
 type Request struct {
 	Method  string
 	Ordinal uint64
@@ -58,7 +64,7 @@ type state struct {
 	mu            sync.Mutex
 	records       []*record
 	latest        *record
-	allocate      func(string, int) ([]byte, error)
+	allocate      func(string, string, int) ([]byte, error)
 	observe       func(Observation)
 	terminal      func() bool
 	release       func()
@@ -90,7 +96,7 @@ func Allowed(method string) bool {
 }
 
 // Attach is invoked by Manager only after its session/generation/lifecycle preflight.
-func (r Reservation) Attach(allocate func(string, int) ([]byte, error), observe func(Observation), terminal func() bool, release func()) bool {
+func (r Reservation) AttachPrivate(allocate func(string, string, int) ([]byte, error), observe func(Observation), terminal func() bool, release func()) bool {
 	if r.state == nil {
 		return false
 	}
@@ -102,6 +108,9 @@ func (r Reservation) Attach(allocate func(string, int) ([]byte, error), observe 
 	}
 	if s.allocate != nil {
 		return true
+	}
+	if allocate == nil || observe == nil || terminal == nil || release == nil {
+		return false
 	}
 	s.allocate, s.observe, s.terminal, s.release = allocate, observe, terminal, release
 	return true
@@ -155,7 +164,7 @@ func (l Lease) Allocate(component string, n int) ([]byte, error) {
 	if s.closed || p.complete || p.frames[component] != nil || n <= 0 {
 		return nil, errors.New("directional allocation refused")
 	}
-	b, err := s.allocate(component, n)
+	b, err := s.allocate(p.method, component, n)
 	if err != nil {
 		return nil, err
 	}
@@ -180,10 +189,10 @@ func (l Lease) Frame(component string, n int) bool {
 	// Keep full reserved backing for terminal clearing; only the observation
 	// commits the actually acquired/emitted prefix length.
 	o := Observation{Method: p.method, RequestID: p.id, Generation: p.generation, Component: component, Length: uint64(n), SHA256: sha256.Sum256(b[:n])}
-	fn := s.observe
+	observe := s.observe
 	s.mu.Unlock()
-	if fn != nil {
-		fn(o)
+	if observe != nil {
+		observe(o)
 	}
 	return true
 }
@@ -232,10 +241,10 @@ func (l Lease) RefusedPrivate(component string, n int, sum [32]byte) {
 		return
 	}
 	o := Observation{Method: p.method, RequestID: p.id, Generation: p.generation, Component: component + "-reservation-refusal", Length: uint64(n), SHA256: sum}
-	fn := s.observe
+	observe := s.observe
 	s.mu.Unlock()
-	if fn != nil {
-		fn(o)
+	if observe != nil {
+		observe(o)
 	}
 }
 func (l Lease) Complete(failure string) {
@@ -330,6 +339,28 @@ func (r *resultReader) Read(dst []byte) (int, error) {
 // ReaderPrivate is a lease-checked immutable stream, not a mutable backing view.
 // Reads into caller-owned decoder scratch are not retained raw custody copies.
 func (l Lease) ReaderPrivate() io.Reader { return &resultReader{record: l.record} }
+
+// CompletedMetadataPrivate authenticates retained bytes without copying or
+// exposing them. All digests are computed while the reservation remains live.
+func (l Lease) CompletedMetadataPrivate() (CompletionMetadataPrivate, bool) {
+	if l.record == nil {
+		return CompletionMetadataPrivate{}, false
+	}
+	p := l.record
+	s := p.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	request, response := p.frames["request-frame"], p.frames["response-frame"]
+	if s.closed || !p.complete || request == nil || response == nil {
+		return CompletionMetadataPrivate{}, false
+	}
+	return CompletionMetadataPrivate{
+		RequestIDPrivate: p.id, GenerationPrivate: p.generation,
+		RequestLengthPrivate: uint64(len(request)), ResponseLengthPrivate: uint64(len(response)), ResultLengthPrivate: uint64(len(p.result)),
+		RequestSHA256Private: sha256.Sum256(request), ResponseSHA256Private: sha256.Sum256(response), ResultSHA256Private: sha256.Sum256(p.result),
+	}, true
+}
+
 func Select(ctx context.Context, q Request) (PreparedSelection, bool) {
 	r, ok := FromContext(ctx)
 	if !ok {
@@ -345,15 +376,54 @@ func Select(ctx context.Context, q Request) (PreparedSelection, bool) {
 	span := p.elements[q.Ordinal]
 	v := View{p, span[0], span[1]}
 	o := Observation{Method: p.method, Ordinal: q.Ordinal, RequestID: p.id, Generation: p.generation, Component: "element", Selected: true, Length: uint64(span[1] - span[0]), SHA256: sha256.Sum256(p.result[span[0]:span[1]])}
-	fn := s.observe
+	observe := s.observe
 	s.mu.Unlock()
-	if fn != nil {
-		fn(o)
+	if observe != nil {
+		observe(o)
 	}
 	return PreparedSelection{v, o}, true
 }
 func (p PreparedSelection) View() View               { return p.view }
 func (p PreparedSelection) Observation() Observation { return p.observation }
+
+// AppendToPrivate copies the exact selected lexical token into caller-provided
+// transient scratch while holding the reservation lock. It never returns an
+// alias to retained backing.
+func (p PreparedSelection) DecodePrivate(target any) error {
+	v := p.view
+	if v.record == nil {
+		return errors.New("prepared selection unavailable")
+	}
+	s := v.record.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || v.start < 0 || v.end < v.start || v.end > len(v.record.result) {
+		return errors.New("prepared selection unavailable")
+	}
+	d := json.NewDecoder(bytes.NewReader(v.record.result[v.start:v.end]))
+	d.DisallowUnknownFields()
+	if err := d.Decode(target); err != nil {
+		return err
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return errors.New("trailing prepared selection")
+	}
+	return nil
+}
+
+func (p PreparedSelection) AppendToPrivate(dst []byte) ([]byte, bool) {
+	v := p.view
+	if v.record == nil {
+		return dst, false
+	}
+	s := v.record.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || v.start < 0 || v.end < v.start || v.end > len(v.record.result) {
+		return dst, false
+	}
+	return append(dst, v.record.result[v.start:v.end]...), true
+}
 
 // SharesBackingPrivate checks exact reserved-frame aliasing without exposing a
 // mutable byte slice or interpreting pointer identity as semantic authority.
@@ -419,12 +489,12 @@ func (r Reservation) Release() bool {
 	}
 	s := r.state
 	s.mu.Lock()
-	fn := s.terminal
+	terminal := s.terminal
 	s.mu.Unlock()
-	if fn == nil {
+	if terminal == nil {
 		return false
 	}
-	return fn()
+	return terminal()
 }
 
 // Terminate is called only by the generic Manager owner at its sole terminal.
@@ -598,3 +668,10 @@ func Fields(raw []byte) (map[string][]byte, error) {
 		i++
 	}
 }
+
+// Compile-only V2 overlay contract: preserve the baseline carrier body while
+// pinning the exact reservation responsibilities consumed by the proposal.
+var _ interface {
+	Context(context.Context) context.Context
+	Release() bool
+} = Reservation{}

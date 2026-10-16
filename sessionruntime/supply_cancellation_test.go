@@ -275,8 +275,13 @@ func TestOwnedRoundTripStalledIO(t *testing.T) {
 			}()
 			select {
 			case got := <-done:
-				if got.Failure != session.RequestTimeout || m.Census().Workers != 0 || m.Census().Requests != 0 || child.tears.Load() != 1 {
-					t.Fatalf("ASSERT_ROUNDTRIP_STALL: %+v %+v teardown=%d", got, m.Census(), child.tears.Load())
+				m.mu.Lock()
+				runtimeState := m.sessions[req.SessionID]
+				poisoned := runtimeState != nil && runtimeState.record.State == session.Poisoned
+				retiredInstalled := runtimeState != nil && runtimeState.retired != nil
+				m.mu.Unlock()
+				if got.Failure != session.RequestTimeout || m.Census().Workers != 0 || m.Census().Requests != 0 || child.tears.Load() != 1 || !poisoned || !retiredInstalled {
+					t.Fatalf("ASSERT_ROUNDTRIP_STALL: %+v %+v teardown=%d poisoned=%t retired=%t", got, m.Census(), child.tears.Load(), poisoned, retiredInstalled)
 				}
 				t.Log("ASSERT_ROUNDTRIP_STALL: PASS")
 			case <-time.After(500 * time.Millisecond):

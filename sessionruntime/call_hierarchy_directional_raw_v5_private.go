@@ -1,12 +1,18 @@
 package sessionruntime
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"math"
 	"sync"
+	"time"
 
 	"lsp-trace/internal/directionalraw"
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
@@ -16,6 +22,7 @@ const privateDirectionalCombinedMaxV5 uint64 = 64 << 20
 
 type privateDirectionalPartitionV5 struct {
 	live, cumulative, allocations, releases uint64
+	directionLive                           [2]uint64
 	occupied                                bool
 }
 type acceptedV2 struct {
@@ -38,26 +45,304 @@ type privateDirectionalAllocationV5 struct {
 }
 
 type privateDirectionalV5 struct {
-	allocationBoundaries []privateDirectionalAllocationV5
-	mu                   sync.Mutex
-	reservation          directionalraw.Reservation
-	account              *privateB4ByteAccountV2
-	owner                *callHierarchyLayer1GenericOwner
-	accepted             []acceptedV2
-	c15Events            []privateB4C15Event
-	frameObjects         map[uint64]string
-	responseObjects      map[uint64]uint64
-	lastResponseObject   uint64
+	allocationBoundaries   []privateDirectionalAllocationV5
+	mu                     sync.Mutex
+	reservation            directionalraw.Reservation
+	account                *privateB4ByteAccountV2
+	owner                  *callHierarchyLayer1GenericOwner
+	accepted               []acceptedV2
+	c15Events              []privateB4C15Event
+	frameObjects           map[uint64]string
+	responseObjects        map[lspwire.RequestKey]uint64
+	preparationLive        uint64
+	preparationCumulative  uint64
+	preparationAllocations uint64
+	preparationReleases    uint64
 }
 type privateDirectionalCallV5 struct {
 	execution *privateDirectionalV5
 	lease     directionalraw.Lease
 	key       lspwire.RequestKey
+	mu        sync.Mutex
+	terminal  uint8
 }
 
-// RoundTripDirectionalPrivate is an exported-private interface precedent like
-// RoundTripPrivateB4. Only an explicitly installed carrier enables it; no wire,
-// MCP, CLI, host configuration or public request schema exposes this operation.
+const (
+	privateDirectionalPendingV5 uint8 = iota
+	privateDirectionalCompletedV5
+	privateDirectionalCancelledV5
+)
+
+func (c *privateDirectionalCallV5) acceptCompletedResponse(pending *lspwire.Pending, key lspwire.ResponseKey) (lspwire.ResponseDisposition, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.terminal != privateDirectionalPendingV5 {
+		return lspwire.ResponseUnknown, false
+	}
+	disposition := pending.Accept(key)
+	if disposition != lspwire.ResponseAccepted {
+		return disposition, false
+	}
+	c.terminal = privateDirectionalCompletedV5
+	return disposition, true
+}
+
+func (c *privateDirectionalCallV5) cancelBeforeCompletion() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.terminal != privateDirectionalPendingV5 {
+		return false
+	}
+	c.terminal = privateDirectionalCancelledV5
+	return true
+}
+
+type DirectionalCallHierarchyRequestPrivate struct {
+	SessionID, URI, LanguageID, Symbol string
+	Generation                         uint64
+	Line, Character                    *uint32
+	Deadline                           time.Time
+	MaxMessages                        int
+	MaxBytes                           int64
+}
+
+type DirectionalWireReceiptPrivate struct {
+	method       string
+	metadata     directionalraw.CompletionMetadataPrivate
+	observations []directionalraw.Observation
+}
+
+func (r DirectionalWireReceiptPrivate) MethodPrivate() string    { return r.method }
+func (r DirectionalWireReceiptPrivate) RequestIDPrivate() uint64 { return r.metadata.RequestIDPrivate }
+func (r DirectionalWireReceiptPrivate) GenerationPrivate() uint64 {
+	return r.metadata.GenerationPrivate
+}
+func (r DirectionalWireReceiptPrivate) RequestLengthPrivate() uint64 {
+	return r.metadata.RequestLengthPrivate
+}
+func (r DirectionalWireReceiptPrivate) ResponseLengthPrivate() uint64 {
+	return r.metadata.ResponseLengthPrivate
+}
+func (r DirectionalWireReceiptPrivate) ResultLengthPrivate() uint64 {
+	return r.metadata.ResultLengthPrivate
+}
+func (r DirectionalWireReceiptPrivate) RequestSHA256Private() [32]byte {
+	return r.metadata.RequestSHA256Private
+}
+func (r DirectionalWireReceiptPrivate) ResponseSHA256Private() [32]byte {
+	return r.metadata.ResponseSHA256Private
+}
+func (r DirectionalWireReceiptPrivate) ResultSHA256Private() [32]byte {
+	return r.metadata.ResultSHA256Private
+}
+func (r DirectionalWireReceiptPrivate) ObservationsPrivate() []directionalraw.Observation {
+	return append([]directionalraw.Observation(nil), r.observations...)
+}
+
+type DirectionalCallHierarchyResultPrivate struct {
+	Incoming                   []lsp.CallHierarchyIncomingCall
+	Outgoing                   []lsp.CallHierarchyOutgoingCall
+	IncomingWire, OutgoingWire DirectionalWireReceiptPrivate
+	IncomingNull, OutgoingNull bool
+	Failure                    session.Failure
+}
+
+func decodeDirectionalPrivate(raw []byte, target any) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(target); err != nil {
+		return err
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return errors.New("trailing result")
+	}
+	return nil
+}
+
+func flattenDirectionalSymbolsPrivate(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
+	var out []lsp.DocumentSymbol
+	var visit func([]lsp.DocumentSymbol)
+	visit = func(values []lsp.DocumentSymbol) {
+		for _, value := range values {
+			out = append(out, value)
+			visit(value.Children)
+		}
+	}
+	visit(symbols)
+	return out
+}
+
+func (m *Manager) directionalOrdinaryCallPrivate(ctx context.Context, req DirectionalCallHierarchyRequestPrivate, method string, params, target any) error {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	observed := m.RoundTrip(ctx, RoundTripRequest{SessionID: req.SessionID, Generation: req.Generation, Method: method, Params: raw, Deadline: req.Deadline, MaxMessages: req.MaxMessages, MaxBytes: req.MaxBytes})
+	if observed.Failure != "" {
+		return errors.New(string(observed.Failure))
+	}
+	if observed.ServerError != nil {
+		return fmt.Errorf("rpc %d: %s", observed.ServerError.Code, observed.ServerError.Message)
+	}
+	return decodeDirectionalPrivate(observed.Result, target)
+}
+
+func (m *Manager) prepareDirectionalItemPrivate(ctx context.Context, req DirectionalCallHierarchyRequestPrivate, reservation directionalraw.Reservation) (lsp.CallHierarchyItem, directionalraw.PreparedSelection, error) {
+	position := lsp.Position{}
+	if req.Symbol != "" {
+		var symbols []lsp.DocumentSymbol
+		if err := m.directionalOrdinaryCallPrivate(ctx, req, "textDocument/documentSymbol", lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: req.URI}}, &symbols); err != nil {
+			return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, err
+		}
+		var match *lsp.DocumentSymbol
+		for _, symbol := range flattenDirectionalSymbolsPrivate(symbols) {
+			if symbol.Name == req.Symbol && (symbol.Kind == 6 || symbol.Kind == 9 || symbol.Kind == 12) {
+				if match != nil {
+					return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("document symbol ambiguous")
+				}
+				copy := symbol
+				match = &copy
+			}
+		}
+		if match == nil {
+			return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("document symbol absent")
+		}
+		position = match.SelectionRange.Start
+	} else {
+		if req.Line == nil || req.Character == nil {
+			return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("position unavailable")
+		}
+		position = lsp.Position{Line: *req.Line, Character: *req.Character}
+	}
+	raw, err := json.Marshal(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: req.URI}, Position: position})
+	if err != nil {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, err
+	}
+	observed, lease := m.RoundTripDirectionalPrivate(reservation.Context(ctx), RoundTripRequest{SessionID: req.SessionID, Generation: req.Generation, Method: "textDocument/prepareCallHierarchy", Params: raw, Deadline: req.Deadline, MaxMessages: req.MaxMessages, MaxBytes: req.MaxBytes})
+	clear(raw)
+	if observed.Failure != "" {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New(string(observed.Failure))
+	}
+	if observed.ServerError != nil {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, fmt.Errorf("rpc %d: %s", observed.ServerError.Code, observed.ServerError.Message)
+	}
+	if err := lease.BindElementsPrivate(); err != nil {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, err
+	}
+	var items []lsp.CallHierarchyItem
+	if err := lease.Decode(&items); err != nil {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, err
+	}
+	if len(items) != 1 || items[0].URI != req.URI {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("prepared identity unavailable")
+	}
+	selected, ok := directionalraw.Select(reservation.Context(ctx), directionalraw.Request{Method: "textDocument/prepareCallHierarchy", Ordinal: 0})
+	if !ok {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("prepared lexical identity unavailable")
+	}
+	var same lsp.CallHierarchyItem
+	if err := selected.DecodePrivate(&same); err != nil || same.URI != items[0].URI || same.Name != items[0].Name {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("prepared semantic identity unavailable")
+	}
+	return items[0], selected, nil
+}
+
+func (m *Manager) executeDirectionalCallPrivate(ctx context.Context, req DirectionalCallHierarchyRequestPrivate, reservation directionalraw.Reservation, method string, selected directionalraw.PreparedSelection, target any) (DirectionalWireReceiptPrivate, bool, error) {
+	raw := make([]byte, 0, selected.View().Len()+9)
+	raw = append(raw, `{"item":`...)
+	var ok bool
+	raw, ok = selected.AppendToPrivate(raw)
+	if !ok {
+		return DirectionalWireReceiptPrivate{}, false, errors.New("prepared lexical identity unavailable")
+	}
+	raw = append(raw, '}')
+	defer clear(raw)
+	observed, lease := m.RoundTripDirectionalPrivate(reservation.Context(ctx), RoundTripRequest{SessionID: req.SessionID, Generation: req.Generation, Method: method, Params: raw, Deadline: req.Deadline, MaxMessages: req.MaxMessages, MaxBytes: req.MaxBytes})
+	cancelCompleted := false
+	if observed.Failure == session.RequestCancelled {
+		if bindErr := lease.BindElementsPrivate(); bindErr == nil {
+			_, cancelCompleted = lease.CompletedMetadataPrivate()
+		}
+		if !cancelCompleted {
+			return DirectionalWireReceiptPrivate{}, false, context.Canceled
+		}
+	}
+	if observed.Failure != "" && !cancelCompleted {
+		if observed.Failure == session.RequestTimeout {
+			return DirectionalWireReceiptPrivate{}, false, context.DeadlineExceeded
+		}
+		return DirectionalWireReceiptPrivate{}, false, errors.New(string(observed.Failure))
+	}
+	if observed.ServerError == nil && !cancelCompleted {
+		if err := lease.BindElementsPrivate(); err != nil {
+			return DirectionalWireReceiptPrivate{}, false, err
+		}
+	}
+	metadata, ok := lease.CompletedMetadataPrivate()
+	if !ok {
+		return DirectionalWireReceiptPrivate{}, false, errors.New("directional completion unavailable")
+	}
+	isNull := lease.Null()
+	if observed.ServerError == nil && !isNull {
+		if err := lease.Decode(target); err != nil {
+			return DirectionalWireReceiptPrivate{}, false, err
+		}
+	}
+	call := observed.directionalV5
+	call.execution.mu.Lock()
+	var observations []directionalraw.Observation
+	for _, accepted := range call.execution.accepted {
+		if accepted.key == call.key {
+			observations = append(observations, accepted.observations...)
+			break
+		}
+	}
+	call.execution.mu.Unlock()
+	receipt := DirectionalWireReceiptPrivate{method: method, metadata: metadata, observations: append([]directionalraw.Observation(nil), observations...)}
+	if observed.ServerError != nil {
+		return receipt, isNull, fmt.Errorf("rpc %d: %s", observed.ServerError.Code, observed.ServerError.Message)
+	}
+	return receipt, isNull, nil
+}
+
+func finalizeDirectionalReservationPrivate(reservation directionalraw.Reservation, result *DirectionalCallHierarchyResultPrivate, err *error) {
+	if reservation.Release() {
+		return
+	}
+	*err = errors.Join(*err, directionalraw.ErrTerminalReleasePrivate)
+	result.Failure = session.Failure("DIRECTIONAL_RELEASE_FAILED")
+}
+
+func (m *Manager) ExecuteCallHierarchyDirectionsPrivate(ctx context.Context, req DirectionalCallHierarchyRequestPrivate) (result DirectionalCallHierarchyResultPrivate, err error) {
+	if ctx == nil {
+		return result, errors.New("nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	document := m.PrepareDocument(ctx, DocumentRequest{SessionID: req.SessionID, Generation: req.Generation, URI: req.URI, LanguageID: req.LanguageID})
+	if document.Failure != "" {
+		result.Failure = document.Failure
+		return result, errors.New(string(document.Failure))
+	}
+	reservation := directionalraw.NewReservation(fmt.Sprintf("directions:%s:%d:%d", req.SessionID, req.Generation, time.Now().UnixNano()))
+	defer func() { finalizeDirectionalReservationPrivate(reservation, &result, &err) }()
+	item, selected, err := m.prepareDirectionalItemPrivate(ctx, req, reservation)
+	if err != nil {
+		return result, err
+	}
+	_ = item // One semantic identity is validated against the selected token.
+	result.IncomingWire, result.IncomingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/incomingCalls", selected, &result.Incoming)
+	if err != nil {
+		return result, err
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	result.OutgoingWire, result.OutgoingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/outgoingCalls", selected, &result.Outgoing)
+	return result, err
+}
+
 func (m *Manager) RoundTripDirectionalPrivate(ctx context.Context, req RoundTripRequest) (RoundTripResult, directionalraw.Lease) {
 	r, ok := directionalraw.FromContext(ctx)
 	if !ok || r.IdentityPrivate() == "" || !directionalraw.Allowed(req.Method) || req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
@@ -67,6 +352,7 @@ func (m *Manager) RoundTripDirectionalPrivate(ctx context.Context, req RoundTrip
 	// Ordinary RoundTrip is deliberately not changed. The shared transaction owns
 	// every session/generation/deadline/protocol and pending-key admission check.
 	result := m.roundTripWithPrivateTransaction(ctx, req, nil, &privateB4Transaction{directionalV5: req.directionalV5})
+	result.directionalV5 = req.directionalV5
 	// External frames remain available only as reserved immutable observations;
 	// don't expose Message.RawMessage aliases into our retained frame backing.
 	result.Notifications = nil
@@ -89,7 +375,7 @@ func (m *Manager) admitDirectionalV5Locked(req RoundTripRequest) session.Failure
 		if r.Attached() || r.Closed() {
 			return session.ResourceExhausted
 		}
-		d = &privateDirectionalV5{reservation: r, frameObjects: make(map[uint64]string), responseObjects: make(map[uint64]uint64)}
+		d = &privateDirectionalV5{reservation: r, frameObjects: make(map[uint64]string), responseObjects: make(map[lspwire.RequestKey]uint64)}
 		custody, failure := newPrivateB4C15CustodyContext(req.SessionID, req.Generation, r.IdentityPrivate(), func(events []privateB4C15Event) error {
 			d.mu.Lock()
 			defer d.mu.Unlock()
@@ -109,7 +395,7 @@ func (m *Manager) admitDirectionalV5Locked(req RoundTripRequest) session.Failure
 		o.observation.identity.request.generation = callHierarchyGeneration(req.Generation)
 		o.directionalV5 = d
 		d.owner = o
-		if !r.Attach(d.allocate, d.observe, func() bool { return (callHierarchyLayer1GenericLease{owner: o}).Release() }, d.releaseAccount) {
+		if !r.AttachPrivate(d.allocate, d.observe, func() bool { return (callHierarchyLayer1GenericLease{owner: o}).Release() }, d.releaseAccount) {
 			return session.ResourceExhausted
 		}
 		m.directionalV5 = d
@@ -133,15 +419,50 @@ func (m *Manager) admitDirectionalV5Locked(req RoundTripRequest) session.Failure
 	call.execution = d
 	return ""
 }
-func (d *privateDirectionalV5) allocate(component string, n int) ([]byte, error) {
+func (d *privateDirectionalV5) allocate(method, component string, n int) ([]byte, error) {
 	if component != "request-frame" && component != "response-frame" {
 		return nil, errors.New("unknown directional component")
 	}
 	a := d.account
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if method == "textDocument/prepareCallHierarchy" {
+		if n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-d.preparationLive {
+			return nil, directionalraw.ErrReservationRefused
+		}
+		site := "c15.directional.v5.prepare-" + component
+		objectID, failure := a.c15.create(site, privateB4C15Operation("allocation"))
+		if failure != "" {
+			return nil, errors.New(string(failure))
+		}
+		d.frameObjects[objectID] = site
+		if component == "response-frame" {
+			d.mu.Lock()
+			for i := len(d.accepted) - 1; i >= 0; i-- {
+				if d.accepted[i].method == method {
+					d.responseObjects[d.accepted[i].key] = objectID
+					break
+				}
+			}
+			d.mu.Unlock()
+		}
+		d.preparationLive += uint64(n)
+		d.preparationCumulative += uint64(n)
+		d.preparationAllocations++
+		d.allocationBoundaries = append(d.allocationBoundaries, privateDirectionalAllocationV5{
+			Component: component, Length: n, Live: d.preparationLive, Cumulative: d.preparationCumulative,
+			Allocations: d.preparationAllocations, OwnershipObjects: len(d.frameObjects), Occupied: true,
+		})
+		return make([]byte, n), nil
+	}
+	direction := 0
+	if method == "callHierarchy/outgoingCalls" {
+		direction = 1
+	} else if method != "callHierarchy/incomingCalls" {
+		return nil, errors.New("unknown directional method")
+	}
 	p := &a.directionalV5
-	if n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-p.live || p.cumulative > math.MaxUint64-uint64(n) || a.table.general.live > privateB4MaxOwnedBytes || a.table.general.live+p.live+uint64(n) > privateDirectionalCombinedMaxV5 {
+	if n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-p.directionLive[direction] || p.cumulative > math.MaxUint64-uint64(n) || a.table.general.live > privateB4MaxOwnedBytes || p.live+uint64(n) > privateDirectionalCombinedMaxV5 {
 		return nil, directionalraw.ErrReservationRefused
 	}
 	site := "c15.directional.v5." + component
@@ -151,10 +472,18 @@ func (d *privateDirectionalV5) allocate(component string, n int) ([]byte, error)
 	}
 	d.frameObjects[objectID] = site
 	if component == "response-frame" {
-		d.lastResponseObject = objectID
+		d.mu.Lock()
+		for i := len(d.accepted) - 1; i >= 0; i-- {
+			if d.accepted[i].method == method {
+				d.responseObjects[d.accepted[i].key] = objectID
+				break
+			}
+		}
+		d.mu.Unlock()
 	}
 	p.occupied = true
 	p.live += uint64(n)
+	p.directionLive[direction] += uint64(n)
 	p.cumulative += uint64(n)
 	p.allocations++
 	// Reservation is committed before the only retained allocation. Raw aliases
@@ -175,11 +504,9 @@ func (d *privateDirectionalV5) allocateBackingLocked(component string, n int) []
 func (d *privateDirectionalV5) observe(o directionalraw.Observation) {
 	a := d.account
 	a.mu.Lock()
-	if o.Component == "response-frame" {
-		d.responseObjects[o.RequestID] = d.lastResponseObject
-	}
+	key := lspwire.RequestKey{Generation: o.Generation, ID: o.RequestID}
 	if o.Component == "element" {
-		a.c15.alias(d.responseObjects[o.RequestID], "c15.directional.v5.selected-element")
+		a.c15.alias(d.responseObjects[key], "c15.directional.v5.selected-element")
 	}
 	a.mu.Unlock()
 	d.mu.Lock()
@@ -195,12 +522,19 @@ func (d *privateDirectionalV5) releaseAccount() {
 	a := d.account
 	a.mu.Lock()
 	p := &a.directionalV5
-	if p.occupied {
+	if p.occupied || d.preparationLive > 0 {
 		for id, site := range d.frameObjects {
 			a.c15.release(id, site)
 		}
-		p.releases++
+		if p.occupied {
+			p.releases++
+		}
+		if d.preparationLive > 0 {
+			d.preparationReleases++
+			d.preparationLive = 0
+		}
 		p.live = 0
+		p.directionLive = [2]uint64{}
 		p.occupied = false
 	}
 	a.mu.Unlock()
@@ -239,19 +573,43 @@ func (c *privateDirectionalCallV5) finish(failure session.Failure) {
 // private qualification surfaces, not serialized response fields.
 func (m *Manager) DirectionalObservationsPrivate() []directionalraw.Observation {
 	m.mu.Lock()
-	d := m.directionalV5
+	owners := append([]*callHierarchyLayer1GenericOwner(nil), m.callHierarchyLayer1GenericOwners...)
+	current := m.directionalV5
 	m.mu.Unlock()
-	if d == nil {
-		return nil
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	var out []directionalraw.Observation
-	for _, a := range d.accepted {
-		for _, o := range a.observations {
-			o.Failure = string(a.failure)
-			out = append(out, o)
+	legacyPrepare := false
+	for _, owner := range owners {
+		if owner == nil || owner.directionalV5 == nil {
+			continue
 		}
+		owner.directionalV5.mu.Lock()
+		for _, accepted := range owner.directionalV5.accepted {
+			if accepted.method == "textDocument/prepareCallHierarchy" {
+				legacyPrepare = true
+				break
+			}
+		}
+		owner.directionalV5.mu.Unlock()
+	}
+	if legacyPrepare {
+		owners = nil
+		if current != nil {
+			owners = append(owners, current.owner)
+		}
+	}
+	var out []directionalraw.Observation
+	for _, owner := range owners {
+		if owner == nil || owner.directionalV5 == nil {
+			continue
+		}
+		d := owner.directionalV5
+		d.mu.Lock()
+		for _, accepted := range d.accepted {
+			for _, observation := range accepted.observations {
+				observation.Failure = string(accepted.failure)
+				out = append(out, observation)
+			}
+		}
+		d.mu.Unlock()
 	}
 	return out
 }
@@ -310,14 +668,43 @@ func (m *Manager) DirectionalAllocationBoundariesPrivate() []privateDirectionalA
 
 func (m *Manager) DirectionalAccountingPrivate() (live, cumulative, allocations, releases, general uint64, occupied bool) {
 	m.mu.Lock()
+	owners := append([]*callHierarchyLayer1GenericOwner(nil), m.callHierarchyLayer1GenericOwners...)
+	m.mu.Unlock()
+	var frameAllocations uint64
+	for _, owner := range owners {
+		if owner == nil || owner.directionalV5 == nil {
+			continue
+		}
+		a := owner.directionalV5.account
+		a.mu.Lock()
+		p := a.directionalV5
+		live += p.live
+		cumulative += p.cumulative
+		frameAllocations += p.allocations
+		releases += p.releases
+		general += a.table.general.live
+		occupied = occupied || p.occupied
+		a.mu.Unlock()
+	}
+	return live, cumulative, frameAllocations / 2, releases, general, occupied
+}
+
+func (m *Manager) DirectionalPreparationAccountingPrivate() (live, cumulative, allocations, releases uint64, occupied bool) {
+	m.mu.Lock()
 	d := m.directionalV5
 	m.mu.Unlock()
-	if d == nil {
+	if d == nil || d.account == nil {
 		return
 	}
-	a := d.account
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	p := a.directionalV5
-	return p.live, p.cumulative, p.allocations, p.releases, a.table.general.live, p.occupied
+	d.account.mu.Lock()
+	defer d.account.mu.Unlock()
+	return d.preparationLive, d.preparationCumulative, d.preparationAllocations, d.preparationReleases, d.preparationLive > 0
 }
+
+// Compile-only V2 overlay contract: preserve the baseline Manager body while
+// pinning the exact directional transport, observation, and accounting surface.
+var _ interface {
+	RoundTripDirectionalPrivate(context.Context, RoundTripRequest) (RoundTripResult, directionalraw.Lease)
+	DirectionalObservationsPrivate() []directionalraw.Observation
+	DirectionalAccountingPrivate() (uint64, uint64, uint64, uint64, uint64, bool)
+} = (*Manager)(nil)

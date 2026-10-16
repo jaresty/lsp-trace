@@ -1073,7 +1073,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		if failure == "" {
 			failure = session.SessionPoisoned
 		}
-		return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+		poison := true
+		if req.directionalV5 != nil && (failure == session.RequestCancelled || failure == session.RequestTimeout) {
+			poison = false
+		}
+		return m.finishRoundTrip(req.SessionID, owner, result, failure, poison)
 	}
 	if markedWrite && writeCapture.bytes != frameBytes {
 		return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
@@ -1098,14 +1102,16 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	}
 
 	type readResult struct {
-		message    lspwire.Message
-		frame      lspwire.ReadFrameObservation
-		raw        []byte
-		bodyBytes  int64
-		successor  lspwire.SuccessorReadObservation
-		frameOwner *privateB4ResponseFrameOwner
-		retained   bool
-		err        error
+		message             lspwire.Message
+		frame               lspwire.ReadFrameObservation
+		raw                 []byte
+		bodyBytes           int64
+		successor           lspwire.SuccessorReadObservation
+		frameOwner          *privateB4ResponseFrameOwner
+		retained            bool
+		responseDisposition lspwire.ResponseDisposition
+		responseLinearized  bool
+		err                 error
 	}
 	captureCap := int64(0)
 	switch req.Method {
@@ -1160,7 +1166,13 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		go func() {
 			if req.directionalV5 != nil {
 				msg, frame, raw, err := reader.ReadDirectionalReserved(maxBytes, req.directionalV5.lease)
-				reads <- readResult{message: msg, frame: frame, raw: raw, bodyBytes: int64(len(raw)), retained: raw != nil, err: err}
+				read := readResult{message: msg, frame: frame, raw: raw, bodyBytes: int64(len(raw)), retained: raw != nil, err: err}
+				if err == nil && msg.Kind() != lspwire.KindNotification && msg.Kind() != lspwire.KindRequest {
+					if responseID, parseErr := strconv.ParseUint(string(msg.ID), 10, 64); parseErr == nil && responseID == key.ID {
+						read.responseDisposition, read.responseLinearized = req.directionalV5.acceptCompletedResponse(r.pending, lspwire.ResponseKey{Generation: req.Generation, ID: responseID})
+					}
+				}
+				reads <- read
 				return
 			}
 			if privateReader != nil {
@@ -1185,8 +1197,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			msg, frame, err := reader.ReadWithFrame()
 			reads <- readResult{message: msg, frame: frame, err: err}
 		}()
+		cancelSignal := ctx.Done()
+		stopDirectionalCancel := func() {}
+		if req.directionalV5 != nil {
+			directionalCancel := make(chan struct{})
+			stop := context.AfterFunc(ctx, func() {
+				if req.directionalV5.cancelBeforeCompletion() {
+					close(directionalCancel)
+				}
+			})
+			stopDirectionalCancel = func() { stop() }
+			cancelSignal = directionalCancel
+		}
 		select {
-		case <-ctx.Done():
+		case <-cancelSignal:
+			stopDirectionalCancel()
 			// Preserve cooperative $/cancelRequest behavior, but never let that
 			// notification become a second unbounded write after cancellation.
 			cancelCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
@@ -1197,8 +1222,25 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				return err
 			})
 			stopCancel()
-			owner.retire()
-			<-reads // Close/teardown interrupted the outstanding read; join it.
+			if req.directionalV5 != nil {
+				joined := <-reads
+				joinedID, joinedIDErr := strconv.ParseUint(string(joined.message.ID), 10, 64)
+				joinedMatches := joined.err == nil && joinedIDErr == nil && joinedID == key.ID && joined.message.Kind() != lspwire.KindNotification && joined.message.Kind() != lspwire.KindRequest
+				if joinedMatches {
+					collector.Record(diagnosticEventReadComplete, joined.bodyBytes, true)
+					result.Bytes += joined.bodyBytes
+					result.Messages++
+					result.responseRead = &ResponseReadObservation{SessionID: req.SessionID, Generation: req.Generation, Key: key, FrameBytes: joined.frame.FrameBytes, FrameSHA256: joined.frame.FrameSHA256}
+					result.ServerError = joined.message.Error
+					if joined.message.Kind() == lspwire.KindSuccessResponse && !req.directionalV5.lease.Result(joined.message.Result) {
+						return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+					}
+					return m.finishRoundTrip(req.SessionID, owner, result, "", false)
+				}
+			} else {
+				owner.retire()
+				<-reads // Close/teardown interrupted the outstanding read; join it.
+			}
 			if state == lspwire.CancelWritten {
 				m.mu.Lock()
 				r.cancels++
@@ -1209,8 +1251,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) || (!req.Deadline.IsZero() && req.Deadline.Sub(m.now()) <= time.Millisecond) {
 				failure = session.RequestTimeout
 			}
-			return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+			return m.finishRoundTrip(req.SessionID, owner, result, failure, req.directionalV5 == nil)
 		case read := <-reads:
+			stopDirectionalCancel()
 			if len(read.raw) == 0 && read.err != nil && genericResponseCapture != nil {
 				read.raw, _ = genericResponseCapture.retainedFrame()
 				read.frame.FrameBytes = int64(len(read.raw))
@@ -1292,7 +1335,10 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				releaseUnselectedFrame()
 				continue
 			}
-			disposition := r.pending.Accept(lspwire.ResponseKey{Generation: req.Generation, ID: responseID})
+			disposition := read.responseDisposition
+			if !read.responseLinearized {
+				disposition = r.pending.Accept(lspwire.ResponseKey{Generation: req.Generation, ID: responseID})
+			}
 			if disposition != lspwire.ResponseAccepted {
 				collector.Record(diagnosticEventLate, int64(responseID), false)
 				if req.ADR0011PrivateResponseLeaseV1 && private != nil && !private.nonCustodial {
