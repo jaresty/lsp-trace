@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.experimental.call-hierarchy-composition.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "lsp-trace.experimental.call-hierarchy-composition.v1"},
+    "experimental_version": {"const": "1"},
+    "status": {"enum": ["SUCCEEDED", "REFUSED"]},
+    "phase": {"type": "string", "minLength": 1},
+    "code": {"type": "string", "minLength": 1},
+    "incoming": {"type": "array", "items": {"$ref": "#/$defs/incomingCall"}},
+    "outgoing": {"type": "array", "items": {"$ref": "#/$defs/outgoingCall"}},
+    "incoming_null": {"type": "boolean"},
+    "outgoing_null": {"type": "boolean"},
+    "completeness": {"const": "UNKNOWN"},
+    "feature_identity": {"const": "UNRESOLVED"},
+    "authority": {"const": 0},
+    "session_poisoned": {"type": "boolean"},
+    "retry_scope": {"enum": ["NONE", "NEW_SESSION_REQUIRED", "REQUEST_CORRECTION"]},
+    "receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "incoming": {"$ref": "#/$defs/receipt"},
+        "outgoing": {"$ref": "#/$defs/receipt"}
+      },
+      "required": ["incoming", "outgoing"]
+    }
+  },
+  "required": ["schema_version", "experimental_version", "status", "phase", "code", "incoming", "outgoing", "incoming_null", "outgoing_null", "completeness", "feature_identity", "authority", "session_poisoned", "retry_scope", "receipts"],
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line": {"type": "integer", "minimum": 0},
+        "character": {"type": "integer", "minimum": 0}
+      },
+      "required": ["line", "character"]
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {"$ref": "#/$defs/position"},
+        "end": {"$ref": "#/$defs/position"}
+      },
+      "required": ["start", "end"]
+    },
+    "callHierarchyItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "kind": {"type": "integer"},
+        "tags": {"type": "array", "items": {"type": "integer"}},
+        "detail": {"type": "string"},
+        "uri": {"type": "string"},
+        "range": {"$ref": "#/$defs/range"},
+        "selectionRange": {"$ref": "#/$defs/range"},
+        "data": {}
+      },
+      "required": ["name", "kind", "uri", "range", "selectionRange"]
+    },
+    "incomingCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from": {"$ref": "#/$defs/callHierarchyItem"},
+        "fromRanges": {"type": ["array", "null"], "items": {"$ref": "#/$defs/range"}}
+      },
+      "required": ["from", "fromRanges"]
+    },
+    "outgoingCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "to": {"$ref": "#/$defs/callHierarchyItem"},
+        "fromRanges": {"type": ["array", "null"], "items": {"$ref": "#/$defs/range"}}
+      },
+      "required": ["to", "fromRanges"]
+    },
+    "receipt": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"state": {"const": "UNAVAILABLE"}},
+          "required": ["state"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {"const": "AUTHENTICATED"},
+            "method": {"type": "string", "minLength": 1},
+            "request_id": {"type": "integer", "minimum": 1},
+            "request_length": {"type": "integer", "minimum": 1},
+            "response_length": {"type": "integer", "minimum": 1},
+            "result_length": {"type": "integer", "minimum": 0},
+            "request_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "response_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "result_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "observations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "method": {"type": "string"},
+                  "ordinal": {"type": "integer", "minimum": 0},
+                  "length": {"type": "integer", "minimum": 0},
+                  "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                  "component": {"type": "string"},
+                  "selected": {"type": "boolean"},
+                  "request_id": {"type": "integer", "minimum": 0},
+                  "failure": {"type": "string"}
+                },
+                "required": ["method", "ordinal", "length", "sha256", "component", "selected", "request_id", "failure"]
+              }
+            }
+          },
+          "required": ["state", "method", "request_id", "request_length", "response_length", "result_length", "request_sha256", "response_sha256", "result_sha256", "observations"]
+        }
+      ]
+    }
+  }
+}

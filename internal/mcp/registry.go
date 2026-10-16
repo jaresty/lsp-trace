@@ -50,6 +50,7 @@ const (
 	ContextChurnExecutorFamily              ExecutorFamily = "context-churn"
 	ContextSymbolChurnExecutorFamily        ExecutorFamily = "context-symbol-churn"
 	ContextSymbolChurnCaptureExecutorFamily ExecutorFamily = "context-symbol-churn-capture"
+	CallHierarchyCompositionExecutorFamily  ExecutorFamily = "call-hierarchy-composition"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -90,6 +91,7 @@ const (
 	EnvelopePolicyContextChurn              EnvelopePolicy = "context-churn"
 	EnvelopePolicyContextSymbolChurn        EnvelopePolicy = "context-symbol-churn"
 	EnvelopePolicyContextSymbolChurnCapture EnvelopePolicy = "context-symbol-churn-capture"
+	EnvelopePolicyCallHierarchyComposition  EnvelopePolicy = "call-hierarchy-composition"
 )
 
 type Tool struct {
@@ -150,6 +152,8 @@ func envelopePolicy(name string, family ExecutorFamily) EnvelopePolicy {
 		return EnvelopePolicyContextSymbolChurn
 	case ContextSymbolChurnCaptureExecutorFamily:
 		return EnvelopePolicyContextSymbolChurnCapture
+	case CallHierarchyCompositionExecutorFamily:
+		return EnvelopePolicyCallHierarchyComposition
 	case StructuralContextExecutorFamily:
 		return EnvelopePolicyStructuralContext
 	case StructuralContextSymbolExecutorFamily:
@@ -167,8 +171,9 @@ func envelopePolicy(name string, family ExecutorFamily) EnvelopePolicy {
 type ToolProfile string
 
 const (
-	ToolProfileDefault  ToolProfile = "default"
-	ToolProfileAdvanced ToolProfile = "advanced"
+	ToolProfileDefault      ToolProfile = "default"
+	ToolProfileAdvanced     ToolProfile = "advanced"
+	ToolProfileExperimental ToolProfile = "experimental"
 
 	// Full and compact remain explicit compatibility profiles. New production
 	// configuration should use default or advanced.
@@ -205,6 +210,15 @@ var advancedToolNames = map[string]struct{}{
 	"lsp_trace_v2_bounded_retained_ranking": {}, "lsp_trace_v2_export_retained_calls": {}, "lsp_trace_v2_verify": {},
 	"lsp_trace_v2_verify_retained_calls": {},
 }
+
+var experimentalToolNames = func() map[string]struct{} {
+	out := make(map[string]struct{}, len(advancedToolNames)+1)
+	for name := range advancedToolNames {
+		out[name] = struct{}{}
+	}
+	out[mcpcontract.CallHierarchyCompositionTool] = struct{}{}
+	return out
+}()
 
 var compactToolNames = map[string]struct{}{
 	"lsp_session_v1_derive_workspace": {}, "lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
@@ -256,7 +270,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 
 func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing, profile ToolProfile) *Registry {
 	switch profile {
-	case ToolProfileDefault, ToolProfileAdvanced, ToolProfileFull, ToolProfileCompact:
+	case ToolProfileDefault, ToolProfileAdvanced, ToolProfileExperimental, ToolProfileFull, ToolProfileCompact:
 	default:
 		panic(fmt.Sprintf("unknown MCP tool profile %q", profile))
 	}
@@ -265,8 +279,12 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
 	manifest = mcpcontract.WithContextSymbolChurnCapture(mcpcontract.WithContextSymbolChurn(mcpcontract.WithContextChurn(mcpcontract.WithStructuralDelta(mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))))))))))
+	if profile == ToolProfileExperimental {
+		manifest = mcpcontract.WithCallHierarchyComposition(manifest)
+	}
 	manifest = mcpcontract.WithDeriveWorkspace(manifest)
 	descriptions := map[string]string{
+		mcpcontract.CallHierarchyCompositionTool:  "Experimental Manager-owned bidirectional call-hierarchy semantic composition with independent directional custody, unknown completeness, unresolved feature identity, and authority zero",
 		mcpcontract.ContextChurnTool:              "Augment exact Structural Context V2 bytes with bounded revision-exact Git churn attributed by file path only; authority remains zero, source_graph_complete remains UNKNOWN, and no CALLS are inferred",
 		mcpcontract.ContextSymbolChurnTool:        "Attribute revision-exact Git changed lines to host-profile LSP document-symbol ranges; authority remains zero, cross-revision identity is not evaluated, and no CALLS are inferred",
 		mcpcontract.ContextSymbolChurnCaptureTool: "Acquire bounded live Structural Context V2 bytes and attribute revision-exact Git changed lines through host-profile LSP document-symbol ranges; authority remains zero and cross-revision identity is not evaluated",
@@ -355,6 +373,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			executorFamily = ContextSymbolChurnExecutorFamily
 		} else if contract.Name == mcpcontract.ContextSymbolChurnCaptureTool {
 			executorFamily = ContextSymbolChurnCaptureExecutorFamily
+		} else if contract.Name == mcpcontract.CallHierarchyCompositionTool {
+			executorFamily = CallHierarchyCompositionExecutorFamily
 		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" || contract.Name == "lsp_trace_v3_slice" || contract.Name == "lsp_trace_v3_incoming" {
 			executorFamily = AcquisitionV2ExecutorFamily
 		}
@@ -1099,12 +1119,17 @@ func (r *Registry) Advertised() []Tool {
 		if tool.Availability != Enabled {
 			continue
 		}
+		if tool.Name == mcpcontract.CallHierarchyCompositionTool && r.toolProfile != ToolProfileExperimental {
+			continue
+		}
 		var names map[string]struct{}
 		switch r.toolProfile {
 		case ToolProfileDefault:
 			names = defaultToolNames
 		case ToolProfileAdvanced:
 			names = advancedToolNames
+		case ToolProfileExperimental:
+			names = experimentalToolNames
 		case ToolProfileCompact:
 			names = compactToolNames
 		case ToolProfileFull:
@@ -1122,7 +1147,7 @@ func (r *Registry) Advertised() []Tool {
 
 func (r *Registry) Resolve(name string) (Tool, bool) {
 	i, ok := r.byName[name]
-	if !ok {
+	if !ok || (r.tools[i].Name == mcpcontract.CallHierarchyCompositionTool && r.toolProfile != ToolProfileExperimental) {
 		return Tool{}, false
 	}
 	return cloneTool(r.tools[i]), true
@@ -1133,6 +1158,9 @@ func (r *Registry) Resolve(name string) (Tool, bool) {
 func (r *Registry) ResolveCanonical(name string) (Tool, bool) {
 	for i := range r.tools {
 		if r.tools[i].Name == name {
+			if name == mcpcontract.CallHierarchyCompositionTool && r.toolProfile != ToolProfileExperimental {
+				return Tool{}, false
+			}
 			return cloneTool(r.tools[i]), true
 		}
 	}

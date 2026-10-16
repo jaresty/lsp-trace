@@ -20,7 +20,7 @@ const (
 	methodNotFoundCode    = -32601
 )
 
-var fixtureLimits = lspwire.Limits{MaxBodyBytes: 1 << 20, MaxHeaderBytes: 8 << 10}
+var fixtureLimits = lspwire.Limits{MaxBodyBytes: (32 << 20) + 1, MaxHeaderBytes: 8 << 10}
 
 type cappedWriter struct {
 	w         io.Writer
@@ -62,6 +62,59 @@ func response(id, result json.RawMessage) lspwire.Message {
 	return lspwire.Message{JSONRPC: lspwire.Version, ID: id, Result: result}
 }
 
+func framedMessageLength(m lspwire.Message) (int, error) {
+	body, err := json.Marshal(m)
+	if err != nil {
+		return 0, err
+	}
+	return len(body) + len(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))), nil
+}
+
+func paddedResultFrame(id json.RawMessage, prefix, suffix string, target int) (json.RawMessage, error) {
+	padding := target - len(prefix) - len(suffix)
+	for attempts := 0; attempts < 4 && padding >= 0; attempts++ {
+		result := json.RawMessage(prefix + strings.Repeat("x", padding) + suffix)
+		got, err := framedMessageLength(response(id, result))
+		if err != nil {
+			return nil, err
+		}
+		if got == target {
+			return result, nil
+		}
+		padding += target - got
+	}
+	return nil, errors.New("exact padded response frame unavailable")
+}
+
+func paddedIncomingItem(item string, target int) (string, error) {
+	const prefix = `,"padding":"`
+	for padding, attempts := target-len(item)-len(prefix)-2, 0; attempts < 4 && padding >= 0; attempts++ {
+		candidate := strings.TrimSuffix(item, "}}") + prefix + strings.Repeat("x", padding) + `"}}`
+		params := json.RawMessage(`{"item":` + candidate + `}`)
+		got, err := framedMessageLength(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`4`), Method: "callHierarchy/incomingCalls", Params: params})
+		if err != nil {
+			return "", err
+		}
+		if got == target {
+			return candidate, nil
+		}
+		padding += target - got
+	}
+	return "", errors.New("exact padded incoming request unavailable")
+}
+
+func claimDirectionalHangOnce(direction string) bool {
+	if os.Getenv("LSP_TRACE_FAKE_LSP_DIRECTIONAL_HANG_ONCE") != direction {
+		return false
+	}
+	marker, err := os.OpenFile(os.Getenv("LSP_TRACE_FAKE_LSP_DIRECTIONAL_ONCE"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return false
+	}
+	_ = marker.Close()
+	return true
+}
+
 func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	errout := &cappedWriter{w: stderr, remaining: maxStderrBytes}
 	if socket := os.Getenv("LSP_TRACE_FAKE_LSP_SCHEDULE_BARRIER"); socket != "" {
@@ -101,6 +154,8 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	r := lspwire.NewReader(stdin, fixtureLimits)
 	w := lspwire.NewWriter(stdout, fixtureLimits)
 	hanging := map[string]json.RawMessage{}
+	directionalPlusOneUsed := false
+	directionalPlusOneOwner := false
 	documentURI := "file:///fixture/main.go"
 	for {
 		m, err := r.Read()
@@ -209,13 +264,32 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 					name, endLine, endCharacter, selectionEnd = "Peer", p.Position.Line, 14, 9
 				}
 			}
-			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"uri":%s,"range":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":%d}},"selectionRange":{"start":{"line":%d,"character":%d},"end":{"line":%d,"character":%d}},"data":{"fixture":%q}}]`, name, uri, line, endLine, endCharacter, line, selectionStart, line, selectionEnd, name))
+			item := fmt.Sprintf(`{"name":%q,"kind":12,"uri":%s,"range":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":%d}},"selectionRange":{"start":{"line":%d,"character":%d},"end":{"line":%d,"character":%d}},"data":{"fixture":%q}}`, name, uri, line, endLine, endCharacter, line, selectionStart, line, selectionEnd, name)
+			directionalLimitMode := os.Getenv("LSP_TRACE_FAKE_LSP_DIRECTIONAL_LIMIT")
+			if (directionalLimitMode == "incoming-retained-plus-one" || os.Getenv("LSP_TRACE_FAKE_LSP_DIRECTIONAL_MALFORMED") == "incoming-object") && !directionalPlusOneOwner {
+				marker, err := os.OpenFile(os.Getenv("LSP_TRACE_FAKE_LSP_DIRECTIONAL_ONCE"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+				if err == nil {
+					directionalPlusOneOwner = true
+					_ = marker.Close()
+				}
+			}
+			if directionalLimitMode == "incoming-retained-exact" || directionalPlusOneOwner {
+				// Keep each frame below the 16 MiB wire ceiling while making the retained
+				// request and response pair total exactly 32 MiB, or exactly one byte more.
+				var err error
+				item, err = paddedIncomingItem(item, 16<<20)
+				if err != nil {
+					fmt.Fprintln(errout, err)
+					return fixtureInputErrorCode
+				}
+			}
+			result := json.RawMessage("[" + item + "]")
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
 			}
 		case "callHierarchy/outgoingCalls":
-			if os.Getenv("LSP_TRACE_FAKE_LSP_ACQUISITION") == "hang-outgoing" {
+			if os.Getenv("LSP_TRACE_FAKE_LSP_ACQUISITION") == "hang-outgoing" || claimDirectionalHangOnce("outgoing") {
 				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
 				continue
 			}
@@ -239,6 +313,10 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				return fixtureInputErrorCode
 			}
 		case "callHierarchy/incomingCalls":
+			if claimDirectionalHangOnce("incoming") {
+				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
+				continue
+			}
 			var p struct {
 				Item struct {
 					Name string `json:"name"`
@@ -246,9 +324,30 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 			}
 			_ = json.Unmarshal(m.Params, &p)
 			result := json.RawMessage(`[]`)
-			if p.Item.Name == "leaf" {
+			if os.Getenv("LSP_TRACE_FAKE_LSP_DIRECTIONAL_MALFORMED") == "incoming-object" && directionalPlusOneOwner {
+				result = json.RawMessage(`{}`)
+			} else if p.Item.Name == "leaf" {
 				uri, _ := json.Marshal(documentURI)
 				result = json.RawMessage(fmt.Sprintf(`[{"from":{"name":"caller","kind":12,"uri":%s,"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"selectionRange":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"data":{"fixture":"caller"}},"fromRanges":[{"start":{"line":2,"character":1},"end":{"line":2,"character":2}}]}]`, uri))
+			}
+			directionalLimitMode := os.Getenv("LSP_TRACE_FAKE_LSP_DIRECTIONAL_LIMIT")
+			if directionalLimitMode == "incoming-retained-exact" || (directionalLimitMode == "incoming-retained-plus-one" && directionalPlusOneOwner && !directionalPlusOneUsed) {
+				directionalPlusOneUsed = true
+				requestLength, err := framedMessageLength(m)
+				if err != nil {
+					fmt.Fprintln(errout, err)
+					return fixtureInputErrorCode
+				}
+				combinedTarget := 32 << 20
+				if directionalLimitMode == "incoming-retained-plus-one" {
+					combinedTarget++
+				}
+				responseTarget := combinedTarget - requestLength
+				result, err = paddedResultFrame(m.ID, `[{"from":{"name":"caller","kind":12,"uri":"file:///fixture.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"data":{"padding":"`, `"}},"fromRanges":[]}]`, responseTarget)
+				if err != nil {
+					fmt.Fprintln(errout, err)
+					return fixtureInputErrorCode
+				}
 			}
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)

@@ -710,6 +710,13 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 	}
+	if tool.ExecutorFamily == CallHierarchyCompositionExecutorFamily {
+		var result map[string]any
+		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || mcpcontract.ValidateJSON(mcpcontract.CallHierarchyCompositionResultID, opResult.Artifact) != nil {
+			return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"experimental composition result validation failed"}))
+		}
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.CallHierarchyCompositionEnvelopeID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result})
+	}
 	if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily || tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
 		var result map[string]any
 		var header struct {
@@ -1225,6 +1232,8 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 		return mcpcontract.ValidateContextSymbolChurnEnvelopeExclusive(raw)
 	case EnvelopePolicyContextSymbolChurnCapture:
 		return mcpcontract.ValidateContextSymbolChurnCaptureEnvelopeExclusive(raw)
+	case EnvelopePolicyCallHierarchyComposition:
+		return mcpcontract.ValidateJSON(mcpcontract.CallHierarchyCompositionEnvelopeID, raw)
 	default:
 		return mcpcontract.ValidateEnvelopeExclusive(raw)
 	}

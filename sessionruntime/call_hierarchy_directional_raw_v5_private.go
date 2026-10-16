@@ -58,6 +58,7 @@ type privateDirectionalV5 struct {
 	preparationCumulative  uint64
 	preparationAllocations uint64
 	preparationReleases    uint64
+	resourceRefusal        session.Failure
 }
 type privateDirectionalCallV5 struct {
 	execution *privateDirectionalV5
@@ -140,11 +141,20 @@ func (r DirectionalWireReceiptPrivate) ObservationsPrivate() []directionalraw.Ob
 }
 
 type DirectionalCallHierarchyResultPrivate struct {
-	Incoming                   []lsp.CallHierarchyIncomingCall
-	Outgoing                   []lsp.CallHierarchyOutgoingCall
-	IncomingWire, OutgoingWire DirectionalWireReceiptPrivate
-	IncomingNull, OutgoingNull bool
-	Failure                    session.Failure
+	Incoming                       []lsp.CallHierarchyIncomingCall
+	Outgoing                       []lsp.CallHierarchyOutgoingCall
+	IncomingWire, OutgoingWire     DirectionalWireReceiptPrivate
+	IncomingNull, OutgoingNull     bool
+	Failure                        session.Failure
+	FailurePostEffect              bool
+	SessionPoisoned                bool
+	RequestEffectObservedPrivate   bool
+	TerminalPoisonObservedPrivate  bool
+	RequestWriteCompletedPrivate   bool
+	IncomingEffectCompletedPrivate bool
+	OutgoingEffectCompletedPrivate bool
+	CancellationPhasePrivate       string
+	TerminalLifecyclePrivate       session.State
 }
 
 func decodeDirectionalPrivate(raw []byte, target any) error {
@@ -247,6 +257,37 @@ func (m *Manager) prepareDirectionalItemPrivate(ctx context.Context, req Directi
 	return items[0], selected, nil
 }
 
+type directionalCallFailurePrivate struct {
+	failure                session.Failure
+	postEffect             bool
+	poisoned               bool
+	requestEffectObserved  bool
+	terminalPoisonObserved bool
+	requestCompleted       bool
+	lifecycle              session.State
+}
+
+func (e directionalCallFailurePrivate) Error() string { return string(e.failure) }
+
+func (e directionalCallFailurePrivate) Unwrap() error {
+	if e.failure == session.RequestTimeout {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+func (m *Manager) directionalPostEffectFailurePrivate(req DirectionalCallHierarchyRequestPrivate, failure session.Failure) directionalCallFailurePrivate {
+	terminal := m.Poison(req.SessionID, req.Generation)
+	if terminal.Failure != "" && terminal.Failure != session.SessionPoisoned {
+		failure = terminal.Failure
+	}
+	return directionalCallFailurePrivate{
+		failure: failure, postEffect: true, poisoned: terminal.State == session.Poisoned,
+		requestEffectObserved: true, terminalPoisonObserved: terminal.State == session.Poisoned,
+		requestCompleted: true, lifecycle: terminal.State,
+	}
+}
+
 func (m *Manager) executeDirectionalCallPrivate(ctx context.Context, req DirectionalCallHierarchyRequestPrivate, reservation directionalraw.Reservation, method string, selected directionalraw.PreparedSelection, target any) (DirectionalWireReceiptPrivate, bool, error) {
 	raw := make([]byte, 0, selected.View().Len()+9)
 	raw = append(raw, `{"item":`...)
@@ -268,23 +309,43 @@ func (m *Manager) executeDirectionalCallPrivate(ctx context.Context, req Directi
 		}
 	}
 	if observed.Failure != "" && !cancelCompleted {
-		if observed.Failure == session.RequestTimeout {
+		failure := observed.Failure
+		if resourceFailure := m.directionalResourceFailurePrivate(); resourceFailure != "" {
+			failure = resourceFailure
+		} else if directionalFailure := m.DirectionalFailurePrivate(); directionalFailure != "" {
+			failure = directionalFailure
+		}
+		_, requestCompleted := observed.CompletedRequestWrite()
+		if requestCompleted {
+			return DirectionalWireReceiptPrivate{}, false, m.directionalPostEffectFailurePrivate(req, failure)
+		}
+		if failure == session.RequestTimeout {
 			return DirectionalWireReceiptPrivate{}, false, context.DeadlineExceeded
 		}
-		return DirectionalWireReceiptPrivate{}, false, errors.New(string(observed.Failure))
+		return DirectionalWireReceiptPrivate{}, false, directionalCallFailurePrivate{failure: failure}
 	}
+	_, requestCompleted := observed.CompletedRequestWrite()
 	if observed.ServerError == nil && !cancelCompleted {
 		if err := lease.BindElementsPrivate(); err != nil {
+			if requestCompleted {
+				return DirectionalWireReceiptPrivate{}, false, m.directionalPostEffectFailurePrivate(req, session.SessionPoisoned)
+			}
 			return DirectionalWireReceiptPrivate{}, false, err
 		}
 	}
 	metadata, ok := lease.CompletedMetadataPrivate()
 	if !ok {
+		if requestCompleted {
+			return DirectionalWireReceiptPrivate{}, false, m.directionalPostEffectFailurePrivate(req, session.SessionPoisoned)
+		}
 		return DirectionalWireReceiptPrivate{}, false, errors.New("directional completion unavailable")
 	}
 	isNull := lease.Null()
 	if observed.ServerError == nil && !isNull {
 		if err := lease.Decode(target); err != nil {
+			if requestCompleted {
+				return DirectionalWireReceiptPrivate{}, false, m.directionalPostEffectFailurePrivate(req, session.SessionPoisoned)
+			}
 			return DirectionalWireReceiptPrivate{}, false, err
 		}
 	}
@@ -334,13 +395,49 @@ func (m *Manager) ExecuteCallHierarchyDirectionsPrivate(ctx context.Context, req
 	_ = item // One semantic identity is validated against the selected token.
 	result.IncomingWire, result.IncomingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/incomingCalls", selected, &result.Incoming)
 	if err != nil {
+		var directionalFailure directionalCallFailurePrivate
+		if errors.As(err, &directionalFailure) {
+			result.Failure = directionalFailure.failure
+			result.FailurePostEffect = directionalFailure.postEffect
+			result.SessionPoisoned = directionalFailure.poisoned
+			result.RequestEffectObservedPrivate = directionalFailure.requestEffectObserved
+			result.TerminalPoisonObservedPrivate = directionalFailure.terminalPoisonObserved
+			result.RequestWriteCompletedPrivate = directionalFailure.requestCompleted
+			result.TerminalLifecyclePrivate = directionalFailure.lifecycle
+		}
+		if errors.Is(err, context.Canceled) {
+			result.CancellationPhasePrivate = "BEFORE_INCOMING_EFFECT"
+		}
 		return result, err
 	}
+	result.IncomingEffectCompletedPrivate = true
+	result.RequestEffectObservedPrivate = true
+	result.RequestWriteCompletedPrivate = true
 	if err := ctx.Err(); err != nil {
+		result.CancellationPhasePrivate = "AFTER_INCOMING_BEFORE_OUTGOING_EFFECT"
 		return result, err
 	}
 	result.OutgoingWire, result.OutgoingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/outgoingCalls", selected, &result.Outgoing)
-	return result, err
+	if err != nil {
+		var directionalFailure directionalCallFailurePrivate
+		if errors.As(err, &directionalFailure) {
+			result.Failure = directionalFailure.failure
+			result.FailurePostEffect = directionalFailure.postEffect
+			result.SessionPoisoned = directionalFailure.poisoned
+			result.RequestEffectObservedPrivate = directionalFailure.requestEffectObserved
+			result.TerminalPoisonObservedPrivate = directionalFailure.terminalPoisonObserved
+			result.RequestWriteCompletedPrivate = directionalFailure.requestCompleted
+			result.TerminalLifecyclePrivate = directionalFailure.lifecycle
+		}
+		if errors.Is(err, context.Canceled) && result.RequestEffectObservedPrivate {
+			result.CancellationPhasePrivate = "AFTER_OUTGOING_REQUEST_EFFECT"
+		}
+		return result, err
+	}
+	result.OutgoingEffectCompletedPrivate = true
+	result.RequestEffectObservedPrivate = true
+	result.RequestWriteCompletedPrivate = true
+	return result, nil
 }
 
 func (m *Manager) RoundTripDirectionalPrivate(ctx context.Context, req RoundTripRequest) (RoundTripResult, directionalraw.Lease) {
@@ -463,6 +560,9 @@ func (d *privateDirectionalV5) allocate(method, component string, n int) ([]byte
 	}
 	p := &a.directionalV5
 	if n <= 0 || a.terminalRequested || a.backingReleased || uint64(n) > privateDirectionalMaxV5-p.directionLive[direction] || p.cumulative > math.MaxUint64-uint64(n) || a.table.general.live > privateB4MaxOwnedBytes || p.live+uint64(n) > privateDirectionalCombinedMaxV5 {
+		d.mu.Lock()
+		d.resourceRefusal = session.ResourceExhausted
+		d.mu.Unlock()
 		return nil, directionalraw.ErrReservationRefused
 	}
 	site := "c15.directional.v5." + component
@@ -612,6 +712,18 @@ func (m *Manager) DirectionalObservationsPrivate() []directionalraw.Observation 
 		d.mu.Unlock()
 	}
 	return out
+}
+
+func (m *Manager) directionalResourceFailurePrivate() session.Failure {
+	m.mu.Lock()
+	d := m.directionalV5
+	m.mu.Unlock()
+	if d == nil {
+		return ""
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.resourceRefusal
 }
 
 // DirectionalFailurePrivate retains the exact typed Manager terminal failure,

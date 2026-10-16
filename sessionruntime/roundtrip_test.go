@@ -3,6 +3,7 @@ package sessionruntime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
@@ -73,7 +74,13 @@ func (c *roundTripChild) serve() {
 		c.mu.Lock()
 		c.requests = append(c.requests, msg)
 		c.mu.Unlock()
-		if msg.Method == "$/cancelRequest" || msg.Method == "textDocument/didOpen" || msg.Method == "textDocument/didChange" {
+		if msg.Method == "$/cancelRequest" {
+			if c.mode == "call-hierarchy-hang-incoming" || c.mode == "call-hierarchy-hang-outgoing" {
+				_ = c.output.Close()
+			}
+			continue
+		}
+		if msg.Method == "textDocument/didOpen" || msg.Method == "textDocument/didChange" {
 			continue
 		}
 		switch c.mode {
@@ -85,6 +92,26 @@ func (c *roundTripChild) serve() {
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`[]`)})
 		case "references-null":
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`null`)})
+		case "call-hierarchy-hang-incoming", "call-hierarchy-hang-outgoing":
+			switch msg.Method {
+			case "textDocument/prepareCallHierarchy":
+				var params struct {
+					TextDocument struct {
+						URI string `json:"uri"`
+					} `json:"textDocument"`
+				}
+				_ = json.Unmarshal(msg.Params, &params)
+				item := fmt.Sprintf(`[{"name":"Target","kind":12,"uri":%q,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}]`, params.TextDocument.URI)
+				_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(item)})
+			case "callHierarchy/incomingCalls":
+				if c.mode == "call-hierarchy-hang-outgoing" {
+					_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`[]`)})
+				}
+			case "callHierarchy/outgoingCalls":
+				if c.mode == "call-hierarchy-hang-incoming" {
+					_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`[]`)})
+				}
+			}
 		case "unmatched-only":
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`999`), Result: json.RawMessage(`[]`)})
 		case "references-repeated":

@@ -98,7 +98,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
 	bootstrapTimeoutValue := fs.String("bootstrap-timeout", defaultBootstrapTimeout.String(), "managed-process bootstrap readiness timeout (greater than zero, maximum 1h)")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
-	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileDefault), "MCP advertisement profile: default, advanced, full, or compact")
+	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileDefault), "MCP advertisement profile: default, advanced, experimental, full, or compact")
 	printBootstrapExample := fs.Bool("print-bootstrap-example", false, "print a safe host-managed process bootstrap template and exit")
 	printVersion := fs.Bool("version", false, "print binary version and build revision")
 	if err := fs.Parse(args); err != nil {
@@ -134,9 +134,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	toolProfile := mcp.ToolProfile(*toolProfileValue)
 	switch toolProfile {
-	case mcp.ToolProfileDefault, mcp.ToolProfileAdvanced, mcp.ToolProfileFull, mcp.ToolProfileCompact:
+	case mcp.ToolProfileDefault, mcp.ToolProfileAdvanced, mcp.ToolProfileExperimental, mcp.ToolProfileFull, mcp.ToolProfileCompact:
 	default:
-		fmt.Fprintf(stderr, "invalid --tool-profile %q: want default, advanced, full, or compact\n", *toolProfileValue)
+		fmt.Fprintf(stderr, "invalid --tool-profile %q: want default, advanced, experimental, full, or compact\n", *toolProfileValue)
 		return 2
 	}
 	if fs.NArg() != 0 {
@@ -372,6 +372,7 @@ func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRunt
 	structural := newStructuralContextExecutor(selected)
 	server.Executors[mcp.StructuralContextExecutorFamily] = structural
 	server.Executors[mcp.StructuralContextV2ExecutorFamily] = newUnifiedStructuralContextV2Executor(selected, structural)
+	server.Executors[mcp.CallHierarchyCompositionExecutorFamily] = callHierarchyCompositionExecutor{runtime: selected}
 	churn, churnOK := server.Executors[mcp.ContextSymbolChurnExecutorFamily].(*contextSymbolChurnExecutor)
 	if churnOK {
 		server.Executors[mcp.ContextSymbolChurnCaptureExecutorFamily] = newContextSymbolChurnCaptureExecutor(structural, churn)
@@ -385,6 +386,18 @@ func (r *hostSelectorRuntime) SeedCustodyProvenance(sessionID string, generation
 	// Bootstrap process selectors are caller-provided local execution authority;
 	// they do not promote to verified-host custody without a manager receipt.
 	return seedbinding.CallerAssertedLocal, true
+}
+
+func (r *hostSelectorRuntime) ResolveSessionStatePrivate(id string) (session.State, bool) {
+	if canonical, ok := r.aliases[id]; ok {
+		id = canonical
+	}
+	for _, record := range r.Records() {
+		if record.SessionID == id {
+			return record.State, true
+		}
+	}
+	return "", false
 }
 
 func (r *hostSelectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {
@@ -520,17 +533,18 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 	return &mcp.Server{
 		Registry: registry, Executor: operation.NewOffline(validator, handlers),
 		Executors: map[mcp.ExecutorFamily]mcp.Executor{
-			mcp.LifecycleExecutorFamily:           lifecycleops.NewExecutor(lifecycleops.NewWithServerIdentity(manager, identity)),
-			mcp.IncomingExecutorFamily:            incomingops.NewExecutor(manager),
-			mcp.SliceExecutorFamily:               sliceops.NewExecutor(manager),
-			mcp.AcquisitionV2ExecutorFamily:       legacyManifestExecutor{runtime: manager},
-			mcp.TraceExecutorFamily:               newTraceExecutor(selected),
-			mcp.CensusExecutorFamily:              newPrivateCensusMCPBinding(newCensusRuntime(selected)),
-			mcp.StructuralContextExecutorFamily:   structural,
-			mcp.StructuralContextV2ExecutorFamily: newUnifiedStructuralContextV2Executor(selected, structural),
-			mcp.StructuralDeltaExecutorFamily:     structuralDeltaExecutor{},
-			mcp.ContextChurnExecutorFamily:        contextChurnExecutor{},
-			mcp.ContextSymbolChurnExecutorFamily:  &contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
+			mcp.LifecycleExecutorFamily:                lifecycleops.NewExecutor(lifecycleops.NewWithServerIdentity(manager, identity)),
+			mcp.IncomingExecutorFamily:                 incomingops.NewExecutor(manager),
+			mcp.SliceExecutorFamily:                    sliceops.NewExecutor(manager),
+			mcp.AcquisitionV2ExecutorFamily:            legacyManifestExecutor{runtime: manager},
+			mcp.TraceExecutorFamily:                    newTraceExecutor(selected),
+			mcp.CensusExecutorFamily:                   newPrivateCensusMCPBinding(newCensusRuntime(selected)),
+			mcp.StructuralContextExecutorFamily:        structural,
+			mcp.StructuralContextV2ExecutorFamily:      newUnifiedStructuralContextV2Executor(selected, structural),
+			mcp.StructuralDeltaExecutorFamily:          structuralDeltaExecutor{},
+			mcp.ContextChurnExecutorFamily:             contextChurnExecutor{},
+			mcp.CallHierarchyCompositionExecutorFamily: callHierarchyCompositionExecutor{runtime: selected},
+			mcp.ContextSymbolChurnExecutorFamily:       &contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
 			mcp.ContextSymbolChurnCaptureExecutorFamily: newContextSymbolChurnCaptureExecutor(
 				newStructuralContextExecutor(selected),
 				&contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
