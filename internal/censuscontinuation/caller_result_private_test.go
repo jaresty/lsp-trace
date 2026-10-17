@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -140,12 +141,20 @@ func TestPrivateCallerResultRejectsInvalidSubmissionBeforePut(t *testing.T) {
 	// A nil results array is structurally distinct from an empty array.
 	nilRaw, _ := json.Marshal(privateCallerResultSubmissionWire{SchemaVersion: privateCallerResultSubmissionSchema, Provenance: privateCallerResultObserved, Results: nil})
 	cases["null-results"] = nilRaw
-	// Exact request identity is never repaired or sorted.
-	requestMismatch := decoded
-	requestMismatch.Results = append([]privateCallerResultSubmissionRow(nil), decoded.Results...)
-	requestMismatch.Results[0].RecordID = string(bytes.Repeat([]byte{'a'}, 64))
-	cases["request-substitution"], _ = json.Marshal(requestMismatch)
-	if len(requestMismatch.Results) > 1 {
+	// Exact request identities are never repaired or sorted.
+	for name, mutate := range map[string]func(*privateCallerResultSubmissionRow){
+		"record-substitution":  func(row *privateCallerResultSubmissionRow) { row.RecordID = string(bytes.Repeat([]byte{'a'}, 64)) },
+		"message-substitution": func(row *privateCallerResultSubmissionRow) { row.MessageID = string(bytes.Repeat([]byte{'b'}, 64)) },
+		"lineage-substitution": func(row *privateCallerResultSubmissionRow) {
+			row.LineageIdentity = string(bytes.Repeat([]byte{'c'}, 64))
+		},
+	} {
+		requestMismatch := decoded
+		requestMismatch.Results = append([]privateCallerResultSubmissionRow(nil), decoded.Results...)
+		mutate(&requestMismatch.Results[0])
+		cases[name], _ = json.Marshal(requestMismatch)
+	}
+	if len(decoded.Results) > 1 {
 		reordered := decoded
 		reordered.Results = append([]privateCallerResultSubmissionRow(nil), decoded.Results...)
 		reordered.Results[0], reordered.Results[1] = reordered.Results[1], reordered.Results[0]
@@ -282,12 +291,30 @@ func TestPrivateCallerResultReadbackReplayConcurrencyAndCancellation(t *testing.
 		t.Fatalf("pre-cancel err=%v puts=%d", err, store.puts)
 	}
 
-	ctx, cancelAfterPut := context.WithCancel(context.Background())
-	post := &privateCallerCancelAfterPutStore{Store: base, cancel: cancelAfterPut}
-	if _, err := RetainPrivateCallerResultSelector(ctx, post, preparedSelector, submission); !errors.Is(err, context.Canceled) {
-		t.Fatalf("post-install cancellation err=%v", err)
+	// Use a clone without this result so cancellation demonstrably occurs after a new immutable install.
+	fresh := NewMemoryStore()
+	base.mu.RLock()
+	for selector, raw := range base.objects {
+		if selector != first {
+			fresh.objects[selector] = append([]byte(nil), raw...)
+		}
 	}
-	recovered, err := RetainPrivateCallerResultSelector(context.Background(), base, preparedSelector, submission)
+	base.mu.RUnlock()
+	ctx, cancelAfterPut := context.WithCancel(context.Background())
+	post := &privateCallerCancelAfterPutStore{Store: fresh, cancel: cancelAfterPut}
+	postSelector, err := RetainPrivateCallerResultSelector(ctx, post, preparedSelector, submission)
+	if !errors.Is(err, context.Canceled) || postSelector != "" {
+		t.Fatalf("post-install cancellation selector=%q err=%v", postSelector, err)
+	}
+	installed, err := fresh.Get(context.Background(), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := parsePrivateCallerResult(installed)
+	if err != nil || parsed.ID() == "" {
+		t.Fatalf("installed result parse id=%q err=%v", parsed.ID(), err)
+	}
+	recovered, err := RetainPrivateCallerResultSelector(context.Background(), fresh, preparedSelector, submission)
 	if err != nil || recovered != first {
 		t.Fatalf("recovery selector=%q want=%q err=%v", recovered, first, err)
 	}
@@ -351,4 +378,274 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func privateCallerRetainedFixture(t *testing.T) (*MemoryStore, string, []byte, privateCallerResult) {
+	t.Helper()
+	store, _, _, preparedSelector, requests := privateCallerPreparedFixture(t)
+	selector, err := RetainPrivateCallerResultSelector(context.Background(), store, preparedSelector, privateCallerSubmission(t, privateCallerResultObserved, privateCallerOutcomeSuccess, requests))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := store.Get(context.Background(), selector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := parsePrivateCallerResult(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store, selector, raw, result
+}
+
+func privateCallerReidentify(w privateCallerResultWire) []byte {
+	w.ResultID = identityJSON(privateCallerResultIdentityDomain, w, func(v *privateCallerResultWire) { v.ResultID = "" })
+	raw, _ := json.Marshal(w)
+	return raw
+}
+
+func TestPrivateCallerResultParserRejectsRetainedMutations(t *testing.T) {
+	_, _, raw, result := privateCallerRetainedFixture(t)
+	mutations := map[string]func(*privateCallerResultWire){
+		"record-id-syntax":  func(w *privateCallerResultWire) { w.Results[0].RecordID = "not-an-identity" },
+		"message-id-syntax": func(w *privateCallerResultWire) { w.Results[0].MessageID = "not-an-identity" },
+		"lineage-id-syntax": func(w *privateCallerResultWire) { w.Results[0].LineageIdentity = "not-an-identity" },
+		"null-outcome":      func(w *privateCallerResultWire) { w.Results[0].Outcome = nil },
+		"outcome-digest": func(w *privateCallerResultWire) {
+			var arm privateCallerSemanticOutcome
+			_ = json.Unmarshal(w.Results[0].Outcome, &arm)
+			arm.RawSemanticSHA256 = digestOf([]byte("wrong"))
+			w.Results[0].Outcome, _ = json.Marshal(arm)
+		},
+		"outcome-length": func(w *privateCallerResultWire) {
+			var arm privateCallerSemanticOutcome
+			_ = json.Unmarshal(w.Results[0].Outcome, &arm)
+			arm.RawSemanticByteLength++
+			w.Results[0].Outcome, _ = json.Marshal(arm)
+		},
+		"canonical-semantic": func(w *privateCallerResultWire) {
+			var arm privateCallerSemanticOutcome
+			_ = json.Unmarshal(w.Results[0].Outcome, &arm)
+			arm.CanonicalSemantic = privateCallerSuccessSemantic("ABSTAINED", []string{"changed"})
+			arm.RawSemanticSHA256 = digestOf(arm.CanonicalSemantic)
+			arm.RawSemanticByteLength = uint64(len(arm.CanonicalSemantic))
+			w.Results[0].Outcome, _ = json.Marshal(arm)
+		},
+	}
+	if len(result.wire.Results) > 1 {
+		mutations["duplicate-record"] = func(w *privateCallerResultWire) { w.Results[1].RecordID = w.Results[0].RecordID }
+		mutations["duplicate-message"] = func(w *privateCallerResultWire) { w.Results[1].MessageID = w.Results[0].MessageID }
+		mutations["duplicate-lineage"] = func(w *privateCallerResultWire) { w.Results[1].LineageIdentity = w.Results[0].LineageIdentity }
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			wire := result.wire
+			wire.Results = append([]privateCallerResultRow(nil), result.wire.Results...)
+			mutate(&wire)
+			if _, err := parsePrivateCallerResult(privateCallerReidentify(wire)); err == nil {
+				t.Fatal("mutated retained artifact accepted")
+			}
+		})
+	}
+	identity := result.wire
+	identity.ResultID = digestOf([]byte("wrong result identity"))
+	identityRaw, _ := json.Marshal(identity)
+	if _, err := parsePrivateCallerResult(identityRaw); err == nil {
+		t.Fatal("result identity mutation accepted")
+	}
+	for name, bad := range map[string][]byte{
+		"unknown":      bytes.Replace(raw, []byte(`"status":`), []byte(`"unknown":0,"status":`), 1),
+		"duplicate":    bytes.Replace(raw, []byte(`"status":`), []byte(`"status":"CALLER_RESULT_RETAINED","status":`), 1),
+		"trailing":     append(append([]byte(nil), raw...), []byte(`{}`)...),
+		"null-results": bytes.Replace(raw, mustJSON(result.wire.Results), []byte("null"), 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parsePrivateCallerResult(bad); err == nil {
+				t.Fatal("invalid retained JSON accepted")
+			}
+		})
+	}
+}
+
+func mustJSON(v any) []byte { raw, _ := json.Marshal(v); return raw }
+
+func privateCallerPreparedRaw(w privateHandoffPreparedWire) []byte {
+	w.PreparedID = identityJSON("lsp-trace:census-handoff-prepared:private:v1", w, func(v *privateHandoffPreparedWire) { v.PreparedID = "" })
+	raw, _ := json.Marshal(w)
+	return raw
+}
+
+func TestPrivateCallerResultRevalidatesEveryPreparedBindingBeforePut(t *testing.T) {
+	base, _, prepared, _, requests := privateCallerPreparedFixture(t)
+	submission := privateCallerSubmission(t, privateCallerResultObserved, privateCallerOutcomeSuccess, requests)
+	mutations := map[string]func(*privateHandoffPreparedWire){
+		"checkpoint-selector": func(w *privateHandoffPreparedWire) {
+			w.CheckpointSelector = digestOf([]byte("other checkpoint selector"))
+		},
+		"checkpoint-id":     func(w *privateHandoffPreparedWire) { w.CheckpointID = digestOf([]byte("other checkpoint id")) },
+		"chain-identity":    func(w *privateHandoffPreparedWire) { w.ChainIdentity = digestOf([]byte("other chain")) },
+		"requests-selector": func(w *privateHandoffPreparedWire) { w.RequestsSelector = digestOf([]byte("other requests selector")) },
+		"requests-digest":   func(w *privateHandoffPreparedWire) { w.RequestsDigest = digestOf([]byte("other requests digest")) },
+		"requests-length":   func(w *privateHandoffPreparedWire) { w.RequestsByteLength++ },
+		"requests-count":    func(w *privateHandoffPreparedWire) { w.RequestsCount++ },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			wire := prepared.wire
+			mutate(&wire)
+			raw := privateCallerPreparedRaw(wire)
+			selector, err := base.Put(context.Background(), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := &privateHandoffObservingStore{Store: base}
+			if _, err := RetainPrivateCallerResultSelector(context.Background(), store, selector, submission); err == nil || store.puts != 0 {
+				t.Fatalf("err=%v puts=%d", err, store.puts)
+			}
+		})
+	}
+}
+
+func TestPrivateCallerResultOversizedEncodedArtifactDoesNotWrite(t *testing.T) {
+	store := &privateHandoffObservingStore{Store: NewMemoryStore()}
+	wire := privateCallerResultWire{SchemaVersion: privateCallerResultSchema, Status: privateCallerResultStatus, Completeness: ContinuationCompleteness, Custody: privateCallerResultCustody, Provenance: privateCallerResultObserved, PreparedSelector: digestOf([]byte("p")), PreparedID: digestOf([]byte("pi")), PreparedDigest: digestOf([]byte("p")), PreparedByteLength: 1, CheckpointSelector: digestOf([]byte("c")), CheckpointID: digestOf([]byte("ci")), ChainIdentity: digestOf([]byte("chain")), RequestsSelector: digestOf([]byte("r")), RequestsDigest: digestOf([]byte("r")), RequestsByteLength: 1}
+	outcome, _ := json.Marshal(privateCallerUnknownOutcome{Kind: privateCallerOutcomeUnknown, Ambiguities: []privateCallerAmbiguity{{Code: "x", Subject: strings.Repeat("s", privateCallerResultMaxTextBytes), Options: []string{"x"}}}})
+	const rows = 16500
+	wire.RequestsCount = rows
+	wire.Results = make([]privateCallerResultRow, rows)
+	for i := range wire.Results {
+		id := func(domain string) string {
+			return strings.TrimPrefix(digestOf([]byte(domain+string(rune(i)))), "sha256:")
+		}
+		wire.Results[i] = privateCallerResultRow{RequestOrdinal: i, RecordID: id("record"), MessageID: id("message"), LineageIdentity: id("lineage"), Outcome: outcome}
+	}
+	wire.ResultID = identityJSON(privateCallerResultIdentityDomain, wire, func(v *privateCallerResultWire) { v.ResultID = "" })
+	if _, err := persistPrivateCallerResult(context.Background(), store, privateCallerResult{wire: wire}); err == nil || store.puts != 0 {
+		t.Fatalf("err=%v puts=%d", err, store.puts)
+	}
+}
+
+func TestPrivateCallerResultConcurrentDistinctSubmissionsCoexist(t *testing.T) {
+	store, _, _, preparedSelector, requests := privateCallerPreparedFixture(t)
+	submissions := [][]byte{
+		privateCallerSubmission(t, privateCallerResultObserved, privateCallerOutcomeSuccess, requests),
+		privateCallerSubmission(t, privateCallerResultObserved, privateCallerOutcomeUnknown, requests),
+	}
+	type result struct {
+		selector string
+		err      error
+	}
+	results := make(chan result, len(submissions))
+	var wg sync.WaitGroup
+	for _, submission := range submissions {
+		submission := append([]byte(nil), submission...)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			selector, err := RetainPrivateCallerResultSelector(context.Background(), store, preparedSelector, submission)
+			results <- result{selector, err}
+		}()
+	}
+	wg.Wait()
+	close(results)
+	seen := map[string]bool{}
+	for got := range results {
+		if got.err != nil || !validDigest(got.selector) || seen[got.selector] {
+			t.Fatalf("result=%+v seen=%v", got, seen)
+		}
+		seen[got.selector] = true
+		raw, err := store.Get(context.Background(), got.selector)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := parsePrivateCallerResult(raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(seen) != 2 {
+		t.Fatalf("selectors=%v", seen)
+	}
+}
+
+func privateCallerChainIdentity(chain []Checkpoint) string {
+	ids := make([]string, len(chain))
+	for i := range chain {
+		ids[i] = chain[i].ID()
+	}
+	return identityJSON("lsp-trace:census-handoff-prepared-chain:private:v1", ids, func(*[]string) {})
+}
+
+func privateCallerStorePreparedForCheckpoint(t *testing.T, store *MemoryStore, template privateHandoffPrepared, selector string, checkpointID string, chainIdentity string) string {
+	t.Helper()
+	wire := template.wire
+	wire.CheckpointSelector = selector
+	wire.CheckpointID = checkpointID
+	wire.ChainIdentity = chainIdentity
+	raw := privateCallerPreparedRaw(wire)
+	preparedSelector, err := store.Put(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return preparedSelector
+}
+
+func TestPrivateCallerResultRejectsCheckpointStageStatusAndMembershipBeforePut(t *testing.T) {
+	store, _, prepared, _, requests := privateCallerPreparedFixture(t)
+	submission := privateCallerSubmission(t, privateCallerResultObserved, privateCallerOutcomeSuccess, requests)
+	chain, err := VerifyChain(context.Background(), store, prepared.wire.CheckpointSelector)
+	if err != nil || len(chain) < 2 {
+		t.Fatalf("chain=%d err=%v", len(chain), err)
+	}
+	last := chain[len(chain)-1]
+
+	// A valid earlier-stage chain remains ineligible for result retention.
+	priorSelector := last.PriorID()
+	prior := chain[len(chain)-2]
+	preparedSelector := privateCallerStorePreparedForCheckpoint(t, store, prepared, priorSelector, prior.ID(), privateCallerChainIdentity(chain[:len(chain)-1]))
+	observed := &privateHandoffObservingStore{Store: store}
+	if _, err := RetainPrivateCallerResultSelector(context.Background(), observed, preparedSelector, submission); err == nil || observed.puts != 0 {
+		t.Fatalf("stage err=%v puts=%d", err, observed.puts)
+	}
+
+	// A valid chain ending at REQUESTS_RENDERED but with COMPLETE status is also ineligible.
+	complete, err := NewCheckpoint(CheckpointInput{PriorCheckpointID: last.PriorID(), Stage: last.Stage(), CensusID: last.CensusID(), HandoffID: last.HandoffID(), ContractID: last.ContractID(), ProfileID: last.ProfileID(), Artifacts: last.Artifacts(), Status: StatusComplete})
+	if err != nil {
+		t.Fatal(err)
+	}
+	completeRaw, err := complete.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	completeSelector, err := store.Put(context.Background(), completeRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completeChain := append(append([]Checkpoint(nil), chain[:len(chain)-1]...), complete)
+	preparedSelector = privateCallerStorePreparedForCheckpoint(t, store, prepared, completeSelector, complete.ID(), privateCallerChainIdentity(completeChain))
+	observed = &privateHandoffObservingStore{Store: store}
+	if _, err := RetainPrivateCallerResultSelector(context.Background(), observed, preparedSelector, submission); err == nil || observed.puts != 0 {
+		t.Fatalf("status err=%v puts=%d", err, observed.puts)
+	}
+
+	for name, mutate := range map[string]func(*checkpointWire){
+		"missing-requests-artifact":   func(w *checkpointWire) { w.Artifacts = append([]ArtifactRef(nil), w.Artifacts[:len(w.Artifacts)-1]...) },
+		"duplicate-requests-artifact": func(w *checkpointWire) { w.Artifacts = append(w.Artifacts, w.Artifacts[len(w.Artifacts)-1]) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			wire := last.wire
+			wire.Artifacts = append([]ArtifactRef(nil), last.wire.Artifacts...)
+			mutate(&wire)
+			wire.CheckpointID = identityJSON("lsp-trace:census-continuation-checkpoint:v1", wire, func(v *checkpointWire) { v.CheckpointID = "" })
+			raw, _ := json.Marshal(wire)
+			selector, err := store.Put(context.Background(), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			preparedSelector := privateCallerStorePreparedForCheckpoint(t, store, prepared, selector, wire.CheckpointID, digestOf([]byte(name)))
+			observed := &privateHandoffObservingStore{Store: store}
+			if _, err := RetainPrivateCallerResultSelector(context.Background(), observed, preparedSelector, submission); err == nil || observed.puts != 0 {
+				t.Fatalf("err=%v puts=%d", err, observed.puts)
+			}
+		})
+	}
 }

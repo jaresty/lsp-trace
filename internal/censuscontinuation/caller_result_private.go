@@ -288,33 +288,41 @@ func retainPrivateCallerResult(ctx context.Context, store Store, preparedSelecto
 	}
 	wire.ResultID = identityJSON(privateCallerResultIdentityDomain, wire, func(v *privateCallerResultWire) { v.ResultID = "" })
 	result := privateCallerResult{wire: wire}
-	raw, err := result.Bytes()
+	selector, err := persistPrivateCallerResult(ctx, store, result)
 	if err != nil {
 		return privateCallerResult{}, "", err
+	}
+	return result, selector, nil
+}
+
+func persistPrivateCallerResult(ctx context.Context, store Store, result privateCallerResult) (string, error) {
+	raw, err := result.Bytes()
+	if err != nil {
+		return "", err
 	}
 	parsed, err := parsePrivateCallerResult(raw)
 	if err != nil || parsed.ID() != result.ID() {
-		return privateCallerResult{}, "", errors.New("private caller result self validation failed")
+		return "", errors.New("private caller result self validation failed")
 	}
 	if err := ctx.Err(); err != nil {
-		return privateCallerResult{}, "", err
+		return "", err
 	}
 	selector, err := store.Put(ctx, raw)
 	if err != nil {
-		return privateCallerResult{}, "", err
+		return "", err
 	}
 	if selector != digestOf(raw) {
-		return privateCallerResult{}, "", errors.New("private caller result store selector mismatch")
+		return "", errors.New("private caller result store selector mismatch")
 	}
 	readback, err := store.Get(ctx, selector)
 	if err != nil {
-		return privateCallerResult{}, "", err
+		return "", err
 	}
 	readbackResult, err := parsePrivateCallerResult(readback)
 	if err != nil || !bytes.Equal(readback, raw) || readbackResult.ID() != result.ID() {
-		return privateCallerResult{}, "", errors.New("private caller result readback mismatch")
+		return "", errors.New("private caller result readback mismatch")
 	}
-	return result, selector, nil
+	return selector, nil
 }
 
 func retainOutcome(raw json.RawMessage) (json.RawMessage, error) {
