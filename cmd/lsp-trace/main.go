@@ -120,6 +120,7 @@ const usageText = `usage:
   lsp-trace context-delta --before FILE --after FILE --machine
   lsp-trace context-churn --input FILE --workspace PATH --from REVISION --to REVISION --machine
   lsp-trace context-churn-symbols --input FILE --workspace PATH --from REVISION --to REVISION --server ABSOLUTE_PATH [--server-arg VALUE...] --language-id ID --machine
+  lsp-trace experimental-handoff prepare --publication-root ROOT --checkpoint-selector sha256:HEX
   ` + censusInvocationUsage + `
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH... | --at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN... | --seed-file PATH)
@@ -183,6 +184,11 @@ func main() {
 	os.Exit(code)
 }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "experimental-handoff" {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		return runExperimentalHandoff(ctx, args[1:], os.Stdout, os.Stderr)
+	}
 	if len(args) > 0 && args[0] == "census" {
 		return runCensus(args[1:], os.Stdout, os.Stderr)
 	}
@@ -458,6 +464,11 @@ func runCorePrepared(args []string, validation *legacyInvocation) int {
 	}
 	if len(args) > 0 && args[0] == "context-churn-symbols" {
 		return runContextChurnSymbols(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "experimental-handoff" {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		return runExperimentalHandoff(ctx, args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "census" {
 		return runCensus(args[1:], os.Stdout, os.Stderr)
