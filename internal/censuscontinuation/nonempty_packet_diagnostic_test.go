@@ -162,7 +162,18 @@ func TestNonemptyRetainedPacketDiagnostic(t *testing.T) {
 		ResolveLimits:    s.contract.PacketResolveLimits(),
 		MaxResponseBytes: s.contract.PacketMaxResponseBytes(),
 	})
-	if err != nil {
-		t.Fatalf("ASSERT_NONEMPTY_RETAINED_PACKET: %v; cause=%v", err, errors.Unwrap(err))
+	if err == nil {
+		t.Fatal("ASSERT_NONEMPTY_RETAINED_PACKET: expected retained packet refusal")
+	}
+	var failure *targetpacket.Failure
+	if !errors.As(err, &failure) {
+		t.Fatalf("ASSERT_NONEMPTY_RETAINED_PACKET: expected targetpacket failure, got %T: %v", err, err)
+	}
+	if failure.Stage != targetpacket.StageSelect || failure.Code != targetpacket.CodeInvalidRequest {
+		t.Fatalf("ASSERT_NONEMPTY_RETAINED_PACKET: stage=%s code=%s; cause=%v", failure.Stage, failure.Code, failure.Err)
+	}
+	const expectedCause = "retainedprojection: AMBIGUOUS_SELECTION: 42b724d0662167b1ead614127f2fcc79d5a9ac5a0613e83beaf7f419ac2b0b30\x00file:///Users/schwa/dev/lsp-trace/internal/censuscontinuation/capture.go: multiple display bindings"
+	if failure.Err == nil || failure.Err.Error() != expectedCause {
+		t.Fatalf("ASSERT_NONEMPTY_RETAINED_PACKET: stage=%s code=%s; cause=%v", failure.Stage, failure.Code, failure.Err)
 	}
 }
