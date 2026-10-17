@@ -449,35 +449,66 @@ func callHierarchyLayer1CommitmentForCorpusRecord(t *testing.T, name string, val
 	return callHierarchyOpaqueCommitmentMetadata{identity: callHierarchyLayer1StringForTest(value.Identity), sha256: digest, length: callHierarchyLayer1Uint64ForTest(value.Length), available: value.Available}
 }
 
-func callHierarchyLayer1ExecuteCorpusRecord(t *testing.T, record callHierarchyLayer1CorpusRecord) (RoundTripResult, callHierarchyLayer1ExternalSnapshotForTest, RoundTripRequest) {
+type callHierarchyLayer1OrdinarySpecForTest struct {
+	mode, errorClass, method string
+	params                   json.RawMessage
+	cancel, shutdown         bool
+	deadline                 time.Duration
+	maxMessages              int
+	maxBytes                 int64
+}
+
+func callHierarchyLayer1OrdinarySpecFromCorpusForTest(t *testing.T, record callHierarchyLayer1CorpusRecord) callHierarchyLayer1OrdinarySpecForTest {
 	t.Helper()
-	manager, started, _ := roundTripManager(t, callHierarchyLayer1ModeForCorpusRecord(record))
-	if record.Error.Class == "shutdown" || record.Error.Class == "transport-unavailable" {
-		if err := manager.Shutdown(context.Background()); err != nil {
-			t.Errorf("ASSERT_CH_API_GAP_%s path=manager.shutdown expected=success got=%v", record.Name, err)
-		}
-	}
-	ctx := context.Background()
-	if record.Error.Class == "cancellation" {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithCancel(ctx)
-		cancel()
-	}
-	params := callHierarchyLayer1BytesForTest(t, record.Name+"-params", record.Frames.Request.Payload.BytesHex)
 	method := callHierarchyLayer1StringForTest(record.Identity.Method.Value)
 	if !record.Identity.Method.Available {
 		method = ""
 	}
-	request := callHierarchyLayer1RequestForTest(started, method, params, []byte("selected"), []byte("handoff"))
-	request.callHierarchyLayer1.selected = callHierarchyLayer1CommitmentForCorpusRecord(t, record.Name+"-selected", record.Commitments.Selected)
-	request.callHierarchyLayer1.handoff = callHierarchyLayer1CommitmentForCorpusRecord(t, record.Name+"-handoff", record.Commitments.Handoff)
-	if !record.Control.Enabled || !record.Control.AttachmentAvailable {
-		request.callHierarchyLayer1 = callHierarchyLayer1RequestAttachment{}
-	}
+	deadline := time.Second
 	if record.Error.Class == "deadline" {
-		request.Deadline = time.Now().Add(30 * time.Millisecond)
+		deadline = 30 * time.Millisecond
 	}
-	result := manager.RoundTrip(ctx, request)
+	return callHierarchyLayer1OrdinarySpecForTest{
+		mode: callHierarchyLayer1ModeForCorpusRecord(record), errorClass: record.Error.Class, method: method,
+		params: append(json.RawMessage(nil), callHierarchyLayer1BytesForTest(t, record.Name+"-params", record.Frames.Request.Payload.BytesHex)...),
+		cancel: record.Error.Class == "cancellation", shutdown: record.Error.Class == "shutdown" || record.Error.Class == "transport-unavailable",
+		deadline: deadline, maxMessages: 3, maxBytes: 4096,
+	}
+}
+
+func callHierarchyLayer1RequestFromSpecForTest(started StartResult, spec callHierarchyLayer1OrdinarySpecForTest, attachment callHierarchyLayer1RequestAttachment) RoundTripRequest {
+	return RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: spec.method,
+		Params: append(json.RawMessage(nil), spec.params...), Deadline: time.Now().Add(spec.deadline),
+		MaxMessages: spec.maxMessages, MaxBytes: spec.maxBytes, callHierarchyLayer1: attachment}
+}
+
+func callHierarchyLayer1ExecuteSpecForTest(t *testing.T, name string, spec callHierarchyLayer1OrdinarySpecForTest, attachment callHierarchyLayer1RequestAttachment) (RoundTripResult, RoundTripRequest) {
+	t.Helper()
+	manager, started, _ := roundTripManager(t, spec.mode)
+	if spec.shutdown {
+		if err := manager.Shutdown(context.Background()); err != nil {
+			t.Fatalf("ASSERT_CH_CURRENT_%s field=manager.shutdown got=%v", name, err)
+		}
+	}
+	ctx := context.Background()
+	if spec.cancel {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		cancel()
+	}
+	request := callHierarchyLayer1RequestFromSpecForTest(started, spec, attachment)
+	return manager.RoundTrip(ctx, request), request
+}
+
+func callHierarchyLayer1ExecuteCorpusRecord(t *testing.T, record callHierarchyLayer1CorpusRecord) (RoundTripResult, callHierarchyLayer1ExternalSnapshotForTest, RoundTripRequest) {
+	t.Helper()
+	spec := callHierarchyLayer1OrdinarySpecFromCorpusForTest(t, record)
+	attachment := callHierarchyLayer1RequestAttachment{}
+	if record.Control.Enabled && record.Control.AttachmentAvailable {
+		attachment.selected = callHierarchyLayer1CommitmentForCorpusRecord(t, record.Name+"-selected", record.Commitments.Selected)
+		attachment.handoff = callHierarchyLayer1CommitmentForCorpusRecord(t, record.Name+"-handoff", record.Commitments.Handoff)
+	}
+	result, request := callHierarchyLayer1ExecuteSpecForTest(t, record.Name, spec, attachment)
 	return result, callHierarchyLayer1ExternalForTest(t, result), request
 }
 
@@ -725,43 +756,80 @@ func callHierarchyLayer1EmitObservationGapsForTest(t *testing.T, expected callHi
 	}
 }
 
-func callHierarchyLayer1AssertOrdinaryCorpusRecordForTest(t *testing.T, expected callHierarchyLayer1CorpusRecord, external callHierarchyLayer1ExternalSnapshotForTest, request RoundTripRequest) {
+func callHierarchyLayer1SuccessfulResultFormForTest(mode string) string {
+	switch mode {
+	case "references-null":
+		return "null"
+	case "references-repeated":
+		return "nonempty"
+	default:
+		return "empty"
+	}
+}
+
+func callHierarchyLayer1AssertCurrentRoundTripForTest(t *testing.T, world string, spec callHierarchyLayer1OrdinarySpecForTest, result RoundTripResult) {
+	t.Helper()
+	form := callHierarchyLayer1ResultFormForTest(result.Result)
+	if spec.cancel && result.Failure != session.RequestCancelled {
+		t.Errorf("ASSERT_CH_CURRENT_%s field=Failure got=%q want=%q", world, result.Failure, session.RequestCancelled)
+	}
+	switch result.Failure {
+	case "":
+		if result.ServerError == nil {
+			if want := callHierarchyLayer1SuccessfulResultFormForTest(spec.mode); form != want {
+				t.Errorf("ASSERT_CH_CURRENT_%s field=Result.form got=%q want=%q result=%q", world, form, want, result.Result)
+			}
+		} else if form != "unavailable" || result.ServerError.Code == 0 || result.ServerError.Message == "" {
+			t.Errorf("ASSERT_CH_CURRENT_%s field=ServerError got=%+v resultForm=%q want=typed-code-message/no-result", world, result.ServerError, form)
+		}
+	case session.RequestCancelled:
+		if !spec.cancel {
+			t.Errorf("ASSERT_CH_CURRENT_%s field=Failure got=%q without cancelled context", world, result.Failure)
+		}
+	case session.RequestTimeout:
+		if spec.mode != "hang" || spec.deadline <= 0 {
+			t.Errorf("ASSERT_CH_CURRENT_%s field=Failure got=%q without executor deadline", world, result.Failure)
+		}
+	case session.SessionPoisoned:
+		// Current call-hierarchy execution may poison malformed, server-error,
+		// deadline, shutdown, or semantically incompatible fixture responses.
+	default:
+		t.Errorf("ASSERT_CH_CURRENT_%s field=Failure got=%q want=current round-trip vocabulary", world, result.Failure)
+	}
+	if result.Failure != "" && (form != "unavailable" || result.ServerError != nil) {
+		t.Errorf("ASSERT_CH_CURRENT_%s field=failure-representation failure=%q resultForm=%q serverError=%+v", world, result.Failure, form, result.ServerError)
+	}
+	if result.Messages < 0 || result.Bytes < 0 || result.RequestMessages < 0 || result.RequestBytes < 0 || (result.Messages == 0) != (result.Bytes == 0) || result.Messages > spec.maxMessages || result.Bytes > spec.maxBytes {
+		t.Errorf("ASSERT_CH_CURRENT_%s field=accounting messages=%d bytes=%d requestMessages=%d requestBytes=%d limits=%d/%d", world, result.Messages, result.Bytes, result.RequestMessages, result.RequestBytes, spec.maxMessages, spec.maxBytes)
+	}
+	for i, notification := range result.Notifications {
+		if notification.Method == "" || notification.ID != nil {
+			t.Errorf("ASSERT_CH_CURRENT_%s field=Notifications[%d] got=%+v", world, i, notification)
+		}
+	}
+	for i, response := range result.Responses {
+		if response.ID == nil || response.Method != "" {
+			t.Errorf("ASSERT_CH_CURRENT_%s field=Responses[%d] got=%+v", world, i, response)
+		}
+	}
+}
+
+func callHierarchyLayer1AssertOrdinaryCorpusRecordForTest(t *testing.T, expected callHierarchyLayer1CorpusRecord, result RoundTripResult, request RoundTripRequest) {
 	t.Helper()
 	actualAttachmentAvailable := request.callHierarchyLayer1 != (callHierarchyLayer1RequestAttachment{})
 	if expected.Control.Enabled != actualAttachmentAvailable || expected.Control.AttachmentAvailable != actualAttachmentAvailable {
-		t.Errorf("ASSERT_CH_CORPUS_CONTROL_SETUP_%s enabled=%v attachmentAvailable=%v actualAttachmentAvailable=%v", expected.Name, expected.Control.Enabled, expected.Control.AttachmentAvailable, actualAttachmentAvailable)
+		t.Errorf("ASSERT_CH_CURRENT_%s field=request.callHierarchyLayer1 enabled=%v attachmentAvailable=%v got=%v", expected.Name, expected.Control.Enabled, expected.Control.AttachmentAvailable, actualAttachmentAvailable)
 	}
-	actualReason := ""
-	if !actualAttachmentAvailable {
-		actualReason = "control-disabled"
+	if !actualAttachmentAvailable && expected.Control.Reason != nil {
+		t.Errorf("ASSERT_CH_CURRENT_%s field=control.reason got=unexposed want=nil corpusReason=%q", expected.Name, *expected.Control.Reason)
 	}
-	if callHierarchyLayer1StringForTest(expected.Control.Reason) != actualReason {
-		t.Errorf("ASSERT_CH_API_GAP_%s path=control.reason expected=%v got=%q", expected.Name, expected.Control.Reason, actualReason)
-	}
-	wantResult := callHierarchyLayer1BytesForTest(t, expected.Name+"-result", expected.Result.BytesHex)
-	wantError := callHierarchyLayer1BytesForTest(t, expected.Name+"-error", &expected.Error.SerializedHex)
-	wantNotifications := callHierarchyLayer1BytesForTest(t, expected.Name+"-notifications", &expected.External.NotificationsHex)
-	wantResponses := callHierarchyLayer1BytesForTest(t, expected.Name+"-responses", &expected.External.ResponsesHex)
-	if expected.External.Available != true || expected.External.ExecutionExpected != true {
-		t.Errorf("ASSERT_CH_CORPUS_EXTERNAL_AVAILABILITY_%s: %+v", expected.Name, expected.External)
-	}
-	actualForm := callHierarchyLayer1ResultFormForTest(external.result)
-	if expected.Result.Available != (expected.Result.BytesHex != nil) || expected.Result.Form != actualForm || !reflect.DeepEqual(external.result, wantResult) || (expected.Result.BytesHex == nil) != (wantResult == nil) {
-		t.Errorf("ASSERT_CH_API_GAP_%s path=external.result expected=available:%v/form:%q/bytes:%x got=form:%q/bytes:%x", expected.Name, expected.Result.Available, expected.Result.Form, wantResult, actualForm, external.result)
-	}
-	if !reflect.DeepEqual(external.serverError, wantError) || !reflect.DeepEqual(external.notifications, wantNotifications) || !reflect.DeepEqual(external.responses, wantResponses) {
-		t.Errorf("ASSERT_CH_API_GAP_%s path=external.error_notifications_responses expected=%x/%x/%x got=%x/%x/%x", expected.Name, wantError, wantNotifications, wantResponses, external.serverError, external.notifications, external.responses)
-	}
-	wantFailure := callHierarchyLayer1StringForTest(expected.External.Failure)
-	if string(external.failure) != wantFailure || external.messages != int(callHierarchyLayer1Uint64ForTest(expected.Transport.Messages.Value)) || external.bytes != int64(callHierarchyLayer1Uint64ForTest(expected.Transport.Bytes.Value)) || external.requestMessages != int(callHierarchyLayer1Uint64ForTest(expected.Transport.RequestMessages.Value)) || external.requestBytes != int64(callHierarchyLayer1Uint64ForTest(expected.Transport.RequestBytes.Value)) {
-		t.Errorf("ASSERT_CH_API_GAP_%s path=external.failure_messages_bytes_request expectedFailure=%q expectedTransport=%+v got=%+v", expected.Name, wantFailure, expected.Transport, external)
-	}
+	callHierarchyLayer1AssertCurrentRoundTripForTest(t, expected.Name, callHierarchyLayer1OrdinarySpecFromCorpusForTest(t, expected), result)
 }
 
 func callHierarchyLayer1AssertCorpusRecordForTest(t *testing.T, expected callHierarchyLayer1CorpusRecord, result RoundTripResult, external callHierarchyLayer1ExternalSnapshotForTest, request RoundTripRequest) {
 	t.Helper()
 	callHierarchyLayer1AssertScaffoldShapeForTest(t, expected.Name)
-	callHierarchyLayer1AssertOrdinaryCorpusRecordForTest(t, expected, external, request)
+	callHierarchyLayer1AssertOrdinaryCorpusRecordForTest(t, expected, result, request)
 	lease, ok := result.privateCallHierarchyObservationLease()
 	expectedObservation := expected.Control.AttachmentAvailable && expected.Control.ObservationAvailable && !expected.Refusal.Refused
 	if !expectedObservation {
@@ -851,36 +919,68 @@ func callHierarchyLayer1AssertCorpusRecordForTest(t *testing.T, expected callHie
 	callHierarchyLayer1AssertReflectedValueForTest(t, expected.Name, "RoundTripResult.callHierarchyLayer1.commitments", result.callHierarchyLayer1, "commitments", expected.Commitments)
 }
 
+func callHierarchyLayer1AssertGapForTest(t *testing.T, world string, enabled bool, result RoundTripResult) {
+	t.Helper()
+	if lease, ok := result.privateCallHierarchyObservationLease(); ok {
+		lease.release()
+		t.Fatalf("ASSERT_CH_CURRENT_%s field=proposal.lease got=present want=absent enabled=%v", world, enabled)
+	}
+	if !reflect.DeepEqual(result.callHierarchyLayer1, callHierarchyLayer1ResultAttachment{}) {
+		t.Fatalf("ASSERT_CH_CURRENT_%s field=proposal.attachment got=%+v want=absent enabled=%v", world, result.callHierarchyLayer1, enabled)
+	}
+}
+
+func callHierarchyLayer1AssertOrdinaryInputsEqualForTest(t *testing.T, disabledName, enabledName string, spec callHierarchyLayer1OrdinarySpecForTest, disabled, enabled RoundTripRequest, disabledCtx, enabledCtx context.Context) {
+	t.Helper()
+	type fixtureConditions struct {
+		mode, errorClass string
+		cancelled        bool
+		shutdown         bool
+		deadline         time.Duration
+		maxMessages      int
+		maxBytes         int64
+	}
+	disabledConditions := fixtureConditions{spec.mode, spec.errorClass, errors.Is(disabledCtx.Err(), context.Canceled), spec.shutdown, spec.deadline, spec.maxMessages, spec.maxBytes}
+	enabledConditions := fixtureConditions{spec.mode, spec.errorClass, errors.Is(enabledCtx.Err(), context.Canceled), spec.shutdown, spec.deadline, spec.maxMessages, spec.maxBytes}
+	if !reflect.DeepEqual(disabledConditions, enabledConditions) || disabledConditions.cancelled != spec.cancel {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=fixture-conditions disabled=%+v enabled=%+v", disabledName, enabledName, disabledConditions, enabledConditions)
+	}
+	disabledAttachment, enabledAttachment := disabled.callHierarchyLayer1, enabled.callHierarchyLayer1
+	disabled.callHierarchyLayer1, enabled.callHierarchyLayer1 = callHierarchyLayer1RequestAttachment{}, callHierarchyLayer1RequestAttachment{}
+	disabled.SessionID, enabled.SessionID = "pair-session", "pair-session"
+	disabled.Deadline, enabled.Deadline = time.Time{}, time.Time{}
+	if !reflect.DeepEqual(disabled, enabled) {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=ordinary-request disabled=%+v enabled=%+v", disabledName, enabledName, disabled, enabled)
+	}
+	if disabledAttachment != (callHierarchyLayer1RequestAttachment{}) || enabledAttachment == (callHierarchyLayer1RequestAttachment{}) {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=private-attachment disabled=%+v enabled=%+v", disabledName, enabledName, disabledAttachment, enabledAttachment)
+	}
+	if spec.mode == "" || spec.deadline <= 0 || spec.maxMessages <= 0 || spec.maxBytes <= 0 {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=fixture-spec got=%+v", disabledName, enabledName, spec)
+	}
+}
+
+func callHierarchyLayer1AssertPairResultsEqualForTest(t *testing.T, disabledName, enabledName string, disabled, enabled RoundTripResult) {
+	t.Helper()
+	if !bytes.Equal(disabled.Result, enabled.Result) || !reflect.DeepEqual(disabled.ServerError, enabled.ServerError) || disabled.Failure != enabled.Failure ||
+		disabled.Messages != enabled.Messages || disabled.Bytes != enabled.Bytes || disabled.RequestMessages != enabled.RequestMessages || disabled.RequestBytes != enabled.RequestBytes ||
+		!reflect.DeepEqual(disabled.Notifications, enabled.Notifications) || !reflect.DeepEqual(disabled.Responses, enabled.Responses) {
+		t.Errorf("ASSERT_CH_PAIR_RESULT_%s_%s field=current-roundtrip disabled=%+v enabled=%+v", disabledName, enabledName, disabled, enabled)
+	}
+}
+
 func TestCallHierarchyLayer1AcceptedCorpusRED(t *testing.T) {
 	worlds := callHierarchyLayer1LoadCorpusForTest(t)
-	var gaps []string
-	var gapsMu sync.Mutex
-	collect := func(record callHierarchyLayer1CorpusRecord) (RoundTripResult, callHierarchyLayer1ExternalSnapshotForTest, RoundTripRequest) {
-		result, external, request := callHierarchyLayer1ExecuteCorpusRecord(t, record)
-		callHierarchyLayer1AssertOrdinaryCorpusRecordForTest(t, record, external, request)
-		classification := "proposal-surface-unavailable"
-		if !record.Control.AttachmentAvailable {
-			classification = "control-disabled"
-		} else if record.Refusal.Refused {
-			classification = "refused:" + callHierarchyLayer1StringForTest(record.Refusal.Reason)
-		}
-		if lease, ok := result.privateCallHierarchyObservationLease(); ok {
-			lease.release()
-			t.Fatalf("ASSERT_CH_CORPUS_EXPECTED_GAP_DISAPPEARED name=%s expected=%s", record.Name, classification)
-		}
-		if !reflect.DeepEqual(result.callHierarchyLayer1, callHierarchyLayer1ResultAttachment{}) {
-			t.Fatalf("ASSERT_CH_CORPUS_GAP_CLASSIFICATION_CHANGED name=%s expected=%s attachment=%+v", record.Name, classification, result.callHierarchyLayer1)
-		}
-		gapsMu.Lock()
-		gaps = append(gaps, fmt.Sprintf("%s=%s", record.Name, classification))
-		gapsMu.Unlock()
-		return result, external, request
+	collect := func(record callHierarchyLayer1CorpusRecord) RoundTripResult {
+		result, _, request := callHierarchyLayer1ExecuteCorpusRecord(t, record)
+		callHierarchyLayer1AssertOrdinaryCorpusRecordForTest(t, record, result, request)
+		callHierarchyLayer1AssertGapForTest(t, record.Name, record.Control.Enabled, result)
+		return result
 	}
 	for _, loaded := range worlds {
 		loaded := loaded
 		t.Run(loaded.entry.Name, func(t *testing.T) { collect(loaded.world.Record) })
 	}
-
 	w24 := worlds[23].world.Record
 	if !w24.Concurrency.Available || len(w24.Concurrency.Workers) != 16 {
 		t.Errorf("ASSERT_CH_CORPUS_W24_16_WORKERS: %+v", w24.Concurrency)
@@ -890,63 +990,67 @@ func TestCallHierarchyLayer1AcceptedCorpusRED(t *testing.T) {
 		for i := range w24.Concurrency.Workers {
 			i := i
 			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				collect(w24.Concurrency.Workers[i])
-			}()
+			go func() { defer wg.Done(); collect(w24.Concurrency.Workers[i]) }()
 		}
 		wg.Wait()
 	})
-
 	w25 := worlds[24].world.Record
 	if len(w25.Comparison.Executions) != 22 || len(w25.Comparison.Pairs) != 11 {
-		t.Errorf("ASSERT_CH_CORPUS_W25_22_EXECUTIONS_11_PAIRS: %+v", w25.Comparison)
+		t.Fatalf("ASSERT_CH_CORPUS_W25_22_EXECUTIONS_11_PAIRS: %+v", w25.Comparison)
 	}
-	t.Run("world-25-executions-and-pairs", func(t *testing.T) {
-		type observedExecution struct {
-			external callHierarchyLayer1ExternalSnapshotForTest
-			request  RoundTripRequest
-		}
-		observed := make(map[string]observedExecution, 22)
-		named := make(map[string]callHierarchyLayer1CorpusRecord, 22)
-		for _, execution := range w25.Comparison.Executions {
-			_, external, request := collect(execution)
-			observed[execution.Name] = observedExecution{external: external, request: request}
-			named[execution.Name] = execution
-		}
-		for _, pair := range w25.Comparison.Pairs {
-			disabledNamed, disabledNamedOK := named[pair.Disabled.Name]
-			enabledNamed, enabledNamedOK := named[pair.Enabled.Name]
-			if !disabledNamedOK || !enabledNamedOK || !reflect.DeepEqual(pair.Disabled, disabledNamed) || !reflect.DeepEqual(pair.Enabled, enabledNamed) {
-				t.Errorf("ASSERT_CH_CORPUS_W25_INLINE_NAMED_RECORD_EXACT_%s_%s", pair.Disabled.Name, pair.Enabled.Name)
+	for _, pair := range w25.Comparison.Pairs {
+		pair := pair
+		t.Run("pair-"+pair.Disabled.Name+"-"+pair.Enabled.Name, func(t *testing.T) {
+			spec := callHierarchyLayer1OrdinarySpecFromCorpusForTest(t, pair.Enabled)
+			disabledManager, disabledStarted, _ := roundTripManager(t, spec.mode)
+			enabledManager, enabledStarted, _ := roundTripManager(t, spec.mode)
+			if spec.shutdown {
+				if err := disabledManager.Shutdown(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				if err := enabledManager.Shutdown(context.Background()); err != nil {
+					t.Fatal(err)
+				}
 			}
-			disabled, disabledOK := observed[pair.Disabled.Name]
-			enabled, enabledOK := observed[pair.Enabled.Name]
-			if !disabledOK || !enabledOK {
-				t.Errorf("ASSERT_CH_API_GAP_%s_%s path=comparison.observed_execution expected=both got=disabled:%v/enabled:%v", pair.Disabled.Name, pair.Enabled.Name, disabledOK, enabledOK)
-				continue
+			attachment := callHierarchyLayer1RequestAttachment{
+				selected: callHierarchyLayer1CommitmentForCorpusRecord(t, pair.Enabled.Name+"-selected", pair.Enabled.Commitments.Selected),
+				handoff:  callHierarchyLayer1CommitmentForCorpusRecord(t, pair.Enabled.Name+"-handoff", pair.Enabled.Commitments.Handoff),
 			}
-			actualExternalEqual := reflect.DeepEqual(disabled.external, enabled.external)
-			actualTransportEqual := disabled.external.messages == enabled.external.messages && disabled.external.bytes == enabled.external.bytes && disabled.external.requestMessages == enabled.external.requestMessages && disabled.external.requestBytes == enabled.external.requestBytes
-			if pair.ExternalEqual != actualExternalEqual {
-				t.Errorf("ASSERT_CH_API_GAP_%s_%s path=comparison.external_equal expected=%v got=%v", pair.Disabled.Name, pair.Enabled.Name, pair.ExternalEqual, actualExternalEqual)
+			disabledRequest := callHierarchyLayer1RequestFromSpecForTest(disabledStarted, spec, callHierarchyLayer1RequestAttachment{})
+			enabledRequest := callHierarchyLayer1RequestFromSpecForTest(enabledStarted, spec, attachment)
+			disabledCtx, enabledCtx := context.Background(), context.Background()
+			if spec.cancel {
+				var disabledCancel, enabledCancel context.CancelFunc
+				disabledCtx, disabledCancel = context.WithCancel(disabledCtx)
+				enabledCtx, enabledCancel = context.WithCancel(enabledCtx)
+				disabledCancel()
+				enabledCancel()
 			}
-			if pair.TransportEqual != actualTransportEqual {
-				t.Errorf("ASSERT_CH_API_GAP_%s_%s path=comparison.transport_equal expected=%v got=%v", pair.Disabled.Name, pair.Enabled.Name, pair.TransportEqual, actualTransportEqual)
-			}
-			if enabled.request.callHierarchyLayer1 == (callHierarchyLayer1RequestAttachment{}) || disabled.request.callHierarchyLayer1 != (callHierarchyLayer1RequestAttachment{}) {
-				t.Errorf("ASSERT_CH_CORPUS_W25_ACTUAL_REQUEST_ATTACHMENT_AVAILABILITY_%s_%s", pair.Enabled.Name, pair.Disabled.Name)
-			}
-			if !reflect.DeepEqual(pair.Disabled.External, pair.Enabled.External) != !pair.ExternalEqual || !reflect.DeepEqual(pair.Disabled.Transport, pair.Enabled.Transport) != !pair.TransportEqual {
-				t.Errorf("ASSERT_CH_CORPUS_W25_INLINE_NAMED_OBSERVATION_CONTRAST_%s_%s", pair.Disabled.Name, pair.Enabled.Name)
-			}
-		}
-	})
+			callHierarchyLayer1AssertOrdinaryInputsEqualForTest(t, pair.Disabled.Name, pair.Enabled.Name, spec, disabledRequest, enabledRequest, disabledCtx, enabledCtx)
+			disabledResult := disabledManager.RoundTrip(disabledCtx, disabledRequest)
+			enabledResult := enabledManager.RoundTrip(enabledCtx, enabledRequest)
+			callHierarchyLayer1AssertCurrentRoundTripForTest(t, pair.Disabled.Name, spec, disabledResult)
+			callHierarchyLayer1AssertCurrentRoundTripForTest(t, pair.Enabled.Name, spec, enabledResult)
+			callHierarchyLayer1AssertPairResultsEqualForTest(t, pair.Disabled.Name, pair.Enabled.Name, disabledResult, enabledResult)
+			callHierarchyLayer1AssertGapForTest(t, pair.Disabled.Name, false, disabledResult)
+			callHierarchyLayer1AssertGapForTest(t, pair.Enabled.Name, true, enabledResult)
+		})
+	}
+}
 
-	const expectedGaps = 25 + 16 + 22
-	if len(gaps) != expectedGaps {
-		t.Fatalf("ASSERT_CH_CORPUS_EXPECTED_GAP_COUNT got=%d want=%d gaps=%v", len(gaps), expectedGaps, gaps)
+func TestCallHierarchyLayer1ObservationDoesNotControlOrdinaryRoundTrip(t *testing.T) {
+	worlds := callHierarchyLayer1LoadCorpusForTest(t)
+	pair := worlds[24].world.Record.Comparison.Pairs[0]
+	spec := callHierarchyLayer1OrdinarySpecFromCorpusForTest(t, pair.Enabled)
+	attachment := callHierarchyLayer1RequestAttachment{
+		selected: callHierarchyLayer1CommitmentForCorpusRecord(t, pair.Enabled.Name+"-selected", pair.Enabled.Commitments.Selected),
+		handoff:  callHierarchyLayer1CommitmentForCorpusRecord(t, pair.Enabled.Name+"-handoff", pair.Enabled.Commitments.Handoff),
 	}
+	disabled, _ := callHierarchyLayer1ExecuteSpecForTest(t, pair.Disabled.Name, spec, callHierarchyLayer1RequestAttachment{})
+	enabled, _ := callHierarchyLayer1ExecuteSpecForTest(t, pair.Enabled.Name, spec, attachment)
+	callHierarchyLayer1AssertPairResultsEqualForTest(t, pair.Disabled.Name, pair.Enabled.Name, disabled, enabled)
+	callHierarchyLayer1AssertGapForTest(t, pair.Disabled.Name, false, disabled)
+	callHierarchyLayer1AssertGapForTest(t, pair.Enabled.Name, true, enabled)
 }
 
 func TestCallHierarchyLayer1MutationPayloadAndPropagationRED(t *testing.T) {
