@@ -105,7 +105,7 @@ func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
 	cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+	if err := runFR23WithScheduledFake(t, cmd); err != nil {
 		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_SUCCEEDS: %v stderr=%s", err, stderr.String())
 	}
 	if strings.Contains(stderr.String(), "topmost sibling expansion produced no exact relations") {
