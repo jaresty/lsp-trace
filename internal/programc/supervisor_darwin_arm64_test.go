@@ -20,12 +20,18 @@ import (
 	"lsp-trace/internal/graph"
 )
 
+const testWorkerWatchdogEnvironment = "PROGRAMC_TEST_PARENT_WATCHDOG"
+
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == workerArgument {
-		parentPID := os.Getppid()
-		startTestWorkerParentWatchdog(parentPID)
-		writeTestWorkerPIDRecord(0, 0)
 		if mode := os.Getenv("PROGRAMC_TEST_WORKER"); mode != "" {
+			if os.Getenv(testWorkerWatchdogEnvironment) == "1" {
+				startTestWorkerParentWatchdog(os.Getppid())
+			}
+			if err := writeTestWorkerPIDRecord(processIdentity{}); err != nil {
+				fmt.Fprintf(os.Stderr, "record test worker identity: %v\n", err)
+				os.Exit(12)
+			}
 			if mode == "delayed-private" {
 				// initialTreeRSS has a two-second acquisition bound. Keep this
 				// fixture alive beyond that entire window so the test never
@@ -39,6 +45,12 @@ func TestMain(m *testing.M) {
 		_, code := RunPrivateWorker(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 		os.Exit(code)
 	}
+	if os.Getenv("PROGRAMC_TEST_WATCHDOG_DRIVER") == "timeout" {
+		if err := prepareTimeoutWatchdogDriver(); err != nil {
+			fmt.Fprintf(os.Stderr, "prepare timeout watchdog driver: %v\n", err)
+			os.Exit(13)
+		}
+	}
 	os.Exit(m.Run())
 }
 
@@ -50,29 +62,93 @@ func startTestWorkerParentWatchdog(parentPID int) {
 			if os.Getppid() == parentPID {
 				continue
 			}
-			// The production supervisor starts the worker with Setpgid, making
-			// its PID the process-group ID. kill(2) selects and signals the
-			// complete group before SIGKILL can terminate this goroutine's process.
-			_ = syscall.Kill(-os.Getpid(), syscall.SIGKILL)
+			self := os.Getpid()
+			pgid, err := syscall.Getpgid(self)
+			if err != nil || pgid != self {
+				// A direct invocation may share an unrelated caller's process
+				// group. Never use a negative PID unless this worker owns its group.
+				os.Exit(126)
+			}
+			// kill(2) selects every member before SIGKILL terminates this process.
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
 			os.Exit(125)
 		}
 	}()
 }
 
-func writeTestWorkerPIDRecord(descendantPID, descendantPGID int) {
+type processIdentity struct {
+	PID   int    `json:"pid"`
+	PGID  int    `json:"pgid"`
+	Start string `json:"start"`
+}
+
+type watchdogPIDs struct {
+	Worker     processIdentity `json:"worker"`
+	Descendant processIdentity `json:"descendant"`
+}
+
+func readProcessIdentity(pid int) (processIdentity, error) {
+	if pid <= 1 {
+		return processIdentity{}, fmt.Errorf("unsafe pid %d", pid)
+	}
+	out, err := exec.Command("/bin/ps", "-o", "pgid=", "-o", "lstart=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return processIdentity{}, err
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) < 6 {
+		return processIdentity{}, fmt.Errorf("incomplete process identity %q", out)
+	}
+	pgid, err := strconv.Atoi(fields[0])
+	if err != nil || pgid <= 1 {
+		return processIdentity{}, fmt.Errorf("invalid process group %q", fields[0])
+	}
+	return processIdentity{PID: pid, PGID: pgid, Start: strings.Join(fields[1:], " ")}, nil
+}
+
+func sameProcessIdentity(recorded processIdentity) bool {
+	current, err := readProcessIdentity(recorded.PID)
+	return err == nil && current == recorded
+}
+
+func writeTestWorkerPIDRecord(descendant processIdentity) error {
 	path := os.Getenv("PROGRAMC_TEST_PIDFILE")
 	if path == "" {
-		return
+		return nil
 	}
-	workerPGID, err := syscall.Getpgid(os.Getpid())
+	worker, err := readProcessIdentity(os.Getpid())
 	if err != nil {
-		return
+		return err
 	}
-	record := fmt.Sprintf("worker_pid=%d worker_pgid=%d descendant_pid=%d descendant_pgid=%d\n", os.Getpid(), workerPGID, descendantPID, descendantPGID)
+	record := watchdogPIDs{Worker: worker, Descendant: descendant}
 	temporary := path + ".tmp"
-	if os.WriteFile(temporary, []byte(record), 0600) == nil {
-		_ = os.Rename(temporary, path)
+	file, err := os.OpenFile(temporary, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
 	}
+	if err = json.NewEncoder(file).Encode(record); err == nil {
+		err = file.Sync()
+	}
+	closeErr := file.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if err = os.Rename(temporary, path); err != nil {
+		return err
+	}
+	directory, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	err = directory.Sync()
+	closeErr = directory.Close()
+	if err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 func testWorkerMode() {
@@ -94,12 +170,17 @@ func testWorkerMode() {
 			fmt.Fprintf(os.Stderr, "start watchdog descendant: %v\n", err)
 			os.Exit(10)
 		}
-		descendantPGID, err := syscall.Getpgid(cmd.Process.Pid)
-		if err != nil {
+		descendant, err := readProcessIdentity(cmd.Process.Pid)
+		if err != nil || descendant.PGID != os.Getpid() {
 			_ = cmd.Process.Kill()
+			fmt.Fprintf(os.Stderr, "invalid watchdog descendant identity: %+v err=%v\n", descendant, err)
 			os.Exit(11)
 		}
-		writeTestWorkerPIDRecord(cmd.Process.Pid, descendantPGID)
+		if err := writeTestWorkerPIDRecord(descendant); err != nil {
+			_ = cmd.Process.Kill()
+			fmt.Fprintf(os.Stderr, "record watchdog readiness: %v\n", err)
+			os.Exit(12)
+		}
 		_ = cmd.Wait()
 		os.Exit(9)
 	case "nonzero":
@@ -117,6 +198,7 @@ func testWorkerMode() {
 }
 func withSupervisorDefaults(t *testing.T) {
 	t.Helper()
+	t.Setenv(testWorkerWatchdogEnvironment, "1")
 	oldWall, oldRSS, oldPoll, oldOutput, oldPS := supervisorWall, supervisorRSSBytes, supervisorPoll, supervisorOutputBytes, supervisorPSPath
 	t.Cleanup(func() {
 		supervisorWall, supervisorRSSBytes, supervisorPoll, supervisorOutputBytes, supervisorPSPath = oldWall, oldRSS, oldPoll, oldOutput, oldPS
@@ -210,38 +292,104 @@ func processIsZombie(pid int) bool {
 	return err == nil && strings.HasPrefix(strings.TrimSpace(string(out)), "Z")
 }
 
-type watchdogPIDs struct {
-	workerPID, workerPGID, descendantPID, descendantPGID int
-}
-
-func readWatchdogPIDs(path string) (watchdogPIDs, error) {
+func readWatchdogPIDs(path string, requireDescendant bool) (watchdogPIDs, error) {
 	var p watchdogPIDs
-	raw, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return p, err
 	}
-	_, err = fmt.Sscanf(string(raw), "worker_pid=%d worker_pgid=%d descendant_pid=%d descendant_pgid=%d", &p.workerPID, &p.workerPGID, &p.descendantPID, &p.descendantPGID)
-	validDescendant := (p.descendantPID == 0 && p.descendantPGID == 0) || (p.descendantPID > 1 && p.descendantPGID == p.workerPGID)
-	if err != nil || p.workerPID <= 1 || p.workerPGID != p.workerPID || !validDescendant {
-		return p, fmt.Errorf("invalid watchdog PID record %q: %w", raw, err)
+	err = json.NewDecoder(file).Decode(&p)
+	closeErr := file.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return p, err
+	}
+	if p.Worker.PID <= 1 || p.Worker.PGID <= 1 || p.Worker.Start == "" {
+		return p, fmt.Errorf("invalid worker identity %+v", p.Worker)
+	}
+	if requireDescendant && (p.Descendant.PID <= 1 || p.Descendant.PGID != p.Worker.PID || p.Descendant.Start == "") {
+		return p, fmt.Errorf("descendant not ready %+v", p.Descendant)
 	}
 	return p, nil
 }
 
-func processGone(pid int) bool {
-	return syscall.Kill(pid, 0) == syscall.ESRCH || processIsZombie(pid)
+func waitForWorkerRecord(path string, requireDescendant bool, deadline time.Time) (watchdogPIDs, error) {
+	var last error
+	for time.Now().Before(deadline) {
+		p, err := readWatchdogPIDs(path, requireDescendant)
+		if err == nil && sameProcessIdentity(p.Worker) && (!requireDescendant || sameProcessIdentity(p.Descendant)) {
+			return p, nil
+		}
+		last = err
+		time.Sleep(10 * time.Millisecond)
+	}
+	return watchdogPIDs{}, fmt.Errorf("watchdog identity record unavailable: %w", last)
+}
+
+func waitForWatchdogReadiness(path string, deadline time.Time) (watchdogPIDs, error) {
+	p, err := waitForWorkerRecord(path, true, deadline)
+	if err != nil {
+		return p, err
+	}
+	if p.Worker.PGID != p.Worker.PID || p.Descendant.PID == 0 || p.Descendant.PGID != p.Worker.PID {
+		return watchdogPIDs{}, fmt.Errorf("invalid watchdog readiness %+v", p)
+	}
+	return p, nil
+}
+
+func recordedIdentityGone(recorded processIdentity) bool {
+	if recorded.PID == 0 {
+		return true
+	}
+	if !sameProcessIdentity(recorded) {
+		return true
+	}
+	return processIsZombie(recorded.PID)
+}
+
+func signalRecordedProcess(recorded processIdentity) {
+	if sameProcessIdentity(recorded) {
+		_ = syscall.Kill(recorded.PID, syscall.SIGKILL)
+	}
+}
+
+func signalRecordedWorkerGroup(recorded watchdogPIDs) {
+	workerOwnsGroup := sameProcessIdentity(recorded.Worker) && recorded.Worker.PGID == recorded.Worker.PID
+	descendantAnchorsGroup := sameProcessIdentity(recorded.Descendant) && recorded.Descendant.PGID == recorded.Worker.PID
+	if workerOwnsGroup || descendantAnchorsGroup {
+		_ = syscall.Kill(-recorded.Worker.PID, syscall.SIGKILL)
+	}
 }
 
 func waitProcessesGone(p watchdogPIDs, deadline time.Time) error {
 	for time.Now().Before(deadline) {
-		descendantGone := p.descendantPID == 0 || processGone(p.descendantPID)
-		if processGone(p.workerPID) && descendantGone {
+		if recordedIdentityGone(p.Worker) && recordedIdentityGone(p.Descendant) {
 			return nil
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	descendantGone := p.descendantPID == 0 || processGone(p.descendantPID)
-	return fmt.Errorf("processes remain: worker pid=%d gone=%t descendant pid=%d gone=%t", p.workerPID, processGone(p.workerPID), p.descendantPID, descendantGone)
+	return fmt.Errorf("recorded identities remain: worker=%+v current=%t descendant=%+v current=%t", p.Worker, sameProcessIdentity(p.Worker), p.Descendant, sameProcessIdentity(p.Descendant))
+}
+
+func prepareTimeoutWatchdogDriver() error {
+	supervisorWall = 30 * time.Second
+	supervisorRSSBytes = 1 << 40
+	supervisorPoll = 5 * time.Millisecond
+	if err := os.Setenv("PROGRAMC_TEST_WORKER", "watchdog-child"); err != nil {
+		return err
+	}
+	if err := os.Setenv(testWorkerWatchdogEnvironment, "1"); err != nil {
+		return err
+	}
+	go func() { _, _, _ = ComputeSupervised(context.Background(), nil, 1) }()
+	p, err := waitForWatchdogReadiness(os.Getenv("PROGRAMC_TEST_PIDFILE"), time.Now().Add(5*time.Second))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("WATCHDOG_READY worker=%d descendant=%d\n", p.Worker.PID, p.Descendant.PID)
+	return nil
 }
 
 func TestWatchdogDriver(t *testing.T) {
@@ -252,10 +400,7 @@ func TestWatchdogDriver(t *testing.T) {
 	withSupervisorDefaults(t)
 	switch mode {
 	case "timeout":
-		supervisorWall = 30 * time.Second
-		t.Setenv("PROGRAMC_TEST_WORKER", "watchdog-child")
-		t.Setenv("PROGRAMC_TEST_PIDFILE", os.Getenv("PROGRAMC_TEST_PIDFILE"))
-		_, _, _ = ComputeSupervised(context.Background(), nil, 1)
+		select {}
 	case "failure":
 		requireCode(t, supervisedFailure(t, "nonzero", context.Background()), CodeNonzeroExit)
 	case "success":
@@ -265,9 +410,65 @@ func TestWatchdogDriver(t *testing.T) {
 		if _, _, failed := ComputeSupervised(context.Background(), input, 1); failed != nil {
 			t.Fatal(failed)
 		}
+	case "nonleader-parent":
+		cmd := exec.Command(os.Args[0], workerArgument)
+		cmd.Env = append(os.Environ(), "PROGRAMC_TEST_WORKER=hang", testWorkerWatchdogEnvironment+"=1")
+		cmd.Stdin = strings.NewReader("")
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		p, err := waitForWorkerRecord(os.Getenv("PROGRAMC_TEST_PIDFILE"), false, time.Now().Add(5*time.Second))
+		if err != nil || p.Worker.PGID == p.Worker.PID {
+			t.Fatalf("expected non-leader worker identity, got %+v err=%v", p.Worker, err)
+		}
 	default:
 		t.Fatalf("unknown watchdog driver mode %q", mode)
 	}
+}
+
+func TestWorkerParentWatchdogRejectsNonLeaderInvocation(t *testing.T) {
+	pidfile := filepath.Join(t.TempDir(), "pids")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestWatchdogDriver$", "-test.timeout=5s")
+	cmd.Env = append(os.Environ(), "PROGRAMC_TEST_WATCHDOG_DRIVER=nonleader-parent", "PROGRAMC_TEST_PIDFILE="+pidfile)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("non-leader parent driver failed: %v", err)
+	}
+	p, err := readWatchdogPIDs(pidfile, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { signalRecordedProcess(p.Worker) })
+	if p.Worker.PGID == p.Worker.PID {
+		t.Fatalf("adversarial worker unexpectedly led group: %+v", p.Worker)
+	}
+	if err := waitProcessesGone(p, time.Now().Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("ASSERT_TESTMAIN_PARENT_WATCHDOG_NONLEADER_SAFE_EXIT: PASS")
+}
+
+func TestWatchdogCleanupRejectsChangedProcessIdentity(t *testing.T) {
+	cmd := exec.Command("/bin/sleep", "30")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	original, err := readProcessIdentity(cmd.Process.Pid)
+	if err != nil || original.PGID != original.PID {
+		_ = cmd.Process.Kill()
+		t.Fatalf("invalid isolated identity %+v: %v", original, err)
+	}
+	t.Cleanup(func() { signalRecordedWorkerGroup(watchdogPIDs{Worker: original}) })
+	reused := original
+	reused.Start += " reused"
+	if !recordedIdentityGone(reused) {
+		t.Fatalf("changed start identity was not treated as gone: %+v", reused)
+	}
+	signalRecordedWorkerGroup(watchdogPIDs{Worker: reused})
+	if !sameProcessIdentity(original) {
+		t.Fatal("identity-mismatched cleanup signaled the live original process")
+	}
+	t.Log("ASSERT_TESTMAIN_PARENT_WATCHDOG_REUSED_IDENTITY_NOT_SIGNALED: PASS")
 }
 
 func TestWorkerParentWatchdogPreventsTimeoutOrphans(t *testing.T) {
@@ -277,8 +478,7 @@ func TestWorkerParentWatchdogPreventsTimeoutOrphans(t *testing.T) {
 		wantTimeout bool
 	}{{"timeout", 350 * time.Millisecond, true}, {"failure", 5 * time.Second, false}, {"success", 8 * time.Second, false}} {
 		t.Run(tc.mode, func(t *testing.T) {
-			dir := t.TempDir()
-			pidfile := filepath.Join(dir, "pids")
+			pidfile := filepath.Join(t.TempDir(), "pids")
 			cmd := exec.Command(os.Args[0], "-test.run=^TestWatchdogDriver$", "-test.timeout="+tc.testTimeout.String())
 			cmd.Env = append(os.Environ(), "PROGRAMC_TEST_WATCHDOG_DRIVER="+tc.mode, "PROGRAMC_TEST_PIDFILE="+pidfile)
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -287,29 +487,26 @@ func TestWorkerParentWatchdogPreventsTimeoutOrphans(t *testing.T) {
 			if err := cmd.Start(); err != nil {
 				t.Fatal(err)
 			}
-			driverPGID := cmd.Process.Pid
+			driver, err := readProcessIdentity(cmd.Process.Pid)
+			if err != nil || driver.PGID != driver.PID {
+				t.Fatalf("invalid driver identity %+v: %v", driver, err)
+			}
 			var observed watchdogPIDs
 			t.Cleanup(func() {
-				_ = syscall.Kill(-driverPGID, syscall.SIGKILL)
-				if observed.workerPGID > 1 {
-					_ = syscall.Kill(-observed.workerPGID, syscall.SIGKILL)
-				}
+				signalRecordedWorkerGroup(watchdogPIDs{Worker: driver})
+				signalRecordedWorkerGroup(observed)
 			})
-			err := cmd.Wait()
+			err = cmd.Wait()
 			if tc.wantTimeout {
-				if err == nil || !strings.Contains(output.String(), "test timed out") {
-					t.Fatalf("expected test timeout, err=%v output=%s", err, output.String())
+				if err == nil || !strings.Contains(output.String(), "WATCHDOG_READY") || !strings.Contains(output.String(), "test timed out") {
+					t.Fatalf("expected readiness followed by test timeout, err=%v output=%s", err, output.String())
 				}
-				deadline := time.Now().Add(2 * time.Second)
-				for time.Now().Before(deadline) {
-					observed, err = readWatchdogPIDs(pidfile)
-					if err == nil {
-						break
-					}
-					time.Sleep(10 * time.Millisecond)
-				}
+				observed, err = readWatchdogPIDs(pidfile, true)
 				if err != nil {
-					t.Fatalf("watchdog PID record unavailable: %v; output=%s", err, output.String())
+					t.Fatalf("watchdog readiness record unavailable: %v; output=%s", err, output.String())
+				}
+				if observed.Descendant.PID == 0 || observed.Descendant.PGID != observed.Worker.PID {
+					t.Fatalf("invalid descendant readiness %+v", observed)
 				}
 				if err := waitProcessesGone(observed, time.Now().Add(2*time.Second)); err != nil {
 					t.Fatal(err)
@@ -320,7 +517,7 @@ func TestWorkerParentWatchdogPreventsTimeoutOrphans(t *testing.T) {
 			if err != nil {
 				t.Fatalf("driver %s failed: %v output=%s", tc.mode, err, output.String())
 			}
-			observed, err = readWatchdogPIDs(pidfile)
+			observed, err = readWatchdogPIDs(pidfile, false)
 			if err != nil {
 				t.Fatalf("driver %s PID record unavailable: %v", tc.mode, err)
 			}
