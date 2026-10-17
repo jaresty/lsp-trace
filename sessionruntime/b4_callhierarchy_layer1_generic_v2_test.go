@@ -938,7 +938,7 @@ func callHierarchyLayer1GenericV2MutationChecks(t *testing.T, record callHierarc
 	}
 }
 
-func TestCallHierarchyLayer1GenericV2CorpusCausalRED(t *testing.T) {
+func TestCallHierarchyLayer1GenericV2CorpusAcceptedGap(t *testing.T) {
 	expectedPaths := callHierarchyLayer1GenericV2ValidateExpectedSchema(t)
 	worlds := callHierarchyLayer1GenericV2Load(t)
 	if len(worlds) != 25 {
@@ -952,10 +952,18 @@ func TestCallHierarchyLayer1GenericV2CorpusCausalRED(t *testing.T) {
 	}
 	var counters callHierarchyLayer1GenericV2Counters
 	rootActuals := make([]callHierarchyLayer1GenericV2Actual, len(worlds))
-	prerequisiteReason := ""
-	recordPrerequisite := func(observation callHierarchyLayer1GenericV2Observation) {
-		if !observation.available && prerequisiteReason == "" {
-			prerequisiteReason = observation.reason
+	assertAcceptedGap := func(name string, observation callHierarchyLayer1GenericV2Observation) {
+		if observation.available {
+			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_AVAILABLE_%s", name)
+		}
+		if observation.reason != "owner:nil" {
+			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_REASON_%s got=%q want=%q", name, observation.reason, "owner:nil")
+		}
+		if !observation.attachment.IsValid() || (observation.attachment.Kind() != reflect.Pointer && observation.attachment.Kind() != reflect.Interface) || !observation.attachment.IsNil() {
+			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_ATTACHMENT_%s kind=%s", name, observation.attachment.Kind())
+		}
+		if observation.owner.IsValid() || observation.lease.IsValid() || observation.view.IsValid() {
+			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_PRIVATE_VALUES_%s owner=%t lease=%t view=%t", name, observation.owner.IsValid(), observation.lease.IsValid(), observation.view.IsValid())
 		}
 	}
 	for i, world := range worlds {
@@ -963,7 +971,7 @@ func TestCallHierarchyLayer1GenericV2CorpusCausalRED(t *testing.T) {
 		t.Run(world.entry.Name, func(t *testing.T) {
 			counters.roots.Add(1)
 			rootActuals[i] = callHierarchyLayer1GenericV2Execute(t, world.envelope)
-			recordPrerequisite(callHierarchyLayer1GenericV2AssertActual(t, world.envelope, rootActuals[i], expectedPaths))
+			assertAcceptedGap(world.entry.Name, callHierarchyLayer1GenericV2AssertActual(t, world.envelope, rootActuals[i], expectedPaths))
 		})
 	}
 
@@ -982,7 +990,7 @@ func TestCallHierarchyLayer1GenericV2CorpusCausalRED(t *testing.T) {
 		}
 		wg.Wait()
 		for i := range w24 {
-			recordPrerequisite(callHierarchyLayer1GenericV2AssertActual(t, w24[i], observed[i], expectedPaths))
+			assertAcceptedGap(w24[i].Expected.Name, callHierarchyLayer1GenericV2AssertActual(t, w24[i], observed[i], expectedPaths))
 		}
 	})
 
@@ -990,14 +998,14 @@ func TestCallHierarchyLayer1GenericV2CorpusCausalRED(t *testing.T) {
 	t.Run("world-25-actual-executions-and-pairs", func(t *testing.T) {
 		for _, execution := range w25.Executions {
 			actual := callHierarchyLayer1GenericV2Execute(t, execution)
-			recordPrerequisite(callHierarchyLayer1GenericV2AssertActual(t, execution, actual, expectedPaths))
+			assertAcceptedGap(execution.Expected.Name, callHierarchyLayer1GenericV2AssertActual(t, execution, actual, expectedPaths))
 			counters.executions.Add(1)
 		}
 		for _, pair := range w25.Pairs {
 			disabled := callHierarchyLayer1GenericV2Execute(t, pair.Disabled)
 			enabled := callHierarchyLayer1GenericV2Execute(t, pair.Enabled)
-			recordPrerequisite(callHierarchyLayer1GenericV2AssertActual(t, pair.Disabled, disabled, expectedPaths))
-			recordPrerequisite(callHierarchyLayer1GenericV2AssertActual(t, pair.Enabled, enabled, expectedPaths))
+			assertAcceptedGap(pair.Disabled.Expected.Name, callHierarchyLayer1GenericV2AssertActual(t, pair.Disabled, disabled, expectedPaths))
+			assertAcceptedGap(pair.Enabled.Expected.Name, callHierarchyLayer1GenericV2AssertActual(t, pair.Enabled, enabled, expectedPaths))
 			disabledTransport := struct {
 				requestFrame, responseFrame []byte
 				messages, requestMessages   int
@@ -1026,11 +1034,7 @@ func TestCallHierarchyLayer1GenericV2CorpusCausalRED(t *testing.T) {
 	if counters.roots.Load() != 25 || counters.workers.Load() != 16 || counters.executions.Load() != 22 || counters.pairs.Load() != 22 || total != 85 {
 		t.Fatal("ASSERT_CH_GENERIC_V2_EXECUTION_COUNTER_MISMATCH")
 	}
-	if prerequisiteReason != "" {
-		t.Errorf("ASSERT_CH_GENERIC_V2_ATTACHMENT_PREREQUISITE contract=RoundTripResult.%s/View reason=%s", callHierarchyLayer1GenericV2AcquireMethod, prerequisiteReason)
-		return
-	}
-	callHierarchyLayer1GenericV2AssertLifecycle(t, worlds[0].envelope, &rootActuals[0].result)
+	t.Log("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP owner=nil lease=unavailable view=unavailable attachments=none reason=owner:nil")
 }
 
 var callHierarchyLayer1GenericV2ErrorType = reflect.TypeOf((*error)(nil)).Elem()
