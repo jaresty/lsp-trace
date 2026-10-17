@@ -938,6 +938,84 @@ func callHierarchyLayer1GenericV2MutationChecks(t *testing.T, record callHierarc
 	}
 }
 
+type callHierarchyLayer1GenericV2GapIssue struct {
+	code   string
+	detail string
+}
+
+func callHierarchyLayer1GenericV2AcceptedGapIssues(observation callHierarchyLayer1GenericV2Observation) []callHierarchyLayer1GenericV2GapIssue {
+	var issues []callHierarchyLayer1GenericV2GapIssue
+	add := func(code, detail string) {
+		issues = append(issues, callHierarchyLayer1GenericV2GapIssue{code: code, detail: detail})
+	}
+	if observation.available {
+		add("available", "private generic-v2 view unexpectedly available")
+	}
+	if observation.reason != "owner:nil" {
+		add("reason", fmt.Sprintf("got=%q want=%q", observation.reason, "owner:nil"))
+	}
+	if !observation.attachment.IsValid() {
+		add("attachment-invalid", "attachment field is missing or invalid")
+	} else {
+		kind := observation.attachment.Kind()
+		if kind != reflect.Pointer && kind != reflect.Interface {
+			add("attachment-kind", fmt.Sprintf("got=%s want=pointer-or-interface", kind))
+		} else if !observation.attachment.IsNil() {
+			add("attachment-present", fmt.Sprintf("kind=%s", kind))
+		}
+	}
+	if observation.owner.IsValid() {
+		add("owner-present", "private owner unexpectedly present")
+	}
+	if observation.lease.IsValid() {
+		add("lease-present", "private lease unexpectedly present")
+	}
+	if observation.view.IsValid() {
+		add("view-present", "private view unexpectedly present")
+	}
+	return issues
+}
+
+func TestCallHierarchyLayer1GenericV2AcceptedGapValidation(t *testing.T) {
+	nilAttachment := reflect.ValueOf((*struct{})(nil))
+	presentValue := reflect.ValueOf(struct{}{})
+	tests := []struct {
+		name        string
+		observation callHierarchyLayer1GenericV2Observation
+		wantCodes   []string
+	}{
+		{name: "present-nil-attachment-owner-nil", observation: callHierarchyLayer1GenericV2Observation{attachment: nilAttachment, reason: "owner:nil"}},
+		{name: "missing-invalid-attachment", observation: callHierarchyLayer1GenericV2Observation{reason: "owner:nil"}, wantCodes: []string{"attachment-invalid"}},
+		{name: "malformed-attachment-kind", observation: callHierarchyLayer1GenericV2Observation{attachment: reflect.ValueOf("malformed"), reason: "owner:nil"}, wantCodes: []string{"attachment-kind"}},
+		{name: "attachment-appearance", observation: callHierarchyLayer1GenericV2Observation{attachment: reflect.ValueOf(&struct{}{}), reason: "owner:nil"}, wantCodes: []string{"attachment-present"}},
+		{name: "changed-reason", observation: callHierarchyLayer1GenericV2Observation{attachment: nilAttachment, reason: "field:missing"}, wantCodes: []string{"reason"}},
+		{name: "available", observation: callHierarchyLayer1GenericV2Observation{attachment: nilAttachment, available: true, reason: "owner:nil"}, wantCodes: []string{"available"}},
+		{name: "owner-appearance", observation: callHierarchyLayer1GenericV2Observation{attachment: nilAttachment, owner: presentValue, reason: "owner:nil"}, wantCodes: []string{"owner-present"}},
+		{name: "lease-appearance", observation: callHierarchyLayer1GenericV2Observation{attachment: nilAttachment, lease: presentValue, reason: "owner:nil"}, wantCodes: []string{"lease-present"}},
+		{name: "view-appearance", observation: callHierarchyLayer1GenericV2Observation{attachment: nilAttachment, view: presentValue, reason: "owner:nil"}, wantCodes: []string{"view-present"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			issues := callHierarchyLayer1GenericV2AcceptedGapIssues(test.observation)
+			gotCodes := make([]string, 0, len(issues))
+			for _, issue := range issues {
+				gotCodes = append(gotCodes, issue.code)
+				if issue.detail == "" {
+					t.Errorf("issue %q has empty detail", issue.code)
+				}
+			}
+			if len(gotCodes) != len(test.wantCodes) {
+				t.Fatalf("codes got=%v want=%v issues=%+v", gotCodes, test.wantCodes, issues)
+			}
+			for i := range gotCodes {
+				if gotCodes[i] != test.wantCodes[i] {
+					t.Fatalf("codes got=%v want=%v issues=%+v", gotCodes, test.wantCodes, issues)
+				}
+			}
+		})
+	}
+}
+
 func TestCallHierarchyLayer1GenericV2CorpusAcceptedGap(t *testing.T) {
 	expectedPaths := callHierarchyLayer1GenericV2ValidateExpectedSchema(t)
 	worlds := callHierarchyLayer1GenericV2Load(t)
@@ -953,17 +1031,8 @@ func TestCallHierarchyLayer1GenericV2CorpusAcceptedGap(t *testing.T) {
 	var counters callHierarchyLayer1GenericV2Counters
 	rootActuals := make([]callHierarchyLayer1GenericV2Actual, len(worlds))
 	assertAcceptedGap := func(name string, observation callHierarchyLayer1GenericV2Observation) {
-		if observation.available {
-			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_AVAILABLE_%s", name)
-		}
-		if observation.reason != "owner:nil" {
-			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_REASON_%s got=%q want=%q", name, observation.reason, "owner:nil")
-		}
-		if !observation.attachment.IsValid() || (observation.attachment.Kind() != reflect.Pointer && observation.attachment.Kind() != reflect.Interface) || !observation.attachment.IsNil() {
-			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_ATTACHMENT_%s kind=%s", name, observation.attachment.Kind())
-		}
-		if observation.owner.IsValid() || observation.lease.IsValid() || observation.view.IsValid() {
-			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_PRIVATE_VALUES_%s owner=%t lease=%t view=%t", name, observation.owner.IsValid(), observation.lease.IsValid(), observation.view.IsValid())
+		for _, issue := range callHierarchyLayer1GenericV2AcceptedGapIssues(observation) {
+			t.Errorf("ASSERT_CH_GENERIC_V2_ACCEPTED_GAP_%s_%s: %s", name, issue.code, issue.detail)
 		}
 	}
 	for i, world := range worlds {
