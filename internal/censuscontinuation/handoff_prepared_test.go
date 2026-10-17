@@ -50,7 +50,7 @@ var privateHandoffFixtureCache struct {
 func privateHandoffFixture(t *testing.T) (*MemoryStore, Result, []Checkpoint) {
 	t.Helper()
 	privateHandoffFixtureCache.once.Do(func() {
-		f := newFixture(t)
+		f := newFixtureWithTargetCount(t, 2, 1)
 		h, err := BuildHandoff(f.input)
 		if err != nil {
 			privateHandoffFixtureCache.err = err
