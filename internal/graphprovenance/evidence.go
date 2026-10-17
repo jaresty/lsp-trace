@@ -238,6 +238,9 @@ func ValidateFor(data []byte, family, version string) (string, error) {
 	if version == "v3" || version == VersionV3 {
 		return validateForV3(data)
 	}
+	if version == "v4" || version == VersionV4 {
+		return validateForV4(data)
+	}
 	if version == "v5" || version == VersionV5 {
 		return validateForV5(data)
 	}

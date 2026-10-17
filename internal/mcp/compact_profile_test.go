@@ -81,8 +81,17 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 	if description["name"] != "lsp_trace_v3_slice" || description["advertised"] != false || description["dispatchable"] != true || description["invocation_route"] != "lsp_trace_v1_execute" {
 		t.Fatalf("ASSERT_COMPACT_HIDDEN_OPERATION_METADATA: %#v", description)
 	}
-	if description["input_schema"] == nil || description["input_schema_id"] == "" || description["graph_v5_production"] == nil || description["graph_v5_source_snapshot"] == nil {
-		t.Fatalf("ASSERT_COMPACT_HIDDEN_V5_RECIPE: %#v", description)
+	production, ok := description["graph_v5_production"].(map[string]any)
+	if description["input_schema"] == nil || description["input_schema_id"] == "" || !ok || description["graph_v5_source_snapshot"] == nil {
+		t.Fatalf("ASSERT_COMPACT_HIDDEN_PRODUCTION_RECIPE: %#v", description)
+	}
+	requestTemplate, _ := production["request_template"].(map[string]any)
+	requestArguments, _ := requestTemplate["arguments"].(map[string]any)
+	if production["output_version"] != "default/auto" || production["v5_contract"] != "valid only for omission-free results" || requestArguments["output_version"] != nil {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_DEFAULT_AUTO_RECIPE_AND_BOUNDED_V5: production=%#v arguments=%#v", production, requestArguments)
+	}
+	if stale := toString(production); strings.Contains(stale, `"output_version":"lsp-trace.graph-provenance.v5"`) {
+		t.Fatalf("ASSERT_STALE_V5_ONLY_PRODUCTION_RECOMMENDATION_ABSENT: %s", stale)
 	}
 	guidance, ok := description["guidance"].(map[string]any)
 	if !ok {
@@ -105,14 +114,18 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_OUTPUT_AUTHORITY: %#v", guidance)
 	}
 	families, _ := guidance["output_families_versions"].([]string)
-	if !reflect.DeepEqual(families, []string{"lsp-trace.graph-provenance.v3", "lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1", "lsp-trace.community-presentation.v1"}) {
+	if !reflect.DeepEqual(families, []string{"lsp-trace.graph-provenance.v3", "lsp-trace.graph-provenance.v4", "lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1", "lsp-trace.community-presentation.v1"}) {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_OUTPUT_FAMILY_VERSION: %#v", guidance)
 	}
 	if guidance["position_convention"] != "MCP line and character values are zero-based; CLI --at PATH:LINE:COLUMN values are one-based" {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_POSITION_BASES: %#v", guidance)
 	}
-	if guidance["output_version_guidance"] != "acquisition route v3; select Graph Provenance V5 output with output_version=lsp-trace.graph-provenance.v5" {
-		t.Fatalf("ASSERT_OPERATION_GUIDANCE_V3_V5_DISTINCTION: %#v", guidance)
+	const outputVersionGuidance = "acquisition route v3: omit output_version for automatic V3 omission-free or V4 omission-bearing results; explicit V4 stays V4; explicit V2/V3 with topmost siblings and explicit V5 with omissions return OUTPUT_VERSION_INCOMPATIBLE; V5 is supported only for omission-free results"
+	if guidance["output_version_guidance"] != outputVersionGuidance {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_OUTPUT_VERSION_COMPATIBILITY: %#v", guidance)
+	}
+	if strings.Contains(toString(guidance), "select Graph Provenance V5 output") {
+		t.Fatalf("ASSERT_STALE_V5_ONLY_GUIDANCE_ABSENT: %#v", guidance)
 	}
 	alias, ok := r.DescribeOperation("lsp_trace_validate")
 	if !ok || alias["name"] != "lsp_trace_v1_validate" {

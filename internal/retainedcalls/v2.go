@@ -109,6 +109,8 @@ type EvidenceV2 struct {
 	Tables        TablesV2 `json:"tables"`
 }
 
+var ErrGraphProvenanceV4Unsupported = errors.New("retained calls v2 does not support graph provenance v4 without loss")
+
 // ProjectionV2 is assembled exclusively from table rows. Result includes every
 // requested target, coverage state and original native connection witness.
 type ProjectionV2 struct {
@@ -252,6 +254,12 @@ func mapConnectionsV2(targets []acquisition.TargetResult, groups []GroupV2, occu
 // ExportV2 admits only explicit graph-provenance V2. The exact original envelope
 // bytes bind the context, never a re-marshaled or graph-only approximation.
 func ExportV2(input []byte) ([]byte, error) {
+	var header struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if json.Unmarshal(input, &header) == nil && header.SchemaVersion == graphprovenance.VersionV4 {
+		return nil, ErrGraphProvenanceV4Unsupported
+	}
 	if len(input) > graphprovenance.MaxEnvelopeBytesV2 {
 		return nil, &LimitErrorV2{"input bytes", graphprovenance.MaxEnvelopeBytesV2}
 	}

@@ -29,6 +29,26 @@ func TestGroupedSliceSchemaRequiresClosedLeidenOptions(t *testing.T) {
 	}
 }
 
+func TestLegacyGraphProvenanceSchemaRejectsTopmostSiblings(t *testing.T) {
+	base := map[string]any{"session_id": "s", "generation": 1, "seed_manifest": map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": map[string]any{"id": "root", "locator": map[string]any{"uri": "file:///fixture/a.go", "line": 0, "character": 0}}, "required_targets": []any{}, "expansion": map[string]any{"topmost_siblings": true}}}
+	for _, version := range []string{"lsp-trace.graph-provenance.v2", "lsp-trace.graph-provenance.v3"} {
+		candidate := cloneMap(base)
+		candidate["output_version"] = version
+		raw, _ := json.Marshal(candidate)
+		if mcpcontract.ValidateJSON(mcpcontract.AcquisitionV2InputID, raw) == nil {
+			t.Fatalf("ASSERT_LEGACY_TOPMOST_SIBLINGS_SCHEMA_REJECTED[%s]", version)
+		}
+	}
+	for _, version := range []string{"lsp-trace.graph-provenance.v4", "lsp-trace.graph-provenance.v5"} {
+		candidate := cloneMap(base)
+		candidate["output_version"] = version
+		raw, _ := json.Marshal(candidate)
+		if err := mcpcontract.ValidateJSON(mcpcontract.AcquisitionV2InputID, raw); err != nil {
+			t.Fatalf("ASSERT_CURRENT_TOPMOST_SIBLINGS_SCHEMA_ADMITTED[%s]: %v", version, err)
+		}
+	}
+}
+
 func TestGroupedSliceDirectAndCanonicalExecutePayloadParity(t *testing.T) {
 	arguments := map[string]any{
 		"session_id": "s", "generation": float64(1),
@@ -77,15 +97,21 @@ func TestAcquisitionV2CapabilitiesAndClosedSchemas(t *testing.T) {
 			t.Fatalf("ASSERT_V2_EXPLICIT_REGISTRATION: %s %+v", name, tool)
 		}
 		if strings.HasSuffix(name, "_slice") || strings.HasSuffix(name, "_incoming") {
-			if !strings.Contains(tool.Description, "V2 output is DEPRECATED") || !strings.Contains(tool.Description, "output_version=lsp-trace.graph-provenance.v5") {
-				t.Fatalf("ASSERT_V2_OUTPUT_DEPRECATION_AND_V5_ROUTE_METADATA: %s %q", name, tool.Description)
+			if !strings.Contains(tool.Description, "V2 output is DEPRECATED") || !strings.Contains(tool.Description, "omit output_version for automatic V3/V4 selection, or request V4 explicitly") {
+				t.Fatalf("ASSERT_V2_OUTPUT_DEPRECATION_AND_TRUTHFUL_ROUTE_METADATA: %s %q", name, tool.Description)
+			}
+			if strings.Contains(tool.Description, "output_version=lsp-trace.graph-provenance.v5") {
+				t.Fatalf("ASSERT_V2_STALE_V5_ONLY_ROUTE_RECOMMENDATION_ABSENT: %s %q", name, tool.Description)
 			}
 		}
 	}
 	for _, name := range []string{"lsp_trace_v3_slice", "lsp_trace_v3_incoming"} {
 		tool, ok := registry.Resolve(name)
-		if !ok || !strings.Contains(tool.Description, "V3 output is DEPRECATED") || !strings.Contains(tool.Description, "output_version=lsp-trace.graph-provenance.v5") {
-			t.Fatalf("ASSERT_V3_OUTPUT_DEPRECATION_AND_V5_ROUTE_METADATA: %s %+v", name, tool)
+		if !ok || !strings.Contains(tool.Description, "V3 output is DEPRECATED") || !strings.Contains(tool.Description, "automatic V3 omission-free or V4 omission-bearing output") || !strings.Contains(tool.Description, "V5 is supported only for omission-free results") {
+			t.Fatalf("ASSERT_V3_OUTPUT_DEPRECATION_AND_COMPATIBILITY_METADATA: %s %+v", name, tool)
+		}
+		if strings.Contains(tool.Description, "select output_version=lsp-trace.graph-provenance.v5") {
+			t.Fatalf("ASSERT_V3_STALE_V5_ONLY_ROUTE_RECOMMENDATION_ABSENT: %s %q", name, tool.Description)
 		}
 	}
 	matrix, ok := registry.Capabilities()["acquisition_v2"].(map[string]any)

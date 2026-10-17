@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"runtime"
 	"testing"
 
-	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/mcpcontract"
 )
@@ -97,7 +95,7 @@ func TestFR23V3RealProcessCLIAndMCPByteParityGenerationOne(t *testing.T) {
 	}
 	hierarchicalEnv := append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical")
 	config["processes"].([]any)[0].(map[string]any)["execution"].(map[string]any)["environment"] = hierarchicalEnv
-	cliCommand = exec.Command(cli, "slice", "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5, "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--seed-manifest", manifestPath, "--language-id", "go")
+	cliCommand = exec.Command(cli, "slice", "--acquisition-version", "v3", "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--seed-manifest", manifestPath, "--language-id", "go")
 	cliCommand.Env = hierarchicalEnv
 	cliStdout.Reset()
 	cliStderr.Reset()
@@ -106,24 +104,42 @@ func TestFR23V3RealProcessCLIAndMCPByteParityGenerationOne(t *testing.T) {
 		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: CLI: %v stderr=%s", err, cliStderr.String())
 	}
 	responses = runMCPProcess(t, mcp, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
-		callRequest(1, "lsp_trace_v3_slice", map[string]any{"session_id": "fixture", "generation": 1, "seed_manifest": manifest, "output_version": graphprovenance.VersionV5}),
+		callRequest(1, "lsp_trace_v3_slice", map[string]any{"session_id": "fixture", "generation": 1, "seed_manifest": manifest}),
 	})
 	call = decodeProcessCall(t, responses[0])
 	mcpArtifact = inlineArtifactBytes(t, call.env)
-	if call.env["operation_status"] != "SUCCEEDED" || !bytes.Equal(cliStdout.Bytes(), mcpArtifact) {
-		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: envelope=%v equal=%v stderr=%s", call.env, bytes.Equal(cliStdout.Bytes(), mcpArtifact), cliStderr.String())
+	if call.env["operation_status"] != "SUCCEEDED" || call.env["artifact_schema_id"] != mcpcontract.GraphProvenanceV4ArtifactID || !bytes.Equal(cliStdout.Bytes(), mcpArtifact) {
+		t.Fatalf("ASSERT_FR23_OMITTED_V4_REAL_PROCESS_CLI_MCP_EXACT_BYTES: envelope=%v equal=%v stderr=%s", call.env, bytes.Equal(cliStdout.Bytes(), mcpArtifact), cliStderr.String())
 	}
-	var v5 graphprovenance.EvidenceV5
-	if err := json.Unmarshal(mcpArtifact, &v5); err != nil {
-		t.Fatal(err)
+	if _, err := graphprovenance.ValidateFor(mcpArtifact, graphprovenance.Family, "v4"); err != nil {
+		t.Fatalf("ASSERT_FR23_V4_REAL_PROCESS_VALID: %v", err)
 	}
-	native, err := base64.StdEncoding.DecodeString(v5.GraphV5)
-	if err != nil {
-		t.Fatal(err)
+	var v4 graphprovenance.EvidenceV4
+	if err := json.Unmarshal(mcpArtifact, &v4); err != nil || len(v4.Acquisition.Omissions) == 0 {
+		t.Fatalf("ASSERT_FR23_V4_VISIBLE_OMISSION: omissions=%d err=%v", len(v4.Acquisition.Omissions), err)
 	}
-	decoded, err := graph.DecodeNativeV3(native)
-	if err != nil || len(decoded.SiblingCandidates) == 0 || len(decoded.Edges) != 0 {
-		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_NONEMPTY_SIBLINGS_NO_CALLS_INFERENCE: siblings=%d edges=%d err=%v", len(decoded.SiblingCandidates), len(decoded.Edges), err)
+	requests := map[string]bool{}
+	for _, request := range v4.Acquisition.Requests {
+		requests[request.ID] = true
 	}
-	t.Logf("PASS ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: bytes=%d siblings=%d", len(mcpArtifact), len(decoded.SiblingCandidates))
+	if !requests[v4.Acquisition.Omissions[0].RequestID] || bytes.Contains(bytes.ToLower(mcpArtifact), []byte("secret")) {
+		t.Fatal("ASSERT_FR23_V4_REFERENCED_REQUEST_AND_SECRET_REJECTION")
+	}
+	t.Logf("PASS ASSERT_FR23_OMITTED_V4_REAL_PROCESS_CLI_MCP_EXACT_BYTES: bytes=%d omissions=%d", len(mcpArtifact), len(v4.Acquisition.Omissions))
+
+	legacyCLI := exec.Command(cli, "slice", "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV3, "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--seed-manifest", manifestPath, "--language-id", "go")
+	legacyCLI.Env = hierarchicalEnv
+	var legacyOut, legacyErr bytes.Buffer
+	legacyCLI.Stdout, legacyCLI.Stderr = &legacyOut, &legacyErr
+	if err := legacyCLI.Run(); err == nil || legacyOut.Len() != 0 || !bytes.Contains(legacyErr.Bytes(), []byte("cannot represent topmost-sibling acquisition omissions")) {
+		t.Fatalf("ASSERT_FR23_EXPLICIT_V3_OMISSION_PRERUNTIME_REFUSAL_CLI: err=%v stdout=%s stderr=%s", err, legacyOut.Bytes(), legacyErr.Bytes())
+	}
+	responses = runMCPProcess(t, mcp, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
+		callRequest(1, "lsp_trace_v3_slice", map[string]any{"session_id": "fixture", "generation": 1, "seed_manifest": manifest, "output_version": graphprovenance.VersionV3}),
+	})
+	rpcError, _ := responses[0]["error"].(map[string]any)
+	message, _ := rpcError["message"].(string)
+	if rpcError["code"] != float64(-32602) || !bytes.Contains([]byte(message), []byte("schema validation")) {
+		t.Fatalf("ASSERT_FR23_EXPLICIT_V3_OMISSION_SCHEMA_REJECTION_MCP: %v", responses[0])
+	}
 }

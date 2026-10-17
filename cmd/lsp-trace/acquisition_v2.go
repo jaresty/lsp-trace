@@ -498,11 +498,19 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 			return fail(err)
 		}
 	}
-	if manifest.Expansion.TopmostSiblings && outputVersion != graphprovenance.VersionV5 {
-		return fail(fmt.Errorf("expansion.topmost_siblings requires explicit graph-provenance v5 output"))
+	// Preserve selector presence through preflight. An omitted selector is routed
+	// after acquisition: omission-free results use exact V3, while results that
+	// carry omissions use V4. Only an explicitly selected legacy format refuses
+	// topmost-sibling acquisition before runtime.
+	explicitLegacyOutput := outputVersion == graphprovenance.VersionV2 || outputVersion == graphprovenance.VersionV3
+	if explicitLegacyOutput && manifest.Expansion.TopmostSiblings {
+		return fail(fmt.Errorf("output version %q cannot represent topmost-sibling acquisition omissions", outputVersion))
 	}
-	if outputVersion != "" && (outputVersion != graphprovenance.VersionV5 || version != "v3" || (!manifest.Expansion.TopmostSiblings && !traceSeeds)) {
+	if outputVersion == graphprovenance.VersionV5 && (version != "v3" || (!manifest.Expansion.TopmostSiblings && !traceSeeds)) {
 		return fail(fmt.Errorf("graph-provenance v5 output requires acquisition-version v3 and expansion.topmost_siblings=true"))
+	}
+	if outputVersion == graphprovenance.VersionV4 && version != "v3" {
+		return fail(fmt.Errorf("graph-provenance v4 output requires acquisition-version v3"))
 	}
 	effective, err := manifest.Request(op)
 	if err != nil {

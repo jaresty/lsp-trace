@@ -315,10 +315,10 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		"lsp_trace_v1_execute":                    "Execute one canonical request through the closed shared transport-neutral dispatcher",
 		mcpcontract.TraceTool:                     "Trace one exact symbol or one or more exact zero-based positions through one managed Graph Provenance V5 acquisition",
 		mcpcontract.CustodyExecuteTool:            "Execute one host-approved identity- and receipt-bound custody operation; not general shell execution",
-		"lsp_trace_v2_slice":                      "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_slice with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
-		"lsp_trace_v2_incoming":                   "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
-		"lsp_trace_v3_slice":                      "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
-		"lsp_trace_v3_incoming":                   "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
+		"lsp_trace_v2_slice":                      "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_slice and omit output_version for automatic V3/V4 selection, or request V4 explicitly. Historical V2 dispatch remains compatible",
+		"lsp_trace_v2_incoming":                   "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming and omit output_version for automatic V3/V4 selection, or request V4 explicitly. Historical V2 dispatch remains compatible",
+		"lsp_trace_v3_slice":                      "Acquisition route v3 with historical Graph V3 output is DEPRECATED; omit output_version for automatic V3 omission-free or V4 omission-bearing output, or request V4 explicitly. V5 is supported only for omission-free results. Historical v3 dispatch remains compatible",
+		"lsp_trace_v3_incoming":                   "Acquisition route v3 with historical Graph V3 output is DEPRECATED; omit output_version for automatic V3 omission-free or V4 omission-bearing output, or request V4 explicitly. V5 is supported only for omission-free results. Historical v3 dispatch remains compatible",
 		"lsp_trace_v1_incoming":                   "Server-reported callers for an exact callee URI in a READY session; text never establishes CALLS.",
 		"lsp_trace_v1_slice":                      "Server-reported caller/callee neighborhood for an exact URI target in a READY session; text never establishes CALLS.",
 	}
@@ -426,6 +426,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV3ArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV4ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV5ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphV5SourceSnapshotArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsArtifactID)
@@ -913,7 +914,8 @@ func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
 	}
 	if tool.Name == "lsp_trace_v3_slice" || tool.Name == "lsp_trace_v3_incoming" {
 		description["graph_v5_production"] = map[string]any{
-			"output_version":                  "lsp-trace.graph-provenance.v5",
+			"output_version":                  "default/auto",
+			"v5_contract":                     "valid only for omission-free results",
 			"requires_topmost_siblings":       true,
 			"sibling_support_contribution":    0,
 			"sibling_relations_are_calls":     false,
@@ -929,7 +931,7 @@ func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
 						"expansion":        map[string]any{"topmost_siblings": true},
 						"limits":           map[string]any{"max_nodes": 200, "max_requests": 100, "max_evidence_bytes": 67108864, "max_path_work": 1000000, "timeout_ms": 60000, "request_timeout_ms": 30000, "max_response_bytes": 16777216, "max_messages": 4096},
 					},
-					"output_version": "lsp-trace.graph-provenance.v5", "detail": "full", "output_selector": "graphs/result.json",
+					"detail": "full", "output_selector": "graphs/result.json",
 				},
 			},
 		}
@@ -972,7 +974,7 @@ func operationGuidance(tool Tool, advertised bool) map[string]any {
 		guidance["position_convention"] = "MCP line and character values are zero-based; CLI --at PATH:LINE:COLUMN values are one-based"
 	}
 	if tool.Name == "lsp_trace_v3_slice" || tool.Name == "lsp_trace_v3_incoming" {
-		guidance["output_version_guidance"] = "acquisition route v3; select Graph Provenance V5 output with output_version=lsp-trace.graph-provenance.v5"
+		guidance["output_version_guidance"] = "acquisition route v3: omit output_version for automatic V3 omission-free or V4 omission-bearing results; explicit V4 stays V4; explicit V2/V3 with topmost siblings and explicit V5 with omissions return OUTPUT_VERSION_INCOMPATIBLE; V5 is supported only for omission-free results"
 	}
 	return guidance
 }

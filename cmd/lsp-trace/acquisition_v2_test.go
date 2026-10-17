@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/url"
@@ -139,13 +138,13 @@ func TestProductionV5BuiltProcessExactEquivalence(t *testing.T) {
 	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	common := []string{"--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--seed-manifest", manifestPath, "--language-id", "go"}
+	common := []string{"--workspace", workspace, "--server", fake, "--seed-manifest", manifestPath, "--language-id", "go"}
 	for _, mode := range []string{"slice", "incoming"} {
 		canonical := append([]string{mode, "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5}, common...)
 		shorthand := append([]string{mode, "--production-v5"}, common...)
 		run := func(args []string) []byte {
 			cmd := exec.Command(cli, args...)
-			cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical")
+			cmd.Env = os.Environ()
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout, cmd.Stderr = &stdout, &stderr
 			if err := cmd.Run(); err != nil {
@@ -226,8 +225,8 @@ func TestProductionV5SeedFileReplayFailsClosedBeforeAcquisition(t *testing.T) {
 	}
 }
 
-func TestProductionV5DiscoversFromFileAndRetainsCanonicalSeedSpec(t *testing.T) {
-	const assertion = "ASSERT_PRODUCTION_V5_FROM_FILE_CANONICAL_SEED_CUSTODY"
+func TestProductionV5DiscoveryWithOmissionsRejectsWithoutLoss(t *testing.T) {
+	const assertion = "ASSERT_PRODUCTION_V5_DISCOVERY_OMISSIONS_TYPED_REFUSAL"
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")
 	}
@@ -246,30 +245,8 @@ func TestProductionV5DiscoversFromFileAndRetainsCanonicalSeedSpec(t *testing.T) 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
-	out := stdout.Bytes()
-	if err != nil {
-		t.Fatalf("%s: command failed: %v: stdout=%s stderr=%s", assertion, err, out, stderr.String())
-	}
-	for _, count := range []string{"files_enumerated=1", "files_selected=1", "files_excluded=0", "symbols_enumerated=5", "symbols_selected=5", "symbols_excluded=0", "symbols_unsupported=0", "symbols_preparation_failed=0", "symbols_prepared=5", "does not claim endpoint or source completeness"} {
-		if !strings.Contains(stderr.String(), count) {
-			t.Fatalf("%s: missing accounting %q: %s", assertion, count, stderr.String())
-		}
-	}
-	var artifact struct {
-		SeedSpec struct {
-			Bytes string `json:"bytes"`
-		} `json:"seed_spec"`
-	}
-	if err := json.Unmarshal(out, &artifact); err != nil {
-		t.Fatalf("%s: decode artifact: %v: %s", assertion, err, out)
-	}
-	got, err := base64.StdEncoding.DecodeString(artifact.SeedSpec.Bytes)
-	if err != nil {
-		t.Fatalf("%s: decode seed bytes: %v", assertion, err)
-	}
-	want := []byte(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","defaults":{},"seeds":[{"type":"position","label":"symbol-001","path":"main.go","line":1,"column":1},{"type":"position","label":"symbol-002","path":"main.go","line":1,"column":1},{"type":"position","label":"symbol-003","path":"main.go","line":3,"column":1},{"type":"position","label":"symbol-004","path":"main.go","line":5,"column":1},{"type":"position","label":"symbol-005","path":"main.go","line":6,"column":1}]}`)
-	if !bytes.Equal(got, want) {
-		t.Fatalf("%s: canonical bytes mismatch\n got: %s\nwant: %s", assertion, got, want)
+	if err == nil || stdout.Len() != 0 || !strings.Contains(stderr.String(), "OUTPUT_VERSION_INCOMPATIBLE") || !strings.Contains(stderr.String(), "cannot represent acquisition omissions") {
+		t.Fatalf("%s: err=%v stdout=%s stderr=%s", assertion, err, stdout.Bytes(), stderr.String())
 	}
 }
 

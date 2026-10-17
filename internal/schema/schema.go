@@ -55,7 +55,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyTrustProvisioningReceipt:   {"v1": "lsp-trace.trust-provisioning-receipt.v1"},
 	FamilySourceDenominator:          {"v1": SourceDenominatorVersionV1},
 	FamilyOperationalCustody:         {"v1": "lsp-trace.operational-custody.v1"},
-	FamilyGraphProvenance:            {"v1": "lsp-trace.graph-provenance.v1", "v2": "lsp-trace.graph-provenance.v2", "v3": "lsp-trace.graph-provenance.v3", "v5": "lsp-trace.graph-provenance.v5"},
+	FamilyGraphProvenance:            {"v1": "lsp-trace.graph-provenance.v1", "v2": "lsp-trace.graph-provenance.v2", "v3": "lsp-trace.graph-provenance.v3", "v4": "lsp-trace.graph-provenance.v4", "v5": "lsp-trace.graph-provenance.v5"},
 	FamilyRetainedCalls:              {"v1": "lsp-trace.retained-calls.v1", "v2": "lsp-trace.retained-calls.v2"},
 	FamilyRetainedRelations:          {"v1": "lsp-trace.retained-relations.v1"},
 	FamilyGraphV5SourceSnapshot:      {"v1": "lsp-trace.graph-v5-source-snapshot.v1", "v2": "lsp-trace.graph-v5-source-snapshot.v2", "v3": "lsp-trace.graph-v5-source-snapshot.v3", "v4": "lsp-trace.graph-v5-source-snapshot.v4", "v5": "lsp-trace.graph-v5-source-snapshot.v5", "v6": "lsp-trace.graph-v5-source-snapshot.v6"},

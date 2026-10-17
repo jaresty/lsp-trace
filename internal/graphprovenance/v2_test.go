@@ -35,7 +35,14 @@ func coordinatorV2Fixture(t *testing.T, configure func(*acquisition.Request)) (a
 			s := lsp.DocumentSymbol{Name: "Ambiguous", Kind: 12, Range: lsp.Range{End: lsp.Position{Character: 10}}, SelectionRange: lsp.Range{End: lsp.Position{Character: 1}}}
 			return json.Marshal([]lsp.DocumentSymbol{s, s})
 		}
+		if request.Method == "textDocument/documentSymbol" && r.TopmostSiblings {
+			return json.Marshal([]lsp.DocumentSymbol{{Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 1}}, Children: []lsp.DocumentSymbol{{Name: "A", Kind: 12, Range: lsp.Range{End: lsp.Position{Character: 10}}, SelectionRange: lsp.Range{End: lsp.Position{Character: 1}}}, {Name: "Peer", Kind: 12, Range: lsp.Range{Start: lsp.Position{Character: 2}, End: lsp.Position{Character: 9}}, SelectionRange: lsp.Range{Start: lsp.Position{Character: 2}, End: lsp.Position{Character: 3}}}}}})
+		}
 		if request.Method == "textDocument/prepareCallHierarchy" {
+			var params lsp.PrepareCallHierarchyParams
+			if r.TopmostSiblings && json.Unmarshal(request.Params, &params) == nil && params.Position.Character == 2 {
+				return json.RawMessage(`[]`), nil
+			}
 			return json.Marshal([]lsp.CallHierarchyItem{{Name: "A", Kind: 12, URI: uri, Range: lsp.Range{End: lsp.Position{Character: 10}}, SelectionRange: lsp.Range{End: lsp.Position{Character: 1}}, Data: json.RawMessage(`{"large":9007199254740993,"uri":"file:///opaque-not-a-source.go"}`)}})
 		}
 		return json.RawMessage(`[]`), nil

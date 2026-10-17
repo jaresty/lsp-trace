@@ -492,26 +492,21 @@ func TestManagedV5ProducerCustodyClosedMatrix(t *testing.T) {
 	}
 }
 
-func TestTopmostSiblingsRequiresExplicitV5BeforeRuntime(t *testing.T) {
+func TestTopmostSiblingsRejectsExplicitLegacyBeforeRuntime(t *testing.T) {
 	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator("file:///fixture/a.go")}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
-	for _, tc := range []struct {
-		name, version string
-	}{
-		{name: "omitted"},
-		{name: "unsupported", version: graphprovenance.VersionV3},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, version := range []string{graphprovenance.VersionV2, graphprovenance.VersionV3} {
+		t.Run(version, func(t *testing.T) {
 			runtime := &forbiddenRuntime{}
-			input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 1, SeedManifest: manifest, OutputVersion: tc.version})
+			input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 1, SeedManifest: manifest, OutputVersion: version})
 			_, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
-			if failure == nil || failure.Code != operation.FailureInvalidInput || runtime.calls != 0 {
-				t.Fatalf("ASSERT_TOPMOST_REQUIRES_EXPLICIT_V5_BEFORE_RUNTIME: failure=%v calls=%d", failure, runtime.calls)
+			if failure == nil || failure.Code != "OUTPUT_VERSION_INCOMPATIBLE" || runtime.calls != 0 {
+				t.Fatalf("ASSERT_TOPMOST_REJECTS_EXPLICIT_LEGACY_BEFORE_RUNTIME: version=%q failure=%v calls=%d", version, failure, runtime.calls)
 			}
 		})
 	}
 	req, err := manifest.Request(SliceV3)
 	if err != nil || req.TopmostSiblings {
-		t.Fatalf("ASSERT_OMITTED_OUTPUT_FROZEN_V3_REQUEST: topmost=%t err=%v", req.TopmostSiblings, err)
+		t.Fatalf("ASSERT_MANIFEST_REQUEST_PRESERVES_LEGACY_DEFAULT: topmost=%t err=%v", req.TopmostSiblings, err)
 	}
 }
 

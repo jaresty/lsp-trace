@@ -454,20 +454,22 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 	}
 	wantsSnapshot := in.OutputVersion == v5sourcesnapshot.Version
 	wantsV5 := in.OutputVersion == graphprovenance.VersionV5 || wantsSnapshot
-	if in.OutputVersion != "" && !wantsV5 {
+	wantsV4 := in.OutputVersion == graphprovenance.VersionV4
+	wantsLegacy := in.OutputVersion == graphprovenance.VersionV2 || in.OutputVersion == graphprovenance.VersionV3
+	if in.OutputVersion != "" && !wantsV5 && !wantsV4 && !wantsLegacy {
 		return fail(operation.FailureInvalidInput, fmt.Errorf("unsupported output_version %q", in.OutputVersion))
 	}
-	if in.SeedManifest.Expansion.TopmostSiblings && !wantsV5 {
-		return fail(operation.FailureInvalidInput, fmt.Errorf("expansion.topmost_siblings requires explicit graph-provenance v5 output"))
-	}
-	if wantsV5 && op.Name != SliceV3 && op.Name != IncomingV3 {
+	if (wantsV5 || wantsV4) && op.Name != SliceV3 && op.Name != IncomingV3 {
 		return fail(operation.FailureInvalidInput, fmt.Errorf("graph-provenance v5 requires current v3 route"))
+	}
+	if wantsLegacy && in.SeedManifest.Expansion.TopmostSiblings {
+		return fail("OUTPUT_VERSION_INCOMPATIBLE", fmt.Errorf("output version %q cannot represent topmost-sibling acquisition omissions", in.OutputVersion))
 	}
 	req, err := in.SeedManifest.Request(op.Name)
 	if err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
-	req.TopmostSiblings = wantsV5 && in.SeedManifest.Expansion.TopmostSiblings
+	req.TopmostSiblings = in.SeedManifest.Expansion.TopmostSiblings
 	if in.SessionID == "" || in.Generation == 0 {
 		return fail(operation.FailureInvalidInput, fmt.Errorf("session_id and exact generation are required"))
 	}
@@ -584,95 +586,107 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
-	siblings, err := cloneSiblingCandidatesForV5(result.Graph.SiblingCandidates)
-	if err != nil {
-		return fail("OUTPUT_VALIDATION_FAILED", err)
+	query := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
+	if diagnostics, ok := e.runtime.(interface {
+		Diagnostics(string, uint64) manageddiagnostic.QueryResult
+	}); ok {
+		query = diagnostics.Diagnostics(id, generation)
 	}
-	carrierRaw, err := graphprovenance.CaptureV2(ctx, result, workspace)
-	if err != nil {
-		return fail("OUTPUT_VALIDATION_FAILED", err)
-	}
-	raw := carrierRaw
-	if op.Name == SliceV3 || op.Name == IncomingV3 {
-		query := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
-		if diagnostics, ok := e.runtime.(interface {
-			Diagnostics(string, uint64) manageddiagnostic.QueryResult
-		}); ok {
-			query = diagnostics.Diagnostics(id, generation)
+	var raw []byte
+	if len(result.Omissions) > 0 || wantsV4 {
+		if wantsV5 || wantsLegacy {
+			return fail("OUTPUT_VERSION_INCOMPATIBLE", fmt.Errorf("output version %q cannot represent acquisition omissions", in.OutputVersion))
 		}
-		if wantsV5 {
-			// V5 owns the acquired graph directly. It must not pass through the
-			// mutable V2 typed/byte alias or its marshal-equality contract.
-			enriched, cloneErr := cloneGraphForV5(result.Graph)
-			if cloneErr != nil {
-				return fail("OUTPUT_VALIDATION_FAILED", cloneErr)
-			}
-			enriched.SchemaVersion = graph.SchemaVersionV5
-			enriched.Invocation.WorkspaceURI = workspace
-			enriched.Invocation.Server.Command = metadata.ServerCommand
-			enriched.Invocation.Expansion.TopmostSiblings = req.TopmostSiblings
-			enriched.SiblingCandidates = siblings
-			enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNotRequested
-			if req.TopmostSiblings {
-				enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNoExactRelations
-				if len(enriched.SiblingCandidates) > 0 {
-					enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingExactRelationsFound
-				}
-			}
-			seeds := map[string]graph.InvocationSeed{}
-			for _, seed := range enriched.Invocation.Seeds {
-				seeds[seed.Label] = seed
-			}
-			invocationID := enriched.Invocation.Provenance.InvocationID
-			if invocationID == "" {
-				invocationID = graph.Unknown
-			}
-			serverVersion := enriched.Invocation.Provenance.ServerVersion
-			if serverVersion == "" {
-				serverVersion = graph.Unknown
-			}
-			for i := range enriched.SiblingCandidates {
-				candidate := &enriched.SiblingCandidates[i]
-				seed := seeds[candidate.SeedLabel]
-				candidate.SeedIdentity = invocationID + ":" + seed.Label + ":" + seed.At
-				candidate.ProviderEvidence = []string{fmt.Sprintf("command=%s;server_version=%s;invocation=%s", enriched.Invocation.Server.Command, serverVersion, invocationID)}
-				candidate.SourceDigests = []string{"candidate=" + seed.ContentSHA256, "origin=" + seed.ContentSHA256}
-				candidate.Custody = graph.SourceCustodyEvidence{Class: graph.SourceCustodyCallerAssertedLocal, SourceContentSHA256: seed.ContentSHA256, ClaimCeiling: "NO_AUTHENTICATED_ANALYZED_SOURCE_IDENTITY"}
-				if custodyReceipt != nil && custodyReceipt.Provenance == seedbinding.VerifiedHost {
-					if !custodyReceipt.Authenticated || custodyReceipt.HostReceiptID == "" {
-						return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("verified host custody requires an exact host receipt identifier"))
-					}
-					candidate.Custody.Class = graph.SourceCustodyVerifiedHost
-					candidate.Custody.HostReceiptID = custodyReceipt.HostReceiptID
-				}
-				if custodyReceipt == nil {
-					candidate.Custody.Class = graph.SourceCustodyMissing
-					candidate.Custody.SourceContentSHA256 = ""
-				}
-			}
-			enriched.Canonicalize()
-			native, marshalErr := json.Marshal(enriched)
-			if marshalErr != nil {
-				return fail("OUTPUT_VALIDATION_FAILED", marshalErr)
-			}
-			var carrier graphprovenance.EvidenceV2
-			if unmarshalErr := json.Unmarshal(carrierRaw, &carrier); unmarshalErr != nil {
-				return fail("OUTPUT_VALIDATION_FAILED", unmarshalErr)
-			}
-			if len(explicitSeedSpec) > 0 {
-				raw, err = graphprovenance.CaptureV5WithSeedSpec(native, id, generation, query, explicitSeedSpec, &carrier)
-			} else {
-				raw, err = graphprovenance.CaptureV5(native, id, generation, query, &carrier)
-			}
-			if err == nil && wantsSnapshot {
-				raw, err = v5sourcesnapshot.Build(raw, workspace, metadata.PositionEncoding)
-			}
-		} else {
-			raw, err = graphprovenance.CaptureV3(raw, id, generation, query)
-		}
+		raw, err = graphprovenance.CaptureV4(result, query)
+	} else {
+		siblings, cloneErr := cloneSiblingCandidatesForV5(result.Graph.SiblingCandidates)
+		err = cloneErr
 		if err != nil {
 			return fail("OUTPUT_VALIDATION_FAILED", err)
 		}
+		carrierRaw, err := graphprovenance.CaptureV2(ctx, result, workspace)
+		if err != nil {
+			return fail("OUTPUT_VALIDATION_FAILED", err)
+		}
+		raw = carrierRaw
+		if op.Name == SliceV3 || op.Name == IncomingV3 {
+			if wantsV5 {
+				// V5 owns the acquired graph directly. It must not pass through the
+				// mutable V2 typed/byte alias or its marshal-equality contract.
+				enriched, cloneErr := cloneGraphForV5(result.Graph)
+				if cloneErr != nil {
+					return fail("OUTPUT_VALIDATION_FAILED", cloneErr)
+				}
+				enriched.SchemaVersion = graph.SchemaVersionV5
+				enriched.Invocation.WorkspaceURI = workspace
+				enriched.Invocation.Server.Command = metadata.ServerCommand
+				enriched.Invocation.Expansion.TopmostSiblings = req.TopmostSiblings
+				enriched.SiblingCandidates = siblings
+				enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNotRequested
+				if req.TopmostSiblings {
+					enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNoExactRelations
+					if len(enriched.SiblingCandidates) > 0 {
+						enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingExactRelationsFound
+					}
+				}
+				seeds := map[string]graph.InvocationSeed{}
+				for _, seed := range enriched.Invocation.Seeds {
+					seeds[seed.Label] = seed
+				}
+				invocationID := enriched.Invocation.Provenance.InvocationID
+				if invocationID == "" {
+					invocationID = graph.Unknown
+				}
+				serverVersion := enriched.Invocation.Provenance.ServerVersion
+				if serverVersion == "" {
+					serverVersion = graph.Unknown
+				}
+				for i := range enriched.SiblingCandidates {
+					candidate := &enriched.SiblingCandidates[i]
+					seed := seeds[candidate.SeedLabel]
+					candidate.SeedIdentity = invocationID + ":" + seed.Label + ":" + seed.At
+					candidate.ProviderEvidence = []string{fmt.Sprintf("command=%s;server_version=%s;invocation=%s", enriched.Invocation.Server.Command, serverVersion, invocationID)}
+					candidate.SourceDigests = []string{"candidate=" + seed.ContentSHA256, "origin=" + seed.ContentSHA256}
+					candidate.Custody = graph.SourceCustodyEvidence{Class: graph.SourceCustodyCallerAssertedLocal, SourceContentSHA256: seed.ContentSHA256, ClaimCeiling: "NO_AUTHENTICATED_ANALYZED_SOURCE_IDENTITY"}
+					if custodyReceipt != nil && custodyReceipt.Provenance == seedbinding.VerifiedHost {
+						if !custodyReceipt.Authenticated || custodyReceipt.HostReceiptID == "" {
+							return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("verified host custody requires an exact host receipt identifier"))
+						}
+						candidate.Custody.Class = graph.SourceCustodyVerifiedHost
+						candidate.Custody.HostReceiptID = custodyReceipt.HostReceiptID
+					}
+					if custodyReceipt == nil {
+						candidate.Custody.Class = graph.SourceCustodyMissing
+						candidate.Custody.SourceContentSHA256 = ""
+					}
+				}
+				enriched.Canonicalize()
+				native, marshalErr := json.Marshal(enriched)
+				if marshalErr != nil {
+					return fail("OUTPUT_VALIDATION_FAILED", marshalErr)
+				}
+				var carrier graphprovenance.EvidenceV2
+				if unmarshalErr := json.Unmarshal(carrierRaw, &carrier); unmarshalErr != nil {
+					return fail("OUTPUT_VALIDATION_FAILED", unmarshalErr)
+				}
+				if len(explicitSeedSpec) > 0 {
+					raw, err = graphprovenance.CaptureV5WithSeedSpec(native, id, generation, query, explicitSeedSpec, &carrier)
+				} else {
+					raw, err = graphprovenance.CaptureV5(native, id, generation, query, &carrier)
+				}
+				if err == nil && wantsSnapshot {
+					raw, err = v5sourcesnapshot.Build(raw, workspace, metadata.PositionEncoding)
+				}
+			} else {
+				raw, err = graphprovenance.CaptureV3(raw, id, generation, query)
+			}
+			if err != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", err)
+			}
+		}
+	}
+	if err != nil {
+		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
 	opResult := operation.Result{Artifact: raw}
 	if route == "private-census-batch" {
