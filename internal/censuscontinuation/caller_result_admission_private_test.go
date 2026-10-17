@@ -89,25 +89,41 @@ func TestPrivateCallerResultAdmissionStrictParserMutations(t *testing.T) {
 	}
 	raw, _ := store.Get(context.Background(), selector)
 	admission, _ := parsePrivateCallerResultAdmission(raw)
+	// These mutations exercise intrinsic receipt syntax and invariants only. Valid
+	// alternate predecessor identities are Store-membership concerns and belong in
+	// operation tests, not parser rejection cases.
 	mutations := map[string]func(*privateCallerResultAdmissionWire){
-		"schema":              func(w *privateCallerResultAdmissionWire) { w.SchemaVersion += "x" },
-		"status":              func(w *privateCallerResultAdmissionWire) { w.Status += "x" },
-		"authority":           func(w *privateCallerResultAdmissionWire) { w.Authority = 1 },
-		"accepted":            func(w *privateCallerResultAdmissionWire) { w.Accepted = true },
-		"completeness":        func(w *privateCallerResultAdmissionWire) { w.Completeness = "COMPLETE" },
-		"qualification":       func(w *privateCallerResultAdmissionWire) { w.SemanticQualification = "PERFORMED" },
-		"candidate":           func(w *privateCallerResultAdmissionWire) { w.CandidateGenerationAllowed = true },
-		"progression":         func(w *privateCallerResultAdmissionWire) { w.AutomaticProgressionAllowed = true },
-		"result-selector":     func(w *privateCallerResultAdmissionWire) { w.ResultSelector = digestOf([]byte("x")) },
-		"result-digest":       func(w *privateCallerResultAdmissionWire) { w.ResultDigest = digestOf([]byte("x")) },
-		"prepared-selector":   func(w *privateCallerResultAdmissionWire) { w.PreparedSelector = digestOf([]byte("x")) },
-		"prepared-digest":     func(w *privateCallerResultAdmissionWire) { w.PreparedDigest = digestOf([]byte("x")) },
-		"checkpoint-selector": func(w *privateCallerResultAdmissionWire) { w.CheckpointSelector = digestOf([]byte("x")) },
-		"checkpoint-digest":   func(w *privateCallerResultAdmissionWire) { w.CheckpointDigest = digestOf([]byte("x")) },
-		"requests-selector":   func(w *privateCallerResultAdmissionWire) { w.RequestsSelector = digestOf([]byte("x")) },
-		"requests-digest":     func(w *privateCallerResultAdmissionWire) { w.RequestsDigest = digestOf([]byte("x")) },
-		"requests-count":      func(w *privateCallerResultAdmissionWire) { w.RequestsCount++ },
-		"row":                 func(w *privateCallerResultAdmissionWire) { w.Rows[0].RecordID = "not-an-identity" },
+		"schema":                 func(w *privateCallerResultAdmissionWire) { w.SchemaVersion += "x" },
+		"status":                 func(w *privateCallerResultAdmissionWire) { w.Status += "x" },
+		"authority":              func(w *privateCallerResultAdmissionWire) { w.Authority = 1 },
+		"accepted":               func(w *privateCallerResultAdmissionWire) { w.Accepted = true },
+		"completeness":           func(w *privateCallerResultAdmissionWire) { w.Completeness = "COMPLETE" },
+		"qualification":          func(w *privateCallerResultAdmissionWire) { w.SemanticQualification = "PERFORMED" },
+		"candidate":              func(w *privateCallerResultAdmissionWire) { w.CandidateGenerationAllowed = true },
+		"progression":            func(w *privateCallerResultAdmissionWire) { w.AutomaticProgressionAllowed = true },
+		"custody":                func(w *privateCallerResultAdmissionWire) { w.Custody += "x" },
+		"provenance":             func(w *privateCallerResultAdmissionWire) { w.Provenance = "INVALID" },
+		"result-selector":        func(w *privateCallerResultAdmissionWire) { w.ResultSelector = digestOf([]byte("result")) },
+		"result-digest":          func(w *privateCallerResultAdmissionWire) { w.ResultDigest = digestOf([]byte("result")) },
+		"result-byte-length":     func(w *privateCallerResultAdmissionWire) { w.ResultByteLength = 0 },
+		"result-id":              func(w *privateCallerResultAdmissionWire) { w.ResultID = "not-an-identity" },
+		"prepared-selector":      func(w *privateCallerResultAdmissionWire) { w.PreparedSelector = digestOf([]byte("prepared")) },
+		"prepared-digest":        func(w *privateCallerResultAdmissionWire) { w.PreparedDigest = digestOf([]byte("prepared")) },
+		"prepared-byte-length":   func(w *privateCallerResultAdmissionWire) { w.PreparedByteLength = 0 },
+		"prepared-id":            func(w *privateCallerResultAdmissionWire) { w.PreparedID = "not-an-identity" },
+		"checkpoint-selector":    func(w *privateCallerResultAdmissionWire) { w.CheckpointSelector = digestOf([]byte("checkpoint")) },
+		"checkpoint-digest":      func(w *privateCallerResultAdmissionWire) { w.CheckpointDigest = digestOf([]byte("checkpoint")) },
+		"checkpoint-byte-length": func(w *privateCallerResultAdmissionWire) { w.CheckpointByteLength = 0 },
+		"checkpoint-id":          func(w *privateCallerResultAdmissionWire) { w.CheckpointID = "not-an-identity" },
+		"chain-identity":         func(w *privateCallerResultAdmissionWire) { w.ChainIdentity = "not-an-identity" },
+		"requests-selector":      func(w *privateCallerResultAdmissionWire) { w.RequestsSelector = digestOf([]byte("requests")) },
+		"requests-digest":        func(w *privateCallerResultAdmissionWire) { w.RequestsDigest = digestOf([]byte("requests")) },
+		"requests-byte-length":   func(w *privateCallerResultAdmissionWire) { w.RequestsByteLength = 0 },
+		"requests-count":         func(w *privateCallerResultAdmissionWire) { w.RequestsCount++ },
+		"row-ordinal":            func(w *privateCallerResultAdmissionWire) { w.Rows[0].Ordinal++ },
+		"row-record-id":          func(w *privateCallerResultAdmissionWire) { w.Rows[0].RecordID = "not-an-identity" },
+		"row-message-id":         func(w *privateCallerResultAdmissionWire) { w.Rows[0].MessageID = "not-an-identity" },
+		"row-lineage-identity":   func(w *privateCallerResultAdmissionWire) { w.Rows[0].LineageIdentity = "not-an-identity" },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
@@ -128,6 +144,7 @@ func TestPrivateCallerResultAdmissionStrictParserMutations(t *testing.T) {
 		"duplicate":    bytes.Replace(raw, []byte(`"status":`), []byte(`"status":"CALLER_RESULT_MECHANICALLY_ADMITTED","status":`), 1),
 		"trailing":     append(append([]byte(nil), raw...), []byte(`{}`)...),
 		"noncanonical": append([]byte(" "), raw...),
+		"null":         []byte("null"),
 		"null-rows":    bytes.Replace(raw, mustJSON(admission.wire.Rows), []byte("null"), 1),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -148,7 +165,7 @@ type privateAdmissionFaultStore struct {
 	cancel          context.CancelFunc
 	last            string
 	changeSelector  string
-	changeAfter     int
+	changeOnRead    int
 	gets            map[string]int
 }
 
@@ -184,18 +201,52 @@ func (s *privateAdmissionFaultStore) Get(ctx context.Context, selector string) (
 	if selector == s.last && s.mutateReadback {
 		raw[len(raw)-1] ^= 1
 	}
-	if selector == s.changeSelector && n > s.changeAfter {
+	if selector == s.changeSelector && n == s.changeOnRead {
 		raw = append([]byte(nil), raw...)
 		raw[len(raw)-1] ^= 1
 	}
 	return raw, nil
 }
 
-func TestPrivateCallerResultAdmissionFailsBeforePutOnObservedInconsistency(t *testing.T) {
+func TestPrivateCallerResultAdmissionFailsBeforePutOnEachInconsistentSecondRead(t *testing.T) {
+	base, resultSelector, result, _ := privateAdmissionFixture(t, privateCallerOutcomeSuccess)
+	cases := []struct {
+		name       string
+		selector   string
+		changeRead int
+		targetRead int
+	}{
+		{name: "result", selector: resultSelector, changeRead: 2, targetRead: 2},
+		{name: "prepared", selector: result.wire.PreparedSelector, changeRead: 2, targetRead: 2},
+		{name: "checkpoint", selector: result.wire.CheckpointSelector, changeRead: 3, targetRead: 3},
+		{name: "requests", selector: result.wire.RequestsSelector, changeRead: 2, targetRead: 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &privateAdmissionFaultStore{Store: base, changeSelector: tc.selector, changeOnRead: tc.changeRead}
+			selector, err := AdmitPrivateCallerResultSelector(context.Background(), store, resultSelector)
+			if err == nil || selector != "" || store.puts != 0 || store.gets[tc.selector] != tc.targetRead {
+				t.Fatalf("%s %s selector=%q err=%v puts=%d reads=%d wantTargetRead=%d", assertAdmissionPrePut, tc.name, selector, err, store.puts, store.gets[tc.selector], tc.targetRead)
+			}
+		})
+	}
+}
+
+func TestPrivateCallerResultAdmissionRejectsInvalidInputsBeforeStoreAccess(t *testing.T) {
 	base, resultSelector, _, _ := privateAdmissionFixture(t, privateCallerOutcomeSuccess)
-	store := &privateAdmissionFaultStore{Store: base, changeSelector: resultSelector, changeAfter: 1}
-	if selector, err := AdmitPrivateCallerResultSelector(context.Background(), store, resultSelector); err == nil || selector != "" || store.puts != 0 {
-		t.Fatalf("%s selector=%q err=%v puts=%d", assertAdmissionPrePut, selector, err, store.puts)
+	for name, tc := range map[string]struct {
+		store    Store
+		selector string
+	}{
+		"nil-store":          {store: nil, selector: resultSelector},
+		"empty-selector":     {store: base, selector: ""},
+		"malformed-selector": {store: base, selector: "not-a-selector"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, err := AdmitPrivateCallerResultSelector(context.Background(), tc.store, tc.selector); err == nil || got != "" {
+				t.Fatalf("%s %s selector=%q err=%v", assertAdmissionPrePut, name, got, err)
+			}
+		})
 	}
 }
 
@@ -263,8 +314,8 @@ func TestPrivateCallerResultAdmissionPutReadbackCancellationReplayAndAlias(t *te
 	base.mu.RUnlock()
 	postCtx, postCancel := context.WithCancel(context.Background())
 	post := &privateAdmissionFaultStore{Store: fresh, cancel: postCancel}
-	if s, e := AdmitPrivateCallerResultSelector(postCtx, post, resultSelector); !errors.Is(e, context.Canceled) || s != "" {
-		t.Fatalf("post cancel %q %v", s, e)
+	if s, e := AdmitPrivateCallerResultSelector(postCtx, post, resultSelector); !errors.Is(e, context.Canceled) || s != "" || post.puts != 1 {
+		t.Fatalf("post cancel %q %v puts=%d", s, e, post.puts)
 	}
 	recovered, err := AdmitPrivateCallerResultSelector(context.Background(), fresh, resultSelector)
 	if err != nil || recovered != first {
@@ -299,7 +350,7 @@ func TestPrivateCallerResultAdmissionPreservesPredecessorBytes(t *testing.T) {
 	}
 }
 
-func TestPrivateCallerResultAdmissionAllowsZeroRequestsWithEmptyRows(t *testing.T) {
+func TestPrivateCallerResultAdmissionIntrinsicZeroRequestReceiptCanonicalCompatibility(t *testing.T) {
 	store, resultSelector, _, _ := privateAdmissionFixture(t, privateCallerOutcomeSuccess)
 	selector, err := AdmitPrivateCallerResultSelector(context.Background(), store, resultSelector)
 	if err != nil {
@@ -315,9 +366,12 @@ func TestPrivateCallerResultAdmissionAllowsZeroRequestsWithEmptyRows(t *testing.
 	wire.Rows = []privateCallerResultAdmissionRow{}
 	zeroRaw := privateAdmissionReidentify(wire)
 	zero, err := parsePrivateCallerResultAdmission(zeroRaw)
-	if err != nil || zero.wire.RequestsCount != 0 || zero.wire.Rows == nil || len(zero.wire.Rows) != 0 || !bytes.Contains(zeroRaw, []byte(`"rows":[]`)) {
-		t.Fatalf("zero receipt=%s admission=%+v err=%v", zeroRaw, zero.wire, err)
+	if err != nil || zero.wire.RequestsCount != 0 || zero.wire.Rows == nil || len(zero.wire.Rows) != 0 || !bytes.Contains(zeroRaw, []byte(`"requests_count":0`)) || !bytes.Contains(zeroRaw, []byte(`"rows":[]`)) {
+		t.Fatalf("intrinsic zero receipt=%s admission=%+v err=%v", zeroRaw, zero.wire, err)
 	}
+	// NOT QUALIFIED: this proves intrinsic canonical receipt compatibility only.
+	// It does not claim authentic operation-level zero-request admission because
+	// VerifyChain currently derives a nonzero request set from accepted predecessors.
 }
 
 func TestPrivateCallerResultAdmissionConcurrentDistinctResultsCoexist(t *testing.T) {
@@ -356,11 +410,23 @@ func TestPrivateCallerResultAdmissionConcurrentDistinctResultsCoexist(t *testing
 	}
 }
 
-func TestPrivateCallerResultAdmissionSizeBoundaryHelper(t *testing.T) {
-	if err := validatePrivateCallerResultAdmissionSize(make([]byte, privateCallerResultAdmissionMaxBytes)); err != nil {
-		t.Fatalf("boundary rejected: %v", err)
+func TestPrivateCallerResultAdmissionSizeBoundary(t *testing.T) {
+	const boundary = 64 << 20
+	if privateCallerResultAdmissionMaxBytes != boundary {
+		t.Fatalf("production boundary=%d want literal=%d", privateCallerResultAdmissionMaxBytes, boundary)
 	}
-	if err := validatePrivateCallerResultAdmissionSize(make([]byte, privateCallerResultAdmissionMaxBytes+1)); err == nil {
-		t.Fatal("boundary+1 accepted")
+	if err := validatePrivateCallerResultAdmissionSize(make([]byte, boundary)); err != nil {
+		t.Fatalf("exact boundary rejected: %v", err)
+	}
+	wantErr := "private caller result admission byte limit"
+	if err := validatePrivateCallerResultAdmissionSize(make([]byte, boundary+1)); err == nil || err.Error() != wantErr {
+		t.Fatalf("helper boundary+1 err=%v want=%q", err, wantErr)
+	}
+	// A valid canonical receipt is structurally much smaller than 64 MiB. The
+	// parser calls this helper before decoding, so canonical-shaped padding is
+	// unnecessary: plus-one arbitrary input must fail specifically at this guard,
+	// before unknown-field or canonical validation can run.
+	if _, err := parsePrivateCallerResultAdmission(make([]byte, boundary+1)); err == nil || err.Error() != wantErr {
+		t.Fatalf("parser boundary+1 err=%v want predecode size error %q", err, wantErr)
 	}
 }
