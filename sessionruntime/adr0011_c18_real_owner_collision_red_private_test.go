@@ -3481,7 +3481,7 @@ func privateC18LifecycleContext(t *testing.T) context.Context {
 
 func privateC18NewSplitPhaseSeam() (privateC18TestSplitPhaseSeam, <-chan any, <-chan any, chan struct{}, chan struct{}) {
 	reached := make(chan any, 2)
-	decision := make(chan any, 1)
+	decision := make(chan any, 2)
 	decisionRelease := make(chan struct{})
 	effectRelease := make(chan struct{})
 	return privateC18TestSplitPhaseSeam{Reached: reached, Decision: decision, DecisionRelease: decisionRelease, EffectRelease: effectRelease}, reached, decision, decisionRelease, effectRelease
@@ -5289,13 +5289,17 @@ func TestADR0011C18PostDecisionStopAbortsBlockedEffectGate(t *testing.T) {
 	default:
 	}
 	close(decisionRelease)
-	privateC18AwaitDecision(t, decisions, privateC18FixtureContenderObjectEvent, privateC18FixtureContenderRetention)
+	firstDecision := privateC18AwaitDecision(t, decisions, privateC18FixtureContenderObjectEvent, privateC18FixtureContenderRetention)
+	secondDecision := privateC18AwaitDecision(t, decisions, privateC18FixtureContenderObjectEvent, privateC18FixtureContenderRetention)
+	if !reflect.DeepEqual(firstDecision, secondDecision) {
+		t.Fatalf("ASSERT_C18_STOP_PRECONDITION_EXACT_DECISION_PAIR first=%+v second=%+v", firstDecision, secondDecision)
+	}
 	committed := f.host.privateC18Pair8CoordinatorSnapshotForTest()
 	if committed.Winner != privateC18FixtureContenderObjectEvent || committed.Decisions != 1 || committed.AuthorizedTransitions != 1 || !committed.ProvisionalAuthority || committed.TerminalDispositions != 0 || committed.Stopped {
 		t.Fatalf("ASSERT_C18_STOP_PRECONDITION_EXACT_AUTHORIZED_BLOCKED_SNAPSHOT snapshot=%+v", committed)
 	}
-	if len(result) > 1 {
-		t.Fatalf("ASSERT_C18_WINNER_RESULT_BEFORE_STOP buffered_results=%d", len(result))
+	if len(result) != 0 {
+		t.Fatalf("ASSERT_C18_RESULT_BEFORE_STOP buffered_results=%d", len(result))
 	}
 	if got := f.observer.snapshot(); !reflect.DeepEqual(got, baseline) {
 		t.Fatalf("ASSERT_C18_EFFECT_BEFORE_STOP baseline=%+v events=%+v", baseline, got)
