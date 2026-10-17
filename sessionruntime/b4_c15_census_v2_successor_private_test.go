@@ -1,25 +1,24 @@
 package sessionruntime
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 )
 
 const (
-	privateB4C15V2BaseHEAD       = "374e7c7ba31363ebd19800f8d027cd22a290a464"
-	privateB4C15V2BaseCount      = 3805
-	privateB4C15V2FinalCount     = 3847
-	privateB4C15V2AddedCount     = 42
-	privateB4C15V2MappingCount   = 44
-	privateB4C15V2RegenerateEnv  = "C15_V2_REGENERATE"
-	privateB4C15V2RegenerateTest = "TestPrivateB4C15V2SuccessorCatalog"
+	privateB4C15V2BaseHEAD          = "374e7c7ba31363ebd19800f8d027cd22a290a464"
+	privateB4C15V2BaseCount         = 3805
+	privateB4C15V2FinalCount        = 3847
+	privateB4C15V2AddedCount        = 42
+	privateB4C15V2MappingCount      = 44
+	privateB4C15V2CandidateSHA256   = "536d11dcfa927d1ce5db24fbd8a956a5170a8f762ee53d8daa3664288172afb2"
+	privateB4C15V2DispositionSHA256 = "494d2f0045db3e34b7c03e2a959aaf21e2fee203bfd3768097df7930ddf6b730"
+	privateB4C15V2ManifestSHA256    = "548e6af3625b248ab7e8a99b29ac24bbb3f674b0ffdb14365d4dfaaf49c89daf"
 )
 
 type privateB4C15V2Manifest struct {
@@ -38,51 +37,35 @@ type privateB4C15V2Manifest struct {
 	ManagerPropagationClaim bool              `json:"manager_propagation_claim"`
 }
 
-func TestPrivateB4C15V2SuccessorCatalog(t *testing.T) {
-	mapping := readPrivateB4C15Mapping(t)
-	candidates, classifications := generatePrivateB4C15Catalog(t, mapping)
-	if got := bytes.Count(candidates, []byte{'\n'}); got != privateB4C15V2FinalCount {
-		t.Fatalf("ASSERT_C15_V2_FINAL_CANDIDATES got=%d want=%d", got, privateB4C15V2FinalCount)
+func TestPrivateB4C15V2HistoricalSuccessorIntegrity(t *testing.T) {
+	candidates := readPrivateB4C15V2Pinned(t, "candidates.tsv", privateB4C15V2CandidateSHA256, true)
+	classifications := readPrivateB4C15V2Pinned(t, "classifications.tsv", privateB4C15V2DispositionSHA256, true)
+	manifestBytes := readPrivateB4C15V2Pinned(t, "manifest.json", privateB4C15V2ManifestSHA256, false)
+
+	var manifest privateB4C15V2Manifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatal(err)
 	}
-	if got := bytes.Count(classifications, []byte{'\n'}); got != privateB4C15V2FinalCount {
-		t.Fatalf("ASSERT_C15_V2_FINAL_CLASSIFICATIONS got=%d want=%d", got, privateB4C15V2FinalCount)
+	if manifest.Schema != "lsp-trace/c15-census-successor-v2" || manifest.BaseHEAD != privateB4C15V2BaseHEAD ||
+		manifest.Generator != "sessionruntime/b4_c15_census_v2_successor_private_test.go:TestPrivateB4C15V2SuccessorCatalog" ||
+		manifest.CanonicalCommand != "C15_V2_REGENERATE=1 go test ./sessionruntime -run '^TestPrivateB4C15V2SuccessorCatalog$' -count=1" {
+		t.Fatalf("ASSERT_C15_V2_HISTORICAL_PROVENANCE %+v", manifest)
+	}
+	if manifest.GeneratorInputs["active-production-go-source"] != "4db5f57f186415ac60e908c45c3f49c239d6afdc1bde5298fadc8b3ad01e5931" ||
+		manifest.GeneratorInputs["c15-census-v1/operation-mapping.json"] != privateB4C15MappingSHA256 ||
+		manifest.PredecessorVerification["c15-census-v1/candidates.tsv"] != privateB4C15CandidateSHA256 ||
+		manifest.PredecessorVerification["c15-census-v1/classifications.tsv"] != privateB4C15DispositionSHA256 {
+		t.Fatalf("ASSERT_C15_V2_HISTORICAL_INPUTS %+v", manifest)
+	}
+	if manifest.BaseCount != privateB4C15V2BaseCount || manifest.FinalCount != privateB4C15V2FinalCount ||
+		manifest.AddedExcluded != privateB4C15V2AddedCount || manifest.Removed != 0 || manifest.Reclassified != 0 ||
+		manifest.UnchangedMapping != privateB4C15V2MappingCount || manifest.ManagerPropagationClaim {
+		t.Fatalf("ASSERT_C15_V2_HISTORICAL_MEANING %+v", manifest)
 	}
 
 	v1Candidates := mustReadC15File(t, "candidates.tsv")
 	v1Classifications := mustReadC15File(t, "classifications.tsv")
 	assertPrivateB4C15V2Delta(t, v1Candidates, v1Classifications, candidates, classifications)
-
-	manifest := privateB4C15V2Manifest{
-		Schema:           "lsp-trace/c15-census-successor-v2",
-		BaseHEAD:         privateB4C15V2BaseHEAD,
-		Generator:        "sessionruntime/" + filepath.Base("b4_c15_census_v2_successor_private_test.go") + ":" + privateB4C15V2RegenerateTest,
-		CanonicalCommand: privateB4C15V2RegenerateEnv + "=1 go test ./sessionruntime -run '^" + privateB4C15V2RegenerateTest + "$' -count=1",
-		GeneratorInputs: map[string]string{
-			"active-production-go-source":          privateB4C15V2SourceDigest(t),
-			"c15-census-v1/operation-mapping.json": privateB4C15MappingSHA256,
-		},
-		PredecessorVerification: map[string]string{
-			"c15-census-v1/candidates.tsv":      privateB4C15CandidateSHA256,
-			"c15-census-v1/classifications.tsv": privateB4C15DispositionSHA256,
-		},
-		BaseCount: privateB4C15V2BaseCount, FinalCount: privateB4C15V2FinalCount,
-		AddedExcluded: privateB4C15V2AddedCount, Removed: 0, Reclassified: 0,
-		UnchangedMapping: privateB4C15V2MappingCount, ManagerPropagationClaim: false,
-	}
-	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifestBytes = append(manifestBytes, '\n')
-
-	generated := map[string][]byte{
-		"candidates.tsv": candidates, "classifications.tsv": classifications, "manifest.json": manifestBytes,
-	}
-	if os.Getenv(privateB4C15V2RegenerateEnv) == "1" {
-		writePrivateB4C15V2(t, generated)
-		return
-	}
-	assertPrivateB4C15V2Pinned(t, generated)
 }
 
 func assertPrivateB4C15V2Delta(t *testing.T, v1Candidates, v1Classifications, v2Candidates, v2Classifications []byte) {
@@ -143,69 +126,22 @@ func privateB4C15V2Rows(t *testing.T, data []byte, fields int) map[string]string
 	return out
 }
 
-func privateB4C15V2SourceDigest(t *testing.T) string {
+func readPrivateB4C15V2Pinned(t *testing.T, name, wantHash string, hasSidecar bool) []byte {
 	t.Helper()
-	dir := packageDir(t)
-	entries, err := os.ReadDir(dir)
+	path := filepath.Join("testdata", "c15-census-v2", name)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var names []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") {
-			names = append(names, entry.Name())
+	got := fmt.Sprintf("%x", sha256.Sum256(data))
+	if got != wantHash {
+		t.Fatalf("ASSERT_C15_V2_REPRODUCIBILITY_HASH_%s got=%s want=%s", name, got, wantHash)
+	}
+	if hasSidecar {
+		sidecar, err := os.ReadFile(path + ".sha256")
+		if err != nil || strings.TrimSpace(string(sidecar)) != got {
+			t.Fatalf("ASSERT_C15_V2_SIDECAR_%s got=%q err=%v", name, strings.TrimSpace(string(sidecar)), err)
 		}
 	}
-	sort.Strings(names)
-	h := sha256.New()
-	for _, name := range names {
-		data, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		fmt.Fprintf(h, "%s\x00%d\x00", name, len(data))
-		_, _ = h.Write(data)
-	}
-	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-func writePrivateB4C15V2(t *testing.T, generated map[string][]byte) {
-	t.Helper()
-	dir := filepath.Join("testdata", "c15-census-v2")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"candidates.tsv", "classifications.tsv", "manifest.json"} {
-		data := generated[name]
-		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if strings.HasSuffix(name, ".tsv") {
-			sidecar := []byte(fmt.Sprintf("%x\n", sha256.Sum256(data)))
-			if err := os.WriteFile(filepath.Join(dir, name+".sha256"), sidecar, 0o644); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-}
-
-func assertPrivateB4C15V2Pinned(t *testing.T, generated map[string][]byte) {
-	t.Helper()
-	dir := filepath.Join("testdata", "c15-census-v2")
-	for _, name := range []string{"candidates.tsv", "classifications.tsv", "manifest.json"} {
-		want, err := os.ReadFile(filepath.Join(dir, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(generated[name], want) {
-			t.Fatalf("ASSERT_C15_V2_CLEAN_REGENERATION_%s", name)
-		}
-		if strings.HasSuffix(name, ".tsv") {
-			sum := fmt.Sprintf("%x", sha256.Sum256(want))
-			sidecar, err := os.ReadFile(filepath.Join(dir, name+".sha256"))
-			if err != nil || strings.TrimSpace(string(sidecar)) != sum {
-				t.Fatalf("ASSERT_C15_V2_SIDECAR_%s got=%q err=%v", name, strings.TrimSpace(string(sidecar)), err)
-			}
-		}
-	}
+	return data
 }

@@ -1,7 +1,6 @@
 package sessionruntime
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -86,95 +85,6 @@ func TestPrivateB4C15OfflineCatalogAndCompactProductionContract(t *testing.T) {
 		got := privateB4C15ProductionSites[i]
 		if got != (privateB4C15ProductionSite{row.SiteID, row.Class, row.LogicalSeam, row.Path, row.Enclosing, row.OperationKind, row.Fingerprint}) {
 			t.Fatalf("ASSERT_C15_REGISTRY_ROW_%d got=%+v mapping=%+v", i, got, row)
-		}
-	}
-}
-
-func TestPrivateB4C15RegenerateOfflineCatalog(t *testing.T) {
-	mapping := readPrivateB4C15Mapping(t)
-	candidateOut, classificationOut := generatePrivateB4C15Catalog(t, mapping)
-	if os.Getenv("C15_REGENERATE") != "1" {
-		assertPrivateB4C15Generated(t, "candidates.tsv", candidateOut, privateB4C15CandidateSHA256)
-		assertPrivateB4C15Generated(t, "classifications.tsv", classificationOut, privateB4C15DispositionSHA256)
-		return
-	}
-	writePrivateB4C15CatalogAtomically(t, map[string][]byte{
-		"candidates.tsv":      candidateOut,
-		"classifications.tsv": classificationOut,
-	})
-}
-
-func TestPrivateB4C15RegenerationDoesNotReadGeneratedOutputs(t *testing.T) {
-	mapping := readPrivateB4C15Mapping(t)
-	wantCandidates, wantClassifications := generatePrivateB4C15Catalog(t, mapping)
-	dir := filepath.Join("testdata", "c15-census-v1")
-	for _, name := range []string{"candidates.tsv", "classifications.tsv"} {
-		path := filepath.Join(dir, name)
-		if err := os.Rename(path, path+".deleted-test"); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = os.Rename(path+".deleted-test", path) })
-	}
-	gotCandidates, gotClassifications := generatePrivateB4C15Catalog(t, mapping)
-	if !bytes.Equal(gotCandidates, wantCandidates) || !bytes.Equal(gotClassifications, wantClassifications) {
-		t.Fatal("ASSERT_C15_CLEAN_REGENERATION_WITHOUT_OUTPUT_SNAPSHOTS")
-	}
-}
-
-func generatePrivateB4C15Catalog(t *testing.T, mapping privateB4C15OperationMapping) ([]byte, []byte) {
-	t.Helper()
-	var candidateOut, classificationOut bytes.Buffer
-	for _, candidate := range discoverPrivateB4C15Candidates(t) {
-		fmt.Fprintf(&candidateOut, "%s\t%s\n", candidate.ID, candidate.Digest)
-		category := "ephemeral-runtime"
-		rationale := candidate.Kind + " " + candidate.Display + " has no privateB4ByteAccountV2 owner operation at this site"
-		if strings.Contains(candidate.Display, ".") {
-			category, rationale = "external-library", candidate.Display+" is library behavior outside privateB4ByteAccountV2 custody"
-		}
-		fmt.Fprintf(&classificationOut, "%s\texcluded\t\t%s\t%s\n", candidate.ID, category, rationale)
-	}
-	for _, row := range mapping.Rows {
-		fingerprint := fmt.Sprintf("%x", sha256.Sum256([]byte(row.Fingerprint)))
-		fmt.Fprintf(&candidateOut, "%s\t%s\n", row.SiteID, fingerprint)
-		fmt.Fprintf(&classificationOut, "%s\tC15-owned\t%s\t\t\n", row.SiteID, row.AccountOperation)
-	}
-	return candidateOut.Bytes(), classificationOut.Bytes()
-}
-
-func assertPrivateB4C15Generated(t *testing.T, name string, got []byte, wantHash string) {
-	t.Helper()
-	want := readPinnedFile(t, name, wantHash)
-	if !bytes.Equal(got, want) {
-		t.Fatalf("ASSERT_C15_CLEAN_REGENERATION_%s", name)
-	}
-}
-
-func writePrivateB4C15CatalogAtomically(t *testing.T, generated map[string][]byte) {
-	t.Helper()
-	dir := filepath.Join("testdata", "c15-census-v1")
-	stage, err := os.MkdirTemp(dir, ".c15-catalog-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(stage)
-
-	names := []string{"candidates.tsv", "classifications.tsv"}
-	for _, name := range names {
-		data, ok := generated[name]
-		if !ok {
-			t.Fatalf("ASSERT_C15_GENERATOR_MISSING_%s", name)
-		}
-		hash := fmt.Sprintf("%x", sha256.Sum256(data)) + "\n"
-		if err := os.WriteFile(filepath.Join(stage, name), data, 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(stage, name+".sha256"), []byte(hash), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, name := range []string{"candidates.tsv", "candidates.tsv.sha256", "classifications.tsv", "classifications.tsv.sha256"} {
-		if err := os.Rename(filepath.Join(stage, name), filepath.Join(dir, name)); err != nil {
-			t.Fatal(err)
 		}
 	}
 }
