@@ -458,6 +458,32 @@ type callHierarchyLayer1OrdinarySpecForTest struct {
 	maxBytes                 int64
 }
 
+func callHierarchyLayer1OrdinaryModeForCorpusRecordForTest(t *testing.T, record callHierarchyLayer1CorpusRecord) string {
+	t.Helper()
+	if record.Error.Class != "none" {
+		return callHierarchyLayer1ModeForCorpusRecord(record)
+	}
+	encoded := callHierarchyLayer1StringForTest(&record.External.ResponsesHex)
+	responseBytes, err := hex.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("ASSERT_CH_CURRENT_%s field=external.responses_hex got=%q: %v", record.Name, encoded, err)
+	}
+	var response struct {
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(responseBytes, &response); err != nil {
+		t.Fatalf("ASSERT_CH_CURRENT_%s field=external.responses got=%q: %v", record.Name, responseBytes, err)
+	}
+	switch callHierarchyLayer1ResultFormForTest(response.Result) {
+	case "null":
+		return "references-null"
+	case "nonempty":
+		return "references-repeated"
+	default:
+		return "references-empty"
+	}
+}
+
 func callHierarchyLayer1OrdinarySpecFromCorpusForTest(t *testing.T, record callHierarchyLayer1CorpusRecord) callHierarchyLayer1OrdinarySpecForTest {
 	t.Helper()
 	method := callHierarchyLayer1StringForTest(record.Identity.Method.Value)
@@ -469,7 +495,7 @@ func callHierarchyLayer1OrdinarySpecFromCorpusForTest(t *testing.T, record callH
 		deadline = 30 * time.Millisecond
 	}
 	return callHierarchyLayer1OrdinarySpecForTest{
-		mode: callHierarchyLayer1ModeForCorpusRecord(record), errorClass: record.Error.Class, method: method,
+		mode: callHierarchyLayer1OrdinaryModeForCorpusRecordForTest(t, record), errorClass: record.Error.Class, method: method,
 		params: append(json.RawMessage(nil), callHierarchyLayer1BytesForTest(t, record.Name+"-params", record.Frames.Request.Payload.BytesHex)...),
 		cancel: record.Error.Class == "cancellation", shutdown: record.Error.Class == "shutdown" || record.Error.Class == "transport-unavailable",
 		deadline: deadline, maxMessages: 3, maxBytes: 4096,
@@ -791,8 +817,9 @@ func callHierarchyLayer1AssertCurrentRoundTripForTest(t *testing.T, world string
 			t.Errorf("ASSERT_CH_CURRENT_%s field=Failure got=%q without executor deadline", world, result.Failure)
 		}
 	case session.SessionPoisoned:
-		// Current call-hierarchy execution may poison malformed, server-error,
-		// deadline, shutdown, or semantically incompatible fixture responses.
+		if !callHierarchyLayer1PoisonPermittedForTest(spec) {
+			t.Errorf("ASSERT_CH_CURRENT_%s field=Failure got=%q fixture=%+v want=poisoning-permitted-fixture", world, result.Failure, spec)
+		}
 	default:
 		t.Errorf("ASSERT_CH_CURRENT_%s field=Failure got=%q want=current round-trip vocabulary", world, result.Failure)
 	}
@@ -930,33 +957,62 @@ func callHierarchyLayer1AssertGapForTest(t *testing.T, world string, enabled boo
 	}
 }
 
-func callHierarchyLayer1AssertOrdinaryInputsEqualForTest(t *testing.T, disabledName, enabledName string, spec callHierarchyLayer1OrdinarySpecForTest, disabled, enabled RoundTripRequest, disabledCtx, enabledCtx context.Context) {
+func callHierarchyLayer1PoisonPermittedForTest(spec callHierarchyLayer1OrdinarySpecForTest) bool {
+	if spec.cancel {
+		return false
+	}
+	switch spec.errorClass {
+	case "protocol", "malformed", "shutdown", "transport-unavailable":
+		return true
+	case "deadline":
+		return spec.mode == "hang" && spec.deadline > 0
+	case "none":
+		return spec.mode == "references-repeated" && len(spec.params) != 0 && !json.Valid(spec.params)
+	default:
+		return false
+	}
+}
+
+func callHierarchyLayer1AssertOrdinaryInputsEqualForTest(t *testing.T, disabledName, enabledName string, disabledSpec, enabledSpec callHierarchyLayer1OrdinarySpecForTest, disabled, enabled RoundTripRequest, disabledCtx, enabledCtx context.Context) {
 	t.Helper()
-	type fixtureConditions struct {
-		mode, errorClass string
-		cancelled        bool
-		shutdown         bool
-		deadline         time.Duration
-		maxMessages      int
-		maxBytes         int64
+	assertEqual := func(field string, disabled, enabled any) {
+		t.Helper()
+		if !reflect.DeepEqual(disabled, enabled) {
+			t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=%s disabled=%+v enabled=%+v", disabledName, enabledName, field, disabled, enabled)
+		}
 	}
-	disabledConditions := fixtureConditions{spec.mode, spec.errorClass, errors.Is(disabledCtx.Err(), context.Canceled), spec.shutdown, spec.deadline, spec.maxMessages, spec.maxBytes}
-	enabledConditions := fixtureConditions{spec.mode, spec.errorClass, errors.Is(enabledCtx.Err(), context.Canceled), spec.shutdown, spec.deadline, spec.maxMessages, spec.maxBytes}
-	if !reflect.DeepEqual(disabledConditions, enabledConditions) || disabledConditions.cancelled != spec.cancel {
-		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=fixture-conditions disabled=%+v enabled=%+v", disabledName, enabledName, disabledConditions, enabledConditions)
+	assertEqual("fixture.mode", disabledSpec.mode, enabledSpec.mode)
+	assertEqual("fixture.errorClass", disabledSpec.errorClass, enabledSpec.errorClass)
+	assertEqual("fixture.method", disabledSpec.method, enabledSpec.method)
+	assertEqual("fixture.params", disabledSpec.params, enabledSpec.params)
+	assertEqual("fixture.cancel", disabledSpec.cancel, enabledSpec.cancel)
+	assertEqual("fixture.shutdown", disabledSpec.shutdown, enabledSpec.shutdown)
+	assertEqual("fixture.deadline", disabledSpec.deadline, enabledSpec.deadline)
+	assertEqual("fixture.maxMessages", disabledSpec.maxMessages, enabledSpec.maxMessages)
+	assertEqual("fixture.maxBytes", disabledSpec.maxBytes, enabledSpec.maxBytes)
+	assertEqual("fixture.context-cancelled", errors.Is(disabledCtx.Err(), context.Canceled), errors.Is(enabledCtx.Err(), context.Canceled))
+	if errors.Is(disabledCtx.Err(), context.Canceled) != disabledSpec.cancel || errors.Is(enabledCtx.Err(), context.Canceled) != enabledSpec.cancel {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=fixture.context-cancelled-vs-spec disabled=%v/%v enabled=%v/%v", disabledName, enabledName, errors.Is(disabledCtx.Err(), context.Canceled), disabledSpec.cancel, errors.Is(enabledCtx.Err(), context.Canceled), enabledSpec.cancel)
 	}
+
 	disabledAttachment, enabledAttachment := disabled.callHierarchyLayer1, enabled.callHierarchyLayer1
-	disabled.callHierarchyLayer1, enabled.callHierarchyLayer1 = callHierarchyLayer1RequestAttachment{}, callHierarchyLayer1RequestAttachment{}
-	disabled.SessionID, enabled.SessionID = "pair-session", "pair-session"
-	disabled.Deadline, enabled.Deadline = time.Time{}, time.Time{}
-	if !reflect.DeepEqual(disabled, enabled) {
-		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=ordinary-request disabled=%+v enabled=%+v", disabledName, enabledName, disabled, enabled)
+	assertEqual("request.Generation", disabled.Generation, enabled.Generation)
+	assertEqual("request.Method", disabled.Method, enabled.Method)
+	assertEqual("request.Params", disabled.Params, enabled.Params)
+	assertEqual("request.deadline-duration", disabledSpec.deadline, enabledSpec.deadline)
+	assertEqual("request.MaxMessages", disabled.MaxMessages, enabled.MaxMessages)
+	assertEqual("request.MaxBytes", disabled.MaxBytes, enabled.MaxBytes)
+	if disabled.SessionID == "" || enabled.SessionID == "" {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=request.SessionID disabled=%q enabled=%q", disabledName, enabledName, disabled.SessionID, enabled.SessionID)
+	}
+	if disabled.Deadline.IsZero() || enabled.Deadline.IsZero() {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=request.Deadline disabled=%v enabled=%v", disabledName, enabledName, disabled.Deadline, enabled.Deadline)
 	}
 	if disabledAttachment != (callHierarchyLayer1RequestAttachment{}) || enabledAttachment == (callHierarchyLayer1RequestAttachment{}) {
 		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=private-attachment disabled=%+v enabled=%+v", disabledName, enabledName, disabledAttachment, enabledAttachment)
 	}
-	if spec.mode == "" || spec.deadline <= 0 || spec.maxMessages <= 0 || spec.maxBytes <= 0 {
-		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=fixture-spec got=%+v", disabledName, enabledName, spec)
+	if disabledSpec.mode == "" || disabledSpec.deadline <= 0 || disabledSpec.maxMessages <= 0 || disabledSpec.maxBytes <= 0 || enabledSpec.mode == "" || enabledSpec.deadline <= 0 || enabledSpec.maxMessages <= 0 || enabledSpec.maxBytes <= 0 {
+		t.Fatalf("ASSERT_CH_PAIR_INPUT_%s_%s field=fixture-spec disabled=%+v enabled=%+v", disabledName, enabledName, disabledSpec, enabledSpec)
 	}
 }
 
@@ -1001,13 +1057,16 @@ func TestCallHierarchyLayer1AcceptedCorpusRED(t *testing.T) {
 	for _, pair := range w25.Comparison.Pairs {
 		pair := pair
 		t.Run("pair-"+pair.Disabled.Name+"-"+pair.Enabled.Name, func(t *testing.T) {
-			spec := callHierarchyLayer1OrdinarySpecFromCorpusForTest(t, pair.Enabled)
-			disabledManager, disabledStarted, _ := roundTripManager(t, spec.mode)
-			enabledManager, enabledStarted, _ := roundTripManager(t, spec.mode)
-			if spec.shutdown {
+			disabledSpec := callHierarchyLayer1OrdinarySpecFromCorpusForTest(t, pair.Disabled)
+			enabledSpec := callHierarchyLayer1OrdinarySpecFromCorpusForTest(t, pair.Enabled)
+			disabledManager, disabledStarted, _ := roundTripManager(t, disabledSpec.mode)
+			enabledManager, enabledStarted, _ := roundTripManager(t, enabledSpec.mode)
+			if disabledSpec.shutdown {
 				if err := disabledManager.Shutdown(context.Background()); err != nil {
 					t.Fatal(err)
 				}
+			}
+			if enabledSpec.shutdown {
 				if err := enabledManager.Shutdown(context.Background()); err != nil {
 					t.Fatal(err)
 				}
@@ -1016,25 +1075,48 @@ func TestCallHierarchyLayer1AcceptedCorpusRED(t *testing.T) {
 				selected: callHierarchyLayer1CommitmentForCorpusRecord(t, pair.Enabled.Name+"-selected", pair.Enabled.Commitments.Selected),
 				handoff:  callHierarchyLayer1CommitmentForCorpusRecord(t, pair.Enabled.Name+"-handoff", pair.Enabled.Commitments.Handoff),
 			}
-			disabledRequest := callHierarchyLayer1RequestFromSpecForTest(disabledStarted, spec, callHierarchyLayer1RequestAttachment{})
-			enabledRequest := callHierarchyLayer1RequestFromSpecForTest(enabledStarted, spec, attachment)
+			disabledRequest := callHierarchyLayer1RequestFromSpecForTest(disabledStarted, disabledSpec, callHierarchyLayer1RequestAttachment{})
+			enabledRequest := callHierarchyLayer1RequestFromSpecForTest(enabledStarted, enabledSpec, attachment)
 			disabledCtx, enabledCtx := context.Background(), context.Background()
-			if spec.cancel {
-				var disabledCancel, enabledCancel context.CancelFunc
+			if disabledSpec.cancel {
+				var disabledCancel context.CancelFunc
 				disabledCtx, disabledCancel = context.WithCancel(disabledCtx)
-				enabledCtx, enabledCancel = context.WithCancel(enabledCtx)
 				disabledCancel()
+			}
+			if enabledSpec.cancel {
+				var enabledCancel context.CancelFunc
+				enabledCtx, enabledCancel = context.WithCancel(enabledCtx)
 				enabledCancel()
 			}
-			callHierarchyLayer1AssertOrdinaryInputsEqualForTest(t, pair.Disabled.Name, pair.Enabled.Name, spec, disabledRequest, enabledRequest, disabledCtx, enabledCtx)
+			callHierarchyLayer1AssertOrdinaryInputsEqualForTest(t, pair.Disabled.Name, pair.Enabled.Name, disabledSpec, enabledSpec, disabledRequest, enabledRequest, disabledCtx, enabledCtx)
 			disabledResult := disabledManager.RoundTrip(disabledCtx, disabledRequest)
 			enabledResult := enabledManager.RoundTrip(enabledCtx, enabledRequest)
-			callHierarchyLayer1AssertCurrentRoundTripForTest(t, pair.Disabled.Name, spec, disabledResult)
-			callHierarchyLayer1AssertCurrentRoundTripForTest(t, pair.Enabled.Name, spec, enabledResult)
+			callHierarchyLayer1AssertCurrentRoundTripForTest(t, pair.Disabled.Name, disabledSpec, disabledResult)
+			callHierarchyLayer1AssertCurrentRoundTripForTest(t, pair.Enabled.Name, enabledSpec, enabledResult)
 			callHierarchyLayer1AssertPairResultsEqualForTest(t, pair.Disabled.Name, pair.Enabled.Name, disabledResult, enabledResult)
 			callHierarchyLayer1AssertGapForTest(t, pair.Disabled.Name, false, disabledResult)
 			callHierarchyLayer1AssertGapForTest(t, pair.Enabled.Name, true, enabledResult)
 		})
+	}
+}
+
+func TestCallHierarchyLayer1UnexpectedPoisoningRejectedForOrdinarySuccess(t *testing.T) {
+	for _, mode := range []string{"references-empty", "references-null", "references-repeated"} {
+		spec := callHierarchyLayer1OrdinarySpecForTest{mode: mode, errorClass: "none", params: json.RawMessage(`{"item":{}}`), deadline: time.Second, maxMessages: 3, maxBytes: 4096}
+		if callHierarchyLayer1PoisonPermittedForTest(spec) {
+			t.Fatalf("ASSERT_CH_CURRENT_UNEXPECTED_POISONING_ORDINARY_SUCCESS mode=%q", mode)
+		}
+	}
+	for _, errorClass := range []string{"protocol", "malformed", "shutdown", "transport-unavailable"} {
+		spec := callHierarchyLayer1OrdinarySpecForTest{mode: "references-empty", errorClass: errorClass, deadline: time.Second, maxMessages: 3, maxBytes: 4096}
+		if !callHierarchyLayer1PoisonPermittedForTest(spec) {
+			t.Fatalf("ASSERT_CH_CURRENT_EXPECTED_POISONING_CONDITION errorClass=%q", errorClass)
+		}
+	}
+	if !callHierarchyLayer1PoisonPermittedForTest(callHierarchyLayer1OrdinarySpecForTest{mode: "hang", errorClass: "deadline", deadline: 30 * time.Millisecond}) ||
+		!callHierarchyLayer1PoisonPermittedForTest(callHierarchyLayer1OrdinarySpecForTest{mode: "references-repeated", errorClass: "none", params: json.RawMessage("fixed-payload"), deadline: time.Second}) ||
+		callHierarchyLayer1PoisonPermittedForTest(callHierarchyLayer1OrdinarySpecForTest{mode: "hang", errorClass: "cancellation", cancel: true, deadline: time.Second}) {
+		t.Fatal("ASSERT_CH_CURRENT_POISONING_DEADLINE_CANCELLATION_BOUNDARY")
 	}
 }
 
