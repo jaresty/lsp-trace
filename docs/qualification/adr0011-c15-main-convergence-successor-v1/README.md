@@ -4,7 +4,7 @@ This is a candidate-specific successor package. Its row classifications are **wr
 
 ## Enumeration
 
-`enumerator_test.go` defines the real Go test `TestADR0011C15MainConvergenceSuccessorEnumerate`. `clean-regenerate.sh` temporarily installs it into `sessionruntime`, performs two fresh canonical runs under the exact environment recorded in `COMMAND.txt`, proves 4,155 catalog/classification/location rows, zero duplicate IDs, 44 verified allocation-mapping rows, byte-identical outputs, and equality with `canonical/`, then removes the temporary test. Logs and `CLEAN_REGENERATION.txt` are retained here.
+The historical `enumerator_test.go` and `clean-regenerate.sh` produced the retained canonical outputs and `CLEAN_REGENERATION.txt`; they were removed from the current tree because the obsolete specimen was not an ordinary package. See [`../HISTORICAL_GENERATOR_PROVENANCE.md`](../HISTORICAL_GENERATOR_PROVENANCE.md) for restoration. Retained logs and conclusions remain historical evidence.
 
 ## Mechanical delta
 

@@ -253,14 +253,14 @@
       "sha256": "56a50d6a8bcdd2dedcc9fae4289de54859bb94d22e2f44944addf065810999d5"
     },
     {
-      "bytes": 4890,
+      "bytes": 4615,
       "path": "evidence/c15/MANIFEST.sha256",
-      "sha256": "10071af80a96cfc6721c878b6662a23d319ff79485c96076aeece557cad860c8"
+      "sha256": "890c6cf3c219fcbcf36114a0240db813cf8537fc3c07795b447a3b0aca7fa7ae"
     },
     {
       "bytes": 135,
       "path": "evidence/c15/MANIFEST.sha256.self",
-      "sha256": "3361d2e10b7b64878516f55143bbd4e958f6c223a022e1ea4138ea7fedc5b2d9"
+      "sha256": "bb6e06a9b553f5131d4610535856197fee59c0a9a744935233544396fc3d0469"
     },
     {
       "bytes": 1700,
@@ -276,11 +276,6 @@
       "bytes": 295338,
       "path": "evidence/c15/adjudication.tsv",
       "sha256": "14d015dec19931fdc5e1d81cf042496a3ce8a6baf40f1d879fee9165397eede8"
-    },
-    {
-      "bytes": 24380,
-      "path": "evidence/c15/derived-enumerator.go",
-      "sha256": "46128beee82ac8eb9deadfa96bdb6422a166e8462ec8be5247c1410673cacd9b"
     },
     {
       "bytes": 779,
@@ -308,9 +303,9 @@
       "sha256": "b5460d614922064939d96e28ae3ddd3078e2ae79224e10ef295526f9c547e0be"
     },
     {
-      "bytes": 1324,
+      "bytes": 1157,
       "path": "evidence/c15/output/MANIFEST.sha256",
-      "sha256": "375a98c33d1973d53674f6fe20c866a52f62832ee16471c10266ca6b91dc9a05"
+      "sha256": "154fa10dbc9e15aa0fd7dadb2b2f78e0f6916f0c6eb2255774c79296b713adf9"
     },
     {
       "bytes": 1517,
@@ -361,16 +356,6 @@
       "bytes": 65,
       "path": "evidence/c15/output/classifications.tsv.sha256",
       "sha256": "f985b956453f5b447a91a67a988821cac83d67a0fcbe1ea3c1969bddeeabebcf"
-    },
-    {
-      "bytes": 24380,
-      "path": "evidence/c15/output/enumerator.go",
-      "sha256": "46128beee82ac8eb9deadfa96bdb6422a166e8462ec8be5247c1410673cacd9b"
-    },
-    {
-      "bytes": 65,
-      "path": "evidence/c15/output/enumerator.go.sha256",
-      "sha256": "c1dd177ca8b804b598495d9e32a7a08c47f377331220853094726353fe2c0cf0"
     },
     {
       "bytes": 1360,

@@ -460,14 +460,14 @@
       "sha256": "e88aaa596cdb044f6273e2f655b641424520f303931fcbff6dece7c8a61f5bca"
     },
     {
-      "bytes": 1480,
+      "bytes": 1399,
       "path": "evidence/enumeration/MANIFEST.sha256",
       "provenance": {
         "kind": "exact-byte-copy",
         "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/MANIFEST.sha256",
         "source_set": "enumeration"
       },
-      "sha256": "48d361069b47438532a2608823b8b03ec446b15ca4daea055600e538ddff8161"
+      "sha256": "992f123b16f472f3d8107653185a4d59b8e44c658607d21b1b4ebfdd8b95c3b0"
     },
     {
       "bytes": 1517,
@@ -588,26 +588,6 @@
         "source_set": "enumeration"
       },
       "sha256": "f985b956453f5b447a91a67a988821cac83d67a0fcbe1ea3c1969bddeeabebcf"
-    },
-    {
-      "bytes": 24380,
-      "path": "evidence/enumeration/enumerator.go",
-      "provenance": {
-        "kind": "exact-byte-copy",
-        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/enumerator.go",
-        "source_set": "enumeration"
-      },
-      "sha256": "b5e1fc97e14fddb02ee700963e1e36831446c81372c3c3ef8004270207358012"
-    },
-    {
-      "bytes": 65,
-      "path": "evidence/enumeration/enumerator.go.sha256",
-      "provenance": {
-        "kind": "exact-byte-copy",
-        "source_path": "/tmp/adr0011-layer1-generic-v3-c15-enum-evidence-ywmvWy/enumerator.go.sha256",
-        "source_set": "enumeration"
-      },
-      "sha256": "db4ec96fcff8d928e15f9c364c6e1cf45d016348d0ddbb35ca555198b5a04273"
     },
     {
       "bytes": 1360,
