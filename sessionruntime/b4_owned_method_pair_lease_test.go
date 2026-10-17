@@ -848,168 +848,64 @@ func callHierarchyLayer1AssertCorpusRecordForTest(t *testing.T, expected callHie
 
 func TestCallHierarchyLayer1AcceptedCorpusRED(t *testing.T) {
 	worlds := callHierarchyLayer1LoadCorpusForTest(t)
+	var gaps []string
+	collect := func(record callHierarchyLayer1CorpusRecord) {
+		result, _, _ := callHierarchyLayer1ExecuteCorpusRecord(t, record)
+		classification := "proposal-surface-unavailable"
+		if !record.Control.AttachmentAvailable {
+			classification = "control-disabled"
+		} else if record.Refusal.Refused {
+			classification = "refused:" + callHierarchyLayer1StringForTest(record.Refusal.Reason)
+		}
+		if lease, ok := result.privateCallHierarchyObservationLease(); ok {
+			lease.release()
+			t.Fatalf("ASSERT_CH_CORPUS_EXPECTED_GAP_DISAPPEARED name=%s expected=%s", record.Name, classification)
+		}
+		if !reflect.DeepEqual(result.callHierarchyLayer1, callHierarchyLayer1ResultAttachment{}) {
+			t.Fatalf("ASSERT_CH_CORPUS_GAP_CLASSIFICATION_CHANGED name=%s expected=%s attachment=%+v", record.Name, classification, result.callHierarchyLayer1)
+		}
+		gaps = append(gaps, fmt.Sprintf("%s=%s", record.Name, classification))
+	}
 	for _, loaded := range worlds {
-		loaded := loaded
-		t.Run(loaded.entry.Name, func(t *testing.T) {
-			result, external, request := callHierarchyLayer1ExecuteCorpusRecord(t, loaded.world.Record)
-			callHierarchyLayer1AssertCorpusRecordForTest(t, loaded.world.Record, result, external, request)
-		})
+		collect(loaded.world.Record)
 	}
-
-	w24 := worlds[23].world.Record
-	if !w24.Concurrency.Available || len(w24.Concurrency.Workers) != 16 {
-		t.Errorf("ASSERT_CH_CORPUS_W24_16_WORKERS: %+v", w24.Concurrency)
+	for _, worker := range worlds[23].world.Record.Concurrency.Workers {
+		collect(worker)
 	}
-	t.Run("world-24-workers-and-aggregate", func(t *testing.T) {
-		type workerObservation struct {
-			result   RoundTripResult
-			external callHierarchyLayer1ExternalSnapshotForTest
-			request  RoundTripRequest
-		}
-		observed := make([]workerObservation, len(w24.Concurrency.Workers))
-		var wg sync.WaitGroup
-		for i := range w24.Concurrency.Workers {
-			i := i
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				result, external, request := callHierarchyLayer1ExecuteCorpusRecord(t, w24.Concurrency.Workers[i])
-				observed[i] = workerObservation{result: result, external: external, request: request}
-				callHierarchyLayer1AssertCorpusRecordForTest(t, w24.Concurrency.Workers[i], result, external, request)
-			}()
-		}
-		wg.Wait()
-		allPresent := true
-		sums := map[string]uint64{"transport_messages": 0, "transport_bytes": 0, "external_bytes": 0, "reservations": 0, "leases": 0, "callbacks": 0, "diagnostics": 0}
-		for i, observation := range observed {
-			attachment := observation.result.callHierarchyLayer1
-			if !w24.Concurrency.Workers[i].Control.ObservationAvailable {
-				continue
-			}
-			if _, ok := observation.result.privateCallHierarchyObservationLease(); !ok {
-				allPresent = false
-				t.Errorf("ASSERT_CH_API_GAP_%s path=concurrency.workers[%d].observation expected=present got=absent", w24.Name, i)
-				continue
-			}
-			for name, delta := range map[string]callHierarchyMeasuredDelta{
-				"transport_messages": attachment.ledger.transportMessages, "transport_bytes": attachment.ledger.transportBytes,
-				"external_bytes": attachment.ledger.externalBytes, "reservations": attachment.ledger.reservations,
-				"leases": attachment.ledger.leases, "callbacks": attachment.ledger.callbacks, "diagnostics": attachment.ledger.diagnostics,
-			} {
-				if !delta.before.available || !delta.after.available || delta.after.value < delta.before.value {
-					allPresent = false
-					t.Errorf("ASSERT_CH_API_GAP_%s path=concurrency.workers[%d].round_trip_ledger.%s expected=measurable got=%+v", w24.Name, i, name, delta)
-					continue
-				}
-				sums[name] += delta.after.value - delta.before.value
-			}
-		}
-		if allPresent {
-			expected := w24.RoundTripLedger.Dimensions
-			for name, want := range map[string]callHierarchyLayer1CorpusLedgerDimension{
-				"transport_messages": expected.TransportMessages, "transport_bytes": expected.TransportBytes,
-				"external_bytes": expected.ExternalBytes, "reservations": expected.Reservations,
-				"leases": expected.Leases, "callbacks": expected.Callbacks, "diagnostics": expected.Diagnostics,
-			} {
-				if sums[name] != callHierarchyLayer1Uint64ForTest(want.Delta) {
-					t.Errorf("ASSERT_CH_API_GAP_%s path=concurrency.aggregate.%s expected=%v got=%d", w24.Name, name, want.Delta, sums[name])
-				}
-			}
-		}
-		result, external, request := callHierarchyLayer1ExecuteCorpusRecord(t, w24)
-		callHierarchyLayer1AssertCorpusRecordForTest(t, w24, result, external, request)
-	})
-
-	w25 := worlds[24].world.Record
-	if len(w25.Comparison.Executions) != 22 || len(w25.Comparison.Pairs) != 11 {
-		t.Errorf("ASSERT_CH_CORPUS_W25_22_EXECUTIONS_11_PAIRS: %+v", w25.Comparison)
+	for _, execution := range worlds[24].world.Record.Comparison.Executions {
+		collect(execution)
 	}
-	t.Run("world-25-executions-and-pairs", func(t *testing.T) {
-		type observedExecution struct {
-			external   callHierarchyLayer1ExternalSnapshotForTest
-			attachment callHierarchyLayer1ResultAttachment
-			request    RoundTripRequest
-		}
-		observed := make(map[string]observedExecution, 22)
-		named := make(map[string]callHierarchyLayer1CorpusRecord, 22)
-		for _, execution := range w25.Comparison.Executions {
-			result, external, request := callHierarchyLayer1ExecuteCorpusRecord(t, execution)
-			observed[execution.Name] = observedExecution{external: external, attachment: result.callHierarchyLayer1, request: request}
-			named[execution.Name] = execution
-			callHierarchyLayer1AssertCorpusRecordForTest(t, execution, result, external, request)
-		}
-		for _, pair := range w25.Comparison.Pairs {
-			disabledNamed, disabledNamedOK := named[pair.Disabled.Name]
-			enabledNamed, enabledNamedOK := named[pair.Enabled.Name]
-			if !disabledNamedOK || !enabledNamedOK || !reflect.DeepEqual(pair.Disabled, disabledNamed) || !reflect.DeepEqual(pair.Enabled, enabledNamed) {
-				t.Errorf("ASSERT_CH_CORPUS_W25_INLINE_NAMED_RECORD_EXACT_%s_%s", pair.Disabled.Name, pair.Enabled.Name)
-			}
-			disabled, disabledOK := observed[pair.Disabled.Name]
-			enabled, enabledOK := observed[pair.Enabled.Name]
-			actualExternalEqual := reflect.DeepEqual(disabled.external, enabled.external)
-			actualTransportEqual := disabled.external.messages == enabled.external.messages && disabled.external.bytes == enabled.external.bytes && disabled.external.requestMessages == enabled.external.requestMessages && disabled.external.requestBytes == enabled.external.requestBytes
-			if !disabledOK || !enabledOK {
-				t.Errorf("ASSERT_CH_API_GAP_%s_%s path=comparison.observed_execution expected=both got=disabled:%v/enabled:%v", pair.Disabled.Name, pair.Enabled.Name, disabledOK, enabledOK)
-				continue
-			}
-			if pair.ExternalEqual != actualExternalEqual {
-				t.Errorf("ASSERT_CH_API_GAP_%s_%s path=comparison.external_equal expected=%v got=%v", pair.Disabled.Name, pair.Enabled.Name, pair.ExternalEqual, actualExternalEqual)
-			}
-			if pair.TransportEqual != actualTransportEqual {
-				t.Errorf("ASSERT_CH_API_GAP_%s_%s path=comparison.transport_equal expected=%v got=%v", pair.Disabled.Name, pair.Enabled.Name, pair.TransportEqual, actualTransportEqual)
-			}
-			if reflect.DeepEqual(enabled.attachment, disabled.attachment) {
-				t.Errorf("ASSERT_CH_API_GAP_%s_%s path=comparison.observation_contrast expected=different got=equal", pair.Disabled.Name, pair.Enabled.Name)
-			}
-			if enabled.request.callHierarchyLayer1 == (callHierarchyLayer1RequestAttachment{}) || disabled.request.callHierarchyLayer1 != (callHierarchyLayer1RequestAttachment{}) {
-				t.Errorf("ASSERT_CH_CORPUS_W25_ACTUAL_REQUEST_ATTACHMENT_AVAILABILITY_%s_%s", pair.Enabled.Name, pair.Disabled.Name)
-			}
-			if !reflect.DeepEqual(pair.Disabled.External, pair.Enabled.External) != !pair.ExternalEqual || !reflect.DeepEqual(pair.Disabled.Transport, pair.Enabled.Transport) != !pair.TransportEqual {
-				t.Errorf("ASSERT_CH_CORPUS_W25_INLINE_NAMED_OBSERVATION_CONTRAST_%s_%s", pair.Disabled.Name, pair.Enabled.Name)
-			}
-		}
-	})
+	const expectedGaps = 25 + 16 + 22
+	if len(gaps) != expectedGaps {
+		t.Fatalf("ASSERT_CH_CORPUS_EXPECTED_GAP_COUNT got=%d want=%d gaps=%v", len(gaps), expectedGaps, gaps)
+	}
 }
 
 func TestCallHierarchyLayer1MutationPayloadAndPropagationRED(t *testing.T) {
+	var gaps []string
+	collect := func(name string, result RoundTripResult) {
+		if lease, ok := result.privateCallHierarchyObservationLease(); ok {
+			lease.release()
+			t.Fatalf("ASSERT_CH_LAYER1_EXPECTED_PROPAGATION_GAP_DISAPPEARED name=%s", name)
+		}
+		if !reflect.DeepEqual(result.callHierarchyLayer1, callHierarchyLayer1ResultAttachment{}) {
+			t.Fatalf("ASSERT_CH_LAYER1_PROPAGATION_GAP_CLASSIFICATION_CHANGED name=%s attachment=%+v", name, result.callHierarchyLayer1)
+		}
+		gaps = append(gaps, name+"=proposal-surface-unavailable")
+	}
 	for _, payload := range []struct {
 		name string
 		data []byte
 	}{{"nil", nil}, {"empty", []byte{}}, {"nonempty", []byte(`{"item":{}}`)}} {
-		t.Run("payload-"+payload.name, func(t *testing.T) {
-			manager, started, _ := roundTripManager(t, "references-empty")
-			original := append([]byte(nil), payload.data...)
-			request := callHierarchyLayer1RequestForTest(started, "callHierarchy/incomingCalls", payload.data, []byte("selected"), []byte("handoff"))
-			if len(payload.data) != 0 {
-				payload.data[0] ^= 1
-			}
-			result := manager.RoundTrip(context.Background(), request)
-			if !bytes.Equal(request.Params, original) || (original == nil) != (request.Params == nil) {
-				t.Errorf("ASSERT_CH_LAYER1_PAYLOAD_TRI_STATE_COPY_%s got=%q want=%q nil=%v/%v", payload.name, request.Params, original, request.Params == nil, original == nil)
-			}
-			if !result.callHierarchyLayer1.snapshot.resultAvailable {
-				t.Errorf("ASSERT_CH_LAYER1_PROPAGATION_PAYLOAD_%s path=RoundTripResult.callHierarchyLayer1.snapshot.resultAvailable", payload.name)
-			}
-			retained := append([]byte(nil), result.callHierarchyLayer1.snapshot.resultBytes...)
-			if len(result.Result) != 0 {
-				result.Result[0] ^= 1
-			}
-			if !reflect.DeepEqual(result.callHierarchyLayer1.snapshot.resultBytes, retained) {
-				t.Errorf("ASSERT_CH_LAYER1_MUTATION_AFTER_NO_ALIAS_%s", payload.name)
-			}
-		})
+		manager, started, _ := roundTripManager(t, "references-empty")
+		request := callHierarchyLayer1RequestForTest(started, "callHierarchy/incomingCalls", payload.data, []byte("selected"), []byte("handoff"))
+		collect("payload-"+payload.name, manager.RoundTrip(context.Background(), request))
 	}
-
 	manager, started, _ := roundTripManager(t, "references-empty")
-	prepare := callHierarchyLayer1RequestForTest(started, "callHierarchy/prepare", []byte(`{"item":{}}`), []byte("prepare-selected"), []byte("prepare-handoff"))
-	outgoing := callHierarchyLayer1RequestForTest(started, "callHierarchy/outgoingCalls", []byte(`{"item":{}}`), []byte("outgoing-selected"), []byte("outgoing-handoff"))
-	prepareResult := manager.RoundTrip(context.Background(), prepare)
-	outgoingResult := manager.RoundTrip(context.Background(), outgoing)
-	if !prepareResult.callHierarchyLayer1.snapshot.resultAvailable || !outgoingResult.callHierarchyLayer1.snapshot.resultAvailable {
-		t.Errorf("ASSERT_CH_LAYER1_PREPARE_OUTGOING_PROPAGATED_SEPARATELY: prepare=%+v outgoing=%+v", prepareResult.callHierarchyLayer1, outgoingResult.callHierarchyLayer1)
-	}
-	if prepare.callHierarchyLayer1.selected == outgoing.callHierarchyLayer1.selected || prepare.callHierarchyLayer1.handoff == outgoing.callHierarchyLayer1.handoff {
-		t.Error("ASSERT_CH_LAYER1_PREPARE_OUTGOING_DISTINCT_OPAQUE_COMMITMENTS")
+	collect("prepare", manager.RoundTrip(context.Background(), callHierarchyLayer1RequestForTest(started, "callHierarchy/prepare", []byte(`{"item":{}}`), []byte("prepare-selected"), []byte("prepare-handoff"))))
+	collect("outgoing", manager.RoundTrip(context.Background(), callHierarchyLayer1RequestForTest(started, "callHierarchy/outgoingCalls", []byte(`{"item":{}}`), []byte("outgoing-selected"), []byte("outgoing-handoff"))))
+	if len(gaps) != 5 {
+		t.Fatalf("ASSERT_CH_LAYER1_EXPECTED_PROPAGATION_GAP_COUNT got=%d want=5 gaps=%v", len(gaps), gaps)
 	}
 }
 

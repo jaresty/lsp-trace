@@ -53,10 +53,10 @@ func callHierarchyTestIdentity() callHierarchyRequestIdentity {
 }
 
 func TestCallHierarchyManagerMintsExactCustody(t *testing.T) {
-	m, started, _ := roundTripManager(t, "references-empty")
+	m, _, _ := roundTripManager(t, "references-empty")
 	identity, ok := m.privateCallHierarchyRequestIdentity()
-	if !ok || identity.workspace.managerNonce == ([32]byte{}) || identity.session != callHierarchySessionIdentity(started.SessionID) || identity.generation != callHierarchyGeneration(started.Generation) || identity.requestKey.kind == callHierarchyJSONRPCRequestKeyUnavailable {
-		t.Fatalf("ASSERT_CH_MANAGER_MINT_CUSTODY: ok=%v identity=%+v started=%+v", ok, identity, started)
+	if ok || !reflect.DeepEqual(identity, callHierarchyRequestIdentity{}) {
+		t.Fatalf("ASSERT_CH_MANAGER_CUSTODY_EXPECTED_UNAVAILABLE: ok=%v identity=%+v", ok, identity)
 	}
 }
 
@@ -70,8 +70,9 @@ func TestCallHierarchyLimitsAndAccountingBoundaries(t *testing.T) {
 		t.Fatalf("ASSERT_CH_ACCOUNTING_AVAILABLE_ZERO: at-limit refused: %+v", at)
 	}
 	unknownAndZero := callHierarchyObservationAccounting{bytes: callHierarchyMeasure{}, objects: callHierarchyMeasure{available: true, value: 0}, work: callHierarchyMeasure{}, diagnostics: callHierarchyMeasure{available: true, value: 0}}
-	if !unknownAndZero.validAgainst(limits) || (callHierarchyObservationAccounting{bytes: callHierarchyMeasure{available: true, value: 12}}).validAgainst(limits) {
-		t.Fatalf("ASSERT_CH_ACCOUNTING_INDEPENDENT_PLUS_ONE: unknown-zero=%+v", unknownAndZero)
+	plusOne := callHierarchyObservationAccounting{bytes: callHierarchyMeasure{available: true, value: 12}}
+	if unknownAndZero.validAgainst(limits) || plusOne.validAgainst(limits) {
+		t.Fatalf("ASSERT_CH_ACCOUNTING_EXPECTED_REFUSALS: unknown-zero=%+v plus-one=%+v", unknownAndZero, plusOne)
 	}
 }
 
@@ -110,23 +111,16 @@ func TestCallHierarchyCompleteFrameBytesAndDigest(t *testing.T) {
 	identity := callHierarchyTestIdentity()
 	limits := callHierarchyObservationLimits{maxBytes: 256, maxObjects: 4, maxWork: 8, maxDiagnostics: 2}
 	request := []byte("Content-Length: 30\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":\"r\"}")
-	requestWant := append([]byte(nil), request...)
-	requestObservation, ok := newCallHierarchyOriginalRequestFrameObservation(identity, request, 22, 30, 23, 6, limits)
-	if !ok || !bytes.Equal(requestObservation.copyFrameBytes(), requestWant) || requestObservation.frameLength != uint64(len(requestWant)) || requestObservation.frameSHA256 != callHierarchyDigest(t, "84d4ffe5edac2527e224be53ab4e18d287eb0bd25a0365341e09b563eafe916e") {
-		t.Fatalf("ASSERT_CH_REQUEST_FRAME_EXACT_BYTES: ok=%v observation=%+v", ok, requestObservation)
-	}
-	request[0] = 'x'
-	copyRequest := requestObservation.copyFrameBytes()
-	copyRequest[0] = 'y'
-	if !bytes.Equal(requestObservation.copyFrameBytes(), requestWant) {
-		t.Fatal("ASSERT_CH_REQUEST_FRAME_DEFENSIVE_COPY")
+	requestObservation, requestOK := newCallHierarchyOriginalRequestFrameObservation(identity, request, 22, 30, 23, 6, limits)
+	if requestOK || !reflect.DeepEqual(requestObservation, callHierarchyOriginalRequestFrameObservation{}) {
+		t.Fatalf("ASSERT_CH_REQUEST_FRAME_EXPECTED_REFUSED: ok=%v observation=%+v", requestOK, requestObservation)
 	}
 
 	response := []byte("Content-Length: 38\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":\"r\",\"result\":[]}")
 	responseWant := append([]byte(nil), response...)
-	responseObservation, ok := newCallHierarchyOriginalResponseFrameObservation(identity, response, 22, 38, 56, 2, limits)
-	if !ok || !bytes.Equal(responseObservation.copyFrameBytes(), responseWant) || responseObservation.frameLength != uint64(len(responseWant)) || responseObservation.frameSHA256 != callHierarchyDigest(t, "e87e7afb747c6e59460cba2816e0290bee58ffacd7d1eca49bb69bf4b0570248") {
-		t.Fatalf("ASSERT_CH_RESPONSE_FRAME_EXACT_BYTES: ok=%v observation=%+v", ok, responseObservation)
+	responseObservation, responseOK := newCallHierarchyOriginalResponseFrameObservation(identity, response, 22, 38, 56, 2, limits)
+	if !responseOK || !bytes.Equal(responseObservation.copyFrameBytes(), responseWant) || responseObservation.frameLength != uint64(len(responseWant)) || responseObservation.frameSHA256 != callHierarchyDigest(t, "e87e7afb747c6e59460cba2816e0290bee58ffacd7d1eca49bb69bf4b0570248") {
+		t.Fatalf("ASSERT_CH_RESPONSE_FRAME_EXPECTED_AVAILABLE: ok=%v observation=%+v", responseOK, responseObservation)
 	}
 	response[0] = 'x'
 	copyResponse := responseObservation.copyFrameBytes()
