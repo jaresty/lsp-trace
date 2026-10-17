@@ -221,6 +221,12 @@ type initializedAcquisitionRuntime struct {
 
 func (r *initializedAcquisitionRuntime) SessionID() string  { return r.sessionID }
 func (r *initializedAcquisitionRuntime) Generation() uint64 { return r.generation }
+func (r *initializedAcquisitionRuntime) WorkspaceRoot(sessionID string, generation uint64) (string, bool) {
+	return r.manager.WorkspaceRoot(sessionID, generation)
+}
+func (r *initializedAcquisitionRuntime) SessionLanguageID(sessionID string, generation uint64) (string, bool) {
+	return r.manager.SessionLanguageID(sessionID, generation)
+}
 func (r *initializedAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
 	request.SessionID, request.Generation = r.sessionID, r.generation
 	return r.privateAcquisitionRuntime.PrepareDocument(ctx, request)

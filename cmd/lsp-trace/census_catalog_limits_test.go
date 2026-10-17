@@ -34,13 +34,12 @@ func (r censusFreshCaptureRuntimeStub) WorkspaceRoot(string, uint64) (string, bo
 	return r.workspace, r.workspace != ""
 }
 
+func (censusFreshCaptureRuntimeStub) SessionLanguageID(string, uint64) (string, bool) {
+	return "go", true
+}
+
 func censusFreshCaptureTestDependencies(ctx context.Context, workspace string) *censuscontinuation.FreshCaptureDependencies {
-	runtime := censusFreshCaptureRuntimeStub{workspace: workspace}
-	deps := censusFreshCaptureDependencies(ctx, runtime, time.Second)
-	preparer := deps.Preparer.(censuscontinuation.ManagedPreparer)
-	preparer.Workspace = runtime
-	deps.Preparer = preparer
-	return deps
+	return censusFreshCaptureDependencies(ctx, censusFreshCaptureRuntimeStub{workspace: workspace}, time.Second)
 }
 
 func TestCensusFreshCaptureSeparatesPreparationAndResolverMessageLimits(t *testing.T) {
@@ -54,5 +53,9 @@ func TestCensusFreshCaptureSeparatesPreparationAndResolverMessageLimits(t *testi
 	resolver, ok := deps.Resolver.(liveprojection.FullDefinitionResolver)
 	if !ok || resolver.Limits.MaxMessages != 32 {
 		t.Fatalf("ASSERT_CLI_RESOLVER_SEPARATE_32_MESSAGE_BUDGET: resolver=%T limits=%+v", deps.Resolver, resolver.Limits)
+	}
+	preparer, ok := deps.Preparer.(censuscontinuation.ManagedPreparer)
+	if !ok || preparer.Workspace == nil || preparer.LanguageResolver == nil {
+		t.Fatalf("ASSERT_CLI_MANAGED_PREPARATION_ROUTING_INJECTED: preparer=%T workspace=%t language_resolver=%t", deps.Preparer, preparer.Workspace != nil, preparer.LanguageResolver != nil)
 	}
 }

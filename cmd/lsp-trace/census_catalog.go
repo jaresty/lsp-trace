@@ -162,6 +162,8 @@ func publishCensusCatalogDescriptor(ctx context.Context, bundle *continuationhos
 func censusFreshCaptureDependencies(ctx context.Context, runtime interface {
 	PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
 	RoundTrip(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
+	WorkspaceRoot(string, uint64) (string, bool)
+	SessionLanguageID(string, uint64) (string, bool)
 }, requestTimeout time.Duration) *censuscontinuation.FreshCaptureDependencies {
 	if runtime == nil {
 		return nil
@@ -171,7 +173,7 @@ func censusFreshCaptureDependencies(ctx context.Context, runtime interface {
 	}
 	return &censuscontinuation.FreshCaptureDependencies{
 		Context:  ctx,
-		Preparer: censuscontinuation.ManagedPreparer{Preparer: runtime},
+		Preparer: censuscontinuation.ManagedPreparer{Preparer: runtime, Workspace: runtime, LanguageResolver: runtime},
 		Resolver: liveprojection.FullDefinitionResolver{Requester: runtime, Limits: liveprojection.DisplayResolutionLimits{MaxWork: 100, MaxMessages: 32, MaxBytes: 1 << 20, RequestTimeout: requestTimeout}},
 		Limits:   censuscontinuation.ManagedPreparationLimits{MaxDocuments: 100, MaxMessages: 100, MaxWork: 100, MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20},
 	}
