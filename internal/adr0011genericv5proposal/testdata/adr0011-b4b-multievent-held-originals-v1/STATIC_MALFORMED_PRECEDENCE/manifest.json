@@ -1,0 +1,109 @@
+{
+  "status": "PRIVATE_SYNTHETIC_RAW_ORIGINALS_PENDING_INDEPENDENT_REVIEW",
+  "scenario": "STATIC_MALFORMED_PRECEDENCE",
+  "assets": [
+    {
+      "filename": "21-initialize_request.frame",
+      "length": 139,
+      "sha256": "ed73d1580450130bc32b777b58b55709d32ee681b9f8bc226e91acb6b65ea765",
+      "ordinal": 21,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "initialize_request",
+      "id": {
+        "type": "number",
+        "value": 201
+      }
+    },
+    {
+      "filename": "22-initialize_response.frame",
+      "length": 102,
+      "sha256": "6b9985f79513dae3a6d8b99d64fb6bab807d37bd0045393095a962cafe6e630a",
+      "ordinal": 22,
+      "direction": "SERVER_TO_CLIENT",
+      "role": "initialize_response",
+      "id": {
+        "type": "number",
+        "value": 201
+      }
+    },
+    {
+      "filename": "23-initialized_notification.frame",
+      "length": 74,
+      "sha256": "3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62",
+      "ordinal": 23,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "initialized_notification",
+      "id": null
+    },
+    {
+      "filename": "24-registration_request.frame",
+      "length": 235,
+      "sha256": "bf643050aa40075d95aa704186983f36d6fcf90b3fa804117cfcfeb183d922a9",
+      "ordinal": 24,
+      "direction": "SERVER_TO_CLIENT",
+      "role": "registration_request",
+      "id": {
+        "type": "string",
+        "value": "static-bad-r"
+      }
+    },
+    {
+      "filename": "25-registration_response.frame",
+      "length": 73,
+      "sha256": "ff2e5e37534629de65248fa5d79c79404a48791b90552ce6887a9d98fe3d7cf4",
+      "ordinal": 25,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "registration_response",
+      "id": {
+        "type": "string",
+        "value": "static-bad-r"
+      }
+    },
+    {
+      "filename": "26-references_write.frame",
+      "length": 209,
+      "sha256": "0ff237dd342de4ec6e3c9102d20aa83b6eb8c33da8db0f9084e2fa0cec1dd8db",
+      "ordinal": 26,
+      "direction": "CLIENT_TO_SERVER",
+      "role": "references_write",
+      "id": {
+        "type": "number",
+        "value": 220
+      }
+    },
+    {
+      "filename": "client-selector.json",
+      "length": 19,
+      "sha256": "844261003650303449410591b51cd4ea076082fe47d6330e9873cb10aec16c57",
+      "role": "client-selector.json"
+    },
+    {
+      "filename": "source.bytes",
+      "length": 5,
+      "sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+      "role": "source.bytes"
+    },
+    {
+      "filename": "context.json",
+      "length": 628,
+      "sha256": "eb90f7986702ce93e4c3956764495f4260cccab191caf22b657aaa2328b4cbdb",
+      "role": "context.json"
+    }
+  ],
+  "event_ordinals": [
+    21,
+    22,
+    23,
+    24,
+    25,
+    26
+  ],
+  "write_ordinals": [
+    26
+  ],
+  "limitations": [
+    "not a claimant",
+    "not observed execution",
+    "not B4b acceptance or selector issuance"
+  ]
+}

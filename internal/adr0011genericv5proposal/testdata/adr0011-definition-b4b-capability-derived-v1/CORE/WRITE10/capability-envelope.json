@@ -1,0 +1,248 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "definition-private-session",
+    "transaction": "definition-core-write-10"
+  },
+  "original": {
+    "length": 3664,
+    "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-capability-derived-v1/CORE/WRITE10/capability-artifact.bin",
+    "sha256": "sha256:77bd4184f247c3a3ee745503c1158dbf3ef2dea0994175f8f2f362c33edd3c98"
+  },
+  "payload": {
+    "events": [
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 231,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/03-registration_request.frame",
+          "sha256": "sha256:c081ae868351adc32bc0bcedb81c7fd761857c2e9ed8632360bdfaa840ccea15"
+        },
+        "request_frame_ordinal": 3,
+        "request_id": "definition-register",
+        "request_method": "client/registerCapability",
+        "request_params": {
+          "registrations": [
+            {
+              "id": "def-reg-1",
+              "method": "textDocument/definition",
+              "registerOptions": {
+                "documentSelector": null
+              }
+            }
+          ]
+        },
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_error": null,
+        "response_frame": {
+          "length": 80,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/05-registration_response.frame",
+          "sha256": "sha256:9a6607c2e240192b01f950be1afb94017ac85fbdfe6adc61654377447a9f264d"
+        },
+        "response_frame_ordinal": 5,
+        "response_id": "definition-register",
+        "response_result": null,
+        "response_status": "SUCCESS",
+        "target_write_frame_ordinal": 10
+      },
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 173,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/07-unregistration_request.frame",
+          "sha256": "sha256:43f1fb2bd60267f3a84114a18d13818c7d76572e6700aa039c2a85b756fb5216"
+        },
+        "request_frame_ordinal": 7,
+        "request_id": 20,
+        "request_method": "client/unregisterCapability",
+        "request_params": {
+          "unregisterations": [
+            {
+              "id": "def-reg-1",
+              "method": "textDocument/definition"
+            }
+          ]
+        },
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_error": {
+          "code": -32000,
+          "message": "synthetic unregister refusal"
+        },
+        "response_frame": {
+          "length": 112,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/09-unregistration_error.frame",
+          "sha256": "sha256:33d40909d47f3bd071b07d6b0ff6906004433ceb6986db7b115f23042415c65a"
+        },
+        "response_frame_ordinal": 9,
+        "response_id": 20,
+        "response_result": null,
+        "response_status": "ERROR",
+        "target_write_frame_ordinal": 10
+      },
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 175,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/11-unregistration_request.frame",
+          "sha256": "sha256:523ab6129d97e8b83d795bb32048f89d4fe1efa731fa27192fd96cd7a5f52216"
+        },
+        "request_frame_ordinal": 11,
+        "request_id": "20",
+        "request_method": "client/unregisterCapability",
+        "request_params": {
+          "unregisterations": [
+            {
+              "id": "def-reg-1",
+              "method": "textDocument/definition"
+            }
+          ]
+        },
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_error": null,
+        "response_frame": {
+          "length": 63,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/13-unregistration_response.frame",
+          "sha256": "sha256:5d91cba806f920200d2a18e2b85f4602b6180d584120250f4747efebf89d7485"
+        },
+        "response_frame_ordinal": 13,
+        "response_id": "20",
+        "response_result": null,
+        "response_status": "SUCCESS",
+        "target_write_frame_ordinal": 10
+      }
+    ],
+    "initialize": {
+      "request_direction": "CLIENT_TO_SERVER",
+      "request_frame": {
+        "length": 196,
+        "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/00-initialize_request.frame",
+        "sha256": "sha256:e8ade37966d8ff51b2a19a899691fe69dc90e02f508f73f7d1af752269663c84"
+      },
+      "request_frame_ordinal": 0,
+      "request_id": 10,
+      "request_method": "initialize",
+      "request_params": {
+        "capabilities": {
+          "textDocument": {
+            "definition": {
+              "dynamicRegistration": true
+            }
+          }
+        },
+        "processId": null,
+        "rootUri": "file:///w"
+      },
+      "response_direction": "SERVER_TO_CLIENT",
+      "response_error": null,
+      "response_frame": {
+        "length": 102,
+        "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/01-initialize_response.frame",
+        "sha256": "sha256:3438b3c6e0964beb3f2f0f8872a73c4d82b3a033639d232295a936e431e55830"
+      },
+      "response_frame_ordinal": 1,
+      "response_id": 10,
+      "response_result": {
+        "capabilities": {
+          "definitionProvider": false
+        }
+      },
+      "response_status": "SUCCESS",
+      "target_write_frame_ordinal": 10
+    },
+    "initialized_notification": {
+      "direction": "CLIENT_TO_SERVER",
+      "frame": {
+        "length": 74,
+        "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/02-initialized_notification.frame",
+        "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62"
+      },
+      "frame_ordinal": 2
+    },
+    "observed_frames": [
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 196,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/00-initialize_request.frame",
+          "sha256": "sha256:e8ade37966d8ff51b2a19a899691fe69dc90e02f508f73f7d1af752269663c84"
+        },
+        "frame_ordinal": 0
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 102,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/01-initialize_response.frame",
+          "sha256": "sha256:3438b3c6e0964beb3f2f0f8872a73c4d82b3a033639d232295a936e431e55830"
+        },
+        "frame_ordinal": 1
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 74,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/02-initialized_notification.frame",
+          "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62"
+        },
+        "frame_ordinal": 2
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 231,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/03-registration_request.frame",
+          "sha256": "sha256:c081ae868351adc32bc0bcedb81c7fd761857c2e9ed8632360bdfaa840ccea15"
+        },
+        "frame_ordinal": 3
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 80,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/05-registration_response.frame",
+          "sha256": "sha256:9a6607c2e240192b01f950be1afb94017ac85fbdfe6adc61654377447a9f264d"
+        },
+        "frame_ordinal": 5
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 173,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/07-unregistration_request.frame",
+          "sha256": "sha256:43f1fb2bd60267f3a84114a18d13818c7d76572e6700aa039c2a85b756fb5216"
+        },
+        "frame_ordinal": 7
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 112,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/09-unregistration_error.frame",
+          "sha256": "sha256:33d40909d47f3bd071b07d6b0ff6906004433ceb6986db7b115f23042415c65a"
+        },
+        "frame_ordinal": 9
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 175,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/11-unregistration_request.frame",
+          "sha256": "sha256:523ab6129d97e8b83d795bb32048f89d4fe1efa731fa27192fd96cd7a5f52216"
+        },
+        "frame_ordinal": 11
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 63,
+          "private_ref": "/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/13-unregistration_response.frame",
+          "sha256": "sha256:5d91cba806f920200d2a18e2b85f4602b6180d584120250f4747efebf89d7485"
+        },
+        "frame_ordinal": 13
+      }
+    ],
+    "target_write_frame_ordinal": 10
+  },
+  "predecessors": [],
+  "role": "CAPABILITY_EVENTS"
+}

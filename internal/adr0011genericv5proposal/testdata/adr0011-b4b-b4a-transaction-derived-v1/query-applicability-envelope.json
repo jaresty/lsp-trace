@@ -1,0 +1,44 @@
+{
+  "role": "QUERY_APPLICABILITY",
+  "identity": {
+    "session": "s",
+    "generation": 1,
+    "transaction": "tx"
+  },
+  "original": {
+    "length": 448,
+    "sha256": "sha256:60a571041dac82ca4952cfc6863af6e9ea380c16b27c2e69848b18b7c14cd8b8",
+    "private_ref": "held:query-applicability.original"
+  },
+  "predecessors": [
+    {
+      "role": "QUERY",
+      "selector": "sha256:454af84d8ca113aae78cb7f0b36f5797d30509462f62405322957b7a6115db43",
+      "digest": "sha256:b91bec39ad766bf2e8dfc7cf38cd93683c79ed82ec696b10b9268a036300845c"
+    },
+    {
+      "role": "SOURCE",
+      "selector": "sha256:75e3439d869c27139383afeed71b8c530d0096164742f93834a2d83ef6a70211",
+      "digest": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8"
+    }
+  ],
+  "payload": {
+    "workspace": "file:///w",
+    "session": "s",
+    "generation": 1,
+    "transaction": "tx",
+    "query_selector": "sha256:454af84d8ca113aae78cb7f0b36f5797d30509462f62405322957b7a6115db43",
+    "query_source_selector": "sha256:75e3439d869c27139383afeed71b8c530d0096164742f93834a2d83ef6a70211",
+    "uri_bytes": {
+      "length": 14,
+      "sha256": "sha256:e368347a8ef8c961a46b3c707aadf19237ddb43f74642d62b5f65007b2e0e19d",
+      "private_ref": "held:uri"
+    },
+    "language_id_present": false,
+    "language_id_bytes": null,
+    "document_kind": "ORDINARY",
+    "notebook_type_bytes": null,
+    "notebook_uri_bytes": null,
+    "notebook_source_selector": null
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "m1-private-session",
+    "transaction": "core-write-4"
+  },
+  "original": {
+    "length": 478,
+    "private_ref": "held:CORE/WRITE4/query-applicability.original",
+    "sha256": "sha256:a902a31c67a86d4cdb4b42a4988e0b9266382d2d61219b7f1131648de883db5e"
+  },
+  "payload": {
+    "document_kind": "ORDINARY",
+    "generation": 1,
+    "language_id_bytes": {
+      "length": 2,
+      "private_ref": "held:context-language",
+      "sha256": "sha256:4cd0e21a9a0795a14ec9aa5f0e7d1abff0492565770e43eafdf1e3e8afed1f33"
+    },
+    "language_id_present": true,
+    "notebook_source_selector": null,
+    "notebook_type_bytes": null,
+    "notebook_uri_bytes": null,
+    "query_selector": "sha256:40b7a37fbeb5761cb896fd857f25aeb8592103c393f720034fed630a32c6042a",
+    "query_source_selector": "sha256:b85a60fd0667a775a92a92e389882c31f61841a8c52e54a23afb786982296d14",
+    "session": "m1-private-session",
+    "transaction": "core-write-4",
+    "uri_bytes": {
+      "length": 14,
+      "private_ref": "held:context-uri",
+      "sha256": "sha256:e368347a8ef8c961a46b3c707aadf19237ddb43f74642d62b5f65007b2e0e19d"
+    },
+    "workspace": "file:///w"
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:62f1b1a5b5f4a8f0db49f747fcdd1e9e1fd1d764a7ca9b4537396ed32366b5aa",
+      "role": "QUERY",
+      "selector": "sha256:40b7a37fbeb5761cb896fd857f25aeb8592103c393f720034fed630a32c6042a"
+    },
+    {
+      "digest": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+      "role": "SOURCE",
+      "selector": "sha256:b85a60fd0667a775a92a92e389882c31f61841a8c52e54a23afb786982296d14"
+    }
+  ],
+  "role": "QUERY_APPLICABILITY"
+}

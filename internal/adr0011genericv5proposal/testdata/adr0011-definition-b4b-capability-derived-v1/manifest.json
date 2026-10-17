@@ -1,0 +1,109 @@
+{
+  "assets": [
+    {
+      "length": 3663,
+      "path": "CORE/WRITE4/capability-artifact.bin",
+      "sha256": "33311cb896444b726202f28215aca9915acd2b610b442eda983d994a0d3ba5db"
+    },
+    {
+      "length": 9634,
+      "path": "CORE/WRITE4/capability-envelope.json",
+      "sha256": "f3a870aa0d5c4dcc0ddedc1d42f7bbfb45f9359aa02fb3ea2cbed73633d52e67"
+    },
+    {
+      "length": 3663,
+      "path": "CORE/WRITE6/capability-artifact.bin",
+      "sha256": "001026d952d14c76c00f41d63344d6d2a247b570d26fd2237e3e3f0ee3dd63b9"
+    },
+    {
+      "length": 9634,
+      "path": "CORE/WRITE6/capability-envelope.json",
+      "sha256": "a2483558f7fff680b5b1b191dce954d8903a9c0c5ff9426af4b060c5e2a90b21"
+    },
+    {
+      "length": 3663,
+      "path": "CORE/WRITE8/capability-artifact.bin",
+      "sha256": "f76d2c5fd40bd2c0c2e6c9345b3901723590fcc9b1b2c370950774822afb27d9"
+    },
+    {
+      "length": 9634,
+      "path": "CORE/WRITE8/capability-envelope.json",
+      "sha256": "3c68b91c1ed9e40a22dcbddf0773ae22540f16de636d4114115f328d24210a16"
+    },
+    {
+      "length": 3664,
+      "path": "CORE/WRITE10/capability-artifact.bin",
+      "sha256": "77bd4184f247c3a3ee745503c1158dbf3ef2dea0994175f8f2f362c33edd3c98"
+    },
+    {
+      "length": 9641,
+      "path": "CORE/WRITE10/capability-envelope.json",
+      "sha256": "d1a421c1bea8740790fc6654e6cb1e2bbe170563bb3482f7ae1652ddbc15c8e2"
+    },
+    {
+      "length": 3664,
+      "path": "CORE/WRITE12/capability-artifact.bin",
+      "sha256": "adfd6b9467ab18e142fdf5ce3c1ab120bc2c2353bdfb59474b4329988c32bc13"
+    },
+    {
+      "length": 9641,
+      "path": "CORE/WRITE12/capability-envelope.json",
+      "sha256": "90d14d533e903969d045d477ffa0da3106e81e389c0507067b9418e2b6952f69"
+    },
+    {
+      "length": 3664,
+      "path": "CORE/WRITE14/capability-artifact.bin",
+      "sha256": "5ca67262c36fb10704108f0789fcb867baa8ffb9adc3e124270273028bd07697"
+    },
+    {
+      "length": 9641,
+      "path": "CORE/WRITE14/capability-envelope.json",
+      "sha256": "9ea25f09de732e7cf1a74dc0052c128a197a9311704e928c1d1bc930fe9b04e9"
+    },
+    {
+      "length": 2140,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/capability-artifact.bin",
+      "sha256": "1bc481038e63f7eb476919a985849b07e51372a1075a91d56d9c4ca42f27b9b4"
+    },
+    {
+      "length": 5845,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/capability-envelope.json",
+      "sha256": "7b201e0319396dcd54e2e9ddba4d0f997e4007e53d74e7480a4e7f23b30ad36d"
+    },
+    {
+      "length": 2152,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/capability-artifact.bin",
+      "sha256": "fe2d32b9d1b4ab45cdec74f315a45cfef3894f4af78f0363e3620b328cf86a5d"
+    },
+    {
+      "length": 5921,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/capability-envelope.json",
+      "sha256": "4aeea2fe3782234318cba791d2047b4feb6e160e81dd4f100e8002b76dfb44e6"
+    },
+    {
+      "length": 5937,
+      "path": "derivation.json",
+      "sha256": "01306894290648dc5e4f956835b8992defa2c52d06b8eac7231d5226c9d1ab0f"
+    }
+  ],
+  "limitations": [
+    "private synthetic CAPABILITY_EVENTS claimant and /2 artifacts pending independent exact-byte review",
+    "authority=0 accepted=false completeness=UNKNOWN NO_PRODUCER_AUTHENTICATION",
+    "no B4a/replay or C/D, admission, issuance or qualification"
+  ],
+  "predecessors": [
+    {
+      "path": "../adr0011-definition-b4b-held-originals-v1/manifest.json",
+      "sha256": "2fb4c68376f5268b0f1722033565c70595545aa3df08e9f3431ecbd9762f99fe"
+    },
+    {
+      "path": "../adr0011-definition-b4b-held-query-originals-v1/manifest.json",
+      "sha256": "f4b765e5576f6ed22c839e2686116146db4d643cd53eef8af851757e824c7001"
+    },
+    {
+      "path": "../adr0011-b4b-full-candidate-private-red-v1/candidate-manifest.json",
+      "sha256": "aee6006bbafdfae8f33a6b011cf34b69ad85411489ac963ef4243fd34cbbd6ec"
+    }
+  ],
+  "status": "PRIVATE_DEFINITION_CAP_PENDING_INDEPENDENT_REVIEW"
+}

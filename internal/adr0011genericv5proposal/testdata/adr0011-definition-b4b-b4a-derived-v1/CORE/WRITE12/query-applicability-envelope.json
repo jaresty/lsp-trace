@@ -1,0 +1,48 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "definition-private-session",
+    "transaction": "definition-core-write-12"
+  },
+  "original": {
+    "length": 507,
+    "private_ref": "held:CORE/WRITE12/query-applicability.original",
+    "sha256": "sha256:9f4ebd8c1945b2ce0e885eb08812892aede91bc4663982581d4d860ccb5c1edb"
+  },
+  "payload": {
+    "document_kind": "ORDINARY",
+    "generation": 1,
+    "language_id_bytes": {
+      "length": 2,
+      "private_ref": "held:context-language",
+      "sha256": "sha256:4cd0e21a9a0795a14ec9aa5f0e7d1abff0492565770e43eafdf1e3e8afed1f33"
+    },
+    "language_id_present": true,
+    "notebook_source_selector": null,
+    "notebook_type_bytes": null,
+    "notebook_uri_bytes": null,
+    "query_selector": "sha256:9f4aec05441aad50a9ef4f547e001268b430a459367d13f4930b9197998e725c",
+    "query_source_selector": "sha256:a077613a4a5e449372e1d895aeb49bdc3f852f589d607aaa55280704a9e49400",
+    "session": "definition-private-session",
+    "transaction": "definition-core-write-12",
+    "uri_bytes": {
+      "length": 23,
+      "private_ref": "held:context-uri",
+      "sha256": "sha256:7a9c6900dc088b1ebda22b3b1d99482e3c31af42b732c971c52d755ee96d23f5"
+    },
+    "workspace": "file:///w"
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:82c2b4036553fccbfc373d8a34945dc4158d84bea12db54094717daee314264b",
+      "role": "QUERY",
+      "selector": "sha256:9f4aec05441aad50a9ef4f547e001268b430a459367d13f4930b9197998e725c"
+    },
+    {
+      "digest": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+      "role": "SOURCE",
+      "selector": "sha256:a077613a4a5e449372e1d895aeb49bdc3f852f589d607aaa55280704a9e49400"
+    }
+  ],
+  "role": "QUERY_APPLICABILITY"
+}

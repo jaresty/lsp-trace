@@ -1,0 +1,3 @@
+Content-Length: 214
+
+{"jsonrpc":"2.0","id":"static-valid-r","method":"client/registerCapability","params":{"registrations":[{"id":"reg-1","method":"textDocument/references","registerOptions":{"documentSelector":[{"scheme":"file"}]}}]}}

@@ -1,0 +1,50 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "definition-private-session",
+    "transaction": "definition-static_malformed_precedence-write-26"
+  },
+  "original": {
+    "length": 180,
+    "private_ref": "held:STATIC_MALFORMED_PRECEDENCE/26-definition_write.frame",
+    "sha256": "sha256:d4d8ceb968b783df965cbccaa97af366f39856eed74255a573437d9d84faaae2"
+  },
+  "payload": {
+    "actual_key": "owner-definition-static_malformed_precedence-26",
+    "completed": true,
+    "completed_frame_ordinal": 26,
+    "frame": {
+      "length": 180,
+      "private_ref": "held:STATIC_MALFORMED_PRECEDENCE/26-definition_write.frame",
+      "sha256": "sha256:d4d8ceb968b783df965cbccaa97af366f39856eed74255a573437d9d84faaae2"
+    },
+    "params": {
+      "length": 86,
+      "private_ref": "held:STATIC_MALFORMED_PRECEDENCE/26-definition_write.frame#params",
+      "sha256": "sha256:adc9520f602074f012824ccd016ff7627d247879297da5c74e517f925327172d"
+    }
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:f9184ef5b9b8cbc258f26bcb583d267b181c044e34bb7d82968b236ee3e0771d",
+      "role": "QUERY",
+      "selector": "sha256:394c1b2799ced14566c4ba598e332df477baf7ad1dc33660c96232a9a0c961bc"
+    },
+    {
+      "digest": "sha256:0defa45ba89e4266d13bca51ca901705b269b39e692745778ae866843a69c046",
+      "role": "QUERY_APPLICABILITY",
+      "selector": "sha256:821c458107ee86eeb9a225b25354e7cf9daac46fb635f568704b8e70f222744b"
+    },
+    {
+      "digest": "sha256:fe2d32b9d1b4ab45cdec74f315a45cfef3894f4af78f0363e3620b328cf86a5d",
+      "role": "CAPABILITY_EVENTS",
+      "selector": "sha256:da037a9f85bd67c183e7c608211b9f683b75084f7e0f44407bfa9f4687ddab76"
+    },
+    {
+      "digest": "sha256:da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
+      "role": "POLICY",
+      "selector": "private-context:definition-policy-v5"
+    }
+  ],
+  "role": "REQUEST_WRITE"
+}

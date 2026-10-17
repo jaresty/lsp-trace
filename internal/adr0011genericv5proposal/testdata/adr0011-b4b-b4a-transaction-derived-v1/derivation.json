@@ -1,0 +1,69 @@
+{
+  "status": "PRIVATE_SYNTHETIC_B4A_CORRELATION_PENDING_INDEPENDENT_STAGE2B_REVIEW",
+  "custody": "held originals supplied separately from four claimant envelopes; fixture authored, not captured execution",
+  "predecessors": [
+    {
+      "manifest": "../adr0011-b4b-held-synthetic-originals/manifest.json",
+      "sha256": "9d83ad7c3d50358318347cb5429637cf1e73af574b3d2b6b7040272851465e9f"
+    },
+    {
+      "manifest": "../adr0011-b4b-held-query-synthetic-v1/manifest.json",
+      "sha256": "9c8df20103872f1f8f9653496674b4e07339c383369e960d83537f09135a1424"
+    },
+    {
+      "manifest": "../adr0011-b4b-capability-derived-v1/manifest.json",
+      "sha256": "724f4e19203bac69419289d6ec61b1fa211cf4ae617ef33cec3bedd6e734caa1"
+    }
+  ],
+  "source_artifact": {
+    "domain": "ADR0011-GENERIC-SOURCE-ARTIFACT/1",
+    "encoding": "ordered 8-byte unsigned big-endian length-prefixed UTF-8 fields",
+    "transaction_selector": "sha256:533a291b30a6528974975e2d9f1adda32e82cc0c096610b6866dedcaca9b3cc4",
+    "private_source_selector": "sha256:75e3439d869c27139383afeed71b8c530d0096164742f93834a2d83ef6a70211"
+  },
+  "held_originals": [
+    {
+      "path": "../adr0011-b4b-held-query-synthetic-v1/source.bytes",
+      "length": 5,
+      "sha256": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+      "private_ref": "held:source.bytes"
+    },
+    {
+      "path": "../adr0011-b4b-held-query-synthetic-v1/query.original",
+      "length": 379,
+      "sha256": "sha256:b91bec39ad766bf2e8dfc7cf38cd93683c79ed82ec696b10b9268a036300845c",
+      "private_ref": "held:query.original"
+    },
+    {
+      "path": "../adr0011-b4b-held-query-synthetic-v1/query-applicability.original",
+      "length": 448,
+      "sha256": "sha256:60a571041dac82ca4952cfc6863af6e9ea380c16b27c2e69848b18b7c14cd8b8",
+      "private_ref": "held:query-applicability.original"
+    },
+    {
+      "path": "../adr0011-b4b-held-synthetic-originals/05-references-write.frame",
+      "length": 207,
+      "sha256": "sha256:acdb0346ecb1889439836d05fc8e6c20dc9d69ebbe0f494a975a21da8f41a12e",
+      "private_ref": "held:05-references-write.frame"
+    }
+  ],
+  "write": {
+    "params_raw_length": 115,
+    "params_raw_sha256": "sha256:cc218fae12bc05a595cdee533a29db7ff271a40d5842681946d7123aa22ad152",
+    "request_id_raw": "3",
+    "request_id_type": "number",
+    "completed_ordinal": 5,
+    "independently_assigned_actual_key": "key-1"
+  },
+  "capability_predecessor": {
+    "role": "CAPABILITY_EVENTS",
+    "selector": "sha256:f2ec8a0082b9c409ef6c1d4efc12cfc3a5e53b0a2a627b1d29803dfa5f38b21f",
+    "digest": "sha256:d0d36273d838e9546ff8ceb9cef05d3549f3b4385892fa8b28ffd0ecdaaa951c"
+  },
+  "limitations": [
+    "POLICY and SCHEMA private context labels are not issued selectors; their role originals are pinned locally but no full graph is verified",
+    "CAPABILITY_EVENTS predecessor is stage2A private candidate, not public issuance",
+    "No B4b chronology execution, UNKNOWN-to-SUPPORTED outcome, C/D admission, V6, runtime capture, or public authority",
+    "Disposable checker and verification results are tooling, not retained evidence assets"
+  ]
+}

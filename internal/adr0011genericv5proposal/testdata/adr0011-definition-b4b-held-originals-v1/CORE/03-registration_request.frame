@@ -1,0 +1,3 @@
+Content-Length: 208
+
+{"id":"definition-register","jsonrpc":"2.0","method":"client/registerCapability","params":{"registrations":[{"id":"def-reg-1","method":"textDocument/definition","registerOptions":{"documentSelector":null}}]}}

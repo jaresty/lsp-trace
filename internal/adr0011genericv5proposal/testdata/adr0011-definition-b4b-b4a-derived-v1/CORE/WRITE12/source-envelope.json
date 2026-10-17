@@ -1,0 +1,24 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "definition-private-session",
+    "transaction": "definition-core-write-12"
+  },
+  "original": {
+    "length": 36,
+    "private_ref": "held:CORE/source.bytes",
+    "sha256": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+  },
+  "payload": {
+    "custody": "OWNER_BUFFER",
+    "source_bytes": {
+      "length": 36,
+      "private_ref": "held:CORE/source.bytes",
+      "sha256": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+    },
+    "uri": "file:///w/definition.go",
+    "version": "buffer:v1"
+  },
+  "predecessors": [],
+  "role": "SOURCE"
+}

@@ -1,0 +1,50 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "m1-private-session",
+    "transaction": "core-write-8"
+  },
+  "original": {
+    "length": 208,
+    "private_ref": "held:CORE/08-references_write.frame",
+    "sha256": "sha256:33bc4d424b1f74f4ad36cf3806d192a2fcc60b59650186cd0a8bb22e48c71351"
+  },
+  "payload": {
+    "actual_key": "owner-core-8",
+    "completed": true,
+    "completed_frame_ordinal": 8,
+    "frame": {
+      "length": 208,
+      "private_ref": "held:CORE/08-references_write.frame",
+      "sha256": "sha256:33bc4d424b1f74f4ad36cf3806d192a2fcc60b59650186cd0a8bb22e48c71351"
+    },
+    "params": {
+      "length": 115,
+      "private_ref": "held:CORE/08-references_write.frame#params",
+      "sha256": "sha256:cc218fae12bc05a595cdee533a29db7ff271a40d5842681946d7123aa22ad152"
+    }
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:7e4daeb512fcd6289060fd1640ca403c872a243289731b0557db2df14659af4f",
+      "role": "QUERY",
+      "selector": "sha256:d8eca45cf7b892d8555e9d48da11aa314bf0072458dc56318d0cfa389cd2ca5b"
+    },
+    {
+      "digest": "sha256:2b436c1840309892c7029893caad23ed8aa7d016f5c8b88672587d6698b2c03e",
+      "role": "QUERY_APPLICABILITY",
+      "selector": "sha256:bbed5f68dcaae0fe0fae48abba833501a9d0e2297e0ba27818b31d80133f77d6"
+    },
+    {
+      "digest": "sha256:0da87edffafb499d1d30fbf5ab672f1e2dbb9da66bf9c0c9811a90214a25cc56",
+      "role": "CAPABILITY_EVENTS",
+      "selector": "sha256:253c4853333483240f62e4891c997407827193aa10e28ccedb405e779ae62886"
+    },
+    {
+      "digest": "sha256:7c46893fecf0dda7a4942b8f33d92f0c2f49793d003c7eab4e8995aeddf8da36",
+      "role": "POLICY",
+      "selector": "private-context:references-policy-v5"
+    }
+  ],
+  "role": "REQUEST_WRITE"
+}

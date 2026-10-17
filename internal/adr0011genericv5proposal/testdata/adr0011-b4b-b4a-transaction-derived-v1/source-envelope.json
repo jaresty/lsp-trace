@@ -1,0 +1,24 @@
+{
+  "role": "SOURCE",
+  "identity": {
+    "session": "s",
+    "generation": 1,
+    "transaction": "tx"
+  },
+  "original": {
+    "length": 5,
+    "sha256": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+    "private_ref": "held:source.bytes"
+  },
+  "predecessors": [],
+  "payload": {
+    "uri": "file:///w/a.go",
+    "version": "buffer:v1",
+    "custody": "OWNER_BUFFER",
+    "source_bytes": {
+      "length": 5,
+      "sha256": "sha256:8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+      "private_ref": "held:source.bytes"
+    }
+  }
+}

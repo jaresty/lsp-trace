@@ -1,0 +1,37 @@
+{
+  "capability_artifact_sha256": "64fa5904cf2dbbd8ae853c4ded9f14834c7e192c4517a02759cf45cdc1ad13b8",
+  "context_labels": "POLICY and SCHEMA private, not issued",
+  "held": {
+    "params_length": 115,
+    "params_sha256": "cc218fae12bc05a595cdee533a29db7ff271a40d5842681946d7123aa22ad152",
+    "query_applicability_sha256": "a902a31c67a86d4cdb4b42a4988e0b9266382d2d61219b7f1131648de883db5e",
+    "query_sha256": "62f1b1a5b5f4a8f0db49f747fcdd1e9e1fd1d764a7ca9b4537396ed32366b5aa",
+    "source_sha256": "8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8",
+    "write_sha256": "274b6b8b643a18cf3adc2d398b98a6c591b73c54f7692e92b31cacfaf009831e"
+  },
+  "identity": {
+    "generation": 1,
+    "owner_key": "owner-core-4",
+    "session": "m1-private-session",
+    "transaction": "core-write-4",
+    "uri": "file:///w/a.go",
+    "wire_id": {
+      "type": "number",
+      "value": 40
+    },
+    "workspace": "file:///w"
+  },
+  "limitations": [
+    "not CheckB4a-validated until exact Go checker passes",
+    "not B4b chronology or issued selector",
+    "not public/production custody"
+  ],
+  "private_selectors": {
+    "CAPABILITY_EVENTS": "sha256:450ef132515257a69081728e88c07070234c741b200b80422ecb0e76bb0dd4bd",
+    "QUERY": "sha256:40b7a37fbeb5761cb896fd857f25aeb8592103c393f720034fed630a32c6042a",
+    "QUERY_APPLICABILITY": "sha256:5e53f8f9201dda2ef20c332927cf48d57203b463a84d478977c8a9755502f625",
+    "SOURCE": "sha256:b85a60fd0667a775a92a92e389882c31f61841a8c52e54a23afb786982296d14",
+    "transaction": "sha256:7218cb9959d58490b31565c42f1bfea19b21037ae0b9b639a8d5f099f4f5ed5e"
+  },
+  "status": "PRIVATE_M2B_CORE_WRITE4_PENDING_INDEPENDENT_REVIEW"
+}

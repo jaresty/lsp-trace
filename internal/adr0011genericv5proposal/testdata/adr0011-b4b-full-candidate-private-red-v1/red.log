@@ -1,0 +1,28 @@
+=== RUN   TestB4bFullCandidatePinnedMatrix
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE4
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE6
+    b4b_full_candidate_test.go:205: chronology outcome got UNKNOWN want SUPPORTED
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE8
+    b4b_full_candidate_test.go:205: chronology outcome got UNKNOWN want SUPPORTED
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE10
+    b4b_full_candidate_test.go:205: chronology outcome got UNKNOWN want SUPPORTED
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE12
+    b4b_full_candidate_test.go:205: chronology outcome got UNKNOWN want SUPPORTED
+=== RUN   TestB4bFullCandidatePinnedMatrix/CORE/WRITE14
+    b4b_full_candidate_test.go:205: chronology outcome got UNKNOWN want UNSUPPORTED
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20
+    b4b_full_candidate_test.go:205: chronology outcome got UNKNOWN want INVALID_CHRONOLOGY
+=== RUN   TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26
+    b4b_full_candidate_test.go:205: chronology outcome got UNKNOWN want MALFORMED
+--- FAIL: TestB4bFullCandidatePinnedMatrix (0.19s)
+    --- PASS: TestB4bFullCandidatePinnedMatrix/CORE/WRITE4 (0.03s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE6 (0.02s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE8 (0.02s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE10 (0.02s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE12 (0.02s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/CORE/WRITE14 (0.02s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/STATIC_VALID_CONFLICT/WRITE20 (0.02s)
+    --- FAIL: TestB4bFullCandidatePinnedMatrix/STATIC_MALFORMED_PRECEDENCE/WRITE26 (0.02s)
+FAIL
+FAIL	lsp-trace/internal/adr0011genericv5proposal	0.490s
+FAIL

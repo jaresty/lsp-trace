@@ -15,7 +15,7 @@ import (
 // expected digest or classification from a claimant envelope.
 func b4bHeldSuccessorAsset(t *testing.T, dir, name string, length int, digest string) []byte {
 	t.Helper()
-	p := filepath.Join("..", "..", ".pi", "evidence", dir, name)
+	p := filepath.Join("testdata", dir, name)
 	b, err := os.ReadFile(p)
 	if err != nil {
 		t.Fatalf("held %s: %v", p, err)

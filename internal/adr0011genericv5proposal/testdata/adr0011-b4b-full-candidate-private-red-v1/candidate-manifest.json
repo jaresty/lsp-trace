@@ -1,0 +1,27 @@
+{
+  "status": "PRIVATE_FULL_B4B_CANDIDATE_PENDING_INDEPENDENT_EXACT_BYTE_REVIEW",
+  "scope": "eight separately held synthetic references WRITEs only; implementation-only test candidate",
+  "files": [
+    {"path": "../../../internal/adr0011genericv5proposal/b4b_full_candidate.go", "sha256": "25059ec63fa5c2e72a89ae46b513dd8571bf9f54a8d06fb917d405763874a381"},
+    {"path": "../../../internal/adr0011genericv5proposal/b4b_full_candidate_test.go", "sha256": "1dca1caf536b56b710f077842c1d8b7ae3562ecd3638554de83227399e5b48dd"},
+    {"path": "red.log", "sha256": "f47f6396df8657547eecff801668b47673541a8dfaad8ba866f36e3fc49cd8e7"},
+    {"path": "green.log", "sha256": "ef5162c10e6f90f564bcf3ee212b529e33ba6a04756e0284739eacd6291ff6da"},
+    {"path": "attestation.json", "sha256": "261d5a4a28e616ad2b629e5994b971c37aecc6b8324249c7f0c3c7269cbb875b"}
+  ],
+  "predecessors": [
+    {"path": "../adr0011-b4b-multievent-held-originals-v1/manifest.json", "sha256": "f2984fd734c6ac81fe3d28ce59494a0ace1c19df046c51246dfaeaa75c762a8d"},
+    {"path": "../adr0011-b4b-multievent-ledger-correction-v1/manifest.json", "sha256": "4a9db86b72e83df7cc2d0390794bcd56135e4cd83620e09ff8d125de4434e474"},
+    {"path": "../adr0011-b4b-multievent-held-query-originals-v1/manifest.json", "sha256": "eb8b85d49163fb099f9347fc660e8ca7f2cae171ab8917f7d839aa4daea9a034"},
+    {"path": "../adr0011-b4b-multievent-capability-derived-v1/manifest.json", "sha256": "4e951a0bc247b40b9c5e81c2015d9778a2c06287c391a332d129a9a53f6f3d1a"},
+    {"path": "../adr0011-b4b-multievent-b4a-core-write4-v1/manifest.json", "sha256": "06a7de788395cbc96987a56d3f1bcdde944e9feaf2c8d8e63c22cc6334609cbf"},
+    {"path": "../adr0011-b4b-multievent-b4a-remaining-v1/manifest.json", "sha256": "2f8f3c56d3314e4714f9e94959013354eafbcf7545a1f386c9f78fcfc2c1933b"}
+  ],
+  "observations": {
+    "semantic_red": "compiled: WRITE4 UNKNOWN PASS and seven asserted outcomes FAIL; malformed-fixture first attempt retained separately, never counted as RED",
+    "green": "eight held matrix outcomes and nine in-memory selector falsifiers PASS; eight changed-CAP and eight changed-owner-key negatives PASS",
+    "package": "279 tests PASS, vet PASS",
+    "vectors": "V5/V3/V2 check PASS; frozen V5 11-path manifest check PASS",
+    "historical_baseline": "exact omitted-CALLS process-byte test PASS"
+  },
+  "limitations": "pending independent review; no accepted full B4b, C/D, issuance, admission, production custody, public authority or ADR0011 qualification"
+}

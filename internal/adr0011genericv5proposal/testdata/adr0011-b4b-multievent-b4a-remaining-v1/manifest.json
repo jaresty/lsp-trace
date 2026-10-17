@@ -1,0 +1,252 @@
+{
+  "assets": [
+    {
+      "length": 1689,
+      "path": "CORE/WRITE10/query-applicability-envelope.json",
+      "sha256": "c48e972e84eefa3be255c9fe8d025d0e99a635a97ed3a94be0b82f058768fc81"
+    },
+    {
+      "length": 1191,
+      "path": "CORE/WRITE10/query-envelope.json",
+      "sha256": "705abb0950c0ac7462b5b594e74ac3e3727984c10c2647d0f7fdb888951a41db"
+    },
+    {
+      "length": 1728,
+      "path": "CORE/WRITE10/request-write-envelope.json",
+      "sha256": "d370537baba70bea6dacbbc42300986f495612e2c2516f1d71f9d53ff6e01473"
+    },
+    {
+      "length": 275,
+      "path": "CORE/WRITE10/source-artifact.bin",
+      "sha256": "65c9c75569ad673d7f7092c934d62a3b2dce0fa43b11143decd13c661d7f81dc"
+    },
+    {
+      "length": 622,
+      "path": "CORE/WRITE10/source-envelope.json",
+      "sha256": "799dde7edc13b00993fb73f6763d333251d0ffd159c2306f53395ec058c4bf94"
+    },
+    {
+      "length": 1689,
+      "path": "CORE/WRITE12/query-applicability-envelope.json",
+      "sha256": "3adc184fea9b7e26705750cb8b48fb6f8fe6f3ba3bae08de4791548d7e7a3cc2"
+    },
+    {
+      "length": 1191,
+      "path": "CORE/WRITE12/query-envelope.json",
+      "sha256": "04ae1cd3bc836f5f362c7c798f051b8b0ac1412ab63cac9185ecc784a1c70e58"
+    },
+    {
+      "length": 1728,
+      "path": "CORE/WRITE12/request-write-envelope.json",
+      "sha256": "2cf114120dbe85699cb30c3187468a8b5ff3f48c4b78d0e2c4558b734bd59d35"
+    },
+    {
+      "length": 275,
+      "path": "CORE/WRITE12/source-artifact.bin",
+      "sha256": "2f98cec615a40e211dfc835f6c2d8330f9f779a096b6666fd9b13b777fbf7c0d"
+    },
+    {
+      "length": 622,
+      "path": "CORE/WRITE12/source-envelope.json",
+      "sha256": "a33bc8a4e4a51cffa38c645134e9ca6d68b7d563d4f370e1bcb0b23a105c0a86"
+    },
+    {
+      "length": 1689,
+      "path": "CORE/WRITE14/query-applicability-envelope.json",
+      "sha256": "1c59c6abf276a44cfd6668ac421a32078a63496d58e7a8eb61b437d5832ef08e"
+    },
+    {
+      "length": 1191,
+      "path": "CORE/WRITE14/query-envelope.json",
+      "sha256": "e51ceb7ace891041f09186d7b7097aa700537a0f716ed895cfd6022e14149965"
+    },
+    {
+      "length": 1728,
+      "path": "CORE/WRITE14/request-write-envelope.json",
+      "sha256": "5432c9e2e21e1f60e30e25c8aae3d495bc7e6819a3da159c62ee27d8405d3d9b"
+    },
+    {
+      "length": 275,
+      "path": "CORE/WRITE14/source-artifact.bin",
+      "sha256": "ea47788fca7c63087c9845130b25c3c52d8cf73bef45f9345e73f303708a293e"
+    },
+    {
+      "length": 622,
+      "path": "CORE/WRITE14/source-envelope.json",
+      "sha256": "b027b39e853cde065fc74cd99295cc37c4d640c4c5b813d1a8f5d02993483cdc"
+    },
+    {
+      "length": 1686,
+      "path": "CORE/WRITE6/query-applicability-envelope.json",
+      "sha256": "2d9b5ccf45b5998c2791c3d78fe98a0170dc09272411d894c621235f636a39ab"
+    },
+    {
+      "length": 1189,
+      "path": "CORE/WRITE6/query-envelope.json",
+      "sha256": "b9e05e4316a425197f257bc2083c9e371bce815ba837bde7863cdec61a800a26"
+    },
+    {
+      "length": 1725,
+      "path": "CORE/WRITE6/request-write-envelope.json",
+      "sha256": "0262004a48be9ed9ca3888c32d3eb1f68fe0e0e81870610747fa3eb8ed3880dd"
+    },
+    {
+      "length": 275,
+      "path": "CORE/WRITE6/source-artifact.bin",
+      "sha256": "9a4bc0a580d3b31a6c1d05608f2f2f6a6eeafd422f54d89ccd6bec5f5c6a95a3"
+    },
+    {
+      "length": 621,
+      "path": "CORE/WRITE6/source-envelope.json",
+      "sha256": "6f8fe0a65d2a4a245bf56327055f49ffa750cebe93d5ab396286af3bff881097"
+    },
+    {
+      "length": 1686,
+      "path": "CORE/WRITE8/query-applicability-envelope.json",
+      "sha256": "c45dde23140e15dfb560a13111b51e4a0b0266a1a720fc743ecde4edc9df8c29"
+    },
+    {
+      "length": 1189,
+      "path": "CORE/WRITE8/query-envelope.json",
+      "sha256": "707feb0c9c69bd3a298cab69f2950a2067b587630fc7b954363ded2102c95640"
+    },
+    {
+      "length": 1725,
+      "path": "CORE/WRITE8/request-write-envelope.json",
+      "sha256": "39f59d42abfcc4aed270b977b008e9a145e77bb9bcc3c09a8a5684678e014be4"
+    },
+    {
+      "length": 275,
+      "path": "CORE/WRITE8/source-artifact.bin",
+      "sha256": "f0154ed8002972523c78e2d9c79a1960ae2a2a93356443ef804ac5fca28afd08"
+    },
+    {
+      "length": 621,
+      "path": "CORE/WRITE8/source-envelope.json",
+      "sha256": "1caaa5935b78ad2b04eeecaffc7fb165e474c5d91700afa7a6cec51e2b4514ca"
+    },
+    {
+      "length": 1758,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-applicability-envelope.json",
+      "sha256": "f33f5a5f9354c0addcfaacce8e51c248bd5968117ea992ddd166f9bd23ca1cfc"
+    },
+    {
+      "length": 1237,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-envelope.json",
+      "sha256": "07e982affbabcbe50e7f00e0b18e497a16957183fef2a17786bdc068aded9661"
+    },
+    {
+      "length": 1843,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/request-write-envelope.json",
+      "sha256": "5159ff0b2bbe1c3f60e54ffb0621abc0d3eda8c4b6c8f2145755f0f76a3acaea"
+    },
+    {
+      "length": 275,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/source-artifact.bin",
+      "sha256": "afaaae32488824c4c0ff364f67a34a57420581a548311e952a84af73e00f6720"
+    },
+    {
+      "length": 691,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/source-envelope.json",
+      "sha256": "187571d06000b6f3e23e7dff6f0198325980850a6482b19ff5d3c0427b65d8f9"
+    },
+    {
+      "length": 1740,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query-applicability-envelope.json",
+      "sha256": "db42c424f79c6b69f2f080ff49d5285e53d5281b5395f294ecb58b2fa4bcf460"
+    },
+    {
+      "length": 1225,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query-envelope.json",
+      "sha256": "87e1d2712e93417c5492622241352af5956c124c291663b3cfe74a853473e758"
+    },
+    {
+      "length": 1813,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/request-write-envelope.json",
+      "sha256": "e76f988cce95defc511d36bdac9fe3c2965b326dbcc15288a7d0c00e77e8e440"
+    },
+    {
+      "length": 275,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/source-artifact.bin",
+      "sha256": "ff39cf1e88b098755741a5434dd35339c55ac75bb47eeb42e8dbbac3f7a6ce92"
+    },
+    {
+      "length": 673,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/source-envelope.json",
+      "sha256": "15dade9202e283c5d46b01a1818b02fcb72fe814741112ad1a875ad84257ccf6"
+    },
+    {
+      "length": 11632,
+      "path": "derivation.json",
+      "sha256": "230c7c50a36c4e3c5c1e532c35695f862ffd86ee268e6e4e0f557f833d359215"
+    }
+  ],
+  "checks": {
+    "accepted_go_A4Validate": "28/28 exact target-specific envelopes PASS",
+    "accepted_go_CheckB4a": "7/7 held original transaction correspondence PASS",
+    "capability_predecessors": "7/7 independently accepted A4 selector recomputation matched held M2A target artifact",
+    "negative_held_owner_key": "7/7 numeric-wire-derived substitution rejected",
+    "negative_held_query_original": "7/7 substituted original rejected"
+  },
+  "custody": "held M1 raw and M1B originals precede these target-specific synthetic claimant envelopes; accepted CORE WRITE4 is a separate pinned pilot",
+  "limitations": [
+    "private synthetic seven-target candidate pending independent exact-byte review",
+    "POLICY and SCHEMA private context labels are not issued selectors",
+    "ledger predictions are not observed B4b classifications",
+    "CORE WRITE4 separately accepted only for private correspondence",
+    "no full B4b, C/D, admission, production custody, or public authority"
+  ],
+  "predecessors": [
+    {
+      "path": "../adr0011-b4b-multievent-held-originals-v1/manifest.json",
+      "sha256": "f2984fd734c6ac81fe3d28ce59494a0ace1c19df046c51246dfaeaa75c762a8d"
+    },
+    {
+      "path": "../adr0011-b4b-multievent-ledger-correction-v1/manifest.json",
+      "sha256": "4a9db86b72e83df7cc2d0390794bcd56135e4cd83620e09ff8d125de4434e474"
+    },
+    {
+      "path": "../adr0011-b4b-multievent-held-query-originals-v1/manifest.json",
+      "sha256": "eb8b85d49163fb099f9347fc660e8ca7f2cae171ab8917f7d839aa4daea9a034"
+    },
+    {
+      "path": "../adr0011-b4b-multievent-capability-derived-v1/manifest.json",
+      "sha256": "4e951a0bc247b40b9c5e81c2015d9778a2c06287c391a332d129a9a53f6f3d1a"
+    },
+    {
+      "path": "../adr0011-b4b-multievent-b4a-core-write4-v1/manifest.json",
+      "sha256": "06a7de788395cbc96987a56d3f1bcdde944e9feaf2c8d8e63c22cc6334609cbf"
+    }
+  ],
+  "status": "PRIVATE_SYNTHETIC_M2B_SEVEN_REMAINING_PENDING_INDEPENDENT_REVIEW",
+  "targets": [
+    {
+      "scenario": "CORE",
+      "write_ordinal": 6
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 8
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 10
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 12
+    },
+    {
+      "scenario": "CORE",
+      "write_ordinal": 14
+    },
+    {
+      "scenario": "STATIC_VALID_CONFLICT",
+      "write_ordinal": 20
+    },
+    {
+      "scenario": "STATIC_MALFORMED_PRECEDENCE",
+      "write_ordinal": 26
+    }
+  ]
+}

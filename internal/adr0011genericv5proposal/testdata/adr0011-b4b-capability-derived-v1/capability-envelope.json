@@ -1,0 +1,139 @@
+{
+  "role": "CAPABILITY_EVENTS",
+  "identity": {
+    "session": "s",
+    "generation": 1,
+    "transaction": "tx"
+  },
+  "original": {
+    "length": 1829,
+    "sha256": "sha256:d0d36273d838e9546ff8ceb9cef05d3549f3b4385892fa8b28ffd0ecdaaa951c",
+    "private_ref": "held-derived:capability-artifact.bin"
+  },
+  "predecessors": [],
+  "payload": {
+    "initialize": {
+      "request_direction": "CLIENT_TO_SERVER",
+      "request_frame": {
+        "length": 137,
+        "sha256": "sha256:5ee617aa7efa8cb1ad34e6d170be201f02f612681b4b7973fea53d5fefb3493f",
+        "private_ref": "held:00-initialize-request.frame"
+      },
+      "request_id": 1,
+      "request_method": "initialize",
+      "request_params": {
+        "processId": null,
+        "rootUri": "file:///w",
+        "capabilities": {}
+      },
+      "request_frame_ordinal": 0,
+      "response_direction": "SERVER_TO_CLIENT",
+      "response_frame": {
+        "length": 75,
+        "sha256": "sha256:7ac854e3d04180081bede182be1f7aae87451541bcbe6c7dbb758643806e0730",
+        "private_ref": "held:01-initialize-response.frame"
+      },
+      "response_id": 1,
+      "response_frame_ordinal": 1,
+      "response_status": "SUCCESS",
+      "response_result": {
+        "capabilities": {}
+      },
+      "response_error": null,
+      "target_write_frame_ordinal": 5
+    },
+    "initialized_notification": {
+      "direction": "CLIENT_TO_SERVER",
+      "frame_ordinal": 2,
+      "frame": {
+        "length": 74,
+        "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62",
+        "private_ref": "held:02-initialized.frame"
+      }
+    },
+    "events": [
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 209,
+          "sha256": "sha256:fb902a3fe0804127b305745e079214c23483d11277141d32521869e9f017d2a5",
+          "private_ref": "held:03-register-request.frame"
+        },
+        "request_id": "r",
+        "request_method": "client/registerCapability",
+        "request_params": {
+          "registrations": [
+            {
+              "id": "reg-1",
+              "method": "textDocument/references",
+              "registerOptions": {
+                "documentSelector": null
+              }
+            }
+          ]
+        },
+        "request_frame_ordinal": 3,
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_frame": {
+          "length": 62,
+          "sha256": "sha256:d9837db167818799d86feb8cba9a998322ae9cc2f97d83bfade94f02e3b47fd9",
+          "private_ref": "held:04-register-response.frame"
+        },
+        "response_id": "r",
+        "response_frame_ordinal": 4,
+        "response_status": "SUCCESS",
+        "response_result": null,
+        "response_error": null,
+        "target_write_frame_ordinal": 5
+      }
+    ],
+    "target_write_frame_ordinal": 5,
+    "observed_frames": [
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame_ordinal": 0,
+        "frame": {
+          "length": 137,
+          "sha256": "sha256:5ee617aa7efa8cb1ad34e6d170be201f02f612681b4b7973fea53d5fefb3493f",
+          "private_ref": "held:00-initialize-request.frame"
+        }
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame_ordinal": 1,
+        "frame": {
+          "length": 75,
+          "sha256": "sha256:7ac854e3d04180081bede182be1f7aae87451541bcbe6c7dbb758643806e0730",
+          "private_ref": "held:01-initialize-response.frame"
+        }
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame_ordinal": 2,
+        "frame": {
+          "length": 74,
+          "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62",
+          "private_ref": "held:02-initialized.frame"
+        }
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame_ordinal": 3,
+        "frame": {
+          "length": 209,
+          "sha256": "sha256:fb902a3fe0804127b305745e079214c23483d11277141d32521869e9f017d2a5",
+          "private_ref": "held:03-register-request.frame"
+        }
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame_ordinal": 4,
+        "frame": {
+          "length": 62,
+          "sha256": "sha256:d9837db167818799d86feb8cba9a998322ae9cc2f97d83bfade94f02e3b47fd9",
+          "private_ref": "held:04-register-response.frame"
+        }
+      }
+    ]
+  }
+}
