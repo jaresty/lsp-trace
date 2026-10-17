@@ -93,7 +93,7 @@ func runSuccessfulExperimentalHandoff(t *testing.T, deps experimentalHandoffDepe
 	code := runExperimentalHandoffWithDependencies(context.Background(), []string{
 		"prepare", "--publication-root", "/private/root",
 		"--checkpoint-selector", "sha256:" + strings.Repeat("a", 64),
-	}, &stdout, &stderr, deps)
+	}, strings.NewReader(""), &stdout, &stderr, deps)
 	return stdout.String(), stderr.String(), code
 }
 
@@ -110,7 +110,7 @@ func TestExperimentalHandoffExplicitOnly(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	if code := runExperimentalHandoffWithDependencies(context.Background(), nil, &stdout, &stderr, deps); code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), experimentalHandoffUsage) || opened != 0 || prepared != 0 {
+	if code := runExperimentalHandoffWithDependencies(context.Background(), nil, strings.NewReader(""), &stdout, &stderr, deps); code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), experimentalHandoffUsage) || opened != 0 || prepared != 0 {
 		t.Fatalf("%s: code=%d stdout=%q stderr=%q opened=%d prepared=%d", assertExperimentalHandoffExplicitOnly, code, stdout.String(), stderr.String(), opened, prepared)
 	}
 	beforeOut, beforeErr, beforeCode := captureRun(t, []string{"version"})
@@ -176,7 +176,7 @@ func TestExperimentalHandoffFailsBeforePut(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runExperimentalHandoffWithDependencies(context.Background(), []string{"prepare", "--publication-root", "/bad", "--checkpoint-selector", "stale"}, &stdout, &stderr, deps)
+	code := runExperimentalHandoffWithDependencies(context.Background(), []string{"prepare", "--publication-root", "/bad", "--checkpoint-selector", "stale"}, strings.NewReader(""), &stdout, &stderr, deps)
 	if code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "checkpoint rejected") || store.puts != 0 {
 		t.Fatalf("%s: code=%d stdout=%q stderr=%q puts=%d", assertExperimentalHandoffFailsBeforePut, code, stdout.String(), stderr.String(), store.puts)
 	}
@@ -216,7 +216,7 @@ func TestExperimentalHandoffContextCloseAndHelp(t *testing.T) {
 					},
 				}
 				var stdout, stderr bytes.Buffer
-				code := runExperimentalHandoffWithDependencies(ctx, []string{"prepare", "--publication-root", "/root", "--checkpoint-selector", checkpoint}, &stdout, &stderr, deps)
+				code := runExperimentalHandoffWithDependencies(ctx, []string{"prepare", "--publication-root", "/root", "--checkpoint-selector", checkpoint}, strings.NewReader(""), &stdout, &stderr, deps)
 				if code != 130 || !closed || stdout.Len() != 0 || !strings.Contains(stderr.String(), tc.prepareErr.Error()) || (tc.closeErr != nil && !strings.Contains(stderr.String(), tc.closeErr.Error())) {
 					t.Fatalf("code=%d closed=%t stdout=%q stderr=%q", code, closed, stdout.String(), stderr.String())
 				}
@@ -241,7 +241,7 @@ func TestExperimentalHandoffContextCloseAndHelp(t *testing.T) {
 				}
 				return stdout.Write(p)
 			})
-			code := runExperimentalHandoffWithDependencies(context.Background(), []string{"prepare", "--publication-root", "/root", "--checkpoint-selector", checkpoint}, writer, &stderr, deps)
+			code := runExperimentalHandoffWithDependencies(context.Background(), []string{"prepare", "--publication-root", "/root", "--checkpoint-selector", checkpoint}, strings.NewReader(""), writer, &stderr, deps)
 			if closeErr == nil && (code != 0 || stdout.Len() == 0 || stderr.Len() != 0) {
 				t.Fatalf("success code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 			}
@@ -252,7 +252,7 @@ func TestExperimentalHandoffContextCloseAndHelp(t *testing.T) {
 	})
 	for _, args := range [][]string{{"prepare", "--help"}, {"--help"}} {
 		var stdout, stderr bytes.Buffer
-		code := runExperimentalHandoffWithDependencies(context.Background(), args, &stdout, &stderr, experimentalHandoffDependencies{})
+		code := runExperimentalHandoffWithDependencies(context.Background(), args, strings.NewReader(""), &stdout, &stderr, experimentalHandoffDependencies{})
 		if code != 0 || stdout.Len() != 0 || strings.Contains(stderr.String(), "HANDOFF_PREPARED") || !strings.Contains(stderr.String(), "experimental-handoff") {
 			t.Fatalf("help args=%v code=%d stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
 		}
@@ -379,7 +379,7 @@ func experimentalHandoffObjectInventory(t *testing.T, root string) map[string]st
 func runProductionExperimentalHandoff(t *testing.T, ctx context.Context, root, checkpoint string) (string, string, int) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := runExperimentalHandoff(ctx, []string{"prepare", "--publication-root", root, "--checkpoint-selector", checkpoint}, &stdout, &stderr)
+	code := runExperimentalHandoff(ctx, []string{"prepare", "--publication-root", root, "--checkpoint-selector", checkpoint}, strings.NewReader(""), &stdout, &stderr)
 	return stdout.String(), stderr.String(), code
 }
 
@@ -503,7 +503,7 @@ func TestExperimentalHandoffLegacyUnchanged(t *testing.T) {
 	calls := 0
 	_, _, _ = runSuccessfulExperimentalHandoff(t, successfulExperimentalHandoffDependencies(store, &calls))
 	afterOut, afterErr, afterCode := captureRun(t, []string{"version"})
-	commandUsage := strings.TrimPrefix(experimentalHandoffUsage, "usage: ")
+	commandUsage := strings.TrimPrefix(strings.Split(experimentalHandoffUsage, "\n")[0], "usage: ")
 	if strings.Count(usageText, commandUsage) != 1 || beforeCode != afterCode || beforeOut != afterOut || beforeErr != afterErr {
 		t.Fatalf("%s: ordinary command bytes changed", assertExperimentalHandoffLegacyUnchanged)
 	}
