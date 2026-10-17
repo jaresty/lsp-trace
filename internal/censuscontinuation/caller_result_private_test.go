@@ -426,7 +426,10 @@ func TestPrivateCallerResultParserRejectsRetainedMutations(t *testing.T) {
 		"canonical-semantic": func(w *privateCallerResultWire) {
 			var arm privateCallerSemanticOutcome
 			_ = json.Unmarshal(w.Results[0].Outcome, &arm)
-			arm.CanonicalSemantic = privateCallerSuccessSemantic("ABSTAINED", []string{"changed"})
+			// Keep the SUCCESS/COMPLETE semantic payload valid while making its
+			// byte representation noncanonical. Recompute every enclosing digest
+			// so canonical-byte validation is the sole failing invariant.
+			arm.CanonicalSemantic = append([]byte(" "), arm.CanonicalSemantic...)
 			arm.RawSemanticSHA256 = digestOf(arm.CanonicalSemantic)
 			arm.RawSemanticByteLength = uint64(len(arm.CanonicalSemantic))
 			w.Results[0].Outcome, _ = json.Marshal(arm)
@@ -641,7 +644,11 @@ func TestPrivateCallerResultRejectsCheckpointStageStatusAndMembershipBeforePut(t
 			if err != nil {
 				t.Fatal(err)
 			}
-			preparedSelector := privateCallerStorePreparedForCheckpoint(t, store, prepared, selector, wire.CheckpointID, digestOf([]byte(name)))
+			mutatedChain := append(append([]Checkpoint(nil), chain[:len(chain)-1]...), Checkpoint{wire: wire})
+			preparedSelector := privateCallerStorePreparedForCheckpoint(t, store, prepared, selector, wire.CheckpointID, privateCallerChainIdentity(mutatedChain))
+			if _, err := VerifyChain(context.Background(), store, selector); err == nil || !strings.Contains(err.Error(), "checkpoint artifact membership mismatch") {
+				t.Fatalf("VerifyChain err=%v", err)
+			}
 			observed := &privateHandoffObservingStore{Store: store}
 			if _, err := RetainPrivateCallerResultSelector(context.Background(), observed, preparedSelector, submission); err == nil || observed.puts != 0 {
 				t.Fatalf("err=%v puts=%d", err, observed.puts)
