@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -178,6 +179,55 @@ func groupByChallengeID(p privateGroupingArtifact, id string) privateGroupingGro
 		}
 	}
 	return privateGroupingGroup{}
+}
+
+func TestPrivateGroupChallengeArtifactWideWorkBound(t *testing.T) {
+	bounds := privateGroupChallengeFrozenBounds()
+	if bounds.MaxWork != privateGroupChallengeMaxWork {
+		t.Fatalf("MaxWork=%d want=%d", bounds.MaxWork, privateGroupChallengeMaxWork)
+	}
+	atLimit := [][][]string{{make([]string, bounds.MaxWork-5)}, {{}}}
+	if err := validatePrivateGroupChallengeWork(2, atLimit, 1, nil, bounds.MaxWork); err != nil {
+		t.Fatalf("at limit: %v", err)
+	}
+	firstHalf := bounds.MaxWork / 2
+	plusOne := [][][]string{{make([]string, firstHalf)}, {make([]string, bounds.MaxWork-3-firstHalf)}}
+	if err := validatePrivateGroupChallengeWork(2, plusOne, 0, nil, bounds.MaxWork); err == nil || err.Error() != "private group challenge work limit" {
+		t.Fatalf("distributed plus one: %v", err)
+	}
+	if err := validatePrivateGroupChallengeWork(math.MaxInt, nil, 1, nil, math.MaxInt); err == nil || err.Error() != "private group challenge work limit" {
+		t.Fatalf("overflow-safe oversized count: %v", err)
+	}
+
+	store, selector, predecessor := privateGroupChallengeFixture(t)
+	raw := privateGroupChallengeSubmission(t, predecessor, map[string]string{privateGroupingSemantic: privateChallengeRetain, privateGroupingSingleton: privateChallengeRetain}, privateChallengeRetain)
+	var submission privateGroupChallengeSubmissionWire
+	if err := json.Unmarshal(raw, &submission); err != nil {
+		t.Fatal(err)
+	}
+	for i := range submission.GroupChallenges {
+		submission.GroupChallenges[i].ProposedCandidateGroups = make([][]string, 6_000)
+	}
+	raw, err := json.Marshal(submission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fault := &privateGroupChallengeFaultStore{Store: store}
+	if got, err := RetainPrivateGroupChallengeSelector(context.Background(), fault, selector, raw); err == nil || err.Error() != "private group challenge work limit" || got != "" || fault.puts != 0 {
+		t.Fatalf("distributed rejection selector=%q err=%v puts=%d", got, err, fault.puts)
+	}
+}
+
+func TestPrivateGroupChallengeProfileDigestIncludesMaxWork(t *testing.T) {
+	const want = "sha256:686743b48acb3bbc29ae9e66a83b24194deff07b42a50970968bbe66533c7b2e"
+	if got := privateGroupChallengeComputedProfileDigest(); got != want {
+		t.Fatalf("profile digest=%s want=%s", got, want)
+	}
+	bounds := privateGroupChallengeFrozenBounds()
+	bounds.MaxWork++
+	if got := identityJSON(privateGroupChallengeProfileDomain, bounds, func(*privateGroupChallengeBounds) {}); got == privateGroupChallengeComputedProfileDigest() {
+		t.Fatal("MaxWork mutation did not change profile digest")
+	}
 }
 
 func TestPrivateGroupChallengeStrictWireBoundsAndForbiddenFields(t *testing.T) {

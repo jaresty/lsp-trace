@@ -22,9 +22,10 @@ const (
 	privateGroupChallengeMaxAlternatives  = 4096
 	privateGroupChallengeMaxCandidates    = 4096
 	privateGroupChallengeMaxMemberships   = 4096
+	privateGroupChallengeMaxWork          = 16_384
 )
 
-const privateGroupChallengeProfileDigestPin = "sha256:0016f4c547f24d16c33616b62db9ccad17d73380b783a5692d268c86e6ef5b28"
+const privateGroupChallengeProfileDigestPin = "sha256:686743b48acb3bbc29ae9e66a83b24194deff07b42a50970968bbe66533c7b2e"
 
 const (
 	privateChallengeRetain     = "RETAIN"
@@ -60,6 +61,7 @@ type privateGroupChallengeBounds struct {
 	MaxProcessRefUTF8Bytes int `json:"max_process_ref_utf8_bytes"`
 	MaxRecordRefUTF8Bytes  int `json:"max_record_ref_utf8_bytes"`
 	MaxArtifactBytes       int `json:"max_artifact_bytes"`
+	MaxWork                int `json:"max_work"`
 }
 type privateGroupChallengeRecord struct {
 	RecordID                string     `json:"record_id"`
@@ -116,7 +118,16 @@ type privateGroupChallengeArtifact struct {
 func (a privateGroupChallengeArtifact) ID() string { return a.wire.ArtifactID }
 
 func privateGroupChallengeFrozenBounds() privateGroupChallengeBounds {
-	return privateGroupChallengeBounds{privateGroupChallengeMaxGroups, privateGroupChallengeMaxAlternatives, privateGroupChallengeMaxCandidates, privateGroupChallengeMaxMemberships, privateGroupChallengeMaxRefBytes, privateGroupChallengeMaxRefBytes, privateGroupChallengeMaxBytes}
+	return privateGroupChallengeBounds{
+		MaxGroups:              privateGroupChallengeMaxGroups,
+		MaxAlternatives:        privateGroupChallengeMaxAlternatives,
+		MaxCandidatesPerGroup:  privateGroupChallengeMaxCandidates,
+		MaxProposalMemberships: privateGroupChallengeMaxMemberships,
+		MaxProcessRefUTF8Bytes: privateGroupChallengeMaxRefBytes,
+		MaxRecordRefUTF8Bytes:  privateGroupChallengeMaxRefBytes,
+		MaxArtifactBytes:       privateGroupChallengeMaxBytes,
+		MaxWork:                privateGroupChallengeMaxWork,
+	}
 }
 func privateGroupChallengeProfileDigest() string { return privateGroupChallengeProfileDigestPin }
 func privateGroupChallengeComputedProfileDigest() string {
@@ -127,6 +138,63 @@ func privateChallengeVerdict(v string, split bool) bool {
 }
 func boundedChallengeRef(v string, max int) bool {
 	return v != "" && utf8.ValidString(v) && len([]byte(v)) <= max
+}
+
+// Challenge work is one unit for each group challenge, alternative challenge,
+// proposed candidate group, proposal candidate membership, and proposed group
+// reference traversed by validation.
+func validatePrivateGroupChallengeWork(groupChallenges int, proposedGroups [][][]string, alternativeChallenges int, proposedGroupRefs []*[]string, maxWork int) error {
+	remaining := maxWork
+	charge := func(units int) bool {
+		if units < 0 || units > remaining {
+			return false
+		}
+		remaining -= units
+		return true
+	}
+	if !charge(groupChallenges) || !charge(alternativeChallenges) {
+		return errors.New("private group challenge work limit")
+	}
+	for _, groups := range proposedGroups {
+		if !charge(len(groups)) {
+			return errors.New("private group challenge work limit")
+		}
+		for _, group := range groups {
+			if !charge(len(group)) {
+				return errors.New("private group challenge work limit")
+			}
+		}
+	}
+	for _, refs := range proposedGroupRefs {
+		if refs != nil && !charge(len(*refs)) {
+			return errors.New("private group challenge work limit")
+		}
+	}
+	return nil
+}
+
+func validatePrivateGroupChallengeSubmissionWork(w privateGroupChallengeSubmissionWire, maxWork int) error {
+	groups := make([][][]string, len(w.GroupChallenges))
+	for i := range w.GroupChallenges {
+		groups[i] = w.GroupChallenges[i].ProposedCandidateGroups
+	}
+	refs := make([]*[]string, len(w.AlternativeChallenges))
+	for i := range w.AlternativeChallenges {
+		refs[i] = w.AlternativeChallenges[i].ProposedGroupRefs
+	}
+	return validatePrivateGroupChallengeWork(len(w.GroupChallenges), groups, len(w.AlternativeChallenges), refs, maxWork)
+}
+
+func validatePrivateGroupChallengeArtifactWork(w privateGroupChallengeArtifactWire, maxWork int) error {
+	groups := make([][][]string, len(w.GroupChallenges))
+	for i := range w.GroupChallenges {
+		groups[i] = w.GroupChallenges[i].ProposedCandidateGroups
+	}
+	refs := make([]*[]string, len(w.AlternativeChallenges))
+	for i := range w.AlternativeChallenges {
+		refs[i] = w.AlternativeChallenges[i].ProposedGroupRefs
+	}
+	return validatePrivateGroupChallengeWork(len(w.GroupChallenges), groups, len(w.AlternativeChallenges), refs, maxWork)
 }
 
 func parsePrivateGroupChallengeSubmission(raw []byte) (privateGroupChallengeSubmissionWire, error) {
@@ -143,6 +211,9 @@ func parsePrivateGroupChallengeSubmission(raw []byte) (privateGroupChallengeSubm
 	}
 	if w.RecordRef != nil && !boundedChallengeRef(*w.RecordRef, b.MaxRecordRefUTF8Bytes) {
 		return w, errors.New("private group challenge record ref invalid")
+	}
+	if err := validatePrivateGroupChallengeSubmissionWork(w, b.MaxWork); err != nil {
+		return w, err
 	}
 	return w, nil
 }
@@ -223,6 +294,9 @@ func (a privateGroupChallengeArtifact) validate() error {
 	}
 	if len(w.GroupChallenges) > b.MaxGroups || len(w.AlternativeChallenges) > b.MaxAlternatives {
 		return errors.New("private group challenge count limit")
+	}
+	if err := validatePrivateGroupChallengeArtifactWork(w, b.MaxWork); err != nil {
+		return err
 	}
 	groupTargets := map[string]bool{}
 	for i, r := range w.GroupChallenges {
