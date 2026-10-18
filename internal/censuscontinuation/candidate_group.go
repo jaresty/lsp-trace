@@ -670,21 +670,25 @@ func sealCandidateGroup(a CandidateGroupArtifact) string {
 }
 
 const (
-	privateGroupingSubmissionSchema  = "lsp-trace.census-grouping-hypothesis-submission.private.v1"
-	privateGroupingArtifactSchema    = "lsp-trace.census-grouping-hypothesis.private.v1"
-	privateGroupingProfileID         = "census-grouping-hypothesis-private-v1"
-	privateGroupingProfileDomain     = "lsp-trace:census-grouping-hypothesis-profile:private:v1"
-	privateGroupingArtifactDomain    = "lsp-trace:census-grouping-hypothesis-artifact:private:v1"
-	privateGroupingGroupDomain       = "lsp-trace:census-grouping-hypothesis-group:private:v1"
-	privateGroupingAlternativeDomain = "lsp-trace:census-grouping-hypothesis-alternative:private:v1"
-	privateGroupingSemantic          = "SEMANTIC_HYPOTHESIS"
-	privateGroupingSingleton         = "MECHANICAL_SINGLETON"
-	privateGroupingMaxBytes          = 1 << 20
-	privateGroupingMaxGroups         = 1024
-	privateGroupingMaxMemberships    = 4096
-	privateGroupingMaxAlternatives   = 4096
-	privateGroupingMaxSemanticBytes  = 4096
-	privateGroupingMaxConditions     = 256
+	privateGroupingSubmissionSchema   = "lsp-trace.census-grouping-hypothesis-submission.private.v1"
+	privateGroupingArtifactSchema     = "lsp-trace.census-grouping-hypothesis.private.v1"
+	privateGroupingProfileID          = "census-grouping-hypothesis-private-v1"
+	privateGroupingProfileDigestPin   = "sha256:d390f61a23d62fdc533b6ee32e78511f9c583699811a8f3b9a17c237a3c99841"
+	privateGroupingProfileDomain      = "lsp-trace:census-grouping-hypothesis-profile:private:v1"
+	privateGroupingArtifactDomain     = "lsp-trace:census-grouping-hypothesis-artifact:private:v1"
+	privateGroupingGroupDomain        = "lsp-trace:census-grouping-hypothesis-group:private:v1"
+	privateGroupingAlternativeDomain  = "lsp-trace:census-grouping-hypothesis-alternative:private:v1"
+	privateGroupingSemantic           = "SEMANTIC_HYPOTHESIS"
+	privateGroupingSingleton          = "MECHANICAL_SINGLETON"
+	privateGroupingMaxBytes           = 1 << 20
+	privateGroupingMaxGroups          = 1024
+	privateGroupingMaxCandidates      = 4096
+	privateGroupingMaxMembersPerGroup = 4096
+	privateGroupingMaxMemberships     = 4096
+	privateGroupingMaxAlternatives    = 4096
+	privateGroupingMaxClientKeyBytes  = 256
+	privateGroupingMaxSemanticBytes   = 4096
+	privateGroupingMaxConditions      = 256
 )
 
 type privateGroupingSubmissionWire struct {
@@ -707,13 +711,17 @@ type privateGroupingSubmissionAlternative struct {
 }
 type privateGroupingBounds struct {
 	MaxGroups                      int `json:"max_groups"`
+	MaxCandidates                  int `json:"max_candidates"`
+	MaxMembersPerGroup             int `json:"max_members_per_group"`
 	MaxMemberships                 int `json:"max_memberships"`
 	MaxAlternatives                int `json:"max_alternatives"`
+	MaxClientGroupKeyUTF8Bytes     int `json:"max_client_group_key_utf8_bytes"`
 	MaxSemanticUTF8Bytes           int `json:"max_semantic_utf8_bytes"`
 	MaxRejectionConditionsPerGroup int `json:"max_rejection_conditions_per_group"`
 	MaxArtifactBytes               int `json:"max_artifact_bytes"`
 }
 type privateGroupingSnapshot struct {
+	Ordinal           int    `json:"ordinal"`
 	CandidateID       string `json:"candidate_id"`
 	DescriptionID     string `json:"description_id"`
 	OutcomeDigest     string `json:"outcome_digest"`
@@ -777,67 +785,88 @@ type privateGroupingArtifact struct{ wire privateGroupingArtifactWire }
 func (a privateGroupingArtifact) ID() string { return a.wire.ArtifactID }
 
 func privateGroupingFrozenBounds() privateGroupingBounds {
-	return privateGroupingBounds{privateGroupingMaxGroups, privateGroupingMaxMemberships, privateGroupingMaxAlternatives, privateGroupingMaxSemanticBytes, privateGroupingMaxConditions, privateGroupingMaxBytes}
+	return privateGroupingBounds{
+		MaxGroups:                      privateGroupingMaxGroups,
+		MaxCandidates:                  privateGroupingMaxCandidates,
+		MaxMembersPerGroup:             privateGroupingMaxMembersPerGroup,
+		MaxMemberships:                 privateGroupingMaxMemberships,
+		MaxAlternatives:                privateGroupingMaxAlternatives,
+		MaxClientGroupKeyUTF8Bytes:     privateGroupingMaxClientKeyBytes,
+		MaxSemanticUTF8Bytes:           privateGroupingMaxSemanticBytes,
+		MaxRejectionConditionsPerGroup: privateGroupingMaxConditions,
+		MaxArtifactBytes:               privateGroupingMaxBytes,
+	}
 }
-func privateGroupingProfileDigest() string {
+func privateGroupingProfileDigest() string { return privateGroupingProfileDigestPin }
+func privateGroupingComputedProfileDigest() string {
 	return identityJSON(privateGroupingProfileDomain, privateGroupingFrozenBounds(), func(*privateGroupingBounds) {})
 }
 
+func validatePrivateGroupingGroup(clientKey, kind string, candidateIDs []string, label, claim, basis string, conditions []string, bounds privateGroupingBounds) error {
+	if clientKey == "" || !utf8.ValidString(clientKey) || len([]byte(clientKey)) > bounds.MaxClientGroupKeyUTF8Bytes || candidateIDs == nil || len(candidateIDs) == 0 || len(candidateIDs) > bounds.MaxMembersPerGroup || conditions == nil {
+		return errors.New("private grouping group shape")
+	}
+	for i, id := range candidateIDs {
+		if !validDigest(id) || (i > 0 && candidateIDs[i-1] >= id) {
+			return errors.New("private grouping candidate canonicality")
+		}
+	}
+	for _, text := range []string{label, claim, basis} {
+		if !utf8.ValidString(text) || len([]byte(text)) > bounds.MaxSemanticUTF8Bytes {
+			return errors.New("private grouping semantic limit")
+		}
+	}
+	switch kind {
+	case privateGroupingSemantic:
+		if label == "" || claim == "" || basis == "" || len(conditions) == 0 || len(conditions) > bounds.MaxRejectionConditionsPerGroup {
+			return errors.New("private grouping semantic group invalid")
+		}
+		for i, condition := range conditions {
+			if condition == "" || !utf8.ValidString(condition) || len([]byte(condition)) > bounds.MaxSemanticUTF8Bytes || (i > 0 && conditions[i-1] >= condition) {
+				return errors.New("private grouping rejection canonicality")
+			}
+		}
+	case privateGroupingSingleton:
+		if len(candidateIDs) != 1 || label != "" || claim != "" || basis != "" || len(conditions) != 0 {
+			return errors.New("private grouping singleton invalid")
+		}
+	default:
+		return errors.New("private grouping kind invalid")
+	}
+	return nil
+}
+
+func privateGroupingPairOutOfOrder(previousLeft, previousRight, left, right string) bool {
+	return previousLeft > left || (previousLeft == left && previousRight >= right)
+}
+
 func parsePrivateGroupingSubmission(raw []byte) (privateGroupingSubmissionWire, error) {
-	if len(raw) == 0 || len(raw) > privateGroupingMaxBytes {
+	bounds := privateGroupingFrozenBounds()
+	if len(raw) == 0 || len(raw) > bounds.MaxArtifactBytes {
 		return privateGroupingSubmissionWire{}, errors.New("private grouping submission byte limit")
 	}
 	var w privateGroupingSubmissionWire
 	if err := strictCanonical(raw, &w); err != nil {
 		return w, err
 	}
-	if w.SchemaVersion != privateGroupingSubmissionSchema || w.Groups == nil || w.Alternatives == nil || len(w.Groups) == 0 || len(w.Groups) > privateGroupingMaxGroups || len(w.Alternatives) > privateGroupingMaxAlternatives {
+	if w.SchemaVersion != privateGroupingSubmissionSchema || w.Groups == nil || w.Alternatives == nil || len(w.Groups) == 0 || len(w.Groups) > bounds.MaxGroups || len(w.Alternatives) > bounds.MaxAlternatives {
 		return w, errors.New("private grouping submission invalid")
 	}
-	keys, semantic, candidates := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	keys, semantic := map[string]bool{}, map[string]bool{}
 	memberships := 0
 	for i, g := range w.Groups {
-		if g.ClientGroupKey == "" || !utf8.ValidString(g.ClientGroupKey) || keys[g.ClientGroupKey] || (i > 0 && w.Groups[i-1].ClientGroupKey >= g.ClientGroupKey) || g.CandidateIDs == nil || len(g.CandidateIDs) == 0 || g.RejectionConditions == nil {
+		if keys[g.ClientGroupKey] || (i > 0 && w.Groups[i-1].ClientGroupKey >= g.ClientGroupKey) || validatePrivateGroupingGroup(g.ClientGroupKey, g.Kind, g.CandidateIDs, g.Label, g.Claim, g.Basis, g.RejectionConditions, bounds) != nil {
 			return w, errors.New("private grouping group canonicality")
 		}
 		keys[g.ClientGroupKey] = true
 		memberships += len(g.CandidateIDs)
-		if memberships > privateGroupingMaxMemberships {
+		if memberships > bounds.MaxMemberships {
 			return w, errors.New("private grouping membership limit")
 		}
-		for j, id := range g.CandidateIDs {
-			if !validDigest(id) || (j > 0 && g.CandidateIDs[j-1] >= id) {
-				return w, errors.New("private grouping candidate canonicality")
-			}
-			candidates[id] = true
-		}
-		for _, s := range []string{g.Label, g.Claim, g.Basis} {
-			if !utf8.ValidString(s) || len([]byte(s)) > privateGroupingMaxSemanticBytes {
-				return w, errors.New("private grouping semantic limit")
-			}
-		}
-		switch g.Kind {
-		case privateGroupingSemantic:
-			if g.Label == "" || g.Claim == "" || g.Basis == "" || len(g.RejectionConditions) == 0 || len(g.RejectionConditions) > privateGroupingMaxConditions {
-				return w, errors.New("private grouping semantic group invalid")
-			}
-			semantic[g.ClientGroupKey] = true
-			for j, condition := range g.RejectionConditions {
-				if condition == "" || !utf8.ValidString(condition) || len([]byte(condition)) > privateGroupingMaxSemanticBytes || (j > 0 && g.RejectionConditions[j-1] >= condition) {
-					return w, errors.New("private grouping rejection canonicality")
-				}
-			}
-		case privateGroupingSingleton:
-			if len(g.CandidateIDs) != 1 || g.Label != "" || g.Claim != "" || g.Basis != "" || len(g.RejectionConditions) != 0 {
-				return w, errors.New("private grouping singleton invalid")
-			}
-		default:
-			return w, errors.New("private grouping kind invalid")
-		}
+		semantic[g.ClientGroupKey] = g.Kind == privateGroupingSemantic
 	}
-	_ = candidates
-	for i, a := range w.Alternatives {
-		if a.LeftClientGroupKey >= a.RightClientGroupKey || !semantic[a.LeftClientGroupKey] || !semantic[a.RightClientGroupKey] || (i > 0 && (w.Alternatives[i-1].LeftClientGroupKey > a.LeftClientGroupKey || (w.Alternatives[i-1].LeftClientGroupKey == a.LeftClientGroupKey && w.Alternatives[i-1].RightClientGroupKey >= a.RightClientGroupKey))) {
+	for i, alternative := range w.Alternatives {
+		if alternative.LeftClientGroupKey >= alternative.RightClientGroupKey || !semantic[alternative.LeftClientGroupKey] || !semantic[alternative.RightClientGroupKey] || (i > 0 && privateGroupingPairOutOfOrder(w.Alternatives[i-1].LeftClientGroupKey, w.Alternatives[i-1].RightClientGroupKey, alternative.LeftClientGroupKey, alternative.RightClientGroupKey)) {
 			return w, errors.New("private grouping alternative canonicality")
 		}
 	}
@@ -867,54 +896,62 @@ func parsePrivateGroupingArtifact(raw []byte) (privateGroupingArtifact, error) {
 }
 func (a privateGroupingArtifact) validate() error {
 	w := a.wire
-	if w.SchemaVersion != privateGroupingArtifactSchema || !validDigest(w.ArtifactID) || w.Status != "GROUPING_HYPOTHESIS_RETAINED" || w.Authority != 0 || w.Accepted || w.Completeness != CompletenessUnknown || w.FeatureIdentity != "UNRESOLVED" || w.SemanticQualification != "NOT_PERFORMED" || w.AutomaticProgressionAllowed || w.ReviewStatus != "NOT_PERFORMED" || w.ChallengeStatus != "NOT_PERFORMED" || w.AdjudicationStatus != "NOT_PERFORMED" || !validDigest(w.CandidateSelector) || w.CandidateDigest != w.CandidateSelector || w.CandidateByteLength == 0 || !validDigest(w.CandidateArtifactID) || w.ProfileID != privateGroupingProfileID || w.ProfileDigest != privateGroupingProfileDigest() || w.Bounds != privateGroupingFrozenBounds() || w.CandidateSnapshots == nil || w.Groups == nil || w.Alternatives == nil || w.UngroupedCandidateIDs == nil {
+	if w.SchemaVersion != privateGroupingArtifactSchema || privateGroupingComputedProfileDigest() != privateGroupingProfileDigestPin || !validDigest(w.ArtifactID) || w.Status != "GROUPING_HYPOTHESIS_RETAINED" || w.Authority != 0 || w.Accepted || w.Completeness != CompletenessUnknown || w.FeatureIdentity != "UNRESOLVED" || w.SemanticQualification != "NOT_PERFORMED" || w.AutomaticProgressionAllowed || w.ReviewStatus != "NOT_PERFORMED" || w.ChallengeStatus != "NOT_PERFORMED" || w.AdjudicationStatus != "NOT_PERFORMED" || !validDigest(w.CandidateSelector) || w.CandidateDigest != w.CandidateSelector || w.CandidateByteLength == 0 || !validDigest(w.CandidateArtifactID) || w.ProfileID != privateGroupingProfileID || w.ProfileDigest != privateGroupingProfileDigest() || w.Bounds != privateGroupingFrozenBounds() || w.CandidateSnapshots == nil || w.Groups == nil || w.Alternatives == nil || w.UngroupedCandidateIDs == nil {
 		return errors.New("private grouping artifact integrity")
 	}
 	if identityJSON(privateGroupingArtifactDomain, w, func(v *privateGroupingArtifactWire) { v.ArtifactID = "" }) != w.ArtifactID {
 		return errors.New("private grouping artifact identity")
 	}
-	candidateSet, grouped := map[string]bool{}, map[string]bool{}
-	for _, s := range w.CandidateSnapshots {
-		if !validDigest(s.CandidateID) || !validDigest(s.DescriptionID) || !validDigest(s.OutcomeDigest) || s.OutcomeByteLength == 0 || candidateSet[s.CandidateID] {
+	bounds := w.Bounds
+	canonical, err := json.Marshal(w)
+	if err != nil || len(canonical) > bounds.MaxArtifactBytes {
+		return errors.New("private grouping artifact byte limit")
+	}
+	if len(w.CandidateSnapshots) == 0 || len(w.CandidateSnapshots) > bounds.MaxCandidates || len(w.Groups) == 0 || len(w.Groups) > bounds.MaxGroups || len(w.Alternatives) > bounds.MaxAlternatives {
+		return errors.New("private grouping retained count limit")
+	}
+	candidateSet, descriptionSet, grouped := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for i, snapshot := range w.CandidateSnapshots {
+		if snapshot.Ordinal != i || !validDigest(snapshot.CandidateID) || !validDigest(snapshot.DescriptionID) || !validDigest(snapshot.OutcomeDigest) || snapshot.OutcomeByteLength == 0 || candidateSet[snapshot.CandidateID] || descriptionSet[snapshot.DescriptionID] {
 			return errors.New("private grouping snapshot invalid")
 		}
-		candidateSet[s.CandidateID] = true
+		candidateSet[snapshot.CandidateID] = true
+		descriptionSet[snapshot.DescriptionID] = true
 	}
-	groupIDs := map[string]string{}
-	semantic := map[string]bool{}
+	groupIDs, semantic := map[string]string{}, map[string]bool{}
 	memberships := 0
 	semanticCount, singletonCount := 0, 0
-	for i, g := range w.Groups {
-		if !validDigest(g.GroupID) || g.CandidateIDs == nil || g.RejectionConditions == nil {
-			return errors.New("private grouping retained group shape invalid")
+	for i, group := range w.Groups {
+		if !validDigest(group.GroupID) || groupIDs[group.ClientGroupKey] != "" || (i > 0 && w.Groups[i-1].ClientGroupKey >= group.ClientGroupKey) || validatePrivateGroupingGroup(group.ClientGroupKey, group.Kind, group.CandidateIDs, group.Label, group.Claim, group.Basis, group.RejectionConditions, bounds) != nil {
+			return errors.New("private grouping retained group invalid")
 		}
-		if i > 0 && w.Groups[i-1].ClientGroupKey >= g.ClientGroupKey {
-			return errors.New("private grouping retained group order invalid")
-		}
-		if identityJSON(privateGroupingGroupDomain, g, func(v *privateGroupingGroup) { v.GroupID = "" }) != g.GroupID {
+		if identityJSON(privateGroupingGroupDomain, group, func(v *privateGroupingGroup) { v.GroupID = "" }) != group.GroupID {
 			return errors.New("private grouping retained group identity invalid")
 		}
-		groupIDs[g.ClientGroupKey] = g.GroupID
-		memberships += len(g.CandidateIDs)
-		for _, id := range g.CandidateIDs {
+		groupIDs[group.ClientGroupKey] = group.GroupID
+		memberships += len(group.CandidateIDs)
+		if memberships > bounds.MaxMemberships {
+			return errors.New("private grouping retained membership limit")
+		}
+		for _, id := range group.CandidateIDs {
 			if !candidateSet[id] {
 				return errors.New("private grouping foreign candidate")
 			}
 			grouped[id] = true
 		}
-		if g.Kind == privateGroupingSemantic {
-			semantic[g.ClientGroupKey] = true
+		semantic[group.ClientGroupKey] = group.Kind == privateGroupingSemantic
+		if group.Kind == privateGroupingSemantic {
 			semanticCount++
-		} else if g.Kind == privateGroupingSingleton {
-			singletonCount++
 		} else {
-			return errors.New("private grouping retained kind")
+			singletonCount++
 		}
 	}
-	for _, alt := range w.Alternatives {
-		if !validDigest(alt.AlternativeID) || !semantic[alt.LeftClientGroupKey] || !semantic[alt.RightClientGroupKey] || alt.LeftGroupID != groupIDs[alt.LeftClientGroupKey] || alt.RightGroupID != groupIDs[alt.RightClientGroupKey] || identityJSON(privateGroupingAlternativeDomain, alt, func(v *privateGroupingAlternative) { v.AlternativeID = "" }) != alt.AlternativeID {
+	alternativeIDs := map[string]bool{}
+	for i, alternative := range w.Alternatives {
+		if !validDigest(alternative.AlternativeID) || alternativeIDs[alternative.AlternativeID] || alternative.LeftClientGroupKey >= alternative.RightClientGroupKey || !semantic[alternative.LeftClientGroupKey] || !semantic[alternative.RightClientGroupKey] || alternative.LeftGroupID != groupIDs[alternative.LeftClientGroupKey] || alternative.RightGroupID != groupIDs[alternative.RightClientGroupKey] || (i > 0 && privateGroupingPairOutOfOrder(w.Alternatives[i-1].LeftClientGroupKey, w.Alternatives[i-1].RightClientGroupKey, alternative.LeftClientGroupKey, alternative.RightClientGroupKey)) || identityJSON(privateGroupingAlternativeDomain, alternative, func(v *privateGroupingAlternative) { v.AlternativeID = "" }) != alternative.AlternativeID {
 			return errors.New("private grouping retained alternative invalid")
 		}
+		alternativeIDs[alternative.AlternativeID] = true
 	}
 	ungrouped := make([]string, 0)
 	for _, s := range w.CandidateSnapshots {
@@ -958,9 +995,9 @@ func RetainPrivateGroupingHypothesisSelector(ctx context.Context, store Store, c
 		candidateByID[c.CandidateID] = c
 	}
 	snapshots := make([]privateGroupingSnapshot, 0, len(candidateByID))
-	for _, c := range predecessor.wire.Candidates {
+	for ordinal, c := range predecessor.wire.Candidates {
 		d := descriptionByID[c.DescriptionID]
-		snapshots = append(snapshots, privateGroupingSnapshot{c.CandidateID, c.DescriptionID, d.OutcomeDigest, d.OutcomeLength})
+		snapshots = append(snapshots, privateGroupingSnapshot{Ordinal: ordinal, CandidateID: c.CandidateID, DescriptionID: c.DescriptionID, OutcomeDigest: d.OutcomeDigest, OutcomeByteLength: d.OutcomeLength})
 	}
 	groups := make([]privateGroupingGroup, len(in.Groups))
 	grouped := map[string]bool{}

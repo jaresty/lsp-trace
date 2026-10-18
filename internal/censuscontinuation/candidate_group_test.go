@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"lsp-trace/internal/graph"
@@ -507,6 +508,243 @@ func TestPrivateGroupingHypothesisSemanticBoundsAndAuthorityMutationMatrix(t *te
 				t.Fatal("accepted authority mutation")
 			}
 		})
+	}
+}
+
+func resealPrivateGroupingWire(w *privateGroupingArtifactWire) {
+	for i := range w.Groups {
+		w.Groups[i].GroupID = identityJSON(privateGroupingGroupDomain, w.Groups[i], func(v *privateGroupingGroup) { v.GroupID = "" })
+	}
+	groupIDs := map[string]string{}
+	for _, group := range w.Groups {
+		groupIDs[group.ClientGroupKey] = group.GroupID
+	}
+	for i := range w.Alternatives {
+		w.Alternatives[i].LeftGroupID = groupIDs[w.Alternatives[i].LeftClientGroupKey]
+		w.Alternatives[i].RightGroupID = groupIDs[w.Alternatives[i].RightClientGroupKey]
+		w.Alternatives[i].AlternativeID = identityJSON(privateGroupingAlternativeDomain, w.Alternatives[i], func(v *privateGroupingAlternative) { v.AlternativeID = "" })
+	}
+	w.ArtifactID = identityJSON(privateGroupingArtifactDomain, *w, func(v *privateGroupingArtifactWire) { v.ArtifactID = "" })
+}
+
+func clonePrivateGroupingWire(t *testing.T, wire privateGroupingArtifactWire) privateGroupingArtifactWire {
+	t.Helper()
+	raw, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clone privateGroupingArtifactWire
+	if err := json.Unmarshal(raw, &clone); err != nil {
+		t.Fatal(err)
+	}
+	return clone
+}
+
+func TestPrivateGroupingRetainedStructuralMutationMatrix(t *testing.T) {
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	ids := []string{predecessor.wire.Candidates[0].CandidateID, predecessor.wire.Candidates[1].CandidateID}
+	sort.Strings(ids)
+	groups := []privateGroupingSubmissionGroup{
+		{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: []string{ids[0]}, Label: "a", Claim: "a", Basis: "a", RejectionConditions: []string{"a"}},
+		{ClientGroupKey: "b", Kind: privateGroupingSemantic, CandidateIDs: []string{ids[1]}, Label: "b", Claim: "b", Basis: "b", RejectionConditions: []string{"b"}},
+	}
+	selector, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, privateGroupingSubmission(t, groups, []privateGroupingSubmissionAlternative{{LeftClientGroupKey: "a", RightClientGroupKey: "b"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := store.Get(context.Background(), selector)
+	artifact, err := parsePrivateGroupingArtifact(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutations := map[string]func(*privateGroupingArtifactWire){
+		"snapshot-order": func(w *privateGroupingArtifactWire) {
+			w.CandidateSnapshots[0], w.CandidateSnapshots[1] = w.CandidateSnapshots[1], w.CandidateSnapshots[0]
+		},
+		"snapshot-ordinal": func(w *privateGroupingArtifactWire) { w.CandidateSnapshots[0].Ordinal++ },
+		"snapshot-description": func(w *privateGroupingArtifactWire) {
+			w.CandidateSnapshots[0].DescriptionID = w.CandidateSnapshots[1].DescriptionID
+		},
+		"snapshot-outcome":          func(w *privateGroupingArtifactWire) { w.CandidateSnapshots[0].OutcomeDigest = "not-a-digest" },
+		"semantic-empty-label":      func(w *privateGroupingArtifactWire) { w.Groups[0].Label = "" },
+		"semantic-empty-conditions": func(w *privateGroupingArtifactWire) { w.Groups[0].RejectionConditions = []string{} },
+		"singleton-with-semantics":  func(w *privateGroupingArtifactWire) { w.Groups[0].Kind = privateGroupingSingleton },
+		"candidate-order":           func(w *privateGroupingArtifactWire) { w.Groups[0].CandidateIDs = []string{ids[1], ids[0]} },
+		"alternative-order": func(w *privateGroupingArtifactWire) {
+			w.Alternatives[0].LeftClientGroupKey, w.Alternatives[0].RightClientGroupKey = "b", "a"
+		},
+		"alternative-duplicate": func(w *privateGroupingArtifactWire) { w.Alternatives = append(w.Alternatives, w.Alternatives[0]) },
+		"alternative-singleton-endpoint": func(w *privateGroupingArtifactWire) {
+			w.Groups[1] = privateGroupingGroup{ClientGroupKey: "b", Kind: privateGroupingSingleton, CandidateIDs: []string{ids[1]}, RejectionConditions: []string{}}
+		},
+		"complement":     func(w *privateGroupingArtifactWire) { w.UngroupedCandidateIDs = []string{ids[0]} },
+		"accounting":     func(w *privateGroupingArtifactWire) { w.Accounting.MembershipCount++ },
+		"profile-digest": func(w *privateGroupingArtifactWire) { w.ProfileDigest = digestOf([]byte("foreign")) },
+		"profile-bound":  func(w *privateGroupingArtifactWire) { w.Bounds.MaxGroups++ },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			wire := clonePrivateGroupingWire(t, artifact.wire)
+			mutate(&wire)
+			resealPrivateGroupingWire(&wire)
+			mutated, _ := json.Marshal(wire)
+			if _, err := parsePrivateGroupingArtifact(mutated); err == nil {
+				t.Fatal("accepted retained structural mutation")
+			}
+		})
+	}
+	for name, mutate := range map[string]func(*privateGroupingArtifactWire){
+		"group-id-substitution":       func(w *privateGroupingArtifactWire) { w.Groups[0].GroupID = w.Groups[1].GroupID },
+		"alternative-id-substitution": func(w *privateGroupingArtifactWire) { w.Alternatives[0].AlternativeID = w.Groups[0].GroupID },
+	} {
+		t.Run(name, func(t *testing.T) {
+			wire := clonePrivateGroupingWire(t, artifact.wire)
+			mutate(&wire)
+			wire.ArtifactID = identityJSON(privateGroupingArtifactDomain, wire, func(v *privateGroupingArtifactWire) { v.ArtifactID = "" })
+			mutated, _ := json.Marshal(wire)
+			if _, err := parsePrivateGroupingArtifact(mutated); err == nil {
+				t.Fatal("accepted retained identity substitution")
+			}
+		})
+	}
+}
+
+func TestPrivateGroupingClientKeyUTF8BoundaryAndGenericGroupLimit(t *testing.T) {
+	if privateGroupingComputedProfileDigest() != privateGroupingProfileDigestPin || privateGroupingProfileDigest() != privateGroupingProfileDigestPin {
+		t.Fatalf("profile digest drift: computed=%s pinned=%s", privateGroupingComputedProfileDigest(), privateGroupingProfileDigestPin)
+	}
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	id := predecessor.wire.Candidates[0].CandidateID
+	exact := strings.Repeat("é", 127) + "ab"
+	if len([]byte(exact)) != privateGroupingMaxClientKeyBytes {
+		t.Fatal("fixture byte boundary")
+	}
+	group := func(key string) privateGroupingSubmissionGroup {
+		return privateGroupingSubmissionGroup{ClientGroupKey: key, Kind: privateGroupingSemantic, CandidateIDs: []string{id}, Label: "a", Claim: "a", Basis: "a", RejectionConditions: []string{"a"}}
+	}
+	if _, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, privateGroupingSubmission(t, []privateGroupingSubmissionGroup{group(exact)}, []privateGroupingSubmissionAlternative{})); err != nil {
+		t.Fatalf("exact multibyte key rejected: %v", err)
+	}
+	if got, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, privateGroupingSubmission(t, []privateGroupingSubmissionGroup{group(exact + "c")}, []privateGroupingSubmissionAlternative{})); err == nil || got != "" {
+		t.Fatalf("plus-one key selector=%q err=%v", got, err)
+	}
+	alternativeGroups := make([]privateGroupingSubmissionGroup, 92)
+	for i := range alternativeGroups {
+		alternativeGroups[i] = group(fmt.Sprintf("a-%03d", i))
+	}
+	allPairs := make([]privateGroupingSubmissionAlternative, 0, 4186)
+	for left := 0; left < len(alternativeGroups); left++ {
+		for right := left + 1; right < len(alternativeGroups); right++ {
+			allPairs = append(allPairs, privateGroupingSubmissionAlternative{LeftClientGroupKey: alternativeGroups[left].ClientGroupKey, RightClientGroupKey: alternativeGroups[right].ClientGroupKey})
+		}
+	}
+	if _, err := parsePrivateGroupingSubmission(privateGroupingSubmission(t, alternativeGroups, allPairs[:privateGroupingMaxAlternatives])); err != nil {
+		t.Fatalf("generic alternative bound rejected: %v", err)
+	}
+	if _, err := parsePrivateGroupingSubmission(privateGroupingSubmission(t, alternativeGroups, allPairs[:privateGroupingMaxAlternatives+1])); err == nil {
+		t.Fatal("generic alternative plus-one accepted")
+	}
+	groups := make([]privateGroupingSubmissionGroup, privateGroupingMaxGroups)
+	for i := range groups {
+		groups[i] = group(fmt.Sprintf("g-%04d", i))
+	}
+	atBound := privateGroupingSubmission(t, groups, []privateGroupingSubmissionAlternative{})
+	if _, err := parsePrivateGroupingSubmission(atBound); err != nil {
+		t.Fatalf("generic group bound rejected: %v", err)
+	}
+	groups = append(groups, group("g-overflow"))
+	sort.Slice(groups, func(i, j int) bool { return groups[i].ClientGroupKey < groups[j].ClientGroupKey })
+	if _, err := parsePrivateGroupingSubmission(privateGroupingSubmission(t, groups, []privateGroupingSubmissionAlternative{})); err == nil {
+		t.Fatal("generic group plus-one accepted")
+	}
+	oversized := make([]byte, privateGroupingMaxBytes+1)
+	if _, err := parsePrivateGroupingArtifact(oversized); err == nil {
+		t.Fatal("artifact byte plus-one accepted")
+	}
+}
+
+func TestPrivateGroupingMemberAndMembershipLimits(t *testing.T) {
+	bounds := privateGroupingFrozenBounds()
+	memberIDs := make([]string, bounds.MaxMembersPerGroup+1)
+	for i := range memberIDs {
+		memberIDs[i] = digestOf([]byte(fmt.Sprintf("member-%05d", i)))
+	}
+	sort.Strings(memberIDs)
+	if err := validatePrivateGroupingGroup("a", privateGroupingSemantic, memberIDs[:bounds.MaxMembersPerGroup], "a", "a", "a", []string{"a"}, bounds); err != nil {
+		t.Fatalf("member bound rejected: %v", err)
+	}
+	if err := validatePrivateGroupingGroup("a", privateGroupingSemantic, memberIDs, "a", "a", "a", []string{"a"}, bounds); err == nil {
+		t.Fatal("member plus-one accepted")
+	}
+
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	id := predecessor.wire.Candidates[0].CandidateID
+	selector, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, privateGroupingSubmission(t, []privateGroupingSubmissionGroup{{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: []string{id}, Label: "a", Claim: "a", Basis: "a", RejectionConditions: []string{"a"}}}, []privateGroupingSubmissionAlternative{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := store.Get(context.Background(), selector)
+	artifact, _ := parsePrivateGroupingArtifact(raw)
+	wire := clonePrivateGroupingWire(t, artifact.wire)
+	five := append([]string{}, memberIDs[:5]...)
+	wire.CandidateSnapshots = make([]privateGroupingSnapshot, len(five))
+	for i, candidateID := range five {
+		wire.CandidateSnapshots[i] = privateGroupingSnapshot{Ordinal: i, CandidateID: candidateID, DescriptionID: digestOf([]byte("description-" + candidateID)), OutcomeDigest: digestOf([]byte("outcome-" + candidateID)), OutcomeByteLength: 1}
+	}
+	wire.Groups = make([]privateGroupingGroup, bounds.MaxGroups)
+	for i := range wire.Groups {
+		wire.Groups[i] = privateGroupingGroup{ClientGroupKey: fmt.Sprintf("g-%04d", i), Kind: privateGroupingSemantic, CandidateIDs: append([]string{}, five[:4]...), Label: "a", Claim: "a", Basis: "a", RejectionConditions: []string{"a"}}
+	}
+	wire.Alternatives = []privateGroupingAlternative{}
+	wire.UngroupedCandidateIDs = []string{five[4]}
+	wire.Accounting = privateGroupingAccounting{CandidateCount: 5, GroupCount: bounds.MaxGroups, SemanticGroupCount: bounds.MaxGroups, MembershipCount: bounds.MaxMemberships, DistinctGroupedCandidateCount: 4, UngroupedCandidateCount: 1}
+	resealPrivateGroupingWire(&wire)
+	if err := (privateGroupingArtifact{wire: wire}).validate(); err != nil {
+		t.Fatalf("membership bound rejected: %v", err)
+	}
+	wire.Groups[0].CandidateIDs = append([]string{}, five...)
+	wire.UngroupedCandidateIDs = []string{}
+	wire.Accounting.MembershipCount++
+	wire.Accounting.DistinctGroupedCandidateCount = 5
+	wire.Accounting.UngroupedCandidateCount = 0
+	resealPrivateGroupingWire(&wire)
+	if err := (privateGroupingArtifact{wire: wire}).validate(); err == nil {
+		t.Fatal("membership plus-one accepted")
+	}
+}
+
+func TestPrivateGroupingConcurrentReplay(t *testing.T) {
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	id := predecessor.wire.Candidates[0].CandidateID
+	submission := privateGroupingSubmission(t, []privateGroupingSubmissionGroup{{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: []string{id}, Label: "a", Claim: "a", Basis: "a", RejectionConditions: []string{"a"}}}, []privateGroupingSubmissionAlternative{})
+	const workers = 12
+	selectors := make(chan string, workers)
+	errs := make(chan error, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			selector, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, submission)
+			selectors <- selector
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(selectors)
+	close(errs)
+	var want string
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for selector := range selectors {
+		if want == "" {
+			want = selector
+		} else if selector != want {
+			t.Fatalf("selector=%q want=%q", selector, want)
+		}
 	}
 }
 
