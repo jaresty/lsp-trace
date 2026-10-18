@@ -18,7 +18,8 @@ const (
 	experimentalHandoffReceiptSchema  = "lsp-trace.experimental-handoff-prepared-receipt.v1"
 	experimentalHandoffRetainedSchema = "lsp-trace.experimental-handoff-retained-result-receipt.v1"
 	experimentalHandoffAdmittedSchema = "lsp-trace.experimental-handoff-admitted-result-receipt.v1"
-	experimentalHandoffUsage          = "usage: lsp-trace experimental-handoff prepare --publication-root ROOT --checkpoint-selector sha256:HEX\n" +
+	experimentalHandoffPrepareUsage   = "usage: lsp-trace experimental-handoff prepare --publication-root ROOT --checkpoint-selector sha256:HEX"
+	experimentalHandoffUsage          = experimentalHandoffPrepareUsage + "\n" +
 		"       lsp-trace experimental-handoff retain-result --publication-root ROOT --prepared-selector sha256:HEX --submission PATH|-\n" +
 		"       lsp-trace experimental-handoff admit-result --publication-root ROOT --result-selector sha256:HEX"
 	experimentalHandoffMaxObjectBytes     = 64 << 20
@@ -105,17 +106,18 @@ func runExperimentalHandoffWithDependencies(ctx context.Context, args []string, 
 
 func runExperimentalHandoffPrepare(ctx context.Context, args []string, stdout, stderr io.Writer, deps experimentalHandoffDependencies) int {
 	fs := flag.NewFlagSet("experimental-handoff prepare", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	fs.SetOutput(io.Discard)
 	root := fs.String("publication-root", "", "existing private publication root")
 	checkpoint := fs.String("checkpoint-selector", "", "exact REQUESTS_RENDERED/RUNNING checkpoint selector")
 	if err := fs.Parse(args); err != nil {
+		fmt.Fprintln(stderr, experimentalHandoffPrepareUsage)
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 1
 	}
 	if fs.NArg() != 0 || *root == "" || *checkpoint == "" || deps.openStore == nil || deps.prepare == nil {
-		fmt.Fprintln(stderr, experimentalHandoffUsage)
+		fmt.Fprintln(stderr, experimentalHandoffPrepareUsage)
 		return 1
 	}
 	store, closer, err := deps.openStore(*root)
@@ -172,7 +174,7 @@ func runExperimentalHandoffRetain(ctx context.Context, args []string, stdin io.R
 		}
 		return 1
 	}
-	if fs.NArg() != 0 || *root == "" || *prepared == "" || *submission == "" || stdin == nil || deps.openStore == nil || deps.retain == nil || (*submission != "-" && deps.openFile == nil) {
+	if fs.NArg() != 0 || *root == "" || *prepared == "" || *submission == "" || (*submission == "-" && stdin == nil) || deps.openStore == nil || deps.retain == nil || (*submission != "-" && deps.openFile == nil) {
 		fmt.Fprintln(stderr, experimentalHandoffUsage)
 		return 1
 	}
@@ -249,6 +251,15 @@ func runExperimentalHandoffTransition(ctx context.Context, root string, stdout, 
 		return 1
 	}
 	selector, transitionErr := transition(store)
+	if errors.Is(ctx.Err(), context.Canceled) {
+		if transitionErr != nil {
+			fmt.Fprintln(stderr, transitionErr)
+		}
+		if closeErr := closer.Close(); closeErr != nil {
+			fmt.Fprintln(stderr, closeErr)
+		}
+		return 130
+	}
 	if transitionErr != nil {
 		closeErr := closer.Close()
 		fmt.Fprintln(stderr, transitionErr)

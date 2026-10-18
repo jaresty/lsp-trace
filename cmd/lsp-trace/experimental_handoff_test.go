@@ -182,6 +182,26 @@ func TestExperimentalHandoffFailsBeforePut(t *testing.T) {
 	}
 }
 
+func TestExperimentalHandoffPrepareExactUsage(t *testing.T) {
+	want := experimentalHandoffPrepareUsage + "\n"
+	for _, tc := range []struct {
+		name string
+		args []string
+		code int
+	}{
+		{name: "malformed", args: []string{"prepare", "--not-a-prepare-flag"}, code: 1},
+		{name: "help", args: []string{"prepare", "--help"}, code: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := runExperimentalHandoffWithDependencies(context.Background(), tc.args, nil, &stdout, &stderr, experimentalHandoffDependencies{})
+			if code != tc.code || stdout.Len() != 0 || stderr.String() != want {
+				t.Fatalf("code=%d want=%d stdout=%q stderr=%q want_stderr=%q", code, tc.code, stdout.String(), stderr.String(), want)
+			}
+		})
+	}
+}
+
 func TestExperimentalHandoffContextCloseAndHelp(t *testing.T) {
 	checkpoint := "sha256:" + strings.Repeat("a", 64)
 	t.Run("causal cancellation", func(t *testing.T) {

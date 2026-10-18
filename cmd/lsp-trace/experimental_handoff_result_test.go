@@ -126,7 +126,7 @@ func TestExperimentalHandoffRetainNamedFileIngressBeforeStore(t *testing.T) {
 	var retainCalls, admitCalls int
 	deps := experimentalHandoffResultDeps(t, &events, &retained, &retainCalls, &admitCalls)
 	var stdout, stderr bytes.Buffer
-	code := runExperimentalHandoffWithDependencies(context.Background(), []string{"retain-result", "--publication-root", "/root", "--prepared-selector", prepared, "--submission", "submission.json"}, experimentalHandoffPanicReader{}, &stdout, &stderr, deps)
+	code := runExperimentalHandoffWithDependencies(context.Background(), []string{"retain-result", "--publication-root", "/root", "--prepared-selector", prepared, "--submission", "submission.json"}, nil, &stdout, &stderr, deps)
 	if code != 0 || stderr.Len() != 0 || string(retained) != "file bytes\n" {
 		t.Fatalf("code=%d stdout=%q stderr=%q retained=%q", code, stdout.String(), stderr.String(), retained)
 	}
@@ -227,6 +227,26 @@ func TestExperimentalHandoffResultFailuresAndCancellation(t *testing.T) {
 				t.Fatalf("code=%d want=%d stdout=%q stderr=%q", code, tc.want, stdout.String(), stderr.String())
 			}
 		})
+	}
+}
+
+func TestExperimentalHandoffResultCanceledAfterInstalledSelector(t *testing.T) {
+	prepared := "sha256:" + strings.Repeat("a", 64)
+	ctx, cancel := context.WithCancel(context.Background())
+	closed := false
+	deps := experimentalHandoffDependencies{
+		openStore: func(string) (censuscontinuation.Store, io.Closer, error) {
+			return &experimentalHandoffTestStore{objects: map[string][]byte{}}, experimentalHandoffReadCloser{Reader: strings.NewReader(""), close: func() error { closed = true; return nil }}, nil
+		},
+		retain: func(context.Context, censuscontinuation.Store, string, []byte) (string, error) {
+			cancel()
+			return "sha256:" + strings.Repeat("b", 64), nil
+		},
+	}
+	var stdout, stderr bytes.Buffer
+	code := runExperimentalHandoffWithDependencies(ctx, []string{"retain-result", "--publication-root", "/root", "--prepared-selector", prepared, "--submission", "-"}, strings.NewReader("x"), &stdout, &stderr, deps)
+	if code != 130 || !closed || stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("code=%d closed=%t stdout=%q stderr=%q", code, closed, stdout.String(), stderr.String())
 	}
 }
 
