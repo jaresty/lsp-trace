@@ -26,6 +26,7 @@ type fakeDiscoveryClient struct {
 	prepareErrors                    map[lsp.Position]error
 	documentRequests                 []string
 	prepareRequests                  []lsp.Position
+	prepareHook                      func()
 }
 
 func (f *fakeDiscoveryClient) SupportsDocumentSymbols() bool { return f.documentSupported }
@@ -37,16 +38,23 @@ func (f *fakeDiscoveryClient) DocumentSymbols(_ context.Context, p lsp.DocumentS
 }
 func (f *fakeDiscoveryClient) PrepareCallHierarchy(_ context.Context, p lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
 	f.prepareRequests = append(f.prepareRequests, p.Position)
+	if f.prepareHook != nil {
+		f.prepareHook()
+	}
 	return append([]lsp.CallHierarchyItem(nil), f.prepare[p.Position]...), f.prepareErrors[p.Position]
 }
 
 type fakeSupplier struct {
 	calls  []string
 	errors map[string]error
+	hook   func()
 }
 
 func (f *fakeSupplier) Supply(_ context.Context, file SourceFile) error {
 	f.calls = append(f.calls, file.Path)
+	if f.hook != nil {
+		f.hook()
+	}
 	return f.errors[file.Path]
 }
 
@@ -289,6 +297,9 @@ func TestDiscoveryAdapterUnsupportedPreparationMalformedAndBounds(t *testing.T) 
 	if !reflect.DeepEqual(have, want) || len(client.prepareRequests) != 0 || got.Complete {
 		t.Fatalf("ASSERT_BOUNDED_UNSUPPORTED_TERMINALS: %v", have)
 	}
+	if !reflect.DeepEqual(incompleteCauseCodes(got), []string{"SYMBOL_LIMIT", "CHILD_INCOMPLETE"}) {
+		t.Fatalf("ASSERT_SYMBOL_LIMIT_CAUSES: %+v", got.IncompleteCauses)
+	}
 
 	client.callSupported = true
 	client.prepare[symbols[0].SelectionRange.Start] = []lsp.CallHierarchyItem{item("one", f.URI, 12, 0, 0), item("two", f.URI, 12, 0, 0)}
@@ -304,6 +315,37 @@ func TestDiscoveryAdapterUnsupportedPreparationMalformedAndBounds(t *testing.T) 
 	}
 	if got.Complete {
 		t.Fatal("ASSERT_MALFORMED_PREPARE_INCOMPLETE")
+	}
+	if !reflect.DeepEqual(incompleteCauseCodes(got), []string{"RESULT_MISMATCH", "RESULT_MISMATCH", "CHILD_INCOMPLETE"}) {
+		t.Fatalf("ASSERT_RESULT_MISMATCH_CAUSES: %+v", got.IncompleteCauses)
+	}
+}
+
+func TestDiscoveryAdapterFileCancellationPrecedence(t *testing.T) {
+	workspace := t.TempDir()
+	f := testSource(workspace, "cancel.go")
+	ctx, cancel := context.WithCancel(context.Background())
+	supplier := &fakeSupplier{errors: map[string]error{f.Path: errors.New("provider")}, hook: cancel}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: supplier, Client: &fakeDiscoveryClient{documentSupported: true}}).Discover(ctx, SessionIdentity{"s", 1})
+	if err != nil || !reflect.DeepEqual(incompleteCauseCodes(got), []string{"CANCELED"}) || got.Accounting.Files[0].Disposition != census.FileIncomplete {
+		t.Fatalf("discovery=%+v err=%v", got, err)
+	}
+}
+
+func TestDiscoveryAdapterIncompleteCauseCancellationPrecedence(t *testing.T) {
+	workspace := t.TempDir()
+	f := testSource(workspace, "cancel.go")
+	s := sym("Mismatch", 12, 1, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{f.URI: {s}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{s.SelectionRange.Start: {item("wrong", f.URI, 12, 1, 1)}}, prepareHook: cancel}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(ctx, SessionIdentity{"s", 1})
+	if err != nil || len(got.IncompleteCauses) != 2 {
+		t.Fatalf("causes=%+v err=%v", got.IncompleteCauses, err)
+	}
+	for _, cause := range got.IncompleteCauses {
+		if cause.Code != "CANCELED" {
+			t.Fatalf("cancellation did not win: %+v", got.IncompleteCauses)
+		}
 	}
 }
 
@@ -373,6 +415,10 @@ func TestDiscoveryAdapterTerminalResponseIncompleteBounds(t *testing.T) {
 			if err != nil || got.Complete || len(client.prepareRequests) != 0 || got.Accounting.SymbolDenominator != 0 || got.Accounting.Files[0].Disposition != census.FileIncomplete {
 				t.Fatalf("ASSERT_OVERSIZED_RESPONSE_TERMINAL_INCOMPLETE: %+v err=%v prepares=%d", got.Accounting, err, len(client.prepareRequests))
 			}
+			wantCode := map[string]string{"wide": "NODE_LIMIT", "deep": "DEPTH_LIMIT", "long": "STRING_BYTE_LIMIT"}[name]
+			if !reflect.DeepEqual(incompleteCauseCodes(got), []string{wantCode}) {
+				t.Fatalf("ASSERT_FLATTEN_CAUSE[%s]: %+v", name, got.IncompleteCauses)
+			}
 		})
 	}
 }
@@ -390,4 +436,26 @@ func TestDiscoveryAdapterMaxUintAndPrepareSubstitutionIncomplete(t *testing.T) {
 	if err != nil || got.Complete || len(got.Targets) != 0 || got.Accounting.SymbolDenominator != 2 {
 		t.Fatalf("ASSERT_MAX_UINT_AND_PREPARE_SUBSTITUTION_INCOMPLETE: %+v err=%v", got, err)
 	}
+	if !reflect.DeepEqual(incompleteCauseCodes(got), []string{"RESULT_MISMATCH", "COORDINATE_OVERFLOW", "CHILD_INCOMPLETE"}) {
+		t.Fatalf("ASSERT_EXACT_SYMBOL_CAUSES: %+v", got.IncompleteCauses)
+	}
+}
+
+func TestDiscoveryAdapterFileLimitCause(t *testing.T) {
+	workspace := t.TempDir()
+	a, b := testSource(workspace, "a.go"), testSource(workspace, "b.go")
+	noncall := sym("Field", 5, 0, 0)
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{a.URI: {noncall}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{}}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{a, b}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client, Limits: DiscoveryLimits{MaxFiles: 1}}).Discover(context.Background(), SessionIdentity{"s", 1})
+	if err != nil || !reflect.DeepEqual(incompleteCauseCodes(got), []string{"FILE_LIMIT"}) {
+		t.Fatalf("causes=%+v err=%v", got.IncompleteCauses, err)
+	}
+}
+
+func incompleteCauseCodes(d Discovery) []string {
+	out := make([]string, len(d.IncompleteCauses))
+	for i, cause := range d.IncompleteCauses {
+		out[i] = cause.Code
+	}
+	return out
 }

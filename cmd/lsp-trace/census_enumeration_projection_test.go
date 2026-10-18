@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
+	"lsp-trace/internal/publication"
 )
 
 func TestPrivateEnumerationProjectionFlagFreshMachineOnlyHiddenAndDuplicate(t *testing.T) {
@@ -67,7 +68,7 @@ func TestPrivateEnumerationReceiptSeparateAfterByteIdenticalDiscoveryLine(t *tes
 func ptrU64(v uint64) *uint64 { return &v }
 func incompleteEnumerationDiscovery(t *testing.T) censusacquisition.Discovery {
 	t.Helper()
-	return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, Workspace: t.TempDir(), Complete: false, Accounting: census.Accounting{FileDenominator: 1, Files: []census.FileEntry{{Ordinal: 0, Disposition: census.FileIncomplete}}, SymbolDenominator: 1, Symbols: []census.SymbolEntry{{Ordinal: 0, Disposition: census.SymbolIncomplete}}}, FileLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "a.go", Disposition: "incomplete"}}}, SymbolLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private", Disposition: "incomplete"}}}, EnumerationSymbols: []censusacquisition.EnumerationSymbol{{Ordinal: 0, FileOrdinal: 0, Kind: 12, Name: "secret", Disposition: census.SymbolIncomplete}}, ProviderFailures: []censusacquisition.ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: func() *int { v := 0; return &v }()}}, Observations: []censusacquisition.DiscoveryObservation{{Dimension: censusacquisition.DiscoveryProviderCompleteness, Known: true, Observed: ptrU64(1)}}}
+	return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, Workspace: t.TempDir(), Complete: false, Accounting: census.Accounting{FileDenominator: 1, Files: []census.FileEntry{{Ordinal: 0, Disposition: census.FileIncomplete}}, SymbolDenominator: 1, Symbols: []census.SymbolEntry{{Ordinal: 0, Disposition: census.SymbolIncomplete}}}, FileLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "a.go", Disposition: "incomplete"}}}, SymbolLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private", Disposition: "incomplete"}}}, EnumerationSymbols: []censusacquisition.EnumerationSymbol{{Ordinal: 0, FileOrdinal: 0, Kind: 12, Name: "secret", Disposition: census.SymbolIncomplete}}, ProviderFailures: []censusacquisition.ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: func() *int { v := 0; return &v }()}}, IncompleteCauses: []censusacquisition.IncompleteCause{{Scope: "FILE", Stage: "DISCOVERY", Code: "CHILD_INCOMPLETE", FileOrdinal: func() *int { v := 0; return &v }()}, {Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: func() *int { v := 0; return &v }()}}, Observations: []censusacquisition.DiscoveryObservation{{Dimension: censusacquisition.DiscoveryProviderCompleteness, Known: true, Omitted: ptrU64(1)}}}
 }
 
 func TestIncompleteOptInPublishesOnceBeforeAcquisitionAndSuccessPublishesNone(t *testing.T) {
@@ -171,6 +172,62 @@ func TestPrivateEnumerationCancellationGatesAndPostCommit(t *testing.T) {
 				t.Fatalf("writes=%d want=%d", len(entries), tc.files)
 			}
 		})
+	}
+}
+
+func TestEnumerationPublicationLinearizationPreEntryAndPostEntryCancellation(t *testing.T) {
+	discovery := incompleteEnumerationDiscovery(t)
+	request, err := censusrequest.New(censusrequest.RefreshCoordinate{SessionID: "s", Generation: 1}, censusrequest.SemanticFields{Sources: []string{"."}, DownDepth: 1, MaxNodes: 631, BatchTargets: 63, TimeoutMS: 60000, RequestTimeoutMS: 30000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := publishEnumerationProjection
+	defer func() { publishEnumerationProjection = old }()
+	calls := 0
+	publishEnumerationProjection = func(root *publication.Root, p censusenumerationprojection.Projection) (censusenumerationprojection.Receipt, error) {
+		calls++
+		return old(root, p)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	pre := publishCensusEnumerationProjection(ctx, discovery, request, t.TempDir())
+	if calls != 0 || pre.Status != "UNAVAILABLE" || pre.UnavailableReason != "CANCELED_PRE_PUBLICATION" {
+		t.Fatalf("calls=%d receipt=%+v", calls, pre)
+	}
+	root := t.TempDir()
+	_ = os.Chmod(root, 0700)
+	ctx, cancel = context.WithCancel(context.Background())
+	publishEnumerationProjection = func(pubRoot *publication.Root, p censusenumerationprojection.Projection) (censusenumerationprojection.Receipt, error) {
+		calls++
+		cancel()
+		return old(pubRoot, p)
+	}
+	post := publishCensusEnumerationProjection(ctx, discovery, request, root)
+	if calls != 1 || post.Status != "PUBLISHED" {
+		t.Fatalf("calls=%d receipt=%+v", calls, post)
+	}
+}
+
+func TestEnumerationFlagAbsentRunnerOutputCallsAndFilesFrozen(t *testing.T) {
+	root := t.TempDir()
+	discovery := incompleteEnumerationDiscovery(t)
+	calls := 0
+	deps := censusCoreDependencies{runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
+		return cb(context.Background(), &initializedAcquisitionRuntime{sessionID: "s", generation: 1})
+	}, discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+		return discovery, nil
+	}, publishEnumeration: func(context.Context, censusacquisition.Discovery, censusrequest.Receipt, string) censusenumerationprojection.Receipt {
+		calls++
+		return censusenumerationprojection.Unavailable("PUBLICATION_FAILED")
+	}}
+	out := runCensusCore(censusCLIOptions{Machine: true, PublicationRoot: root, Sources: []string{"."}, DownDepth: 1, MaxNodes: 631, MaxBatchTargets: 63, Timeout: 60000000000, RequestTimeout: 30000000000}, censusCoreConfig{}, deps)
+	files, err := os.ReadDir(root)
+	if err != nil || calls != 0 || len(files) != 0 || out.DiscoveryDiagnostic == nil || out.RequestReceipt == nil || out.EnumerationReceipt != nil {
+		t.Fatalf("calls=%d files=%d out=%+v err=%v", calls, len(files), out, err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := writeCensusOutcome(&stdout, &stderr, true, out); code != 1 || stdout.Len() != 0 || bytes.Count(stderr.Bytes(), []byte{'\n'}) != 1 {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.Bytes(), stderr.Bytes())
 	}
 }
 

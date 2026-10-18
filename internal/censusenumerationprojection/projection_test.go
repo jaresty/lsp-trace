@@ -3,6 +3,7 @@ package censusenumerationprojection
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -23,8 +24,8 @@ func fixture(t *testing.T) Projection {
 	}
 	fo := 0
 	so := 0
-	observed := uint64(1)
-	p, err := Build(Input{SessionID: "session", Generation: 2, RequestFingerprint: "sha256:" + strings.Repeat("a", 64), WorkspaceURI: "file:///workspace", Files: []File{{0, "a.go", "incomplete"}, {1, "failed.go", "unreadable"}}, Symbols: []Symbol{{0, 0, start, 12, "incomplete", digest}}, Observations: []Observation{{Dimension: "PROVIDER_COMPLETENESS", State: "KNOWN", Observed: &observed}}, ProviderFailures: []ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: &so}, {Stage: "DOCUMENT_SUPPLY", Code: "REQUEST_FAILED", FileOrdinal: func() *int { v := fo + 1; return &v }()}}, RequestMaxNodes: 631, RequestTimeoutMS: 30, TimeoutMS: 60})
+	omitted := uint64(1)
+	p, err := Build(Input{SessionID: "session", Generation: 2, RequestFingerprint: "sha256:" + strings.Repeat("a", 64), WorkspaceURI: "file:///workspace", Files: []File{{0, "a.go", "incomplete"}, {1, "failed.go", "unreadable"}}, Symbols: []Symbol{{0, 0, start, 12, "incomplete", digest}}, Observations: []Observation{{Dimension: "PROVIDER_COMPLETENESS", State: "KNOWN", Omitted: &omitted}}, ProviderFailures: []ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: &so}, {Stage: "DOCUMENT_SUPPLY", Code: "REQUEST_FAILED", FileOrdinal: func() *int { v := fo + 1; return &v }()}}, IncompleteCauses: []IncompleteCause{{Scope: "FILE", Stage: "DISCOVERY", Code: "CHILD_INCOMPLETE", FileOrdinal: &fo}, {Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: &so}}, RequestMaxNodes: 631, RequestTimeoutMS: 30, TimeoutMS: 60})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,19 +127,6 @@ func TestBoundsWorkAndReconciliation(t *testing.T) {
 		t.Fatal("ordinal gap accepted")
 	}
 }
-func TestExactByteAndWorkCapsAndPlusOne(t *testing.T) {
-	for name, limit := range map[string]int{"canonical": MaxCanonicalBytes, "identity": MaxIdentityInputBytes, "work": MaxWork} {
-		t.Run(name, func(t *testing.T) {
-			if !withinLimit(uint64(limit), limit) {
-				t.Fatal("exact limit rejected")
-			}
-			if withinLimit(uint64(limit)+1, limit) {
-				t.Fatal("limit+1 accepted")
-			}
-		})
-	}
-}
-
 func TestExactFileAndSymbolCardinalityCapsAndPlusOne(t *testing.T) {
 	files := make([]File, MaxFiles)
 	for i := range files {
@@ -183,7 +171,14 @@ func TestLarge631FixtureUnderLimits(t *testing.T) {
 		}
 		symbols[i] = Symbol{i, 0, start, 12, "incomplete", d}
 	}
-	p, e := Build(Input{SessionID: "s", Generation: 1, RequestFingerprint: "sha256:" + strings.Repeat("a", 64), WorkspaceURI: "file:///workspace", Files: files, Symbols: symbols, RequestMaxNodes: 631, RequestTimeoutMS: 1, TimeoutMS: 1})
+	causes := make([]IncompleteCause, 0, len(symbols)+1)
+	fo := 0
+	causes = append(causes, IncompleteCause{Scope: "FILE", Stage: "DISCOVERY", Code: "CHILD_INCOMPLETE", FileOrdinal: &fo})
+	for i := range symbols {
+		ordinal := i
+		causes = append(causes, IncompleteCause{Scope: "SYMBOL", Stage: "DISCOVERY", Code: "SYMBOL_LIMIT", SymbolOrdinal: &ordinal})
+	}
+	p, e := Build(Input{SessionID: "s", Generation: 1, RequestFingerprint: "sha256:" + strings.Repeat("a", 64), WorkspaceURI: "file:///workspace", Files: files, Symbols: symbols, IncompleteCauses: causes, RequestMaxNodes: 631, RequestTimeoutMS: 1, TimeoutMS: 1})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -221,6 +216,106 @@ func TestPublishDistinctNamespaceCustodyAndCollision(t *testing.T) {
 		t.Fatal("collision accepted")
 	}
 }
+func TestInjectedExactEncodeDecodeAndIdentityByteLimits(t *testing.T) {
+	p := fixture(t)
+	raw, err := EncodeCanonical(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldEncode, oldDecode, oldIdentity := encodeCanonicalLimit, decodeCanonicalLimit, identityInputLimit
+	defer func() {
+		encodeCanonicalLimit, decodeCanonicalLimit, identityInputLimit = oldEncode, oldDecode, oldIdentity
+	}()
+	encodeCanonicalLimit = len(raw)
+	if _, err := EncodeCanonical(p); err != nil {
+		t.Fatalf("exact encode rejected: %v", err)
+	}
+	encodeCanonicalLimit = len(raw) - 1
+	if _, err := EncodeCanonical(p); err == nil {
+		t.Fatal("encode +1 accepted")
+	}
+	encodeCanonicalLimit = oldEncode
+	decodeCanonicalLimit = len(raw)
+	if _, err := Decode(raw); err != nil {
+		t.Fatalf("exact decode rejected: %v", err)
+	}
+	decodeCanonicalLimit = len(raw) - 1
+	if _, err := Decode(raw); err == nil {
+		t.Fatal("decode +1 accepted")
+	}
+	decodeCanonicalLimit = oldDecode
+	identity := identityInputSize(p.Symbols[0], p.Files[0].Path)
+	identityInputLimit = identity
+	if _, err := EncodeCanonical(p); err != nil {
+		t.Fatalf("exact identity rejected: %v", err)
+	}
+	identityInputLimit = identity - 1
+	if _, err := EncodeCanonical(p); err == nil {
+		t.Fatal("identity +1 accepted")
+	}
+}
+
+func TestCanonicalPermutationDeepCloneAndFixedPointWork(t *testing.T) {
+	p := fixture(t)
+	input := Input{SessionID: p.SessionID, Generation: p.Generation, RequestFingerprint: p.RequestFingerprint, WorkspaceURI: "file:///workspace", Files: append([]File(nil), p.Files...), Symbols: append([]Symbol(nil), p.Symbols...), Observations: append([]Observation(nil), p.DiscoveryObservations...), ProviderFailures: append([]ProviderFailure(nil), p.ProviderFailures...), IncompleteCauses: append([]IncompleteCause(nil), p.IncompleteCauses...), RequestMaxNodes: p.Bounds.RequestMaxNodes, RequestTimeoutMS: p.Bounds.RequestTimeoutMS, TimeoutMS: p.Bounds.TimeoutMS}
+	reverse := func(n int, swap func(int, int)) {
+		for i := 0; i < n/2; i++ {
+			swap(i, n-1-i)
+		}
+	}
+	reverse(len(input.Observations), func(i, j int) {
+		input.Observations[i], input.Observations[j] = input.Observations[j], input.Observations[i]
+	})
+	reverse(len(input.ProviderFailures), func(i, j int) {
+		input.ProviderFailures[i], input.ProviderFailures[j] = input.ProviderFailures[j], input.ProviderFailures[i]
+	})
+	reverse(len(input.IncompleteCauses), func(i, j int) {
+		input.IncompleteCauses[i], input.IncompleteCauses[j] = input.IncompleteCauses[j], input.IncompleteCauses[i]
+	})
+	got, err := Build(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawA, _ := EncodeCanonical(p)
+	rawB, _ := EncodeCanonical(got)
+	if !bytes.Equal(rawA, rawB) {
+		t.Fatal("set permutation changed canonical JSON")
+	}
+	if input.IncompleteCauses[0].FileOrdinal != nil {
+		*input.IncompleteCauses[0].FileOrdinal = 99
+	} else {
+		*input.IncompleteCauses[0].SymbolOrdinal = 99
+	}
+	if bytes.Equal(rawB, mustEncode(t, got)) == false {
+		t.Fatal("input pointer mutation escaped clone")
+	}
+	identity := uint64(identityInputSize(got.Symbols[0], got.Files[0].Path))
+	want := uint64(len(got.Files)+len(got.Symbols)) + identity + uint64(len(rawB))
+	if got.Work != want || got.Work >= MaxWork {
+		t.Fatalf("work=%d want=%d ceiling=%d", got.Work, want, MaxWork)
+	}
+}
+func mustEncode(t *testing.T, p Projection) []byte {
+	t.Helper()
+	b, e := EncodeCanonical(p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return b
+}
+
+func TestInjectedPublicationFailureReturnsNoReceiptSelector(t *testing.T) {
+	old := publishBoundFile
+	defer func() { publishBoundFile = old }()
+	publishBoundFile = func(*publication.Root, string, []byte, func([]byte) error) (*publication.BoundFileReceipt, error) {
+		return nil, errors.New("injected")
+	}
+	r, err := Publish(nil, fixture(t))
+	if err == nil || r.Selector != "" || r.Digest != "" || r.Status != "" {
+		t.Fatalf("receipt=%+v err=%v", r, err)
+	}
+}
+
 func TestReceiptClosedUnavailableAndStrictJSONRoundTrip(t *testing.T) {
 	for _, reason := range []string{"ENCODE_FAILED", "PUBLICATION_FAILED", "CANCELED_PRE_RECONCILIATION", "CANCELED_PRE_PUBLICATION"} {
 		raw, err := MarshalReceipt(Unavailable(reason))

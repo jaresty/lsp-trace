@@ -129,6 +129,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		fileDisposition := file.Disposition
 		if fileDisposition == "" && ctx.Err() != nil {
 			fileDisposition = census.FileIncomplete
+			appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)
 			timeoutBoundary = true
 			sourceOmissions++
 		}
@@ -137,6 +138,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		}
 		if fileDisposition == "" && a.Limits.MaxFiles > 0 && filesAttempted >= a.Limits.MaxFiles {
 			fileDisposition = census.FileIncomplete
+			appendFileIncompleteCause(&out, "DISCOVERY", "FILE_LIMIT", fileOrdinal)
 			nodeBoundary = true
 			sourceOmissions++
 		}
@@ -157,11 +159,16 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		}
 		filesAttempted++
 		if err := a.Supplier.Supply(ctx, file); err != nil {
-			appendFile(&out, fileOrdinal, file.Path, census.FileUnreadable)
 			code := "REQUEST_FAILED"
+			disposition := census.FileUnreadable
 			if ctx.Err() != nil {
 				code = "CANCELED"
+				disposition = census.FileIncomplete
+				appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)
+				timeoutBoundary = true
+				sourceOmissions++
 			}
+			appendFile(&out, fileOrdinal, file.Path, disposition)
 			appendFileProviderFailure(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
 			complete = false
 			providerIncomplete = true
@@ -175,12 +182,17 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			continue
 		}
 		symbols, err := a.Client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}})
-		if err != nil {
-			appendFile(&out, fileOrdinal, file.Path, census.FileDocumentSymbolFailed)
+		if err != nil || ctx.Err() != nil {
 			code := "REQUEST_FAILED"
+			disposition := census.FileDocumentSymbolFailed
 			if ctx.Err() != nil {
 				code = "CANCELED"
+				disposition = census.FileIncomplete
+				appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)
+				timeoutBoundary = true
+				sourceOmissions++
 			}
+			appendFile(&out, fileOrdinal, file.Path, disposition)
 			appendFileProviderFailure(&out, "DOCUMENT_SYMBOL", code, fileOrdinal)
 			complete = false
 			providerIncomplete = true
@@ -200,6 +212,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			appendFile(&out, fileOrdinal, file.Path, census.FileIncomplete)
 			code := map[string]string{"nodes": "NODE_LIMIT", "depth": "DEPTH_LIMIT", "bytes": "STRING_BYTE_LIMIT"}[boundary]
 			appendFileProviderFailure(&out, "DOCUMENT_SYMBOL_FLATTEN", code, fileOrdinal)
+			appendFileIncompleteCause(&out, "DOCUMENT_SYMBOL_FLATTEN", code, fileOrdinal)
 			complete = false
 			sourceOmissions++
 			nodeBoundary = nodeBoundary || boundary == "nodes"
@@ -209,6 +222,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		}
 		sort.SliceStable(flat, func(i, j int) bool { return documentSymbolKey(flat[i]) < documentSymbolKey(flat[j]) })
 		fileComplete := true
+		fileCanceled := false
 		for _, symbol := range flat {
 			ordinal := symbolOrdinal
 			symbolOrdinal++
@@ -217,6 +231,12 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			if ctx.Err() != nil || ordinal >= captureset.MaxTargets || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols) {
 				fileComplete, complete = false, false
 				sourceOmissions++
+				code := "SYMBOL_LIMIT"
+				if ctx.Err() != nil {
+					code = "CANCELED"
+					fileCanceled = true
+				}
+				appendSymbolIncompleteCause(&out, "DISCOVERY", code, ordinal)
 				timeoutBoundary = timeoutBoundary || ctx.Err() != nil
 				nodeBoundary = nodeBoundary || ordinal >= captureset.MaxTargets || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols)
 			} else if !callableSymbolKind(symbol.Kind) {
@@ -229,6 +249,14 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			} else {
 				items, prepareErr := a.Client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}, Position: symbol.SelectionRange.Start})
 				switch {
+				case ctx.Err() != nil:
+					disposition = census.SymbolIncomplete
+					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "CANCELED", ordinal)
+					appendSymbolIncompleteCause(&out, "DISCOVERY", "CANCELED", ordinal)
+					fileCanceled = true
+					fileComplete, complete = false, false
+					providerIncomplete, timeoutBoundary = true, true
+					sourceOmissions++
 				case prepareErr != nil:
 					disposition = census.SymbolPreparationFailed
 					code := "REQUEST_FAILED"
@@ -242,6 +270,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				case len(items) != 1 || !preparedItemMatches(items[0], file.URI, symbol):
 					disposition = census.SymbolIncomplete
 					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "RESULT_MISMATCH", ordinal)
+					appendSymbolIncompleteCause(&out, "PREPARE_CALL_HIERARCHY", "RESULT_MISMATCH", ordinal)
 					fileComplete, complete = false, false
 					providerIncomplete = true
 					sourceOmissions++
@@ -252,6 +281,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 						out.Targets = append(out.Targets, PreparedTarget{CensusOrdinal: ordinal, CanonicalSeedV2: seed, URI: file.URI, LanguageID: file.LanguageID, Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Range, SelectionRange: symbol.SelectionRange, SymbolIdentity: identity})
 					} else {
 						disposition = census.SymbolIncomplete
+						appendSymbolIncompleteCause(&out, "DISCOVERY", "COORDINATE_OVERFLOW", ordinal)
 						fileComplete, complete = false, false
 						sourceOmissions++
 					}
@@ -269,6 +299,11 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			appendFile(&out, fileOrdinal, file.Path, census.FileSelected)
 		} else {
 			appendFile(&out, fileOrdinal, file.Path, census.FileIncomplete)
+			if fileCanceled {
+				appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)
+			} else {
+				appendFileIncompleteCause(&out, "DISCOVERY", "CHILD_INCOMPLETE", fileOrdinal)
+			}
 		}
 	}
 	out.Accounting.SymbolDenominator = symbolOrdinal
@@ -285,6 +320,15 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		out.Observations = discoveryObservations(a.Limits, uint64(filesAttempted+symbolOrdinal), sourceOmissions, nodeBoundary, depthBoundary, providerIncomplete, timeoutBoundary, byteBoundary)
 	}
 	return cloneDiscovery(out), nil
+}
+
+func appendFileIncompleteCause(out *Discovery, stage, code string, ordinal int) {
+	value := ordinal
+	out.IncompleteCauses = append(out.IncompleteCauses, IncompleteCause{Scope: "FILE", Stage: stage, Code: code, FileOrdinal: &value})
+}
+func appendSymbolIncompleteCause(out *Discovery, stage, code string, ordinal int) {
+	value := ordinal
+	out.IncompleteCauses = append(out.IncompleteCauses, IncompleteCause{Scope: "SYMBOL", Stage: stage, Code: code, SymbolOrdinal: &value})
 }
 
 func appendFileProviderFailure(out *Discovery, stage, code string, ordinal int) {
@@ -538,6 +582,17 @@ func cloneDiscovery(d Discovery) Discovery {
 		if d.ProviderFailures[i].SymbolOrdinal != nil {
 			v := *d.ProviderFailures[i].SymbolOrdinal
 			d.ProviderFailures[i].SymbolOrdinal = &v
+		}
+	}
+	d.IncompleteCauses = append([]IncompleteCause(nil), d.IncompleteCauses...)
+	for i := range d.IncompleteCauses {
+		if d.IncompleteCauses[i].FileOrdinal != nil {
+			v := *d.IncompleteCauses[i].FileOrdinal
+			d.IncompleteCauses[i].FileOrdinal = &v
+		}
+		if d.IncompleteCauses[i].SymbolOrdinal != nil {
+			v := *d.IncompleteCauses[i].SymbolOrdinal
+			d.IncompleteCauses[i].SymbolOrdinal = &v
 		}
 	}
 	return d

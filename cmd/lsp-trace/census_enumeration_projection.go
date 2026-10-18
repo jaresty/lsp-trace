@@ -10,6 +10,8 @@ import (
 	"lsp-trace/internal/publication"
 )
 
+var publishEnumerationProjection = censusenumerationprojection.Publish
+
 func publishCensusEnumerationProjection(ctx context.Context, discovery censusacquisition.Discovery, request censusrequest.Receipt, rootPath string) censusenumerationprojection.Receipt {
 	files := make([]censusenumerationprojection.File, len(discovery.FileLedger.Entries))
 	for i, entry := range discovery.FileLedger.Entries {
@@ -35,24 +37,36 @@ func publishCensusEnumerationProjection(ctx context.Context, discovery censusacq
 	}
 	failures := make([]censusenumerationprojection.ProviderFailure, len(discovery.ProviderFailures))
 	for i, failure := range discovery.ProviderFailures {
-		failures[i] = censusenumerationprojection.ProviderFailure{Stage: failure.Stage, Code: failure.Code, FileOrdinal: failure.FileOrdinal, SymbolOrdinal: failure.SymbolOrdinal}
+		failures[i] = censusenumerationprojection.ProviderFailure{Stage: failure.Stage, Code: failure.Code, FileOrdinal: cloneInt(failure.FileOrdinal), SymbolOrdinal: cloneInt(failure.SymbolOrdinal)}
+	}
+	causes := make([]censusenumerationprojection.IncompleteCause, len(discovery.IncompleteCauses))
+	for i, cause := range discovery.IncompleteCauses {
+		causes[i] = censusenumerationprojection.IncompleteCause{Scope: cause.Scope, Stage: cause.Stage, Code: cause.Code, FileOrdinal: cloneInt(cause.FileOrdinal), SymbolOrdinal: cloneInt(cause.SymbolOrdinal)}
 	}
 	workspaceURI := (&url.URL{Scheme: "file", Path: discovery.Workspace}).String()
-	projection, err := censusenumerationprojection.Build(censusenumerationprojection.Input{SessionID: discovery.Session.SessionID, Generation: discovery.Session.Generation, RequestFingerprint: request.Fingerprint, WorkspaceURI: workspaceURI, Files: files, Symbols: symbols, Observations: observations, ProviderFailures: failures, RequestDownDepth: request.Semantic.DownDepth, RequestUpDepth: request.Semantic.UpDepth, RequestMaxNodes: request.Semantic.MaxNodes, RequestBatchTargets: request.Semantic.BatchTargets, RequestTimeoutMS: request.Semantic.RequestTimeoutMS, TimeoutMS: request.Semantic.TimeoutMS})
+	projection, err := censusenumerationprojection.Build(censusenumerationprojection.Input{SessionID: discovery.Session.SessionID, Generation: discovery.Session.Generation, RequestFingerprint: request.Fingerprint, WorkspaceURI: workspaceURI, Files: files, Symbols: symbols, Observations: observations, ProviderFailures: failures, IncompleteCauses: causes, RequestDownDepth: request.Semantic.DownDepth, RequestUpDepth: request.Semantic.UpDepth, RequestMaxNodes: request.Semantic.MaxNodes, RequestBatchTargets: request.Semantic.BatchTargets, RequestTimeoutMS: request.Semantic.RequestTimeoutMS, TimeoutMS: request.Semantic.TimeoutMS})
 	if err != nil {
 		return censusenumerationprojection.Unavailable("ENCODE_FAILED")
-	}
-	if ctx.Err() != nil {
-		return censusenumerationprojection.Unavailable("CANCELED_PRE_PUBLICATION")
 	}
 	root, err := publication.OpenRoot(rootPath)
 	if err != nil {
 		return censusenumerationprojection.Unavailable("PUBLICATION_FAILED")
 	}
 	defer root.Close()
-	receipt, err := censusenumerationprojection.Publish(root, projection)
+	if ctx.Err() != nil {
+		return censusenumerationprojection.Unavailable("CANCELED_PRE_PUBLICATION")
+	}
+	receipt, err := publishEnumerationProjection(root, projection)
 	if err != nil {
 		return censusenumerationprojection.Unavailable("PUBLICATION_FAILED")
 	}
 	return receipt
+}
+
+func cloneInt(v *int) *int {
+	if v == nil {
+		return nil
+	}
+	copy := *v
+	return &copy
 }

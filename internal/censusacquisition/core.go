@@ -119,6 +119,16 @@ type ProviderFailure struct {
 	SymbolOrdinal *int
 }
 
+// IncompleteCause is the normalized, closed reason for one incomplete ledger member.
+// Exactly one ordinal is populated and Scope agrees with it.
+type IncompleteCause struct {
+	Scope         string
+	Stage         string
+	Code          string
+	FileOrdinal   *int
+	SymbolOrdinal *int
+}
+
 type Discovery struct {
 	Session                  SessionIdentity
 	Workspace                string
@@ -127,6 +137,7 @@ type Discovery struct {
 	Targets                  []PreparedTarget
 	EnumerationSymbols       []EnumerationSymbol
 	ProviderFailures         []ProviderFailure
+	IncompleteCauses         []IncompleteCause
 	Complete                 bool
 	Observations             []DiscoveryObservation
 }
@@ -379,8 +390,46 @@ func validateDiscovery(d Discovery) error {
 	if eligible != len(d.Targets) {
 		return errors.New("selected prepared symbol target mismatch")
 	}
+	fileIncomplete := map[int]bool{}
+	for _, e := range d.Accounting.Files {
+		fileIncomplete[e.Ordinal] = e.Disposition == census.FileIncomplete
+	}
+	symbolIncomplete := map[int]bool{}
+	for _, e := range d.Accounting.Symbols {
+		symbolIncomplete[e.Ordinal] = e.Disposition == census.SymbolIncomplete
+	}
+	fileCauses, symbolCauses := map[int]int{}, map[int]int{}
+	for _, cause := range d.IncompleteCauses {
+		if cause.Scope == "FILE" && cause.FileOrdinal != nil && cause.SymbolOrdinal == nil && *cause.FileOrdinal >= 0 && *cause.FileOrdinal < d.Accounting.FileDenominator && validDiscoveryCause(cause) {
+			fileCauses[*cause.FileOrdinal]++
+		} else if cause.Scope == "SYMBOL" && cause.SymbolOrdinal != nil && cause.FileOrdinal == nil && *cause.SymbolOrdinal >= 0 && *cause.SymbolOrdinal < d.Accounting.SymbolDenominator && validDiscoveryCause(cause) {
+			symbolCauses[*cause.SymbolOrdinal]++
+		} else {
+			return errors.New("invalid incomplete cause")
+		}
+	}
+	for i := 0; i < d.Accounting.FileDenominator; i++ {
+		if fileIncomplete[i] != (fileCauses[i] == 1) {
+			return errors.New("file incomplete cause mismatch")
+		}
+	}
+	for i := 0; i < d.Accounting.SymbolDenominator; i++ {
+		if symbolIncomplete[i] != (symbolCauses[i] == 1) {
+			return errors.New("symbol incomplete cause mismatch")
+		}
+	}
 	return nil
 }
+func validDiscoveryCause(c IncompleteCause) bool {
+	if c.Scope == "FILE" {
+		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "FILE_LIMIT" || c.Code == "CHILD_INCOMPLETE") || c.Stage == "DOCUMENT_SYMBOL_FLATTEN" && (c.Code == "NODE_LIMIT" || c.Code == "DEPTH_LIMIT" || c.Code == "STRING_BYTE_LIMIT")
+	}
+	if c.Scope == "SYMBOL" {
+		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "SYMBOL_LIMIT" || c.Code == "COORDINATE_OVERFLOW") || c.Stage == "PREPARE_CALL_HIERARCHY" && c.Code == "RESULT_MISMATCH"
+	}
+	return false
+}
+
 func canonicalTargets(d Discovery) ([]captureset.Target, map[int]PreparedTarget, error) {
 	if len(d.Targets) > captureset.MaxTargets {
 		return nil, nil, errors.New("target bound exceeded")
