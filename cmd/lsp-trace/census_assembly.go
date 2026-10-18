@@ -13,6 +13,7 @@ import (
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
@@ -187,11 +188,15 @@ func publishCensusCaptureSetInternal(ctx context.Context, capability censusPubli
 	return outcome
 }
 
-func runInitializedCensusAcquisition(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int) (censusAssembly, error) {
+func runInitializedCensusAcquisition(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int, diagnostics ...*censusdiagnostic.Recorder) (censusAssembly, error) {
 	if runtime == nil {
 		return censusAssembly{}, errors.New("initialized census runtime required")
 	}
-	acquirer := newInitializedCensusBatchAcquirer(runtime, limits)
+	var diagnostic *censusdiagnostic.Recorder
+	if len(diagnostics) == 1 {
+		diagnostic = diagnostics[0]
+	}
+	acquirer := newInitializedCensusBatchAcquirer(runtime, limits, diagnostic)
 	planning := &censusacquisition.PlanningConfig{DownDepth: downDepth, UpDepth: upDepth, MaxBatchTargets: maxBatchTargets}
 	projection, err := (censusacquisition.Core{Discoverer: discoverer, Acquirer: acquirer, Planning: planning}).Run(ctx, acquirer.session.identity())
 	if err != nil {

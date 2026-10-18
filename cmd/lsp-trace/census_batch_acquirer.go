@@ -13,6 +13,7 @@ import (
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/operation"
@@ -67,15 +68,20 @@ type censusBatchSession interface {
 type censusBatchAcquirer struct {
 	session               censusBatchSession
 	limits                acquisitionops.Limits
+	diagnostic            *censusdiagnostic.Recorder
 	beforeNativeAdmission func()
 }
 
-func newCensusBatchAcquirer(session censusBatchSession, limits acquisitionops.Limits) *censusBatchAcquirer {
-	return &censusBatchAcquirer{session: session, limits: limits}
+func newCensusBatchAcquirer(session censusBatchSession, limits acquisitionops.Limits, diagnostic ...*censusdiagnostic.Recorder) *censusBatchAcquirer {
+	a := &censusBatchAcquirer{session: session, limits: limits}
+	if len(diagnostic) == 1 {
+		a.diagnostic = diagnostic[0]
+	}
+	return a
 }
 
-func newInitializedCensusBatchAcquirer(runtime *initializedAcquisitionRuntime, limits acquisitionops.Limits) *censusBatchAcquirer {
-	return newCensusBatchAcquirer(&initializedCensusBatchSession{runtime: runtime}, limits)
+func newInitializedCensusBatchAcquirer(runtime *initializedAcquisitionRuntime, limits acquisitionops.Limits, diagnostic *censusdiagnostic.Recorder) *censusBatchAcquirer {
+	return newCensusBatchAcquirer(&initializedCensusBatchSession{runtime: runtime}, limits, diagnostic)
 }
 
 type initializedCensusBatchSession struct {
@@ -125,6 +131,20 @@ func (s *initializedCensusBatchSession) execute(ctx context.Context, request acq
 func batchFail(code string, err error) (censusBatchResult, *censusBatchFailure) {
 	return censusBatchResult{}, &censusBatchFailure{Code: code, Err: err}
 }
+
+func (a *censusBatchAcquirer) fail(request censusacquisition.BatchRequest, code, category string, err error, operationFailure *operation.Failure) (censusBatchResult, *censusBatchFailure) {
+	if a != nil && a.diagnostic != nil {
+		ordinal := request.Ordinal
+		record := censusdiagnostic.Record{Fingerprint: rawDigest(request.CanonicalSeedsV2), Category: category, Ordinal: &ordinal}
+		if category == "ACQUISITION" && operationFailure != nil {
+			normalized := operation.NormalizeFailure(operationFailure)
+			record.OperationCode = normalized.Code
+			record.OperationCategory = "ACQUISITION"
+		}
+		_ = a.diagnostic.Record(record)
+	}
+	return batchFail(code, err)
+}
 func cancelled(ctx context.Context) *censusBatchFailure {
 	if err := ctx.Err(); err != nil {
 		return &censusBatchFailure{Code: censusBatchFailureCancelled, Err: err}
@@ -143,58 +163,58 @@ func (a *censusBatchAcquirer) AcquireV5(ctx context.Context, request censusacqui
 func (a *censusBatchAcquirer) acquireBatch(ctx context.Context, request censusacquisition.BatchRequest) (censusBatchResult, *censusBatchFailure) {
 	request = cloneBatchRequest(request)
 	if f := cancelled(ctx); f != nil {
-		return censusBatchResult{}, f
+		return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 	}
 	if a == nil || a.session == nil {
-		return batchFail(censusBatchFailureInvalidInput, errors.New("initialized session required"))
+		return a.fail(request, censusBatchFailureInvalidInput, "INVALID_INPUT", errors.New("initialized session required"), nil)
 	}
 	if err := request.Session.Validate(); err != nil {
-		return batchFail(censusBatchFailureInvalidInput, err)
+		return a.fail(request, censusBatchFailureInvalidInput, "INVALID_INPUT", err, nil)
 	}
 	if request.CensusID == "" || request.BatchID == "" || request.Ordinal < 0 || len(request.Targets) < 1 || len(request.Targets) > 63 || len(request.CanonicalSeedsV2) == 0 {
-		return batchFail(censusBatchFailureInvalidInput, errors.New("complete bounded batch identity required"))
+		return a.fail(request, censusBatchFailureInvalidInput, "INVALID_INPUT", errors.New("complete bounded batch identity required"), nil)
 	}
 	if f := cancelled(ctx); f != nil {
-		return censusBatchResult{}, f
+		return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 	}
 	if a.session.identity() != request.Session {
-		return batchFail(censusBatchFailureSessionDrift, errors.New("generation drift before batch"))
+		return a.fail(request, censusBatchFailureSessionDrift, "SESSION_DRIFT", errors.New("generation drift before batch"), nil)
 	}
 	workspace, err := a.session.workspace()
 	if err != nil {
-		return batchFail(censusBatchFailureSessionDrift, err)
+		return a.fail(request, censusBatchFailureSessionDrift, "SESSION_DRIFT", err, nil)
 	}
 	if err = censusacquisition.ValidateBatchSeeds(request, workspace); err != nil {
-		return batchFail(censusBatchFailureInvalidInput, err)
+		return a.fail(request, censusBatchFailureInvalidInput, "INVALID_INPUT", err, nil)
 	}
 	if f := cancelled(ctx); f != nil {
-		return censusBatchResult{}, f
+		return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 	}
 	manifest := request.AcquisitionManifest(a.limits)
 	if f := cancelled(ctx); f != nil {
-		return censusBatchResult{}, f
+		return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 	}
 	result, failed := a.session.execute(ctx, acquisitionorchestration.PlannedBatchRequest{SessionID: request.Session.SessionID, Generation: request.Session.Generation, RequestID: fmt.Sprintf("census:%s:%06d:%s", request.CensusID, request.Ordinal, request.BatchID), Manifest: manifest, CanonicalSeedsV2: bytes.Clone(request.CanonicalSeedsV2)})
 	if failed != nil {
-		return batchFail(censusBatchFailureAcquisition, operation.NormalizeFailure(failed))
+		return a.fail(request, censusBatchFailureAcquisition, "ACQUISITION", operation.NormalizeFailure(failed), failed)
 	}
 	if f := cancelled(ctx); f != nil {
-		return censusBatchResult{}, f
+		return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 	}
 	if err := admitCompleteBatch(ctx, result.RawV5, result.BoundedTraversalComplete, request, a.beforeNativeAdmission); err != nil {
 		if f := cancelled(ctx); f != nil {
-			return censusBatchResult{}, f
+			return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 		}
-		return batchFail(censusBatchFailureAdmission, err)
+		return a.fail(request, censusBatchFailureAdmission, "ADMISSION", err, nil)
 	}
 	if f := cancelled(ctx); f != nil {
-		return censusBatchResult{}, f
+		return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 	}
 	if a.session.identity() != request.Session {
-		return batchFail(censusBatchFailureSessionDrift, errors.New("generation drift after admission"))
+		return a.fail(request, censusBatchFailureSessionDrift, "SESSION_DRIFT", errors.New("generation drift after admission"), nil)
 	}
 	if f := cancelled(ctx); f != nil {
-		return censusBatchResult{}, f
+		return a.fail(request, f.Code, "CANCELLED", f.Err, nil)
 	}
 	return censusBatchResult{Session: request.Session, CensusID: request.CensusID, BatchID: request.BatchID, Ordinal: request.Ordinal, CanonicalSeedsV2SHA256: rawDigest(request.CanonicalSeedsV2), Raw: bytes.Clone(result.RawV5)}, nil
 }

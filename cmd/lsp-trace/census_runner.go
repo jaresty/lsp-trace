@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/continuationhost"
@@ -124,6 +126,13 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
 	}
+	var diagnostic *censusdiagnostic.Recorder
+	if options.PrivateAcquisitionDiagnosticPath != "" {
+		diagnostic, err = censusdiagnostic.NewRecorder(options.PrivateAcquisitionDiagnosticPath, censusdiagnostic.DefaultMaxBytes, censusdiagnostic.DefaultMaxRecords)
+		if err != nil {
+			return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
+		}
+	}
 	starter, err := deps.newStarter()
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
@@ -139,7 +148,7 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		timeoutMS = 60000
 	}
 	limits := acquisitionops.Limits{MaxNodes: &options.MaxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
-	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true}
+	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic}
 	catalogCode := -1
 	if options.Catalog {
 		cfg.afterCommit = func(_ context.Context, runtime *initializedAcquisitionRuntime, outcome censusPublicationOutcome) int {

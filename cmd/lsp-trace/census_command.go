@@ -57,6 +57,7 @@ func marshalCensusCLIDiagnostic(d censusCLIDiagnostic) ([]byte, error) {
 type censusCLIOptions struct {
 	Sources, Includes, Excludes                                                []string
 	Workspace, Server, Profile, ConfigPath, CatalogConfigPath, PublicationRoot string
+	PrivateAcquisitionDiagnosticPath                                           string
 	ServerArgs                                                                 []string
 	DownDepth, UpDepth, MaxNodes, MaxBatchTargets                              int
 	Timeout, RequestTimeout                                                    time.Duration
@@ -90,6 +91,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.StringVar(&o.ConfigPath, "config", "", "acquisition profile configuration")
 	fs.StringVar(&o.CatalogConfigPath, "catalog-config", "", "host-owned catalog continuation configuration")
 	fs.StringVar(&o.PublicationRoot, "publication-root", "", "private publication root")
+	fs.StringVar(&o.PrivateAcquisitionDiagnosticPath, "private-acquisition-diagnostic-path", "", "")
 	fs.BoolVar(&o.Catalog, "catalog", false, "continue to the provisional feature catalog")
 	fs.StringVar(&o.Resume, "resume", "", "resume an opaque catalog continuation selector")
 	fs.StringVar(&o.StopAfter, "stop-after", "", "stop catalog continuation after describe-requests")
@@ -167,7 +169,7 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 		if o.CatalogConfigPath == "" || o.PublicationRoot == "" {
 			return errors.New("resume requires catalog config and publication root")
 		}
-		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true}
+		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true}
 		for _, arg := range args {
 			name := strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--")
 			if forbidden[name] {
@@ -193,6 +195,9 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 	}
 	if o.DownDepth < 0 || o.UpDepth < 0 || o.MaxNodes < 1 || o.MaxNodes > 10000 || o.MaxBatchTargets < 1 || o.MaxBatchTargets > 63 || o.Timeout <= 0 || o.RequestTimeout <= 0 || o.RequestTimeout > o.Timeout {
 		return errors.New("invalid census bounds")
+	}
+	if path := o.PrivateAcquisitionDiagnosticPath; path != "" && (!filepath.IsAbs(path) || filepath.Clean(path) != path) {
+		return errors.New("invalid private acquisition diagnostic path")
 	}
 	for _, s := range o.Sources {
 		if s == "" || filepath.IsAbs(s) || !filepath.IsLocal(s) || filepath.Clean(s) != s {
