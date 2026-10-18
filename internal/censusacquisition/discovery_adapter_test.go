@@ -332,6 +332,41 @@ func TestDiscoveryAdapterFileCancellationPrecedence(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAdapterSuccessfulSupplyCancellationPrecedesUnsupportedCapability(t *testing.T) {
+	workspace := t.TempDir()
+	f := testSource(workspace, "cancel.go")
+	ctx, cancel := context.WithCancel(context.Background())
+	supplier := &fakeSupplier{errors: map[string]error{}, hook: cancel}
+	client := &fakeDiscoveryClient{documentSupported: false}
+
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: supplier, Client: client}).Discover(ctx, SessionIdentity{"s", 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Complete || len(got.Accounting.Files) != 1 || got.Accounting.Files[0].Disposition != census.FileIncomplete {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_INCOMPLETE: complete=%v files=%+v", got.Complete, got.Accounting.Files)
+	}
+	if len(got.IncompleteCauses) != 1 {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_SINGLE_CAUSE: %+v", got.IncompleteCauses)
+	}
+	cause := got.IncompleteCauses[0]
+	if cause.Scope != "FILE" || cause.Stage != "ENUMERATION" || cause.Code != "CANCELED" || cause.FileOrdinal == nil || *cause.FileOrdinal != 0 {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_CAUSE: %+v", cause)
+	}
+	if len(client.documentRequests) != 0 || len(got.ProviderFailures) != 0 {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_PRECEDENCE: requests=%v failures=%+v", client.documentRequests, got.ProviderFailures)
+	}
+	if err := got.Accounting.Validate(); err != nil {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_ACCOUNTING_VALID: %v", err)
+	}
+	if got.Accounting.FileDenominator != 1 || got.FileLedger.Denominator != 1 || len(got.FileLedger.Entries) != 1 || got.FileLedger.Entries[0].Ordinal != 0 || got.FileLedger.Entries[0].Identity != f.Path || got.FileLedger.Entries[0].Disposition != string(census.FileIncomplete) {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_FILE_LEDGERS_RECONCILED: accounting=%+v ledger=%+v", got.Accounting, got.FileLedger)
+	}
+	if got.Accounting.SymbolDenominator != 0 || got.SymbolLedger.Denominator != 0 || len(got.Accounting.Symbols) != 0 || len(got.SymbolLedger.Entries) != 0 {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_SYMBOL_LEDGERS_RECONCILED: accounting=%+v ledger=%+v", got.Accounting, got.SymbolLedger)
+	}
+}
+
 func TestDiscoveryAdapterIncompleteCauseCancellationPrecedence(t *testing.T) {
 	workspace := t.TempDir()
 	f := testSource(workspace, "cancel.go")

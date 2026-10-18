@@ -174,6 +174,14 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			providerIncomplete = true
 			continue
 		}
+		if ctx.Err() != nil {
+			appendFile(&out, fileOrdinal, file.Path, census.FileIncomplete)
+			appendFileIncompleteCause(&out, "ENUMERATION", "CANCELED", fileOrdinal)
+			complete = false
+			timeoutBoundary = true
+			sourceOmissions++
+			continue
+		}
 		if !a.Client.SupportsDocumentSymbols() {
 			appendFile(&out, fileOrdinal, file.Path, census.FileUnsupported)
 			appendFileProviderFailure(&out, "DOCUMENT_SYMBOL", "UNSUPPORTED", fileOrdinal)
