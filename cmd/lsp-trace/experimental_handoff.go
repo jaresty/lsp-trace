@@ -15,13 +15,16 @@ import (
 )
 
 const (
-	experimentalHandoffReceiptSchema  = "lsp-trace.experimental-handoff-prepared-receipt.v1"
-	experimentalHandoffRetainedSchema = "lsp-trace.experimental-handoff-retained-result-receipt.v1"
-	experimentalHandoffAdmittedSchema = "lsp-trace.experimental-handoff-admitted-result-receipt.v1"
-	experimentalHandoffPrepareUsage   = "usage: lsp-trace experimental-handoff prepare --publication-root ROOT --checkpoint-selector sha256:HEX"
-	experimentalHandoffUsage          = experimentalHandoffPrepareUsage + "\n" +
+	experimentalHandoffReceiptSchema           = "lsp-trace.experimental-handoff-prepared-receipt.v1"
+	experimentalHandoffRetainedSchema          = "lsp-trace.experimental-handoff-retained-result-receipt.v1"
+	experimentalHandoffAdmittedSchema          = "lsp-trace.experimental-handoff-admitted-result-receipt.v1"
+	experimentalHandoffCandidateSelectorSchema = "lsp-trace.experimental-handoff-candidate-selector-receipt.v1"
+	experimentalHandoffPrepareUsage            = "usage: lsp-trace experimental-handoff prepare --publication-root ROOT --checkpoint-selector sha256:HEX"
+	experimentalHandoffPrepareCandidatesUsage  = "usage: lsp-trace experimental-handoff prepare-candidates --publication-root ROOT --admission-selector sha256:HEX"
+	experimentalHandoffUsage                   = experimentalHandoffPrepareUsage + "\n" +
 		"       lsp-trace experimental-handoff retain-result --publication-root ROOT --prepared-selector sha256:HEX --submission PATH|-\n" +
-		"       lsp-trace experimental-handoff admit-result --publication-root ROOT --result-selector sha256:HEX"
+		"       lsp-trace experimental-handoff admit-result --publication-root ROOT --result-selector sha256:HEX\n" +
+		"       lsp-trace experimental-handoff prepare-candidates --publication-root ROOT --admission-selector sha256:HEX"
 	experimentalHandoffMaxObjectBytes     = 64 << 20
 	experimentalHandoffMaxSubmissionBytes = 64 << 20
 )
@@ -47,12 +50,18 @@ type experimentalHandoffAdmittedResultReceipt struct {
 	AdmissionSelector string `json:"admission_selector"`
 }
 
+type experimentalHandoffCandidateSelectorReceipt struct {
+	SchemaVersion     string `json:"schema_version"`
+	CandidateSelector string `json:"candidate_selector"`
+}
+
 type experimentalHandoffDependencies struct {
-	openStore func(string) (censuscontinuation.Store, io.Closer, error)
-	openFile  func(string) (io.ReadCloser, error)
-	prepare   func(context.Context, censuscontinuation.Store, string) (string, error)
-	retain    func(context.Context, censuscontinuation.Store, string, []byte) (string, error)
-	admit     func(context.Context, censuscontinuation.Store, string) (string, error)
+	openStore         func(string) (censuscontinuation.Store, io.Closer, error)
+	openFile          func(string) (io.ReadCloser, error)
+	prepare           func(context.Context, censuscontinuation.Store, string) (string, error)
+	retain            func(context.Context, censuscontinuation.Store, string, []byte) (string, error)
+	admit             func(context.Context, censuscontinuation.Store, string) (string, error)
+	prepareCandidates func(context.Context, censuscontinuation.Store, string) (string, error)
 }
 
 func productionExperimentalHandoffDependencies() experimentalHandoffDependencies {
@@ -72,9 +81,10 @@ func productionExperimentalHandoffDependencies() experimentalHandoffDependencies
 		openFile: func(path string) (io.ReadCloser, error) {
 			return os.Open(path)
 		},
-		prepare: censuscontinuation.PreparePrivateHandoffSelector,
-		retain:  censuscontinuation.RetainPrivateCallerResultSelector,
-		admit:   censuscontinuation.AdmitPrivateCallerResultSelector,
+		prepare:           censuscontinuation.PreparePrivateHandoffSelector,
+		retain:            censuscontinuation.RetainPrivateCallerResultSelector,
+		admit:             censuscontinuation.AdmitPrivateCallerResultSelector,
+		prepareCandidates: censuscontinuation.PreparePrivateProvisionalCandidateSelector,
 	}
 }
 
@@ -98,6 +108,8 @@ func runExperimentalHandoffWithDependencies(ctx context.Context, args []string, 
 		return runExperimentalHandoffRetain(ctx, args[1:], stdin, stdout, stderr, deps)
 	case "admit-result":
 		return runExperimentalHandoffAdmit(ctx, args[1:], stdout, stderr, deps)
+	case "prepare-candidates":
+		return runExperimentalHandoffPrepareCandidates(ctx, args[1:], stdout, stderr, deps)
 	default:
 		fmt.Fprintln(stderr, experimentalHandoffUsage)
 		return 1
@@ -209,6 +221,29 @@ func runExperimentalHandoffAdmit(ctx context.Context, args []string, stdout, std
 		return deps.admit(ctx, store, *result)
 	}, func(selector string) any {
 		return experimentalHandoffAdmittedResultReceipt{SchemaVersion: experimentalHandoffAdmittedSchema, AdmissionSelector: selector}
+	})
+}
+
+func runExperimentalHandoffPrepareCandidates(ctx context.Context, args []string, stdout, stderr io.Writer, deps experimentalHandoffDependencies) int {
+	fs := flag.NewFlagSet("experimental-handoff prepare-candidates", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	root := fs.String("publication-root", "", "existing private publication root")
+	admission := fs.String("admission-selector", "", "exact private admitted result selector")
+	if err := fs.Parse(args); err != nil {
+		fmt.Fprintln(stderr, experimentalHandoffPrepareCandidatesUsage)
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 1
+	}
+	if fs.NArg() != 0 || *root == "" || *admission == "" || deps.openStore == nil || deps.prepareCandidates == nil {
+		fmt.Fprintln(stderr, experimentalHandoffPrepareCandidatesUsage)
+		return 1
+	}
+	return runExperimentalHandoffTransition(ctx, *root, stdout, stderr, deps.openStore, func(store censuscontinuation.Store) (string, error) {
+		return deps.prepareCandidates(ctx, store, *admission)
+	}, func(selector string) any {
+		return experimentalHandoffCandidateSelectorReceipt{SchemaVersion: experimentalHandoffCandidateSelectorSchema, CandidateSelector: selector}
 	})
 }
 
