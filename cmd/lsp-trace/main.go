@@ -124,6 +124,7 @@ const usageText = `usage:
   lsp-trace experimental-handoff retain-result --publication-root ROOT --prepared-selector sha256:HEX --submission PATH|-
   lsp-trace experimental-handoff admit-result --publication-root ROOT --result-selector sha256:HEX
   lsp-trace experimental-handoff prepare-candidates --publication-root ROOT --admission-selector sha256:HEX
+  lsp-trace experimental-handoff retain-grouping --publication-root ROOT --candidate-selector sha256:HEX --submission PATH|-
   ` + censusInvocationUsage + `
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH... | --at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN... | --seed-file PATH)
