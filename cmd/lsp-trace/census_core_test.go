@@ -1,16 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censusrequest"
+	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/publication"
 )
 
@@ -147,11 +152,6 @@ func TestRunCensusCoreFailBeforePublishMatrix(t *testing.T) {
 		{"discovery", func() (censusacquisition.Discovery, error) {
 			return censusacquisition.Discovery{}, errors.New("/private/provider")
 		}, nil, nil},
-		{"incomplete", func() (censusacquisition.Discovery, error) {
-			d := discoveryFromProjection(base)
-			d.Complete = false
-			return d, nil
-		}, nil, nil},
 		{"prepare", func() (censusacquisition.Discovery, error) { return discoveryFromProjection(base), nil }, errors.New("prepare /private/path"), nil},
 		{"late-batch", func() (censusacquisition.Discovery, error) { return discoveryFromProjection(base), nil }, errors.New("late batch provider output"), nil},
 		{"assembly", func() (censusacquisition.Discovery, error) { return discoveryFromProjection(base), nil }, nil, errors.New("assembly mutation")},
@@ -188,6 +188,123 @@ func TestRunCensusCoreFailBeforePublishMatrix(t *testing.T) {
 				t.Fatalf("ASSERT_FAIL_BEFORE_PUBLISH %+v calls=%d", got, published)
 			}
 		})
+	}
+}
+
+func TestCensusOutcomeTypedMatrix(t *testing.T) {
+	diagnostic := mustDiagnostic(t, censusStagePublication)
+	result := &censusCLIResult{}
+	discovery := &censusresult.DiscoveryDiagnostic{}
+	receipt := &censusrequest.Receipt{}
+	for _, tc := range []struct {
+		name    string
+		outcome censusPublicationOutcome
+		want    bool
+	}{
+		{"unexplained-empty", censusPublicationOutcome{}, false},
+		{"full-discovery-pair", censusPublicationOutcome{DiscoveryDiagnostic: discovery, RequestReceipt: receipt}, true},
+		{"ordinary-diagnostic", censusPublicationOutcome{Diagnostic: diagnostic}, true},
+		{"result", censusPublicationOutcome{Result: result}, true},
+		{"lone-discovery-diagnostic", censusPublicationOutcome{DiscoveryDiagnostic: discovery}, false},
+		{"lone-receipt", censusPublicationOutcome{RequestReceipt: receipt}, false},
+		{"result-with-ancillary-diagnostic", censusPublicationOutcome{Result: result, Diagnostic: diagnostic}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := censusOutcomeTyped(tc.outcome); got != tc.want {
+				t.Fatalf("typed=%t want=%t outcome=%+v", got, tc.want, tc.outcome)
+			}
+		})
+	}
+}
+
+func TestRunCensusCoreIncompleteDiscoveryPreservesTypedPair(t *testing.T) {
+	projection := censusPublicationProjection(t, 1)
+	discovery := discoveryFromProjection(projection)
+	discovery.Complete = false
+	discovery.Observations = []censusacquisition.DiscoveryObservation{{Dimension: censusacquisition.DiscoveryProviderCompleteness, Known: false}}
+	acquired, capabilities, publications, afterCommits := 0, 0, 0, 0
+	callbackCode := 0
+	deps := censusCoreDependencies{
+		runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
+			callbackCode = cb(context.Background(), &initializedAcquisitionRuntime{sessionID: "publication-session", generation: 7})
+			return callbackCode
+		},
+		discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+			return discovery, nil
+		},
+		acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error) {
+			acquired++
+			return censusAssembly{}, nil
+		},
+		capability: func(censusAssembly) (censusPublicationCapability, error) {
+			capabilities++
+			return censusPublicationCapability{}, nil
+		},
+		publish: func(context.Context, censusPublicationCapability, string) censusPublicationOutcome {
+			publications++
+			return censusPublicationOutcome{}
+		},
+	}
+	options := censusCLIOptions{Sources: []string{"."}, DownDepth: 1, MaxNodes: 100, MaxBatchTargets: 63, Timeout: time.Second, RequestTimeout: time.Second}
+	out := runCensusCore(options, censusCoreConfig{afterCommit: func(context.Context, *initializedAcquisitionRuntime, censusPublicationOutcome) int {
+		afterCommits++
+		return 0
+	}}, deps)
+	if callbackCode != 1 || out.Diagnostic != nil || out.Result != nil || out.DiscoveryDiagnostic == nil || out.RequestReceipt == nil || out.controlFlow != nil || acquired != 0 || capabilities != 0 || publications != 0 || afterCommits != 0 {
+		t.Fatalf("out=%+v callback=%d calls=%d/%d/%d/%d", out, callbackCode, acquired, capabilities, publications, afterCommits)
+	}
+	wantSemantic := censusrequest.SemanticFields{Sources: []string{"."}, Includes: []string{}, Excludes: []string{}, DownDepth: 1, UpDepth: 0, MaxNodes: 100, BatchTargets: 63, TimeoutMS: 1000, RequestTimeoutMS: 1000}
+	if out.DiscoveryDiagnostic.Code != "DISCOVERY_BOUNDED_INCOMPLETE" || len(out.DiscoveryDiagnostic.Observations) != 1 || out.DiscoveryDiagnostic.Observations[0].Dimension != censusresult.DimensionProviderCompleteness || out.RequestReceipt.Refresh != (censusrequest.RefreshCoordinate{SessionID: "publication-session", Generation: 7}) || !reflect.DeepEqual(out.RequestReceipt.Semantic, wantSemantic) {
+		t.Fatalf("diagnostic=%+v receipt=%+v want_semantic=%+v", out.DiscoveryDiagnostic, out.RequestReceipt, wantSemantic)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := writeCensusOutcome(&stdout, &stderr, true, out); code != 1 || stdout.Len() != 0 {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.Bytes(), stderr.Bytes())
+	}
+	want, err := json.Marshal(struct {
+		Diagnostic     *censusresult.DiscoveryDiagnostic `json:"diagnostic"`
+		RequestReceipt *censusrequest.Receipt            `json:"request_receipt"`
+	}{out.DiscoveryDiagnostic, out.RequestReceipt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = append(want, '\n')
+	if !bytes.Equal(stderr.Bytes(), want) {
+		t.Fatalf("stderr=%q want=%q", stderr.Bytes(), want)
+	}
+}
+
+func TestRunCensusCoreCallbackAbsentStillFallsBack(t *testing.T) {
+	out := runCensusCore(censusCLIOptions{}, censusCoreConfig{}, censusCoreDependencies{runSession: func(initializedAcquisitionRunnerConfig, func(context.Context, *initializedAcquisitionRuntime) int) int {
+		return 1
+	}})
+	if out.Diagnostic == nil || out.Diagnostic.Stage != censusStageAcquisition || out.Result != nil || out.DiscoveryDiagnostic != nil || out.RequestReceipt != nil || out.controlFlow == nil {
+		t.Fatalf("out=%+v", out)
+	}
+}
+
+func TestRunCensusCoreNonzeroPreservesResultAndAncillaryDiagnostic(t *testing.T) {
+	projection := censusPublicationProjection(t, 1)
+	published := successfulCorePublication(t, censusPublicationCapabilityFor(t, projection))
+	published.Diagnostic = mustDiagnostic(t, censusStageCommitted)
+	deps := censusCoreDependencies{
+		runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
+			_ = cb(context.Background(), &initializedAcquisitionRuntime{sessionID: "publication-session", generation: 7})
+			return 1
+		},
+		discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+			return discoveryFromProjection(projection), nil
+		},
+		acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error) {
+			capability := censusPublicationCapabilityFor(t, projection)
+			return censusAssembly{state: capability.state, token: capability.token}, nil
+		},
+		capability: func(a censusAssembly) (censusPublicationCapability, error) { return a.publicationCapability() },
+		publish:    func(context.Context, censusPublicationCapability, string) censusPublicationOutcome { return published },
+	}
+	out := runCensusCore(censusCLIOptions{}, censusCoreConfig{}, deps)
+	if out.Result != published.Result || out.Diagnostic != published.Diagnostic || out.DiscoveryDiagnostic != nil || out.RequestReceipt != nil || out.controlFlow != nil {
+		t.Fatalf("out=%+v published=%+v", out, published)
 	}
 }
 

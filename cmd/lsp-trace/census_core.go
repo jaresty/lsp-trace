@@ -66,6 +66,10 @@ func productionCensusCoreDependencies() censusCoreDependencies {
 	}
 }
 
+func censusOutcomeTyped(outcome censusPublicationOutcome) bool {
+	return outcome.Diagnostic != nil || outcome.Result != nil || outcome.DiscoveryDiagnostic != nil && outcome.RequestReceipt != nil
+}
+
 // runCensusCore coordinates one already-preflighted census through the existing
 // initialized-session lifecycle. It performs no parsing and writes no streams.
 func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCoreDependencies) censusPublicationOutcome {
@@ -149,10 +153,10 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 	})
 	if !callbackRan {
 		observer.cause(censuscontrolflow.CallbackNotEntered, censuscontrolflow.PhaseNotEntered)
-	} else if code != 0 && outcome.Diagnostic == nil {
+	} else if code != 0 && !censusOutcomeTyped(outcome) {
 		observer.cause(censuscontrolflow.FinalNonzeroFallback, censuscontrolflow.PhaseCompleted)
 	}
-	if !callbackRan || code != 0 && outcome.Diagnostic == nil {
+	if !callbackRan || code != 0 && !censusOutcomeTyped(outcome) {
 		diagnostic, _ := buildCensusCLIDiagnostic(censusStageAcquisition, nil)
 		outcome = censusPublicationOutcome{Diagnostic: &diagnostic}
 	}

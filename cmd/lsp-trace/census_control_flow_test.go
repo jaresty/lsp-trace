@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
+	"lsp-trace/internal/censusrequest"
+	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/operation"
 	"lsp-trace/sessionruntime"
 )
@@ -105,21 +108,6 @@ func TestRunCensusCoreControlFlowBranchMatrix(t *testing.T) {
 				return capability, err
 			}
 		}, censuscontrolflow.PostCoreRuntimeInvalid, censuscontrolflow.PhaseCompleted},
-		{"final-nonzero-fallback", func(d *censusCoreDependencies) {
-			projection := censusPublicationProjection(t, 1)
-			d.acquire = func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error) {
-				capability := censusPublicationCapabilityFor(t, projection)
-				return censusAssembly{state: capability.state, token: capability.token}, nil
-			}
-			d.capability = func(a censusAssembly) (censusPublicationCapability, error) { return a.publicationCapability() }
-			d.publish = func(context.Context, censusPublicationCapability, string) censusPublicationOutcome {
-				return successfulCorePublication(t, censusPublicationCapabilityFor(t, projection))
-			}
-			d.runSession = func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
-				_ = cb(context.Background(), &initializedAcquisitionRuntime{sessionID: "publication-session", generation: 7})
-				return 1
-			}
-		}, censuscontrolflow.FinalNonzeroFallback, censuscontrolflow.PhaseCompleted},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -429,6 +417,63 @@ func TestRunCensusControlFlowSuccessAndNonAcquisitionFailuresDoNotRecord(t *test
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("config failure created ledger: %v", err)
+	}
+}
+
+func TestRunCensusBoundedIncompleteDiscoveryPreservesEnvelopeWithoutControlFlow(t *testing.T) {
+	projection := censusPublicationProjection(t, 1)
+	discovery := discoveryFromProjection(projection)
+	discovery.Complete = false
+	discovery.Observations = []censusacquisition.DiscoveryObservation{{Dimension: censusacquisition.DiscoveryProviderCompleteness, Known: false}}
+	publicationRoot := t.TempDir()
+	controlPath := privatePathForRunner(t)
+	acquired, capabilities, publications := 0, 0, 0
+	var exact censusPublicationOutcome
+	deps := runnerControlFlowDeps(t, func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+		core := censusCoreDependencies{
+			runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
+				return cb(context.Background(), &initializedAcquisitionRuntime{sessionID: "publication-session", generation: 7})
+			},
+			discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+				return discovery, nil
+			},
+			acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error) {
+				acquired++
+				return censusAssembly{}, nil
+			},
+			capability: func(censusAssembly) (censusPublicationCapability, error) {
+				capabilities++
+				return censusPublicationCapability{}, nil
+			},
+			publish: func(context.Context, censusPublicationCapability, string) censusPublicationOutcome {
+				publications++
+				return censusPublicationOutcome{}
+			},
+		}
+		exact = runCensusCore(options, cfg, core)
+		return exact
+	})
+	var stdout, stderr bytes.Buffer
+	code := runCensusWithDependencies(runnerControlFlowArgs(t, publicationRoot, controlPath), &stdout, &stderr, deps)
+	if code != 1 || stdout.Len() != 0 || exact.DiscoveryDiagnostic == nil || exact.RequestReceipt == nil || exact.Diagnostic != nil || exact.controlFlow != nil || acquired != 0 || capabilities != 0 || publications != 0 {
+		t.Fatalf("code=%d outcome=%+v calls=%d/%d/%d stdout=%q stderr=%q", code, exact, acquired, capabilities, publications, stdout.Bytes(), stderr.Bytes())
+	}
+	want, err := json.Marshal(struct {
+		Diagnostic     *censusresult.DiscoveryDiagnostic `json:"diagnostic"`
+		RequestReceipt *censusrequest.Receipt            `json:"request_receipt"`
+	}{exact.DiscoveryDiagnostic, exact.RequestReceipt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = append(want, '\n')
+	if !bytes.Equal(stderr.Bytes(), want) || bytes.Contains(stderr.Bytes(), []byte("ACQUISITION_FAILED")) {
+		t.Fatalf("stderr=%q want=%q", stderr.Bytes(), want)
+	}
+	if entries, err := os.ReadDir(publicationRoot); err != nil || len(entries) != 0 {
+		t.Fatalf("publication entries=%v err=%v", entries, err)
+	}
+	if raw, err := os.ReadFile(controlPath); err == nil && len(raw) != 0 || err != nil && !os.IsNotExist(err) {
+		t.Fatalf("control-flow=%q err=%v", raw, err)
 	}
 }
 
