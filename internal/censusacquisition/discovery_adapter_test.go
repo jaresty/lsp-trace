@@ -356,8 +356,11 @@ func TestDiscoveryAdapterSuccessfulSupplyCancellationPrecedesUnsupportedCapabili
 	if len(client.documentRequests) != 0 || len(got.ProviderFailures) != 0 {
 		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_PRECEDENCE: requests=%v failures=%+v", client.documentRequests, got.ProviderFailures)
 	}
-	if err := got.Accounting.Validate(); err != nil {
-		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_ACCOUNTING_VALID: %v", err)
+	if err := validateDiscovery(got); err != nil {
+		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_DISCOVERY_VALID: %v", err)
+	}
+	if validDiscoveryCause(IncompleteCause{Scope: "FILE", Stage: "ENUMERATION", Code: "FILE_LIMIT"}) {
+		t.Fatal("ASSERT_ENUMERATION_FILE_LIMIT_CAUSE_INCOMPATIBLE")
 	}
 	if got.Accounting.FileDenominator != 1 || got.FileLedger.Denominator != 1 || len(got.FileLedger.Entries) != 1 || got.FileLedger.Entries[0].Ordinal != 0 || got.FileLedger.Entries[0].Identity != f.Path || got.FileLedger.Entries[0].Disposition != string(census.FileIncomplete) {
 		t.Fatalf("ASSERT_SUCCESSFUL_SUPPLY_CANCELLATION_FILE_LEDGERS_RECONCILED: accounting=%+v ledger=%+v", got.Accounting, got.FileLedger)
