@@ -174,20 +174,30 @@ func (r *privateAcquisitionRuntime) diagnosticHandles() []sessionruntime.Diagnos
 	defer r.mu.Unlock()
 	return append([]sessionruntime.DiagnosticOperationHandle(nil), r.handles...)
 }
-func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	result := r.manager.RoundTrip(ctx, request)
 	r.retainHandle(result.DiagnosticOperation)
-	if r.probe != nil {
-		if result.Failure != "" {
-			class, cause := privateSessionFailureCause(result.Failure)
-			r.probe.observe(privateProbePhase(request.Method), class, cause, false)
-		} else if result.ServerError != nil {
-			class, cause := privateRPCErrorCause(result.ServerError)
-			r.probe.observe(privateProbePhase(request.Method), class, cause, false)
-		} else {
-			r.probe.observeSuccess(false)
-		}
+	return result
+}
+func (r *privateAcquisitionRuntime) observeRoundTrip(method string, result sessionruntime.RoundTripResult, decodeErr error) {
+	if r.probe == nil {
+		return
 	}
+	if result.Failure != "" {
+		class, cause := privateSessionFailureCause(result.Failure)
+		r.probe.observe(privateProbePhase(method), class, cause, false)
+	} else if result.ServerError != nil {
+		class, cause := privateRPCErrorCause(result.ServerError)
+		r.probe.observe(privateProbePhase(method), class, cause, false)
+	} else if decodeErr != nil {
+		r.probe.observe(privateProbePhase(method), "DECODE_FAILURE", "DECODE_FAILURE", false)
+	} else {
+		r.probe.observeSuccess(false)
+	}
+}
+func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	result := r.roundTrip(ctx, request)
+	r.observeRoundTrip(request.Method, result, nil)
 	return result
 }
 func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {

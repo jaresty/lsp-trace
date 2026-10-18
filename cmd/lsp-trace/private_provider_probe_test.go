@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
@@ -122,6 +125,72 @@ func TestPrivateProviderProbeChronologyCountsBoundsCanonicalAndPrivacy(t *testin
 	p.observeSuccess(false)
 	if p.artifact().Status != "INCOMPLETE" {
 		t.Fatal("overflow not incomplete")
+	}
+}
+
+func TestPrivateProviderProbeProductionDiscoveryMalformedResultIsOneDecodeFailure(t *testing.T) {
+	p := &privateProviderProbe{counts: make(map[string]uint64)}
+	r := &privateAcquisitionRuntime{probe: p}
+	calls := 0
+	client := productionDiscoveryClient{
+		runtime: r, sessionID: "session", generation: 1,
+		roundTrip: func(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+			calls++
+			return sessionruntime.RoundTripResult{Result: json.RawMessage(`{`)}
+		},
+	}
+	if _, err := client.DocumentSymbols(context.Background(), lsp.DocumentSymbolParams{}); err == nil {
+		t.Fatal("malformed result accepted")
+	}
+	a := p.artifact()
+	if calls != 1 || a.Work != 1 || p.sequence != 1 || len(a.Records) != 1 || a.Records[0].Sequence != 1 || a.Records[0].Class != "DECODE_FAILURE" || len(a.CauseCounts) != 1 || a.CauseCounts[0] != (privateProviderProbeCount{"DECODE_FAILURE", 1}) {
+		t.Fatalf("calls=%d sequence=%d artifact=%+v", calls, p.sequence, a)
+	}
+}
+
+func TestPrivateProviderProbeRoundTripFinalizationIsExclusiveAndPrecedent(t *testing.T) {
+	cases := []struct {
+		name       string
+		result     sessionruntime.RoundTripResult
+		decodeErr  error
+		wantCause  string
+		wantClass  string
+		wantRecord int
+	}{
+		{"decode", sessionruntime.RoundTripResult{Result: json.RawMessage(`{`)}, errors.New("decode"), "DECODE_FAILURE", "DECODE_FAILURE", 1},
+		{"rpc-beats-decode", sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32601}, Result: json.RawMessage(`{`)}, errors.New("decode"), "METHOD_NOT_FOUND", "JSON_RPC_CODE_BUCKET", 1},
+		{"typed-beats-rpc-and-decode", sessionruntime.RoundTripResult{Failure: session.RequestTimeout, ServerError: &lspwire.RPCError{Code: -32601}, Result: json.RawMessage(`{`)}, errors.New("decode"), string(session.RequestTimeout), "TYPED_SESSION_RUNTIME_FAILURE", 1},
+		{"success", sessionruntime.RoundTripResult{Result: json.RawMessage(`[]`)}, nil, "", "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &privateProviderProbe{counts: make(map[string]uint64)}
+			r := &privateAcquisitionRuntime{probe: p}
+			r.observeRoundTrip("textDocument/documentSymbol", tc.result, tc.decodeErr)
+			a := p.artifact()
+			if a.Work != 1 || p.sequence != 1 || len(a.Records) != tc.wantRecord || len(a.CauseCounts) != tc.wantRecord {
+				t.Fatalf("artifact=%+v sequence=%d", a, p.sequence)
+			}
+			if tc.wantRecord == 1 && (a.Records[0].Sequence != 1 || a.Records[0].Cause != tc.wantCause || a.Records[0].Class != tc.wantClass || a.CauseCounts[0].Count != 1) {
+				t.Fatalf("artifact=%+v", a)
+			}
+		})
+	}
+}
+
+func TestPrivateProviderProbeRoundTripSequenceAndFullCountsOutliveRetention(t *testing.T) {
+	p := &privateProviderProbe{counts: make(map[string]uint64)}
+	r := &privateAcquisitionRuntime{probe: p}
+	r.observeRoundTrip("textDocument/documentSymbol", sessionruntime.RoundTripResult{Result: json.RawMessage(`{`)}, errors.New("decode"))
+	r.observeRoundTrip("textDocument/prepareCallHierarchy", sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32603}}, nil)
+	r.observeRoundTrip("callHierarchy/outgoingCalls", sessionruntime.RoundTripResult{Failure: session.ResourceExhausted}, nil)
+	a := p.artifact()
+	if a.Work != 3 || len(a.Records) != 1 || a.Records[0].Sequence != 1 {
+		t.Fatalf("artifact=%+v", a)
+	}
+	want := []privateProviderProbeCount{{"DECODE_FAILURE", 1}, {"INTERNAL_ERROR", 1}, {string(session.ResourceExhausted), 1}}
+	if !reflect.DeepEqual(a.CauseCounts, want) {
+		t.Fatalf("counts=%+v", a.CauseCounts)
 	}
 }
 

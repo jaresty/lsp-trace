@@ -108,7 +108,7 @@ func (p *privateProviderProbe) observeSuccess(file bool) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !checkedProbeAdd(&p.work, 1) || file && !checkedProbeAdd(&p.files, 1) {
+	if !checkedProbeAdd(&p.work, 1) || !checkedProbeAdd(&p.sequence, 1) || file && !checkedProbeAdd(&p.files, 1) {
 		p.incomplete = true
 	}
 }

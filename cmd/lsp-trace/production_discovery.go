@@ -24,6 +24,7 @@ type productionDiscoveryClient struct {
 	sessionID  string
 	generation uint64
 	timeout    time.Duration
+	roundTrip  func(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
 }
 
 func (c productionDiscoveryClient) SupportsDocumentSymbols() bool { return true }
@@ -33,26 +34,26 @@ func (c productionDiscoveryClient) call(ctx context.Context, method string, para
 	if err != nil {
 		return err
 	}
-	result := c.runtime.RoundTrip(ctx, sessionruntime.RoundTripRequest{
+	roundTrip := c.roundTrip
+	if roundTrip == nil {
+		roundTrip = c.runtime.roundTrip
+	}
+	result := roundTrip(ctx, sessionruntime.RoundTripRequest{
 		SessionID: c.sessionID, Generation: c.generation, Method: method, Params: raw,
 		Deadline: time.Now().Add(c.timeout), MaxMessages: 64, MaxBytes: 4 << 20,
 	})
+	var decodeErr error
+	if result.Failure == "" && result.ServerError == nil && len(result.Result) != 0 && string(result.Result) != "null" {
+		decodeErr = json.Unmarshal(result.Result, out)
+	}
+	c.runtime.observeRoundTrip(method, result, decodeErr)
 	if result.Failure != "" {
 		return fmt.Errorf("%s: %s", method, result.Failure)
 	}
 	if result.ServerError != nil {
 		return fmt.Errorf("%s: server error %d: %s", method, result.ServerError.Code, result.ServerError.Message)
 	}
-	if len(result.Result) == 0 || string(result.Result) == "null" {
-		return nil
-	}
-	if err := json.Unmarshal(result.Result, out); err != nil {
-		if c.runtime.probe != nil {
-			c.runtime.probe.observe(privateProbePhase(method), "DECODE_FAILURE", "DECODE_FAILURE", false)
-		}
-		return err
-	}
-	return nil
+	return decodeErr
 }
 
 func (c productionDiscoveryClient) DocumentSymbols(ctx context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
