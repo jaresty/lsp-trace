@@ -367,7 +367,7 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 		previousCause = count.Cause
 	}
 	retainedCounts := make(map[string]uint64, len(a.Records))
-	var previousSequence uint64
+	var previousSequence, retainedSymbolCount uint64
 	for i, record := range a.Records {
 		if record.Sequence == 0 || record.Sequence <= previousSequence || record.Sequence > a.Work || record.Cause == "" {
 			return a, errors.New("invalid private provider probe")
@@ -377,6 +377,9 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 		}
 		if !validPrivateProviderProbePhaseClass(record.Phase, record.Class) || !validPrivateProviderProbeCause(record.Class, record.Cause) {
 			return a, errors.New("invalid private provider probe")
+		}
+		if record.Phase == "DOCUMENT_SYMBOL" {
+			retainedSymbolCount++
 		}
 		retainedCounts[record.Cause]++
 		if retainedCounts[record.Cause] > causeCounts[record.Cause] {
@@ -394,6 +397,9 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 			}
 		}
 		previousSequence = record.Sequence
+	}
+	if retainedSymbolCount > a.Work-a.FileDenominator {
+		return a, errors.New("invalid private provider probe")
 	}
 	return a, nil
 }
