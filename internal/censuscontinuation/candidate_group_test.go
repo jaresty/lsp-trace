@@ -2,7 +2,11 @@ package censuscontinuation
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -322,6 +326,216 @@ func TestCandidateGroupArtifactIdentityBindsResourceProfile(t *testing.T) {
 	substituted.ArtifactID = sealCandidateGroup(substituted)
 	if _, err := substituted.Bytes(); err == nil {
 		t.Fatal("ASSERT_CANDIDATE_ARTIFACT_PROFILE_SUBSTITUTION_REJECTED")
+	}
+}
+
+func privateGroupingFixture(t *testing.T) (*MemoryStore, string, privateProvisionalArtifact) {
+	t.Helper()
+	store, admissionSelector, _ := privateProvisionalFixture(t, []string{privateCallerOutcomeSuccess})
+	selector, err := PreparePrivateProvisionalCandidateSelector(context.Background(), store, admissionSelector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := store.Get(context.Background(), selector)
+	artifact, err := parsePrivateProvisionalCandidate(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store, selector, artifact
+}
+
+func privateGroupingSubmission(t *testing.T, groups []privateGroupingSubmissionGroup, alternatives []privateGroupingSubmissionAlternative) []byte {
+	t.Helper()
+	raw, err := json.Marshal(privateGroupingSubmissionWire{SchemaVersion: privateGroupingSubmissionSchema, Groups: groups, Alternatives: alternatives})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func TestPrivateGroupingHypothesisKindsOverlapAlternativesAndAccounting(t *testing.T) {
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	ids := []string{predecessor.wire.Candidates[0].CandidateID, predecessor.wire.Candidates[1].CandidateID}
+	sort.Strings(ids)
+	groups := []privateGroupingSubmissionGroup{
+		{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: ids, Label: " exact label ", Claim: "claim", Basis: "basis", RejectionConditions: []string{"condition-a"}},
+		{ClientGroupKey: "b", Kind: privateGroupingSemantic, CandidateIDs: []string{ids[0]}, Label: "other", Claim: "other claim", Basis: "other basis", RejectionConditions: []string{"condition-b"}},
+		{ClientGroupKey: "c", Kind: privateGroupingSingleton, CandidateIDs: []string{ids[1]}, RejectionConditions: []string{}},
+	}
+	submission := privateGroupingSubmission(t, groups, []privateGroupingSubmissionAlternative{{LeftClientGroupKey: "a", RightClientGroupKey: "b"}})
+	selector, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, submission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := store.Get(context.Background(), selector)
+	artifact, err := parsePrivateGroupingArtifact(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := artifact.wire
+	if w.Authority != 0 || w.Accepted || w.Completeness != CompletenessUnknown || w.FeatureIdentity != "UNRESOLVED" || w.SemanticQualification != "NOT_PERFORMED" || w.AutomaticProgressionAllowed || w.Groups[0].Label != " exact label " {
+		t.Fatalf("fixed fields or semantic preservation: %+v", w)
+	}
+	if w.Accounting.CandidateCount != 2 || w.Accounting.GroupCount != 3 || w.Accounting.MembershipCount != 4 || w.Accounting.DistinctGroupedCandidateCount != 2 || w.Accounting.UngroupedCandidateCount != 0 || len(w.UngroupedCandidateIDs) != 0 {
+		t.Fatalf("accounting: %+v ungrouped=%v", w.Accounting, w.UngroupedCandidateIDs)
+	}
+	if bytes.Contains(raw, predecessor.wire.Descriptions[0].Outcome) || bytes.Contains(raw, []byte(`"outcome"`)) {
+		t.Fatal("outcome payload copied")
+	}
+	second, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, submission)
+	if err != nil || second != selector {
+		t.Fatalf("replay selector=%q want=%q err=%v", second, selector, err)
+	}
+}
+
+func TestPrivateGroupingHypothesisPartialCoverageAndStrictSubmission(t *testing.T) {
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	id := predecessor.wire.Candidates[0].CandidateID
+	valid := privateGroupingSubmission(t, []privateGroupingSubmissionGroup{{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: []string{id}, Label: "label", Claim: "claim", Basis: "basis", RejectionConditions: []string{"reject"}}}, []privateGroupingSubmissionAlternative{})
+	selector, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := store.Get(context.Background(), selector)
+	artifact, _ := parsePrivateGroupingArtifact(raw)
+	if artifact.wire.Accounting.UngroupedCandidateCount != 1 || len(artifact.wire.UngroupedCandidateIDs) != 1 {
+		t.Fatalf("partial coverage: %+v", artifact.wire.Accounting)
+	}
+	cases := map[string][]byte{
+		"nil":          nil,
+		"null":         []byte("null"),
+		"empty-groups": privateGroupingSubmission(t, []privateGroupingSubmissionGroup{}, []privateGroupingSubmissionAlternative{}),
+		"unknown":      bytes.Replace(valid, []byte(`"groups":`), []byte(`"caller_id":"forbidden","groups":`), 1),
+		"whitespace":   append([]byte(" "), valid...),
+	}
+	for name, candidate := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, candidate); err == nil || got != "" {
+				t.Fatalf("selector=%q err=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestPrivateGroupingHypothesisRejectsCanonicalAndAlternativeViolations(t *testing.T) {
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	ids := []string{predecessor.wire.Candidates[0].CandidateID, predecessor.wire.Candidates[1].CandidateID}
+	sort.Strings(ids)
+	base := func() []privateGroupingSubmissionGroup {
+		return []privateGroupingSubmissionGroup{
+			{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: []string{ids[0]}, Label: "a", Claim: "a", Basis: "a", RejectionConditions: []string{"a"}},
+			{ClientGroupKey: "b", Kind: privateGroupingSemantic, CandidateIDs: []string{ids[1]}, Label: "b", Claim: "b", Basis: "b", RejectionConditions: []string{"b"}},
+		}
+	}
+	for name, mutate := range map[string]func(*[]privateGroupingSubmissionGroup, *[]privateGroupingSubmissionAlternative){
+		"group-order": func(g *[]privateGroupingSubmissionGroup, _ *[]privateGroupingSubmissionAlternative) {
+			(*g)[0], (*g)[1] = (*g)[1], (*g)[0]
+		},
+		"member-order": func(g *[]privateGroupingSubmissionGroup, _ *[]privateGroupingSubmissionAlternative) {
+			(*g)[0].CandidateIDs = []string{ids[1], ids[0]}
+		},
+		"duplicate-condition": func(g *[]privateGroupingSubmissionGroup, _ *[]privateGroupingSubmissionAlternative) {
+			(*g)[0].RejectionConditions = []string{"a", "a"}
+		},
+		"reverse-alternative": func(_ *[]privateGroupingSubmissionGroup, a *[]privateGroupingSubmissionAlternative) {
+			*a = []privateGroupingSubmissionAlternative{{LeftClientGroupKey: "b", RightClientGroupKey: "a"}}
+		},
+		"singleton-endpoint": func(g *[]privateGroupingSubmissionGroup, a *[]privateGroupingSubmissionAlternative) {
+			(*g)[1] = privateGroupingSubmissionGroup{ClientGroupKey: "b", Kind: privateGroupingSingleton, CandidateIDs: []string{ids[1]}, RejectionConditions: []string{}}
+			*a = []privateGroupingSubmissionAlternative{{LeftClientGroupKey: "a", RightClientGroupKey: "b"}}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			groups, alternatives := base(), []privateGroupingSubmissionAlternative{{LeftClientGroupKey: "a", RightClientGroupKey: "b"}}
+			mutate(&groups, &alternatives)
+			if got, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, privateGroupingSubmission(t, groups, alternatives)); err == nil || got != "" {
+				t.Fatalf("selector=%q err=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestPrivateGroupingHypothesisSemanticBoundsAndAuthorityMutationMatrix(t *testing.T) {
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	id := predecessor.wire.Candidates[0].CandidateID
+	group := privateGroupingSubmissionGroup{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: []string{id}, Label: strings.Repeat("x", privateGroupingMaxSemanticBytes), Claim: "claim", Basis: "basis", RejectionConditions: make([]string, privateGroupingMaxConditions)}
+	for i := range group.RejectionConditions {
+		group.RejectionConditions[i] = fmt.Sprintf("condition-%03d", i)
+	}
+	valid := privateGroupingSubmission(t, []privateGroupingSubmissionGroup{group}, []privateGroupingSubmissionAlternative{})
+	selector, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, valid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tooLong := group
+	tooLong.Label += "x"
+	tooMany := group
+	tooMany.RejectionConditions = append(append([]string{}, group.RejectionConditions...), "condition-overflow")
+	for name, submission := range map[string][]byte{
+		"semantic-plus-one":   privateGroupingSubmission(t, []privateGroupingSubmissionGroup{tooLong}, []privateGroupingSubmissionAlternative{}),
+		"conditions-plus-one": privateGroupingSubmission(t, []privateGroupingSubmissionGroup{tooMany}, []privateGroupingSubmissionAlternative{}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, err := RetainPrivateGroupingHypothesisSelector(context.Background(), store, candidateSelector, submission); err == nil || got != "" {
+				t.Fatalf("selector=%q err=%v", got, err)
+			}
+		})
+	}
+	raw, _ := store.Get(context.Background(), selector)
+	base, err := parsePrivateGroupingArtifact(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutations := map[string]func(*privateGroupingArtifactWire){
+		"authority":              func(w *privateGroupingArtifactWire) { w.Authority = 1 },
+		"accepted":               func(w *privateGroupingArtifactWire) { w.Accepted = true },
+		"completeness":           func(w *privateGroupingArtifactWire) { w.Completeness = "COMPLETE" },
+		"feature-identity":       func(w *privateGroupingArtifactWire) { w.FeatureIdentity = "ACCEPTED" },
+		"semantic-qualification": func(w *privateGroupingArtifactWire) { w.SemanticQualification = "PERFORMED" },
+		"progression":            func(w *privateGroupingArtifactWire) { w.AutomaticProgressionAllowed = true },
+		"review":                 func(w *privateGroupingArtifactWire) { w.ReviewStatus = "PERFORMED" },
+		"challenge":              func(w *privateGroupingArtifactWire) { w.ChallengeStatus = "PERFORMED" },
+		"adjudication":           func(w *privateGroupingArtifactWire) { w.AdjudicationStatus = "PERFORMED" },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			w := base.wire
+			mutate(&w)
+			w.ArtifactID = identityJSON(privateGroupingArtifactDomain, w, func(v *privateGroupingArtifactWire) { v.ArtifactID = "" })
+			mutated, _ := json.Marshal(w)
+			if _, err := parsePrivateGroupingArtifact(mutated); err == nil {
+				t.Fatal("accepted authority mutation")
+			}
+		})
+	}
+}
+
+func TestPrivateGroupingHypothesisPutReadbackCancellationAndMutation(t *testing.T) {
+	store, candidateSelector, predecessor := privateGroupingFixture(t)
+	id := predecessor.wire.Candidates[0].CandidateID
+	submission := privateGroupingSubmission(t, []privateGroupingSubmissionGroup{{ClientGroupKey: "a", Kind: privateGroupingSemantic, CandidateIDs: []string{id}, Label: "a", Claim: "a", Basis: "a", RejectionConditions: []string{"a"}}}, []privateGroupingSubmissionAlternative{})
+	for name, configure := range map[string]func(*privateProvisionalFaultStore){
+		"put":      func(s *privateProvisionalFaultStore) { s.putErr = true },
+		"selector": func(s *privateProvisionalFaultStore) { s.wrongPut = true },
+		"readback": func(s *privateProvisionalFaultStore) { s.readbackErr = true },
+		"mutation": func(s *privateProvisionalFaultStore) { s.mutateReadback = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			fault := &privateProvisionalFaultStore{Store: store}
+			configure(fault)
+			if got, err := RetainPrivateGroupingHypothesisSelector(context.Background(), fault, candidateSelector, submission); err == nil || got != "" || fault.puts != 1 {
+				t.Fatalf("selector=%q err=%v puts=%d", got, err, fault.puts)
+			}
+		})
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	fault := &privateProvisionalFaultStore{Store: store, cancel: cancel}
+	if got, err := RetainPrivateGroupingHypothesisSelector(ctx, fault, candidateSelector, submission); err == nil || got != "" || fault.puts != 1 || fault.gets[fault.last] != 0 {
+		t.Fatalf("post-put cancellation selector=%q err=%v puts=%d readbacks=%d", got, err, fault.puts, fault.gets[fault.last])
+	}
+	changed := &privateProvisionalFaultStore{Store: store, changeSelector: candidateSelector, changeOnRead: 2}
+	if got, err := RetainPrivateGroupingHypothesisSelector(context.Background(), changed, candidateSelector, submission); err == nil || got != "" || changed.puts != 0 {
+		t.Fatalf("predecessor mutation selector=%q err=%v puts=%d", got, err, changed.puts)
 	}
 }
 
