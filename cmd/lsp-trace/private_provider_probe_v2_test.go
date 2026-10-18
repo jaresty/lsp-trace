@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"sort"
@@ -205,6 +206,34 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 		copy.Records = append([]privateProviderProbeRecordV2(nil), valid.Records...)
 		return copy
 	}
+	parseRaw := func(t *testing.T, raw string, wantValid bool) {
+		t.Helper()
+		_, err := parsePrivateProviderProbeV2([]byte(raw + "\n"))
+		if (err == nil) != wantValid {
+			t.Fatalf("wantValid=%v err=%v artifact=%s", wantValid, err, raw)
+		}
+	}
+
+	for _, test := range []struct {
+		name      string
+		counts    string
+		records   string
+		wantValid bool
+	}{
+		{name: "valid-cause-counts-empty-records-null", counts: "[]", records: "null", wantValid: true},
+		{name: "invalid-cause-counts-null-records-null", counts: "null", records: "null"},
+		{name: "invalid-cause-counts-empty-records-empty", counts: "[]", records: "[]"},
+		{name: "invalid-cause-counts-null-records-empty", counts: "null", records: "[]"},
+	} {
+		t.Run("zero-work-"+test.name, func(t *testing.T) {
+			raw := fmt.Sprintf(`{"schema":"lsp-trace.private-provider-probe.v2","status":"COMPLETE","file_denominator":0,"cause_counts":%s,"records":%s,"rerun_count":0,"work":0}`, test.counts, test.records)
+			parseRaw(t, raw, test.wantValid)
+		})
+		t.Run("positive-work-all-success-"+test.name, func(t *testing.T) {
+			raw := fmt.Sprintf(`{"schema":"lsp-trace.private-provider-probe.v2","status":"COMPLETE","file_denominator":0,"cause_counts":%s,"records":%s,"rerun_count":0,"work":1}`, test.counts, test.records)
+			parseRaw(t, raw, test.wantValid)
+		})
+	}
 
 	t.Run("exact-arbitrary-pairing-reproducer", func(t *testing.T) {
 		const raw = "{\"schema\":\"lsp-trace.private-provider-probe.v2\",\"status\":\"COMPLETE\",\"file_denominator\":0,\"cause_counts\":[{\"cause\":\"RESOURCE_EXHAUSTED\",\"count\":1}],\"records\":[{\"sequence\":1,\"phase\":\"DOCUMENT_SYMBOL\",\"class\":\"DECODE_FAILURE\",\"cause\":\"RESOURCE_EXHAUSTED\"}],\"rerun_count\":0,\"work\":1}\n"
@@ -257,7 +286,7 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 		parse(t, a, true)
 		a.FileDenominator = ^uint64(0)
 		parse(t, a, false)
-		a.CauseCounts = nil
+		a.CauseCounts = []privateProviderProbeCount{}
 		a.Records = nil
 		parse(t, a, true)
 	})

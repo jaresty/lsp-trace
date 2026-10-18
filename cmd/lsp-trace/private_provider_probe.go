@@ -348,6 +348,9 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 	if d.Decode(&struct{}{}) != io.EOF {
 		return a, errors.New("invalid private provider probe")
 	}
+	if a.CauseCounts == nil || len(a.Records) == 0 && a.Records != nil {
+		return a, errors.New("invalid private provider probe")
+	}
 	canonical, _ := json.Marshal(a)
 	if !bytes.Equal(canonical, line) || a.Schema != privateProviderProbeSchemaV2 || (a.Status != "COMPLETE" && a.Status != "INCOMPLETE") || len(a.Records) > 2 || a.RerunCount != 0 || a.FileDenominator > a.Work {
 		return a, errors.New("invalid private provider probe")
