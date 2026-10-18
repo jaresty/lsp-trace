@@ -217,6 +217,26 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 		a.FileDenominator = 1
 		parse(t, a, false)
 	})
+	t.Run("exact-document-supply-denominator-reproducer", func(t *testing.T) {
+		const raw = "{\"schema\":\"lsp-trace.private-provider-probe.v2\",\"status\":\"COMPLETE\",\"file_denominator\":0,\"cause_counts\":[{\"cause\":\"DECODE_FAILURE\",\"count\":1},{\"cause\":\"DOCUMENT_SOURCE_UNAVAILABLE\",\"count\":1}],\"records\":[{\"sequence\":1,\"phase\":\"DOCUMENT_SYMBOL\",\"class\":\"DECODE_FAILURE\",\"cause\":\"DECODE_FAILURE\"},{\"sequence\":2,\"phase\":\"DOCUMENT_SUPPLY\",\"class\":\"DOCUMENT_FAILURE\",\"cause\":\"DOCUMENT_SOURCE_UNAVAILABLE\"}],\"rerun_count\":0,\"work\":2}\n"
+		if _, err := parsePrivateProviderProbeV2([]byte(raw)); err == nil {
+			t.Fatal("accepted retained document supply beyond file denominator")
+		}
+	})
+	t.Run("valid-one-document-supply-with-denominator-one", func(t *testing.T) {
+		a := clone()
+		a.FileDenominator = 1
+		a.Work = 2
+		a.CauseCounts = []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}, {Cause: "DOCUMENT_SOURCE_UNAVAILABLE", Count: 1}}
+		a.Records = []privateProviderProbeRecordV2{
+			{Sequence: 1, Phase: "DOCUMENT_SYMBOL", Class: "DECODE_FAILURE", Cause: "DECODE_FAILURE"},
+			{Sequence: 2, Phase: "DOCUMENT_SUPPLY", Class: "DOCUMENT_FAILURE", Cause: "DOCUMENT_SOURCE_UNAVAILABLE"},
+		}
+		parse(t, a, true)
+	})
+	t.Run("valid-zero-file-without-document-supply", func(t *testing.T) {
+		parse(t, clone(), true)
+	})
 	t.Run("valid-minimum-document-supply-work", func(t *testing.T) {
 		a := clone()
 		a.FileDenominator = 1
@@ -282,8 +302,24 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 	})
 	t.Run("aggregates-beyond-retained-records", func(t *testing.T) {
 		a := clone()
-		a.Work = 3
-		a.CauseCounts[0].Count = 3
+		a.FileDenominator = 1
+		a.Work = 4
+		a.CauseCounts = []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}, {Cause: "DOCUMENT_SOURCE_UNAVAILABLE", Count: 3}}
+		a.Records = []privateProviderProbeRecordV2{
+			{Sequence: 1, Phase: "DOCUMENT_SYMBOL", Class: "DECODE_FAILURE", Cause: "DECODE_FAILURE"},
+			{Sequence: 2, Phase: "DOCUMENT_SUPPLY", Class: "DOCUMENT_FAILURE", Cause: "DOCUMENT_SOURCE_UNAVAILABLE"},
+		}
+		parse(t, a, true)
+	})
+	t.Run("document-supply-denominator-overflow-boundary", func(t *testing.T) {
+		a := clone()
+		a.FileDenominator = ^uint64(0) - 1
+		a.Work = ^uint64(0)
+		a.CauseCounts = []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}, {Cause: "DOCUMENT_SOURCE_UNAVAILABLE", Count: 1}}
+		a.Records = []privateProviderProbeRecordV2{
+			{Sequence: 1, Phase: "DOCUMENT_SYMBOL", Class: "DECODE_FAILURE", Cause: "DECODE_FAILURE"},
+			{Sequence: 2, Phase: "DOCUMENT_SUPPLY", Class: "DOCUMENT_FAILURE", Cause: "DOCUMENT_SOURCE_UNAVAILABLE"},
+		}
 		parse(t, a, true)
 	})
 	t.Run("success-remainder", func(t *testing.T) {
@@ -326,7 +362,11 @@ func TestPrivateProviderProbeV2PhaseClassClosure(t *testing.T) {
 				counts = append(counts, privateProviderProbeCount{Cause: cause, Count: 1})
 			}
 		}
-		return privateProviderProbeArtifactV2{Schema: privateProviderProbeSchemaV2, Status: "COMPLETE", CauseCounts: counts, Records: records, Work: work}
+		fileDenominator := uint64(0)
+		if phase == "DOCUMENT_SUPPLY" {
+			fileDenominator = 1
+		}
+		return privateProviderProbeArtifactV2{Schema: privateProviderProbeSchemaV2, Status: "COMPLETE", FileDenominator: fileDenominator, CauseCounts: counts, Records: records, Work: work}
 	}
 	parse := func(t *testing.T, value privateProviderProbeArtifactV2, wantValid bool) {
 		t.Helper()
