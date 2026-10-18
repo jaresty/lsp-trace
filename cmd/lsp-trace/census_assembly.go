@@ -13,6 +13,7 @@ import (
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/censusrequest"
@@ -64,6 +65,7 @@ type censusPublicationOutcome struct {
 	DiscoveryDiagnostic *censusresult.DiscoveryDiagnostic
 	RequestReceipt      *censusrequest.Receipt
 	continuation        *censusContinuationCustody
+	controlFlow         *censuscontrolflow.Record
 }
 
 func (o censusPublicationOutcome) BuildCommittedHandoff() (censuscontinuation.CommittedHandoff, error) {
@@ -188,17 +190,27 @@ func publishCensusCaptureSetInternal(ctx context.Context, capability censusPubli
 	return outcome
 }
 
-func runInitializedCensusAcquisition(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int, diagnostics ...*censusdiagnostic.Recorder) (censusAssembly, error) {
+func runInitializedCensusAcquisition(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int, diagnostics ...any) (censusAssembly, error) {
 	if runtime == nil {
 		return censusAssembly{}, errors.New("initialized census runtime required")
 	}
 	var diagnostic *censusdiagnostic.Recorder
-	if len(diagnostics) == 1 {
-		diagnostic = diagnostics[0]
+	var observer *censusControlFlowObserver
+	for _, extra := range diagnostics {
+		switch value := extra.(type) {
+		case *censusdiagnostic.Recorder:
+			diagnostic = value
+		case *censusControlFlowObserver:
+			observer = value
+		}
 	}
-	acquirer := newInitializedCensusBatchAcquirer(runtime, limits, diagnostic)
+	acquirer := newInitializedCensusBatchAcquirer(runtime, limits, diagnostic, observer)
 	planning := &censusacquisition.PlanningConfig{DownDepth: downDepth, UpDepth: upDepth, MaxBatchTargets: maxBatchTargets}
-	projection, err := (censusacquisition.Core{Discoverer: discoverer, Acquirer: acquirer, Planning: planning}).Run(ctx, acquirer.session.identity())
+	core := censusacquisition.Core{Discoverer: discoverer, Acquirer: acquirer, Planning: planning}
+	core.OnErrorPhase = func(phase censusacquisition.Phase) {
+		observer.cause(censuscontrolflow.CoreFailed, censuscontrolflow.CorePhase(phase))
+	}
+	projection, err := core.Run(ctx, acquirer.session.identity())
 	if err != nil {
 		var batchFailure interface{ BatchOrdinal() int }
 		if errors.As(err, &batchFailure) && batchFailure.BatchOrdinal() > 0 {

@@ -6,6 +6,7 @@ import (
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
@@ -19,7 +20,7 @@ type censusCoreDependencies struct {
 	runSession          func(initializedAcquisitionRunnerConfig, func(context.Context, *initializedAcquisitionRuntime) int) int
 	discover            func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error)
 	acquire             func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error)
-	acquireDiagnostic   func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int, *censusdiagnostic.Recorder) (censusAssembly, error)
+	acquireDiagnostic   func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int, *censusdiagnostic.Recorder, *censusControlFlowObserver) (censusAssembly, error)
 	capability          func(censusAssembly) (censusPublicationCapability, error)
 	publish             func(context.Context, censusPublicationCapability, string) censusPublicationOutcome
 	publishContinuation func(context.Context, censusPublicationCapability, string, programccompose.ExactMetadata) censusPublicationOutcome
@@ -54,8 +55,8 @@ func productionCensusCoreDependencies() censusCoreDependencies {
 		acquire: func(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int) (censusAssembly, error) {
 			return runInitializedCensusAcquisition(ctx, runtime, discoverer, limits, downDepth, upDepth, maxBatchTargets)
 		},
-		acquireDiagnostic: func(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int, diagnostic *censusdiagnostic.Recorder) (censusAssembly, error) {
-			return runInitializedCensusAcquisition(ctx, runtime, discoverer, limits, downDepth, upDepth, maxBatchTargets, diagnostic)
+		acquireDiagnostic: func(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int, diagnostic *censusdiagnostic.Recorder, observer *censusControlFlowObserver) (censusAssembly, error) {
+			return runInitializedCensusAcquisition(ctx, runtime, discoverer, limits, downDepth, upDepth, maxBatchTargets, diagnostic, observer)
 		},
 		capability: func(assembly censusAssembly) (censusPublicationCapability, error) {
 			return assembly.publicationCapability()
@@ -69,15 +70,18 @@ func productionCensusCoreDependencies() censusCoreDependencies {
 // initialized-session lifecycle. It performs no parsing and writes no streams.
 func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCoreDependencies) censusPublicationOutcome {
 	outcome := censusPublicationOutcome{}
+	observer := newCensusControlFlowObserver()
 	callbackRan := false
 	code := deps.runSession(cfg.runner, func(ctx context.Context, runtime *initializedAcquisitionRuntime) int {
 		callbackRan = true
 		fail := func(stage censusFailureStage, batch *int) int {
+			observer.cause(censuscontrolflow.CoreFailed, censusControlFlowPhase(stage))
 			diagnostic, _ := buildCensusCLIDiagnostic(stage, batch)
 			outcome = censusPublicationOutcome{Diagnostic: &diagnostic}
 			return 1
 		}
 		if err := ctx.Err(); err != nil || runtime == nil || runtime.SessionID() == "" || runtime.Generation() == 0 {
+			observer.cause(censuscontrolflow.CallbackRuntimeInvalid, censuscontrolflow.PhaseInput)
 			return fail(censusStageAcquisition, nil)
 		}
 		discovery, err := deps.discover(ctx, options, runtime, cfg.callHierarchy)
@@ -98,7 +102,7 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 		}
 		var assembly censusAssembly
 		if deps.acquireDiagnostic != nil {
-			assembly, err = deps.acquireDiagnostic(ctx, runtime, fixedCensusDiscovery{discovery: discovery}, cfg.limits, options.DownDepth, options.UpDepth, options.MaxBatchTargets, cfg.diagnostic)
+			assembly, err = deps.acquireDiagnostic(ctx, runtime, fixedCensusDiscovery{discovery: discovery}, cfg.limits, options.DownDepth, options.UpDepth, options.MaxBatchTargets, cfg.diagnostic, observer)
 		} else {
 			assembly, err = deps.acquire(ctx, runtime, fixedCensusDiscovery{discovery: discovery}, cfg.limits, options.DownDepth, options.UpDepth, options.MaxBatchTargets)
 		}
@@ -106,6 +110,7 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 			return fail(censusStageAcquisition, censusBatchOrdinal(err))
 		}
 		if err := ctx.Err(); err != nil || runtime.SessionID() != discovery.Session.SessionID || runtime.Generation() != discovery.Session.Generation {
+			observer.cause(censuscontrolflow.PostCoreRuntimeInvalid, censuscontrolflow.PhaseCompleted)
 			return fail(censusStageAcquisition, nil)
 		}
 		capability, err := deps.capability(assembly)
@@ -113,6 +118,7 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 			return fail(censusStageAssembly, nil)
 		}
 		if err := ctx.Err(); err != nil {
+			observer.cause(censuscontrolflow.PostCoreRuntimeInvalid, censuscontrolflow.PhaseCompleted)
 			return fail(censusStageAcquisition, nil)
 		}
 		if deps.publishContinuation != nil {
@@ -141,9 +147,19 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 		}
 		return 0
 	})
+	if !callbackRan {
+		observer.cause(censuscontrolflow.CallbackNotEntered, censuscontrolflow.PhaseNotEntered)
+	} else if code != 0 && outcome.Diagnostic == nil {
+		observer.cause(censuscontrolflow.FinalNonzeroFallback, censuscontrolflow.PhaseCompleted)
+	}
 	if !callbackRan || code != 0 && outcome.Diagnostic == nil {
 		diagnostic, _ := buildCensusCLIDiagnostic(censusStageAcquisition, nil)
 		outcome = censusPublicationOutcome{Diagnostic: &diagnostic}
+	}
+	if outcome.Diagnostic != nil && outcome.Diagnostic.Stage == censusStageAcquisition {
+		if record, ok := observer.record(); ok {
+			outcome.controlFlow = &record
+		}
 	}
 	return outcome
 }

@@ -13,6 +13,7 @@ import (
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
@@ -69,6 +70,7 @@ type censusBatchAcquirer struct {
 	session               censusBatchSession
 	limits                acquisitionops.Limits
 	diagnostic            *censusdiagnostic.Recorder
+	controlFlow           *censusControlFlowObserver
 	beforeNativeAdmission func()
 }
 
@@ -80,8 +82,12 @@ func newCensusBatchAcquirer(session censusBatchSession, limits acquisitionops.Li
 	return a
 }
 
-func newInitializedCensusBatchAcquirer(runtime *initializedAcquisitionRuntime, limits acquisitionops.Limits, diagnostic *censusdiagnostic.Recorder) *censusBatchAcquirer {
-	return newCensusBatchAcquirer(&initializedCensusBatchSession{runtime: runtime}, limits, diagnostic)
+func newInitializedCensusBatchAcquirer(runtime *initializedAcquisitionRuntime, limits acquisitionops.Limits, diagnostic *censusdiagnostic.Recorder, observer ...*censusControlFlowObserver) *censusBatchAcquirer {
+	a := newCensusBatchAcquirer(&initializedCensusBatchSession{runtime: runtime}, limits, diagnostic)
+	if len(observer) == 1 {
+		a.controlFlow = observer[0]
+	}
+	return a
 }
 
 type initializedCensusBatchSession struct {
@@ -159,7 +165,11 @@ func (a *censusBatchAcquirer) fail(request censusacquisition.BatchRequest, code,
 			record.OperationCode = censusDiagnosticOperationCode(normalized.Code)
 			record.OperationCategory = "ACQUISITION"
 		}
-		_ = a.diagnostic.Record(record)
+		if err := a.diagnostic.Record(record); err != nil {
+			a.controlFlow.batch(censuscontrolflow.BatchRejected)
+		} else {
+			a.controlFlow.batch(censuscontrolflow.BatchAccepted)
+		}
 	}
 	return batchFail(code, err)
 }

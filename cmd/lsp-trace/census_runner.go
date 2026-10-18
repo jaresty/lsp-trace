@@ -13,6 +13,7 @@ import (
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
@@ -133,6 +134,13 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 			return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
 		}
 	}
+	var controlFlow *censuscontrolflow.Recorder
+	if options.PrivateControlFlowDiagnosticPath != "" {
+		controlFlow, err = censuscontrolflow.NewRecorder(options.PrivateControlFlowDiagnosticPath, censuscontrolflow.DefaultMaxBytes, censuscontrolflow.DefaultMaxRecords)
+		if err != nil {
+			return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
+		}
+	}
 	starter, err := deps.newStarter()
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
@@ -157,13 +165,20 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		}
 	}
 	outcome := deps.runCore(options, cfg, productionCensusCoreDependencies())
+	finish := func() int {
+		code := writeCensusOutcome(stdout, stderr, options.Machine, outcome)
+		if controlFlow != nil && outcome.controlFlow != nil {
+			_ = controlFlow.Record(*outcome.controlFlow)
+		}
+		return code
+	}
 	if !options.Catalog {
-		return writeCensusOutcome(stdout, stderr, options.Machine, outcome)
+		return finish()
 	}
 	if catalogCode >= 0 {
 		return catalogCode
 	}
-	return writeCensusOutcome(stdout, stderr, options.Machine, outcome)
+	return finish()
 }
 
 func writeCensusFailure(stderr io.Writer, stage censusFailureStage, machine bool, err error) int {

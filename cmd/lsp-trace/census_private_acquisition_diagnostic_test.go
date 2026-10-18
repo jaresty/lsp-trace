@@ -217,7 +217,7 @@ func runPrivateDiagnosticCoreFailure(t *testing.T, recorder *censusdiagnostic.Re
 		discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
 			return discoveryFromProjection(projection), nil
 		},
-		acquireDiagnostic: func(_ context.Context, _ *initializedAcquisitionRuntime, _ censusacquisition.Discoverer, _ acquisitionops.Limits, _, _, _ int, got *censusdiagnostic.Recorder) (censusAssembly, error) {
+		acquireDiagnostic: func(_ context.Context, _ *initializedAcquisitionRuntime, _ censusacquisition.Discoverer, _ acquisitionops.Limits, _, _, _ int, got *censusdiagnostic.Recorder, _ *censusControlFlowObserver) (censusAssembly, error) {
 			if got != recorder {
 				t.Fatal("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_CORE_RECORDER_FORWARDING")
 			}
@@ -298,7 +298,7 @@ func TestPrivateAcquisitionDiagnosticLateBatchFailureCoreLeavesNoCapabilityResul
 		discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
 			return discoveryFromProjection(projection), nil
 		},
-		acquireDiagnostic: func(_ context.Context, _ *initializedAcquisitionRuntime, _ censusacquisition.Discoverer, _ acquisitionops.Limits, _, _, _ int, recorder *censusdiagnostic.Recorder) (censusAssembly, error) {
+		acquireDiagnostic: func(_ context.Context, _ *initializedAcquisitionRuntime, _ censusacquisition.Discoverer, _ acquisitionops.Limits, _, _, _ int, recorder *censusdiagnostic.Recorder, _ *censusControlFlowObserver) (censusAssembly, error) {
 			calls := 0
 			session := &fakeBatchSession{id: "s", generation: 7, respond: func(_ context.Context, request operation.Request) (operation.Result, *operation.Failure) {
 				calls++
