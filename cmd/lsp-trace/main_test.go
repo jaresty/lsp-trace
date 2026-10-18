@@ -1101,9 +1101,11 @@ func TestParseSliceUsesSymmetricDepthFlagsAndExclusiveStartModes(t *testing.T) {
 			}
 		}
 	})
-	t.Run("no max depth", func(t *testing.T) {
-		if _, err := parseSlice(append(append([]string{}, base...), "--max-depth", "7", "--from-file", "a.go")); err == nil {
-			t.Error("ASSERT_SLICE_MAX_DEPTH_NOT_EXPOSED: accepted --max-depth")
+	t.Run("negative depth", func(t *testing.T) {
+		for _, flag := range []string{"--down-depth", "--up-depth"} {
+			if _, err := parseSlice(append(append([]string{}, base...), flag, "-1", "--from-file", "a.go")); err == nil || !strings.Contains(err.Error(), "non-negative") {
+				t.Errorf("ASSERT_SLICE_DEPTH_NON_NEGATIVE[%s]: %v", flag, err)
+			}
 		}
 	})
 }

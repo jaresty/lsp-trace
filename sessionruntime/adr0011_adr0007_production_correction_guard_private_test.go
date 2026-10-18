@@ -67,24 +67,18 @@ func (r *correctionGuardSecondPrepareFailureRuntimePrivate) RoundTrip(ctx contex
 }
 
 func TestADR0011ADR0007ProductionCorrectionGuardPrivate(t *testing.T) {
-	readyManagerPrivate := func(t *testing.T, child *scriptedTransportPrivate) (*sessionruntime.Manager, sessionruntime.StartResult, string) {
+	readyManagerPrivate := func(t *testing.T, child *scriptedTransportPrivate) (*sessionruntime.Manager, sessionruntime.StartResult, string, string) {
 		t.Helper()
-		workspace := fixedWorkspacePathPrivate
-		if err := os.RemoveAll(workspace); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.MkdirAll(workspace, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() { _ = os.RemoveAll(workspace) })
+		workspace := t.TempDir()
 		path := filepath.Join(workspace, "calls.go")
 		if err := os.WriteFile(path, []byte("package calls\nfunc Target() {}\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		uri, err := source.FileURI(path)
-		if err != nil || uri != fixedWorkspaceURIPrivate {
-			t.Fatalf("ASSERT_CORRECTION_GUARD_FIXED_WORKSPACE: uri=%q err=%v", uri, err)
+		if err != nil {
+			t.Fatalf("ASSERT_CORRECTION_GUARD_TEMP_WORKSPACE_URI: uri=%q err=%v", uri, err)
 		}
+		child.prepareItem = bytes.ReplaceAll(child.prepareItem, []byte(fixedWorkspaceURIPrivate), []byte(uri))
 		validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: workspace, Profile: "go", EnvironmentReference: "local"})
 		if err != nil {
 			t.Fatal(err)
@@ -111,11 +105,11 @@ func TestADR0011ADR0007ProductionCorrectionGuardPrivate(t *testing.T) {
 		if len(startup) != 3 || startup[2].Method != "initialized" || startup[2].Kind != "request" {
 			t.Fatalf("ASSERT_CORRECTION_GUARD_STARTUP_SEQUENCE: %+v", startup)
 		}
-		return manager, started, uri
+		return manager, started, uri, workspace
 	}
 	t.Run("success-propagates-facets-authentic-wire-and-directional-results", func(t *testing.T) {
 		child := newScriptedTransportPrivate("nonempty", "nonempty", false)
-		manager, started, uri := readyManagerPrivate(t, child)
+		manager, started, uri, _ := readyManagerPrivate(t, child)
 		req := privateRequestPrivate(t, started, uri, directionalraw.BidirectionalPlanPrivate{IncomingBytes: 4096, OutgoingBytes: 4096}, false)
 		root := req.Coordinate.Root
 		result := executePrivate(t, context.Background(), manager, req)
@@ -188,7 +182,7 @@ func TestADR0011ADR0007ProductionCorrectionGuardPrivate(t *testing.T) {
 	for _, tc := range cases {
 		t.Run("release/"+tc.name, func(t *testing.T) {
 			child := newScriptedTransportPrivate(tc.incoming, tc.outgoing, false)
-			manager, started, uri := readyManagerPrivate(t, child)
+			manager, started, uri, _ := readyManagerPrivate(t, child)
 			req := privateRequestPrivate(t, started, uri, tc.plan, false)
 			root := req.Coordinate.Root
 			if tc.mutate != nil {
@@ -209,9 +203,13 @@ func TestADR0011ADR0007ProductionCorrectionGuardPrivate(t *testing.T) {
 
 	t.Run("release/prepared-document-failure", func(t *testing.T) {
 		child := newScriptedTransportPrivate("nonempty", "nonempty", false)
-		manager, started, uri := readyManagerPrivate(t, child)
+		manager, started, uri, workspace := readyManagerPrivate(t, child)
 		req := privateRequestPrivate(t, started, uri, directionalraw.BidirectionalPlanPrivate{IncomingBytes: 4096, OutgoingBytes: 4096}, false)
-		req.Operation.Input = bytes.ReplaceAll(req.Operation.Input, []byte(uri), []byte("file:///private/tmp/adr0011-fixed-workspace/missing.go"))
+		missingURI, err := source.FileURI(filepath.Join(workspace, "missing.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Operation.Input = bytes.ReplaceAll(req.Operation.Input, []byte(uri), []byte(missingURI))
 		root := req.Coordinate.Root
 		entry, err := incomingops.NewADR0011ADR0007ProductionPrivate(incomingops.NewExecutor(manager))
 		if err != nil {
@@ -229,7 +227,7 @@ func TestADR0011ADR0007ProductionCorrectionGuardPrivate(t *testing.T) {
 
 	t.Run("release/incoming-target-resolution-failure", func(t *testing.T) {
 		child := newScriptedTransportPrivate("nonempty", "nonempty", false)
-		manager, started, uri := readyManagerPrivate(t, child)
+		manager, started, uri, _ := readyManagerPrivate(t, child)
 		req := privateRequestPrivate(t, started, uri, directionalraw.BidirectionalPlanPrivate{IncomingBytes: 4096, OutgoingBytes: 4096}, false)
 		req.Operation.Input = bytes.ReplaceAll(req.Operation.Input, []byte(`"symbol":"Target"`), []byte(`"symbol":"Missing"`))
 		root := req.Coordinate.Root
@@ -249,7 +247,7 @@ func TestADR0011ADR0007ProductionCorrectionGuardPrivate(t *testing.T) {
 
 	t.Run("single-manager-preparation-reused-exactly", func(t *testing.T) {
 		child := newScriptedTransportPrivate("nonempty", "nonempty", false)
-		manager, started, uri := readyManagerPrivate(t, child)
+		manager, started, uri, _ := readyManagerPrivate(t, child)
 		req := privateRequestPrivate(t, started, uri, directionalraw.BidirectionalPlanPrivate{IncomingBytes: 4096, OutgoingBytes: 4096}, false)
 		root := req.Coordinate.Root
 		result := executePrivate(t, context.Background(), manager, req)

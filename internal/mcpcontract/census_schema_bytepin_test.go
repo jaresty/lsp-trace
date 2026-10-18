@@ -9,7 +9,7 @@ import (
 
 func TestCensusAdditiveSchemaBytesAndRegistryIdentityPinned(t *testing.T) {
 	pins := map[string]string{
-		CensusDomainErrorID:                      "b6a7694652cfa0dcfc2cff297e3ca964f78a2b923826b76c6e64449d7103510e",
+		CensusDomainErrorID: "b6a7694652cfa0dcfc2cff297e3ca964f78a2b923826b76c6e64449d7103510e",
 		// The explicit root object type is Linux-compatible and validation-equivalent to the object-only oneOf branches.
 		FutureCensusV2InputID:                    "ca26a8974e7bef62f4e92b939c58c86eceea0129b9b552739d0e520f329abc1a",
 		FutureCensusCompositeResultID:            "d676bff3bacdf35142dc5c6e63ab48e64c6b6efc5860448fc079f1561289c767",

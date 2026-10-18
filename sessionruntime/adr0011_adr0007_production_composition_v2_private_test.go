@@ -189,7 +189,7 @@ func (c *scriptedTransportPrivate) directionalReply(id uint64, direction, varian
 	if direction == "outgoing" {
 		endpoint = "to"
 	}
-	c.writeResponse("callHierarchy/"+direction+"Calls", id, resultFramePrivate(id, []byte(`[{"`+endpoint+`":`+string(callItemPrivate())+`,"fromRanges":[]}]`)))
+	c.writeResponse("callHierarchy/"+direction+"Calls", id, resultFramePrivate(id, []byte(`[{"`+endpoint+`":`+string(c.prepareItem)+`,"fromRanges":[]}]`)))
 }
 
 func (c *scriptedTransportPrivate) Stdin() io.WriteCloser { return c.stdin }
