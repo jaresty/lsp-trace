@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -261,6 +262,75 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 		a.Work = 3
 		parse(t, a, true)
 	})
+}
+
+func TestPrivateProviderProbeV2PhaseClassClosure(t *testing.T) {
+	type tuple struct {
+		class string
+		cause string
+	}
+	roundTrip := []tuple{
+		{class: "TYPED_SESSION_RUNTIME_FAILURE", cause: "REQUEST_TIMEOUT"},
+		{class: "JSON_RPC_CODE_BUCKET", cause: "INTERNAL_ERROR"},
+		{class: "DECODE_FAILURE", cause: "DECODE_FAILURE"},
+	}
+	preparation := []tuple{
+		{class: "DOCUMENT_FAILURE", cause: "DOCUMENT_SOURCE_UNAVAILABLE"},
+		{class: "ADAPTER_IDENTITY_MISMATCH", cause: "ADAPTER_IDENTITY_MISMATCH"},
+	}
+	artifact := func(phase string, value tuple) privateProviderProbeArtifactV2 {
+		records := []privateProviderProbeRecordV2{{Sequence: 1, Phase: phase, Class: value.class, Cause: value.cause}}
+		causes := []string{value.cause}
+		work := uint64(1)
+		if phase == "DOCUMENT_SUPPLY" {
+			records = append([]privateProviderProbeRecordV2{{Sequence: 1, Phase: "DOCUMENT_SYMBOL", Class: "DECODE_FAILURE", Cause: "DECODE_FAILURE"}}, records...)
+			records[1].Sequence = 2
+			causes = append(causes, "DECODE_FAILURE")
+			work = 2
+		}
+		sort.Strings(causes)
+		counts := make([]privateProviderProbeCount, 0, len(causes))
+		for _, cause := range causes {
+			if len(counts) > 0 && counts[len(counts)-1].Cause == cause {
+				counts[len(counts)-1].Count++
+			} else {
+				counts = append(counts, privateProviderProbeCount{Cause: cause, Count: 1})
+			}
+		}
+		return privateProviderProbeArtifactV2{Schema: privateProviderProbeSchemaV2, Status: "COMPLETE", CauseCounts: counts, Records: records, Work: work}
+	}
+	parse := func(t *testing.T, value privateProviderProbeArtifactV2, wantValid bool) {
+		t.Helper()
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = parsePrivateProviderProbeV2(append(raw, '\n'))
+		if (err == nil) != wantValid {
+			t.Fatalf("wantValid=%v err=%v artifact=%s", wantValid, err, raw)
+		}
+	}
+
+	for _, value := range preparation {
+		t.Run("document-symbol-rejects-"+strings.ToLower(value.class), func(t *testing.T) {
+			parse(t, artifact("DOCUMENT_SYMBOL", value), false)
+		})
+	}
+	for _, value := range roundTrip {
+		t.Run("document-supply-rejects-"+strings.ToLower(value.class), func(t *testing.T) {
+			parse(t, artifact("DOCUMENT_SUPPLY", value), false)
+		})
+	}
+	for _, value := range roundTrip {
+		t.Run("document-symbol-accepts-"+strings.ToLower(value.class), func(t *testing.T) {
+			parse(t, artifact("DOCUMENT_SYMBOL", value), true)
+		})
+	}
+	for _, value := range preparation {
+		t.Run("document-supply-accepts-"+strings.ToLower(value.class), func(t *testing.T) {
+			parse(t, artifact("DOCUMENT_SUPPLY", value), true)
+		})
+	}
 }
 
 func v2Record(v map[string]any) map[string]any {

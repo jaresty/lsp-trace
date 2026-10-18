@@ -288,6 +288,16 @@ func parsePrivateProviderProbe(raw []byte) (privateProviderProbeArtifact, error)
 	return a, nil
 }
 
+func validPrivateProviderProbePhaseClass(phase, class string) bool {
+	switch phase {
+	case "DOCUMENT_SYMBOL":
+		return class == "TYPED_SESSION_RUNTIME_FAILURE" || class == "JSON_RPC_CODE_BUCKET" || class == "DECODE_FAILURE"
+	case "DOCUMENT_SUPPLY":
+		return class == "DOCUMENT_FAILURE" || class == "ADAPTER_IDENTITY_MISMATCH"
+	}
+	return false
+}
+
 func validPrivateProviderProbeCause(class, cause string) bool {
 	switch class {
 	case "TYPED_SESSION_RUNTIME_FAILURE":
@@ -365,7 +375,7 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 		if i == 0 && record.Phase != "DOCUMENT_SYMBOL" || i == 1 && record.Phase != "DOCUMENT_SUPPLY" {
 			return a, errors.New("invalid private provider probe")
 		}
-		if !validPrivateProviderProbeCause(record.Class, record.Cause) {
+		if !validPrivateProviderProbePhaseClass(record.Phase, record.Class) || !validPrivateProviderProbeCause(record.Class, record.Cause) {
 			return a, errors.New("invalid private provider probe")
 		}
 		retainedCounts[record.Cause]++
