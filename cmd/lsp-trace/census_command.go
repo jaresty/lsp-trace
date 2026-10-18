@@ -58,6 +58,7 @@ type censusCLIOptions struct {
 	Sources, Includes, Excludes                                                []string
 	Workspace, Server, Profile, ConfigPath, CatalogConfigPath, PublicationRoot string
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
+	PrivateProviderProbePath                                                   string
 	ServerArgs                                                                 []string
 	DownDepth, UpDepth, MaxNodes, MaxBatchTargets                              int
 	Timeout, RequestTimeout                                                    time.Duration
@@ -93,6 +94,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.StringVar(&o.PublicationRoot, "publication-root", "", "private publication root")
 	fs.StringVar(&o.PrivateAcquisitionDiagnosticPath, "private-acquisition-diagnostic-path", "", "")
 	fs.StringVar(&o.PrivateControlFlowDiagnosticPath, "private-control-flow-diagnostic-path", "", "")
+	fs.StringVar(&o.PrivateProviderProbePath, "private-provider-probe-path", "", "")
 	fs.BoolVar(&o.Catalog, "catalog", false, "continue to the provisional feature catalog")
 	fs.StringVar(&o.Resume, "resume", "", "resume an opaque catalog continuation selector")
 	fs.StringVar(&o.StopAfter, "stop-after", "", "stop catalog continuation after describe-requests")
@@ -114,6 +116,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	}
 	if censusNamedFlagCount(clean, "private-enumeration-projection") > 1 {
 		return o, errors.New("duplicate private enumeration projection flag")
+	}
+	if censusNamedFlagCount(clean, "private-provider-probe-path") > 1 {
+		return o, errors.New("duplicate private provider probe path flag")
 	}
 	if len(src) > 0 {
 		o.Sources = []string(src)
@@ -176,6 +181,9 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 	if o.PrivateEnumerationProjection && (!o.Machine || o.Resume != "" || o.Catalog) {
 		return errors.New("private enumeration projection requires fresh machine census")
 	}
+	if o.PrivateProviderProbePath != "" && (!o.Machine || o.Resume != "" || o.Catalog) {
+		return errors.New("private provider probe requires fresh machine census")
+	}
 	if o.StopAfter != "" {
 		if o.StopAfter != "describe-requests" {
 			return errors.New("stop-after must be describe-requests")
@@ -191,7 +199,7 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 		if o.CatalogConfigPath == "" || o.PublicationRoot == "" {
 			return errors.New("resume requires catalog config and publication root")
 		}
-		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true, "private-enumeration-projection": true}
+		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true, "private-enumeration-projection": true, "private-provider-probe-path": true}
 		for _, arg := range args {
 			name := strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--")
 			if forbidden[name] {
@@ -223,6 +231,9 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 	}
 	if path := o.PrivateControlFlowDiagnosticPath; path != "" && (!filepath.IsAbs(path) || filepath.Clean(path) != path) {
 		return errors.New("invalid private control-flow diagnostic path")
+	}
+	if path := o.PrivateProviderProbePath; path != "" && (!filepath.IsAbs(path) || filepath.Clean(path) != path) {
+		return errors.New("invalid private provider probe path")
 	}
 	for _, s := range o.Sources {
 		if s == "" || filepath.IsAbs(s) || !filepath.IsLocal(s) || filepath.Clean(s) != s {

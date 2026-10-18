@@ -153,6 +153,7 @@ func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int 
 // records cannot enter or alter the frozen public V3 composition.
 type privateAcquisitionRuntime struct {
 	manager *sessionruntime.Manager
+	probe   *privateProviderProbe
 	mu      sync.Mutex
 	handles []sessionruntime.DiagnosticOperationHandle
 }
@@ -176,11 +177,32 @@ func (r *privateAcquisitionRuntime) diagnosticHandles() []sessionruntime.Diagnos
 func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	result := r.manager.RoundTrip(ctx, request)
 	r.retainHandle(result.DiagnosticOperation)
+	if r.probe != nil {
+		if result.Failure != "" {
+			class, cause := privateSessionFailureCause(result.Failure)
+			r.probe.observe(privateProbePhase(request.Method), class, cause, false)
+		} else if result.ServerError != nil {
+			class, cause := privateRPCErrorCause(result.ServerError)
+			r.probe.observe(privateProbePhase(request.Method), class, cause, false)
+		} else {
+			r.probe.observeSuccess(false)
+		}
+	}
 	return result
 }
 func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
 	result := r.manager.PrepareDocument(ctx, request)
 	r.retainHandle(result.DiagnosticOperation)
+	if r.probe != nil {
+		if result.Failure != "" {
+			class, cause := privateDocumentFailureCause(result.Failure)
+			r.probe.observe("DOCUMENT_SUPPLY", class, cause, true)
+		} else if result.URI != request.URI || result.LanguageID != request.LanguageID {
+			r.probe.observe("DOCUMENT_SUPPLY", "ADAPTER_IDENTITY_MISMATCH", "ADAPTER_IDENTITY_MISMATCH", true)
+		} else {
+			r.probe.observeSuccess(true)
+		}
+	}
 	return result
 }
 func (r *privateAcquisitionRuntime) Records() []sessionruntime.Record { return r.manager.Records() }
@@ -249,6 +271,7 @@ type initializedAcquisitionRunnerConfig struct {
 	stderr             io.Writer
 	observeStart       func(sessionruntime.StartResult)
 	observeStop        func(session.LifecycleResult)
+	providerProbe      *privateProviderProbe
 }
 
 func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, callback func(context.Context, initializedAcquisitionSession) int) int {
@@ -292,7 +315,7 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 	if !ok || ready.State != sessionruntime.ReadinessReady {
 		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
 	}
-	privateRuntime := &privateAcquisitionRuntime{manager: cfg.manager}
+	privateRuntime := &privateAcquisitionRuntime{manager: cfg.manager, probe: cfg.providerProbe}
 	privateRuntime.retainHandle(ready.DiagnosticOperation)
 	return callback(ctx, &initializedAcquisitionRuntime{privateAcquisitionRuntime: privateRuntime, ctx: ctx, sessionID: started.SessionID, generation: started.Generation, requestTimeout: cfg.requestTimeout, attemptID: started.AttemptID, diagnosticGeneration: started.DiagnosticGeneration})
 }

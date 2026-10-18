@@ -46,7 +46,13 @@ func (c productionDiscoveryClient) call(ctx context.Context, method string, para
 	if len(result.Result) == 0 || string(result.Result) == "null" {
 		return nil
 	}
-	return json.Unmarshal(result.Result, out)
+	if err := json.Unmarshal(result.Result, out); err != nil {
+		if c.runtime.probe != nil {
+			c.runtime.probe.observe(privateProbePhase(method), "DECODE_FAILURE", "DECODE_FAILURE", false)
+		}
+		return err
+	}
+	return nil
 }
 
 func (c productionDiscoveryClient) DocumentSymbols(ctx context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
