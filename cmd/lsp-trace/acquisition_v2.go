@@ -179,13 +179,17 @@ func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessi
 	r.retainHandle(result.DiagnosticOperation)
 	return result
 }
-func (r *privateAcquisitionRuntime) observeRoundTrip(method string, result sessionruntime.RoundTripResult, decodeErr error) {
+func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMaxMessages int, configuredMaxBytes int64, result sessionruntime.RoundTripResult, decodeErr error) {
 	if r.probe == nil {
 		return
 	}
 	if result.Failure != "" {
 		class, cause := privateSessionFailureCause(result.Failure)
-		r.probe.observe(privateProbePhase(method), class, cause, false)
+		if r.probe.version == "v2" && result.Failure == session.ResourceExhausted {
+			r.probe.observeExhaustion(privateProbePhase(method), class, cause, configuredMaxMessages, configuredMaxBytes, result)
+		} else {
+			r.probe.observe(privateProbePhase(method), class, cause, false)
+		}
 	} else if result.ServerError != nil {
 		class, cause := privateRPCErrorCause(result.ServerError)
 		r.probe.observe(privateProbePhase(method), class, cause, false)
@@ -197,7 +201,7 @@ func (r *privateAcquisitionRuntime) observeRoundTrip(method string, result sessi
 }
 func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	result := r.roundTrip(ctx, request)
-	r.observeRoundTrip(request.Method, result, nil)
+	r.observeRoundTrip(request.Method, request.MaxMessages, request.MaxBytes, result, nil)
 	return result
 }
 func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {

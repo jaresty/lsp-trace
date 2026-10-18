@@ -166,7 +166,7 @@ func TestPrivateProviderProbeRoundTripFinalizationIsExclusiveAndPrecedent(t *tes
 		t.Run(tc.name, func(t *testing.T) {
 			p := &privateProviderProbe{counts: make(map[string]uint64)}
 			r := &privateAcquisitionRuntime{probe: p}
-			r.observeRoundTrip("textDocument/documentSymbol", tc.result, tc.decodeErr)
+			r.observeRoundTrip("textDocument/documentSymbol", 64, 4<<20, tc.result, tc.decodeErr)
 			a := p.artifact()
 			if a.Work != 1 || p.sequence != 1 || len(a.Records) != tc.wantRecord || len(a.CauseCounts) != tc.wantRecord {
 				t.Fatalf("artifact=%+v sequence=%d", a, p.sequence)
@@ -181,9 +181,9 @@ func TestPrivateProviderProbeRoundTripFinalizationIsExclusiveAndPrecedent(t *tes
 func TestPrivateProviderProbeRoundTripSequenceAndFullCountsOutliveRetention(t *testing.T) {
 	p := &privateProviderProbe{counts: make(map[string]uint64)}
 	r := &privateAcquisitionRuntime{probe: p}
-	r.observeRoundTrip("textDocument/documentSymbol", sessionruntime.RoundTripResult{Result: json.RawMessage(`{`)}, errors.New("decode"))
-	r.observeRoundTrip("textDocument/prepareCallHierarchy", sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32603}}, nil)
-	r.observeRoundTrip("callHierarchy/outgoingCalls", sessionruntime.RoundTripResult{Failure: session.ResourceExhausted}, nil)
+	r.observeRoundTrip("textDocument/documentSymbol", 64, 4<<20, sessionruntime.RoundTripResult{Result: json.RawMessage(`{`)}, errors.New("decode"))
+	r.observeRoundTrip("textDocument/prepareCallHierarchy", 64, 4<<20, sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32603}}, nil)
+	r.observeRoundTrip("callHierarchy/outgoingCalls", 64, 4<<20, sessionruntime.RoundTripResult{Failure: session.ResourceExhausted}, nil)
 	a := p.artifact()
 	if a.Work != 3 || len(a.Records) != 1 || a.Records[0].Sequence != 1 {
 		t.Fatalf("artifact=%+v", a)

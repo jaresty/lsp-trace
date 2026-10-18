@@ -38,15 +38,16 @@ func (c productionDiscoveryClient) call(ctx context.Context, method string, para
 	if roundTrip == nil {
 		roundTrip = c.runtime.roundTrip
 	}
+	const maxMessages, maxBytes = 64, int64(4 << 20)
 	result := roundTrip(ctx, sessionruntime.RoundTripRequest{
 		SessionID: c.sessionID, Generation: c.generation, Method: method, Params: raw,
-		Deadline: time.Now().Add(c.timeout), MaxMessages: 64, MaxBytes: 4 << 20,
+		Deadline: time.Now().Add(c.timeout), MaxMessages: maxMessages, MaxBytes: maxBytes,
 	})
 	var decodeErr error
 	if result.Failure == "" && result.ServerError == nil && len(result.Result) != 0 && string(result.Result) != "null" {
 		decodeErr = json.Unmarshal(result.Result, out)
 	}
-	c.runtime.observeRoundTrip(method, result, decodeErr)
+	c.runtime.observeRoundTrip(method, maxMessages, maxBytes, result, decodeErr)
 	if result.Failure != "" {
 		return fmt.Errorf("%s: %s", method, result.Failure)
 	}

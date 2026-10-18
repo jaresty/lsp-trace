@@ -16,7 +16,10 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const privateProviderProbeSchema = "lsp-trace.private-provider-probe.v1"
+const (
+	privateProviderProbeSchema   = "lsp-trace.private-provider-probe.v1"
+	privateProviderProbeSchemaV2 = "lsp-trace.private-provider-probe.v2"
+)
 
 type privateProviderProbeRecord struct {
 	Sequence uint64 `json:"sequence"`
@@ -37,16 +40,47 @@ type privateProviderProbeArtifact struct {
 	RerunCount      uint64                       `json:"rerun_count"`
 	Work            uint64                       `json:"work"`
 }
+
+type privateProviderProbeExhaustionV2 struct {
+	ObservedMessages      int    `json:"observed_messages"`
+	ObservedBytes         int64  `json:"observed_bytes"`
+	ConfiguredMaxMessages int    `json:"configured_max_messages"`
+	ConfiguredMaxBytes    int64  `json:"configured_max_bytes"`
+	Boundary              string `json:"boundary"`
+}
+type privateProviderProbeRecordV2 struct {
+	Sequence   uint64                            `json:"sequence"`
+	Phase      string                            `json:"phase"`
+	Class      string                            `json:"class"`
+	Cause      string                            `json:"cause"`
+	Exhaustion *privateProviderProbeExhaustionV2 `json:"exhaustion,omitempty"`
+}
+type privateProviderProbeArtifactV2 struct {
+	Schema          string                         `json:"schema"`
+	Status          string                         `json:"status"`
+	FileDenominator uint64                         `json:"file_denominator"`
+	CauseCounts     []privateProviderProbeCount    `json:"cause_counts"`
+	Records         []privateProviderProbeRecordV2 `json:"records"`
+	RerunCount      uint64                         `json:"rerun_count"`
+	Work            uint64                         `json:"work"`
+}
 type privateProviderProbe struct {
 	mu                    sync.Mutex
-	path                  string
+	path, version         string
 	sequence, files, work uint64
 	counts                map[string]uint64
 	records               []privateProviderProbeRecord
+	recordsV2             []privateProviderProbeRecordV2
 	incomplete            bool
 }
 
 func newPrivateProviderProbe(path string) (*privateProviderProbe, error) {
+	return newPrivateProviderProbeVersion(path, "v1")
+}
+func newPrivateProviderProbeVersion(path, version string) (*privateProviderProbe, error) {
+	if version != "v1" && version != "v2" {
+		return nil, errors.New("invalid private provider probe version")
+	}
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return nil, errors.New("invalid private provider probe path")
 	}
@@ -61,7 +95,7 @@ func newPrivateProviderProbe(path string) (*privateProviderProbe, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, errors.New("private provider probe unavailable")
 	}
-	return &privateProviderProbe{path: path, counts: make(map[string]uint64)}, nil
+	return &privateProviderProbe{path: path, version: version, counts: make(map[string]uint64)}, nil
 }
 func checkedProbeAdd(a *uint64, n uint64) bool {
 	if math.MaxUint64-*a < n {
@@ -92,6 +126,9 @@ func (p *privateProviderProbe) observe(phase, class, cause string, file bool) {
 	want := phase == "DOCUMENT_SYMBOL" && !hasProbePhase(p.records, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhase(p.records, "DOCUMENT_SYMBOL") && !hasProbePhase(p.records, phase)
 	if want && len(p.records) < 2 {
 		p.records = append(p.records, privateProviderProbeRecord{p.sequence, phase, class, cause})
+		if p.version == "v2" {
+			p.recordsV2 = append(p.recordsV2, privateProviderProbeRecordV2{Sequence: p.sequence, Phase: phase, Class: class, Cause: cause})
+		}
 	}
 }
 func hasProbePhase(records []privateProviderProbeRecord, phase string) bool {
@@ -101,6 +138,51 @@ func hasProbePhase(records []privateProviderProbeRecord, phase string) bool {
 		}
 	}
 	return false
+}
+func privateProviderProbeBoundary(observedMessages int, observedBytes int64, configuredMaxMessages int, configuredMaxBytes int64) (string, error) {
+	if observedMessages < 0 || observedBytes < 0 {
+		return "", errors.New("invalid private provider probe exhaustion")
+	}
+	if configuredMaxMessages <= 0 || configuredMaxBytes <= 0 {
+		return "UNKNOWN", nil
+	}
+	if observedBytes > configuredMaxBytes {
+		return "BYTE_LIMIT_EXCEEDED", nil
+	}
+	if observedMessages >= configuredMaxMessages {
+		return "MESSAGE_CEILING_OBSERVED", nil
+	}
+	return "NEITHER_BOUNDARY_OBSERVED", nil
+}
+func (p *privateProviderProbe) observeExhaustion(phase, class, cause string, configuredMaxMessages int, configuredMaxBytes int64, result sessionruntime.RoundTripResult) {
+	if p == nil || cause == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !checkedProbeAdd(&p.work, 1) || !checkedProbeAdd(&p.sequence, 1) {
+		p.incomplete = true
+		return
+	}
+	if math.MaxUint64-p.counts[cause] < 1 {
+		p.incomplete = true
+		return
+	}
+	p.counts[cause]++
+	want := phase == "DOCUMENT_SYMBOL" && !hasProbePhase(p.records, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhase(p.records, "DOCUMENT_SYMBOL") && !hasProbePhase(p.records, phase)
+	if !want || len(p.records) >= 2 {
+		return
+	}
+	p.records = append(p.records, privateProviderProbeRecord{p.sequence, phase, class, cause})
+	boundary, err := privateProviderProbeBoundary(result.Messages, result.Bytes, configuredMaxMessages, configuredMaxBytes)
+	if err != nil {
+		p.incomplete = true
+		return
+	}
+	p.recordsV2 = append(p.recordsV2, privateProviderProbeRecordV2{
+		Sequence: p.sequence, Phase: phase, Class: class, Cause: cause,
+		Exhaustion: &privateProviderProbeExhaustionV2{result.Messages, result.Bytes, configuredMaxMessages, configuredMaxBytes, boundary},
+	})
 }
 func (p *privateProviderProbe) observeSuccess(file bool) {
 	if p == nil {
@@ -130,11 +212,22 @@ func (p *privateProviderProbe) artifact() privateProviderProbeArtifact {
 	}
 	return privateProviderProbeArtifact{privateProviderProbeSchema, status, p.files, counts, append([]privateProviderProbeRecord(nil), p.records...), 0, p.work}
 }
+func (p *privateProviderProbe) artifactV2() privateProviderProbeArtifactV2 {
+	base := p.artifact()
+	p.mu.Lock()
+	records := append([]privateProviderProbeRecordV2(nil), p.recordsV2...)
+	p.mu.Unlock()
+	return privateProviderProbeArtifactV2{privateProviderProbeSchemaV2, base.Status, base.FileDenominator, base.CauseCounts, records, base.RerunCount, base.Work}
+}
 func (p *privateProviderProbe) finalize() error {
 	if p == nil {
 		return nil
 	}
-	raw, err := json.Marshal(p.artifact())
+	var value any = p.artifact()
+	if p.version == "v2" {
+		value = p.artifactV2()
+	}
+	raw, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
@@ -189,6 +282,59 @@ func parsePrivateProviderProbe(raw []byte) (privateProviderProbeArtifact, error)
 		validClass := record.Class == "TYPED_SESSION_RUNTIME_FAILURE" || record.Class == "JSON_RPC_CODE_BUCKET" || record.Class == "DECODE_FAILURE" || record.Class == "DOCUMENT_FAILURE" || record.Class == "ADAPTER_IDENTITY_MISMATCH"
 		if !validClass {
 			return a, errors.New("invalid private provider probe")
+		}
+		previousSequence = record.Sequence
+	}
+	return a, nil
+}
+
+func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, error) {
+	var a privateProviderProbeArtifactV2
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' || len(raw) > 1 && raw[len(raw)-2] == '\n' {
+		return a, errors.New("invalid private provider probe")
+	}
+	line := bytes.TrimSuffix(raw, []byte{'\n'})
+	d := json.NewDecoder(bytes.NewReader(line))
+	d.DisallowUnknownFields()
+	if d.Decode(&a) != nil {
+		return a, errors.New("invalid private provider probe")
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return a, errors.New("invalid private provider probe")
+	}
+	canonical, _ := json.Marshal(a)
+	if !bytes.Equal(canonical, line) || a.Schema != privateProviderProbeSchemaV2 || (a.Status != "COMPLETE" && a.Status != "INCOMPLETE") || len(a.Records) > 2 || a.RerunCount != 0 || a.FileDenominator > a.Work {
+		return a, errors.New("invalid private provider probe")
+	}
+	previousCause := ""
+	for _, count := range a.CauseCounts {
+		if count.Cause == "" || count.Count == 0 || previousCause >= count.Cause {
+			return a, errors.New("invalid private provider probe")
+		}
+		previousCause = count.Cause
+	}
+	var previousSequence uint64
+	for i, record := range a.Records {
+		if record.Sequence == 0 || record.Sequence <= previousSequence || record.Sequence > a.Work || record.Cause == "" {
+			return a, errors.New("invalid private provider probe")
+		}
+		if i == 0 && record.Phase != "DOCUMENT_SYMBOL" || i == 1 && record.Phase != "DOCUMENT_SUPPLY" {
+			return a, errors.New("invalid private provider probe")
+		}
+		validClass := record.Class == "TYPED_SESSION_RUNTIME_FAILURE" || record.Class == "JSON_RPC_CODE_BUCKET" || record.Class == "DECODE_FAILURE" || record.Class == "DOCUMENT_FAILURE" || record.Class == "ADAPTER_IDENTITY_MISMATCH"
+		if !validClass {
+			return a, errors.New("invalid private provider probe")
+		}
+		wantExhaustion := record.Class == "TYPED_SESSION_RUNTIME_FAILURE" && record.Cause == string(session.ResourceExhausted)
+		if wantExhaustion != (record.Exhaustion != nil) {
+			return a, errors.New("invalid private provider probe")
+		}
+		if record.Exhaustion != nil {
+			e := record.Exhaustion
+			boundary, err := privateProviderProbeBoundary(e.ObservedMessages, e.ObservedBytes, e.ConfiguredMaxMessages, e.ConfiguredMaxBytes)
+			if err != nil || e.Boundary != boundary {
+				return a, errors.New("invalid private provider probe")
+			}
 		}
 		previousSequence = record.Sequence
 	}

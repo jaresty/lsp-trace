@@ -144,7 +144,7 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	}
 	var providerProbe *privateProviderProbe
 	if options.PrivateProviderProbePath != "" {
-		providerProbe, err = newPrivateProviderProbe(options.PrivateProviderProbePath)
+		providerProbe, err = newPrivateProviderProbeVersion(options.PrivateProviderProbePath, options.PrivateProviderProbeVersion)
 		if err != nil {
 			return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
 		}

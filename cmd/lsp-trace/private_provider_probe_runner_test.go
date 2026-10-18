@@ -33,16 +33,24 @@ type providerProbeRunnerResult struct {
 	starterCalls, managerCalls int
 	starts, stops              int
 	probe                      privateProviderProbeArtifact
+	probeV2                    privateProviderProbeArtifactV2
 	probeExists                bool
 }
 
 func providerProbeRunnerArgs(workspace, root, probe string, enumeration bool) []string {
+	return providerProbeRunnerArgsVersion(workspace, root, probe, "v1", enumeration)
+}
+
+func providerProbeRunnerArgsVersion(workspace, root, probe, version string, enumeration bool) []string {
 	args := []string{"--machine", "--workspace", workspace, "--source", ".", "--publication-root", root, "--server", "helper", "--request-timeout", "1s"}
 	if enumeration {
 		args = append(args, "--private-enumeration-projection")
 	}
 	if probe != "" {
 		args = append(args, "--private-provider-probe-path", probe)
+		if version != "v1" {
+			args = append(args, "--private-provider-probe-version", version)
+		}
 	}
 	return args
 }
@@ -97,7 +105,17 @@ func runProviderProbeRunner(t *testing.T, enableProbe, enumeration bool, runCore
 	return runProviderProbeRunnerInWorkspace(t, t.TempDir(), enableProbe, enumeration, runCore)
 }
 
+func runProviderProbeRunnerVersion(t *testing.T, version string, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
+	t.Helper()
+	return runProviderProbeRunnerInWorkspaceVersion(t, t.TempDir(), version, enableProbe, enumeration, runCore)
+}
+
 func runProviderProbeRunnerInWorkspace(t *testing.T, workspace string, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
+	t.Helper()
+	return runProviderProbeRunnerInWorkspaceVersion(t, workspace, "v1", enableProbe, enumeration, runCore)
+}
+
+func runProviderProbeRunnerInWorkspaceVersion(t *testing.T, workspace, version string, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -114,7 +132,7 @@ func runProviderProbeRunnerInWorkspace(t *testing.T, workspace string, enablePro
 	}
 	deps, starters, managers := providerProbeRunnerDeps(t, runCore)
 	var stdout, stderr bytes.Buffer
-	code := runCensusWithDependencies(providerProbeRunnerArgs(workspace, root, probe, enumeration), &stdout, &stderr, deps)
+	code := runCensusWithDependencies(providerProbeRunnerArgsVersion(workspace, root, probe, version, enumeration), &stdout, &stderr, deps)
 	result := providerProbeRunnerResult{code: code, stdout: append([]byte(nil), stdout.Bytes()...), stderr: append([]byte(nil), stderr.Bytes()...), publication: providerProbePublicationFiles(t, root), starterCalls: *starters, managerCalls: *managers}
 	if enumeration {
 		lines := bytes.Split(bytes.TrimSuffix(result.stderr, []byte{'\n'}), []byte{'\n'})
@@ -151,7 +169,11 @@ func runProviderProbeRunnerInWorkspace(t *testing.T, workspace string, enablePro
 	if probe != "" {
 		raw, err := os.ReadFile(probe)
 		if err == nil {
-			result.probe, err = parsePrivateProviderProbe(raw)
+			if version == "v2" {
+				result.probeV2, err = parsePrivateProviderProbeV2(raw)
+			} else {
+				result.probe, err = parsePrivateProviderProbe(raw)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -288,10 +310,14 @@ func TestRunCensusProviderProbeRejectionsPrecedeStarterEffects(t *testing.T) {
 	path := probePath(t)
 	base := []string{"--machine", "--workspace", t.TempDir(), "--publication-root", t.TempDir(), "--server", "helper"}
 	cases := map[string][]string{
-		"duplicate":  append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-path", path),
-		"nonmachine": {"--workspace", t.TempDir(), "--publication-root", t.TempDir(), "--server", "helper", "--private-provider-probe-path", path},
-		"catalog":    append(append([]string{}, base...), "--catalog", "--catalog-config", "host.json", "--private-provider-probe-path", path),
-		"resume":     {"--machine", "--resume", "sha256:" + strings.Repeat("a", 64), "--catalog-config", "host.json", "--publication-root", t.TempDir(), "--private-provider-probe-path", path},
+		"duplicate":         append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-path", path),
+		"nonmachine":        {"--workspace", t.TempDir(), "--publication-root", t.TempDir(), "--server", "helper", "--private-provider-probe-path", path},
+		"catalog":           append(append([]string{}, base...), "--catalog", "--catalog-config", "host.json", "--private-provider-probe-path", path),
+		"resume":            {"--machine", "--resume", "sha256:" + strings.Repeat("a", 64), "--catalog-config", "host.json", "--publication-root", t.TempDir(), "--private-provider-probe-path", path},
+		"version-duplicate": append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-version", "v1", "--private-provider-probe-version", "v2"),
+		"version-unknown":   append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-version", "V2"),
+		"version-empty":     append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-version="),
+		"version-no-path":   append(append([]string{}, base...), "--private-provider-probe-version", "v2"),
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -307,5 +333,41 @@ func TestRunCensusProviderProbeRejectionsPrecedeStarterEffects(t *testing.T) {
 				t.Fatalf("code=%d starter=%d manager=%d stdout=%q stderr=%q", code, starter, manager, stdout.Bytes(), stderr.Bytes())
 			}
 		})
+	}
+}
+
+func TestRunCensusProviderProbeV2RealSessionParityAndSingleLifecycle(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process test uses Darwin supervisor")
+	}
+	var starts, stops int
+	core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+		cfg.runner.start.Process = managedprocess.Spec{Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: cfg.runner.start.Process.Dir, Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1", "LSP_TRACE_RUNTIME_HELPER_MALFORMED_DOCUMENT_SYMBOL=1")}
+		cfg.runner.timeout = 3 * time.Second
+		cfg.runner.requestTimeout = time.Second
+		cfg.runner.observeStart = func(sessionruntime.StartResult) { starts++ }
+		cfg.runner.observeStop = func(session.LifecycleResult) { stops++ }
+		code := runInitializedAcquisitionSession(cfg.runner, func(ctx context.Context, initialized initializedAcquisitionSession) int {
+			discovery, err := runInitializedCensusDiscovery(ctx, options, initialized.(*initializedAcquisitionRuntime), true)
+			if err != nil || discovery.Accounting.FileDenominator != 3 {
+				t.Fatalf("discovery denominator=%d err=%v", discovery.Accounting.FileDenominator, err)
+			}
+			return 0
+		})
+		if code != 0 {
+			t.Fatalf("session code=%d", code)
+		}
+		return deterministicProviderProbeOutcome(t)
+	}
+	v1 := runProviderProbeRunnerVersion(t, "v1", true, false, core)
+	v2 := runProviderProbeRunnerVersion(t, "v2", true, false, core)
+	if v1.code != v2.code || !bytes.Equal(v1.stdout, v2.stdout) || !bytes.Equal(v1.stderr, v2.stderr) {
+		t.Fatalf("public drift v1=%d/%q/%q v2=%d/%q/%q", v1.code, v1.stdout, v1.stderr, v2.code, v2.stdout, v2.stderr)
+	}
+	if starts != 2 || stops != 2 || v1.starterCalls != 1 || v1.managerCalls != 1 || v2.starterCalls != 1 || v2.managerCalls != 1 {
+		t.Fatalf("lifecycle starts=%d stops=%d v1=%d/%d v2=%d/%d", starts, stops, v1.starterCalls, v1.managerCalls, v2.starterCalls, v2.managerCalls)
+	}
+	if !v2.probeExists || v2.probeV2.Schema != privateProviderProbeSchemaV2 || v2.probeV2.Work != v1.probe.Work || v2.probeV2.FileDenominator != v1.probe.FileDenominator || !reflect.DeepEqual(v2.probeV2.CauseCounts, v1.probe.CauseCounts) {
+		t.Fatalf("private parity v1=%+v v2=%+v", v1.probe, v2.probeV2)
 	}
 }
