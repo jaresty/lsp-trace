@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
@@ -141,6 +142,14 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		}
 		if fileDisposition != "" {
 			appendFile(&out, fileOrdinal, file.Path, fileDisposition)
+			switch fileDisposition {
+			case census.FileUnreadable:
+				appendFileProviderFailure(&out, "DOCUMENT_SUPPLY", "UNAVAILABLE", fileOrdinal)
+				providerIncomplete = true
+			case census.FileUnsupported:
+				appendFileProviderFailure(&out, "DOCUMENT_SYMBOL", "UNSUPPORTED", fileOrdinal)
+				providerIncomplete = true
+			}
 			if fileDisposition != census.FileExcluded {
 				complete = false
 			}
@@ -297,7 +306,7 @@ func appendFile(out *Discovery, ordinal int, identity string, disposition census
 }
 
 func validateSourceFile(f SourceFile, workspace string) error {
-	if f.Path == "" || path.IsAbs(f.Path) || path.Clean(f.Path) != f.Path || strings.Contains(f.Path, "\\") || f.Path == "." || f.Path == ".." || strings.HasPrefix(f.Path, "../") {
+	if !validSourceRelativePath(f.Path) {
 		return errors.New("canonical workspace-relative slash path required")
 	}
 	if _, err := canonicalWorkspaceRelativePath(workspace, f.URI); err != nil {
@@ -311,6 +320,18 @@ func validateSourceFile(f SourceFile, workspace string) error {
 	default:
 		return errors.New("enumerator supplied invalid pre-disposition")
 	}
+}
+
+func validSourceRelativePath(value string) bool {
+	if value == "" || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") || path.IsAbs(value) || path.Clean(value) != value {
+		return false
+	}
+	for i, part := range strings.Split(value, "/") {
+		if part == "" || part == "." || part == ".." || i == 0 && strings.Contains(part, ":") {
+			return false
+		}
+	}
+	return true
 }
 
 func sourceFileKey(f SourceFile) string {

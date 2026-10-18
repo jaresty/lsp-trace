@@ -65,12 +65,17 @@ func TestPrivateEnumerationReceiptSeparateAfterByteIdenticalDiscoveryLine(t *tes
 	}
 }
 func ptrU64(v uint64) *uint64 { return &v }
+func incompleteEnumerationDiscovery(t *testing.T) censusacquisition.Discovery {
+	t.Helper()
+	return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, Workspace: t.TempDir(), Complete: false, Accounting: census.Accounting{FileDenominator: 1, Files: []census.FileEntry{{Ordinal: 0, Disposition: census.FileIncomplete}}, SymbolDenominator: 1, Symbols: []census.SymbolEntry{{Ordinal: 0, Disposition: census.SymbolIncomplete}}}, FileLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "a.go", Disposition: "incomplete"}}}, SymbolLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private", Disposition: "incomplete"}}}, EnumerationSymbols: []censusacquisition.EnumerationSymbol{{Ordinal: 0, FileOrdinal: 0, Kind: 12, Name: "secret", Disposition: census.SymbolIncomplete}}, ProviderFailures: []censusacquisition.ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: func() *int { v := 0; return &v }()}}, Observations: []censusacquisition.DiscoveryObservation{{Dimension: censusacquisition.DiscoveryProviderCompleteness, Known: true, Observed: ptrU64(1)}}}
+}
+
 func TestIncompleteOptInPublishesOnceBeforeAcquisitionAndSuccessPublishesNone(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
 	}
-	incomplete := censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, Workspace: t.TempDir(), Complete: false, Accounting: census.Accounting{FileDenominator: 1, Files: []census.FileEntry{{Ordinal: 0, Disposition: census.FileIncomplete}}, SymbolDenominator: 1, Symbols: []census.SymbolEntry{{Ordinal: 0, Disposition: census.SymbolIncomplete}}}, FileLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "a.go", Disposition: "incomplete"}}}, SymbolLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private", Disposition: "incomplete"}}}, EnumerationSymbols: []censusacquisition.EnumerationSymbol{{Ordinal: 0, FileOrdinal: 0, Kind: 12, Name: "secret", Disposition: census.SymbolIncomplete}}, ProviderFailures: []censusacquisition.ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: func() *int { v := 0; return &v }()}}, Observations: []censusacquisition.DiscoveryObservation{{Dimension: censusacquisition.DiscoveryProviderCompleteness, Known: true, Observed: ptrU64(1)}}}
+	incomplete := incompleteEnumerationDiscovery(t)
 	acquired := 0
 	deps := censusCoreDependencies{runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
 		return cb(context.Background(), &initializedAcquisitionRuntime{sessionID: "s", generation: 1})
@@ -107,6 +112,65 @@ func TestIncompleteOptInPublishesOnceBeforeAcquisitionAndSuccessPublishesNone(t 
 	out = runCensusCore(opts, censusCoreConfig{}, deps)
 	if out.Result == nil || out.EnumerationReceipt != nil {
 		t.Fatalf("success out=%+v", out)
+	}
+}
+
+func TestPrivateEnumerationCancellationGatesAndPostCommit(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		setup  func(context.CancelFunc, *censusCoreDependencies)
+		reason string
+		files  int
+	}{
+		{name: "discover-return", reason: "CANCELED_PRE_RECONCILIATION", setup: func(cancel context.CancelFunc, deps *censusCoreDependencies) {
+			base := deps.discover
+			deps.discover = func(ctx context.Context, o censusCLIOptions, r *initializedAcquisitionRuntime, b bool) (censusacquisition.Discovery, error) {
+				d, err := base(ctx, o, r, b)
+				cancel()
+				return d, err
+			}
+		}},
+		{name: "pre-publish", reason: "CANCELED_PRE_PUBLICATION", setup: func(cancel context.CancelFunc, deps *censusCoreDependencies) {
+			deps.publishEnumeration = func(ctx context.Context, d censusacquisition.Discovery, r censusrequest.Receipt, root string) censusenumerationprojection.Receipt {
+				cancel()
+				return publishCensusEnumerationProjection(ctx, d, r, root)
+			}
+		}},
+		{name: "postcommit", reason: "", files: 1, setup: func(cancel context.CancelFunc, deps *censusCoreDependencies) {
+			deps.publishEnumeration = func(ctx context.Context, d censusacquisition.Discovery, r censusrequest.Receipt, root string) censusenumerationprojection.Receipt {
+				got := publishCensusEnumerationProjection(ctx, d, r, root)
+				cancel()
+				return got
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			_ = os.Chmod(root, 0700)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			discovery := incompleteEnumerationDiscovery(t)
+			deps := censusCoreDependencies{runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
+				return cb(ctx, &initializedAcquisitionRuntime{sessionID: "s", generation: 1})
+			}, discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+				return discovery, nil
+			}}
+			tc.setup(cancel, &deps)
+			out := runCensusCore(censusCLIOptions{PrivateEnumerationProjection: true, Machine: true, PublicationRoot: root, Sources: []string{"."}, DownDepth: 1, MaxNodes: 10000, MaxBatchTargets: 63, Timeout: 60000000000, RequestTimeout: 30000000000}, censusCoreConfig{}, deps)
+			if out.DiscoveryDiagnostic == nil || out.RequestReceipt == nil || out.EnumerationReceipt == nil {
+				t.Fatalf("typed outcome lost: %+v", out)
+			}
+			if tc.reason != "" && (out.EnumerationReceipt.Status != "UNAVAILABLE" || out.EnumerationReceipt.UnavailableReason != tc.reason || out.EnumerationReceipt.Selector != "" || out.EnumerationReceipt.Digest != "") {
+				t.Fatalf("receipt=%+v", out.EnumerationReceipt)
+			}
+			if tc.reason == "" && out.EnumerationReceipt.Status != "PUBLISHED" {
+				t.Fatalf("committed receipt lost: %+v", out.EnumerationReceipt)
+			}
+			entries, _ := os.ReadDir(root)
+			if len(entries) != tc.files {
+				t.Fatalf("writes=%d want=%d", len(entries), tc.files)
+			}
+		})
 	}
 }
 

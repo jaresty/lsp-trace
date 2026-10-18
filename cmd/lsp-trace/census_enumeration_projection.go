@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/url"
 
 	"lsp-trace/internal/censusacquisition"
@@ -9,7 +10,7 @@ import (
 	"lsp-trace/internal/publication"
 )
 
-func publishCensusEnumerationProjection(discovery censusacquisition.Discovery, request censusrequest.Receipt, rootPath string) censusenumerationprojection.Receipt {
+func publishCensusEnumerationProjection(ctx context.Context, discovery censusacquisition.Discovery, request censusrequest.Receipt, rootPath string) censusenumerationprojection.Receipt {
 	files := make([]censusenumerationprojection.File, len(discovery.FileLedger.Entries))
 	for i, entry := range discovery.FileLedger.Entries {
 		files[i] = censusenumerationprojection.File{Ordinal: entry.Ordinal, Path: entry.Identity, Disposition: entry.Disposition}
@@ -40,6 +41,9 @@ func publishCensusEnumerationProjection(discovery censusacquisition.Discovery, r
 	projection, err := censusenumerationprojection.Build(censusenumerationprojection.Input{SessionID: discovery.Session.SessionID, Generation: discovery.Session.Generation, RequestFingerprint: request.Fingerprint, WorkspaceURI: workspaceURI, Files: files, Symbols: symbols, Observations: observations, ProviderFailures: failures, RequestDownDepth: request.Semantic.DownDepth, RequestUpDepth: request.Semantic.UpDepth, RequestMaxNodes: request.Semantic.MaxNodes, RequestBatchTargets: request.Semantic.BatchTargets, RequestTimeoutMS: request.Semantic.RequestTimeoutMS, TimeoutMS: request.Semantic.TimeoutMS})
 	if err != nil {
 		return censusenumerationprojection.Unavailable("ENCODE_FAILED")
+	}
+	if ctx.Err() != nil {
+		return censusenumerationprojection.Unavailable("CANCELED_PRE_PUBLICATION")
 	}
 	root, err := publication.OpenRoot(rootPath)
 	if err != nil {

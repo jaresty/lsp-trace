@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/census"
 	"lsp-trace/internal/lsp"
 )
 
@@ -27,6 +28,32 @@ func (c projectionClient) DocumentSymbols(context.Context, lsp.DocumentSymbolPar
 }
 func (c projectionClient) PrepareCallHierarchy(context.Context, lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
 	return nil, c.prepareErr
+}
+
+func TestStaticFilesPredispositionsProduceClosedProviderFailures(t *testing.T) {
+	workspace := t.TempDir()
+	file := func(name string, disposition census.FileDisposition) SourceFile {
+		return SourceFile{Path: name, URI: (&url.URL{Scheme: "file", Path: filepath.Join(workspace, name)}).String(), LanguageID: "go", Disposition: disposition}
+	}
+	discovery, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{file("unreadable.go", census.FileUnreadable), file("unsupported.go", census.FileUnsupported)}, Supplier: projectionFailSupplier{}, Client: projectionClient{}}).Discover(context.Background(), SessionIdentity{SessionID: "s", Generation: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(discovery.ProviderFailures) != 2 || discovery.ProviderFailures[0].Stage != "DOCUMENT_SUPPLY" || discovery.ProviderFailures[0].Code != "UNAVAILABLE" || discovery.ProviderFailures[1].Stage != "DOCUMENT_SYMBOL" || discovery.ProviderFailures[1].Code != "UNSUPPORTED" {
+		t.Fatalf("failures=%+v", discovery.ProviderFailures)
+	}
+}
+
+func TestSourceFilePathRejectsNonLocalAndNoncanonicalForms(t *testing.T) {
+	workspace := t.TempDir()
+	for _, candidate := range []string{"", "../secret.go", "a/../secret.go", "file:/x.go", "file://x.go", "C:", "C:/x.go", "//host/x.go", `a\\b.go`, "./a.go", "a/./b.go", "a//b.go", "a\x00b.go", string([]byte{0xff})} {
+		t.Run(strings.ReplaceAll(candidate, "/", "_"), func(t *testing.T) {
+			f := SourceFile{Path: candidate, URI: (&url.URL{Scheme: "file", Path: filepath.Join(workspace, "x.go")}).String()}
+			if err := validateSourceFile(f, workspace); err == nil {
+				t.Fatalf("accepted %q", candidate)
+			}
+		})
+	}
 }
 
 func TestEnumerationProviderFailuresClosedNoRawTextAndNoFabricatedSymbols(t *testing.T) {

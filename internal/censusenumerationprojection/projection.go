@@ -16,6 +16,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/strictjson"
@@ -258,7 +259,7 @@ func EncodeCanonical(p Projection) ([]byte, error) {
 }
 func Decode(raw []byte) (Projection, error) {
 	var p Projection
-	if len(raw) == 0 || len(raw) > MaxCanonicalBytes || strictjson.RejectDuplicates(raw) != nil {
+	if len(raw) == 0 || !withinLimit(uint64(len(raw)), MaxCanonicalBytes) || strictjson.RejectDuplicates(raw) != nil {
 		return p, errors.New("invalid projection JSON")
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -289,7 +290,7 @@ func validate(p Projection, raw []byte) error {
 	identityBytes := 0
 	fileDisposition := map[int]string{}
 	for i, f := range p.Files {
-		if f.Ordinal != i || f.Path == "" || path.IsAbs(f.Path) || path.Clean(f.Path) != f.Path || strings.Contains(f.Path, "\\") || f.Disposition == "" {
+		if f.Ordinal != i || !validWorkspaceRelativePath(f.Path) || f.Disposition == "" {
 			return errors.New("invalid file ledger")
 		}
 		fileDisposition[i] = f.Disposition
@@ -305,12 +306,14 @@ func validate(p Projection, raw []byte) error {
 			return errors.New("symbol identity digest mismatch")
 		}
 	}
-	if identityBytes > MaxIdentityInputBytes {
+	if !withinLimit(uint64(identityBytes), MaxIdentityInputBytes) {
 		return errors.New("identity input limit exceeded")
 	}
 	if !equalCounts(p.FileDispositionCounts, countsFiles(p.Files)) || !equalCounts(p.SymbolDispositionCounts, countsSymbols(p.Symbols)) {
 		return errors.New("disposition count mismatch")
 	}
+	fileFailures := make(map[int]int)
+	symbolFailures := make(map[int]int)
 	for i, f := range p.ProviderFailures {
 		if !validStage(f.Stage) || !validCode(f.Code) || (f.FileOrdinal == nil) == (f.SymbolOrdinal == nil) || i > 0 && failureKey(p.ProviderFailures[i-1]) >= failureKey(f) {
 			return errors.New("invalid provider failure")
@@ -319,11 +322,25 @@ func validate(p Projection, raw []byte) error {
 			if *f.FileOrdinal < 0 || *f.FileOrdinal >= len(p.Files) || !fileFailureMatches(f, fileDisposition[*f.FileOrdinal]) {
 				return errors.New("provider failure reconciliation")
 			}
+			fileFailures[*f.FileOrdinal]++
 		}
 		if f.SymbolOrdinal != nil {
 			if *f.SymbolOrdinal < 0 || *f.SymbolOrdinal >= len(p.Symbols) || !symbolFailureMatches(f, p.Symbols[*f.SymbolOrdinal].Disposition) {
 				return errors.New("provider failure reconciliation")
 			}
+			symbolFailures[*f.SymbolOrdinal]++
+		}
+	}
+	for i, f := range p.Files {
+		required := f.Disposition == "unreadable" || f.Disposition == "unsupported" || f.Disposition == "document-symbol-failed"
+		if required && fileFailures[i] != 1 || !required && f.Disposition != "incomplete" && fileFailures[i] != 0 || fileFailures[i] > 1 {
+			return errors.New("provider failure reconciliation")
+		}
+	}
+	for i, s := range p.Symbols {
+		required := s.Disposition == "unsupported" || s.Disposition == "prepare-missing" || s.Disposition == "preparation-failed"
+		if required && symbolFailures[i] != 1 || !required && s.Disposition != "incomplete" && symbolFailures[i] != 0 || symbolFailures[i] > 1 {
+			return errors.New("provider failure reconciliation")
 		}
 	}
 	q := p
@@ -338,7 +355,7 @@ func validate(p Projection, raw []byte) error {
 		return errors.New("work overflow")
 	}
 	work, ok = add(work, uint64(len(raw)-len(base)))
-	if !ok || work != p.Work || work > MaxWork {
+	if !ok || work != p.Work || !withinLimit(work, MaxWork) {
 		return errors.New("work mismatch")
 	}
 	return nil
@@ -356,9 +373,9 @@ func failureKey(f ProviderFailure) string {
 func fileFailureMatches(f ProviderFailure, disposition string) bool {
 	switch f.Stage {
 	case "DOCUMENT_SUPPLY":
-		return disposition == "unreadable"
+		return disposition == "unreadable" && (f.Code == "UNAVAILABLE" || f.Code == "REQUEST_FAILED" || f.Code == "CANCELED")
 	case "DOCUMENT_SYMBOL":
-		return disposition == "unsupported" || disposition == "document-symbol-failed"
+		return disposition == "unsupported" && f.Code == "UNSUPPORTED" || disposition == "document-symbol-failed" && (f.Code == "REQUEST_FAILED" || f.Code == "CANCELED")
 	case "DOCUMENT_SYMBOL_FLATTEN":
 		return disposition == "incomplete"
 	default:
@@ -389,6 +406,23 @@ func validCode(s string) bool {
 	}
 	return false
 }
+func withinLimit(value uint64, limit int) bool {
+	return limit >= 0 && value <= uint64(limit)
+}
+
+func validWorkspaceRelativePath(value string) bool {
+	if value == "" || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") || path.IsAbs(value) || path.Clean(value) != value {
+		return false
+	}
+	parts := strings.Split(value, "/")
+	for i, part := range parts {
+		if part == "" || part == "." || part == ".." || i == 0 && strings.Contains(part, ":") {
+			return false
+		}
+	}
+	return true
+}
+
 func digest(s string) bool {
 	if !strings.HasPrefix(s, "sha256:") || len(s) != 71 {
 		return false

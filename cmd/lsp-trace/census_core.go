@@ -8,6 +8,7 @@ import (
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/programccompose"
@@ -24,6 +25,7 @@ type censusCoreDependencies struct {
 	capability          func(censusAssembly) (censusPublicationCapability, error)
 	publish             func(context.Context, censusPublicationCapability, string) censusPublicationOutcome
 	publishContinuation func(context.Context, censusPublicationCapability, string, programccompose.ExactMetadata) censusPublicationOutcome
+	publishEnumeration  func(context.Context, censusacquisition.Discovery, censusrequest.Receipt, string) censusenumerationprojection.Receipt
 }
 
 type censusCoreConfig struct {
@@ -63,6 +65,7 @@ func productionCensusCoreDependencies() censusCoreDependencies {
 		},
 		publish:             publishCensusCaptureSet,
 		publishContinuation: publishCensusCaptureSetWithContinuation,
+		publishEnumeration:  publishCensusEnumerationProjection,
 	}
 }
 
@@ -103,7 +106,14 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 			}
 			outcome = censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt}
 			if options.PrivateEnumerationProjection {
-				privateReceipt := publishCensusEnumerationProjection(discovery, receipt, options.PublicationRoot)
+				privateReceipt := censusenumerationprojection.Unavailable("CANCELED_PRE_RECONCILIATION")
+				if ctx.Err() == nil {
+					publisher := deps.publishEnumeration
+					if publisher == nil {
+						publisher = publishCensusEnumerationProjection
+					}
+					privateReceipt = publisher(ctx, discovery, receipt, options.PublicationRoot)
+				}
 				outcome.EnumerationReceipt = &privateReceipt
 			}
 			return 1
