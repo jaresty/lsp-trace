@@ -132,13 +132,31 @@ func batchFail(code string, err error) (censusBatchResult, *censusBatchFailure) 
 	return censusBatchResult{}, &censusBatchFailure{Code: code, Err: err}
 }
 
+func censusDiagnosticOperationCode(code string) string {
+	switch code {
+	case operation.FailureInvalidInput,
+		censusBatchFailureInvalidInput,
+		censusBatchFailureSessionDrift,
+		"CANCELLED",
+		"CANCELED",
+		"REQUEST_CANCELLED",
+		censusBatchFailureCancelled,
+		operation.FailureInternal,
+		censusBatchFailureAcquisition,
+		censusBatchFailureAdmission:
+		return code
+	default:
+		return operation.FailureInternal
+	}
+}
+
 func (a *censusBatchAcquirer) fail(request censusacquisition.BatchRequest, code, category string, err error, operationFailure *operation.Failure) (censusBatchResult, *censusBatchFailure) {
 	if a != nil && a.diagnostic != nil {
 		ordinal := request.Ordinal
 		record := censusdiagnostic.Record{Fingerprint: rawDigest(request.CanonicalSeedsV2), Category: category, Ordinal: &ordinal}
 		if category == "ACQUISITION" && operationFailure != nil {
 			normalized := operation.NormalizeFailure(operationFailure)
-			record.OperationCode = normalized.Code
+			record.OperationCode = censusDiagnosticOperationCode(normalized.Code)
 			record.OperationCategory = "ACQUISITION"
 		}
 		_ = a.diagnostic.Record(record)

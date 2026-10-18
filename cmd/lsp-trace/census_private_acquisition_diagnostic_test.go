@@ -48,6 +48,59 @@ func TestPrivateAcquisitionDiagnosticFlagFreshOnlyHidden(t *testing.T) {
 	}
 }
 
+func TestCensusDiagnosticOperationCodeClosedMapping(t *testing.T) {
+	allowed := []string{
+		operation.FailureInvalidInput,
+		censusBatchFailureInvalidInput,
+		censusBatchFailureSessionDrift,
+		"CANCELLED",
+		"CANCELED",
+		"REQUEST_CANCELLED",
+		censusBatchFailureCancelled,
+		operation.FailureInternal,
+		censusBatchFailureAcquisition,
+		censusBatchFailureAdmission,
+	}
+	for _, code := range allowed {
+		if got := censusDiagnosticOperationCode(code); got != code {
+			t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_ALLOWED_CODE code=%q got=%q", code, got)
+		}
+	}
+	for _, code := range []string{"", "UNKNOWN", "private://workspace/request-id/server-stderr/selector/artifact"} {
+		if got := censusDiagnosticOperationCode(code); got != operation.FailureInternal {
+			t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_UNKNOWN_CODE code=%q got=%q", code, got)
+		}
+	}
+}
+
+func TestPrivateAcquisitionDiagnosticUnknownOperationCodeIsGeneric(t *testing.T) {
+	const hostile = "private://workspace/request-id/server-stderr/selector/artifact"
+	path, recorder := newPrivateAcquisitionRecorder(t)
+	cause := errors.New("original acquisition cause")
+	operationFailure := &operation.Failure{Code: hostile, Err: cause}
+	session := &fakeBatchSession{id: "s", generation: 7, respond: func(context.Context, operation.Request) (operation.Result, *operation.Failure) {
+		return operation.Result{}, operationFailure
+	}}
+	_, failure := newCensusBatchAcquirer(session, acquisitionops.Limits{}, recorder).acquireBatch(context.Background(), batchRequest(1, 2))
+	if failure == nil || failure.Code != censusBatchFailureAcquisition || !errors.Is(failure, cause) {
+		t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_ORIGINAL_FAILURE failure=%v", failure)
+	}
+	if operationFailure.Code != hostile || operationFailure.Err != cause {
+		t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_OPERATION_FAILURE_MUTATED failure=%+v", operationFailure)
+	}
+	record, err := censusdiagnostic.ReadLast(path)
+	if err != nil || record.OperationCode != operation.FailureInternal || record.OperationCategory != "ACQUISITION" {
+		t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_GENERIC_CODE record=%+v err=%v", record, err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), hostile) || !strings.Contains(string(raw), `"operation_code":"INTERNAL"`) {
+		t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_HOSTILE_CODE_CLOSED raw=%s", raw)
+	}
+}
+
 func TestPrivateAcquisitionDiagnosticCategoryFieldParityAndIdentity(t *testing.T) {
 	cases := []struct {
 		name, category string
@@ -152,31 +205,137 @@ func TestPrivateAcquisitionDiagnosticAppendFailurePreservesCauseAndNoPostReturnA
 	}
 }
 
-func TestPrivateAcquisitionDiagnosticPublicFailureBytesPinnedWithAndWithoutRecorder(t *testing.T) {
+func runPrivateDiagnosticCoreFailure(t *testing.T, recorder *censusdiagnostic.Recorder, operationFailure *operation.Failure) (censusPublicationOutcome, string, string, error, int, int) {
+	t.Helper()
+	projection := censusPublicationProjection(t, 1)
+	var acquired error
+	capabilities, publications := 0, 0
+	deps := censusCoreDependencies{
+		runSession: func(_ initializedAcquisitionRunnerConfig, callback func(context.Context, *initializedAcquisitionRuntime) int) int {
+			return callback(context.Background(), &initializedAcquisitionRuntime{sessionID: "publication-session", generation: 7})
+		},
+		discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+			return discoveryFromProjection(projection), nil
+		},
+		acquireDiagnostic: func(_ context.Context, _ *initializedAcquisitionRuntime, _ censusacquisition.Discoverer, _ acquisitionops.Limits, _, _, _ int, got *censusdiagnostic.Recorder) (censusAssembly, error) {
+			if got != recorder {
+				t.Fatal("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_CORE_RECORDER_FORWARDING")
+			}
+			session := &fakeBatchSession{id: "s", generation: 7, respond: func(context.Context, operation.Request) (operation.Result, *operation.Failure) {
+				return operation.Result{}, operationFailure
+			}}
+			request := batchRequest(1, 3)
+			_, failure := newCensusBatchAcquirer(session, acquisitionops.Limits{}, got).acquireBatch(context.Background(), request)
+			acquired = failure
+			return censusAssembly{}, &censusBatchAcquisitionFailure{ordinal: request.Ordinal, Err: failure}
+		},
+		capability: func(censusAssembly) (censusPublicationCapability, error) {
+			capabilities++
+			return censusPublicationCapability{}, errors.New("must not construct capability")
+		},
+		publish: func(context.Context, censusPublicationCapability, string) censusPublicationOutcome {
+			publications++
+			return censusPublicationOutcome{}
+		},
+	}
+	outcome := runCensusCore(censusCLIOptions{}, censusCoreConfig{diagnostic: recorder}, deps)
+	var stdout, stderr strings.Builder
+	if code := writeCensusOutcome(&stdout, &stderr, true, outcome); code != 1 {
+		t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_PUBLIC_EXIT code=%d", code)
+	}
+	return outcome, stdout.String(), stderr.String(), acquired, capabilities, publications
+}
+
+func TestPrivateAcquisitionDiagnosticPublicFailureCoreParity(t *testing.T) {
 	const want = "{\"schema_version\":\"lsp-trace.census-diagnostic.v1\",\"status\":\"FAILED\",\"stage\":\"acquisition\",\"code\":\"ACQUISITION_FAILED\",\"batch_ordinal\":3,\"retry\":true}\n"
+	cause := errors.New("private ledger value")
+	var baseline string
 	for _, enabled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "without-recorder", true: "with-recorder"}[enabled], func(t *testing.T) {
 			var recorder *censusdiagnostic.Recorder
 			if enabled {
 				_, recorder = newPrivateAcquisitionRecorder(t)
 			}
-			session := &fakeBatchSession{id: "s", generation: 7, respond: func(context.Context, operation.Request) (operation.Result, *operation.Failure) {
-				return operation.Result{}, &operation.Failure{Code: operation.FailureInternal, Err: errors.New("private failure")}
-			}}
-			_, failure := newCensusBatchAcquirer(session, acquisitionops.Limits{}, recorder).acquireBatch(context.Background(), batchRequest(1, 2))
-			if failure == nil {
-				t.Fatal("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_PUBLIC_BYTE_PIN missing failure")
+			outcome, stdout, stderr, acquired, capabilities, publications := runPrivateDiagnosticCoreFailure(t, recorder, &operation.Failure{Code: operation.FailureInternal, Err: cause})
+			if outcome.Diagnostic == nil || outcome.Diagnostic.Retry != true || !errors.Is(acquired, cause) || capabilities != 0 || publications != 0 {
+				t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_PUBLIC_CLASSIFICATION outcome=%+v acquired=%v capability=%d publication=%d", outcome, acquired, capabilities, publications)
 			}
-			ordinal := 3
-			diagnostic, err := buildCensusCLIDiagnostic(censusStageAcquisition, &ordinal)
-			if err != nil {
-				t.Fatal(err)
+			if stdout != "" || stderr != want || strings.Contains(stderr, cause.Error()) {
+				t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_PUBLIC_BYTES stdout=%q stderr=%q", stdout, stderr)
 			}
-			raw, err := marshalCensusCLIDiagnostic(diagnostic)
-			if err != nil || string(raw) != want {
-				t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_PUBLIC_BYTE_PIN got=%q err=%v", raw, err)
+			if !enabled {
+				baseline = stderr
+			} else if stderr != baseline {
+				t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_PUBLIC_PARITY enabled=%q disabled=%q", stderr, baseline)
 			}
 		})
+	}
+}
+
+func TestPrivateAcquisitionDiagnosticAppendFailurePublicPathPreservesOriginal(t *testing.T) {
+	path, recorder := newPrivateAcquisitionRecorder(t)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cause := errors.New("original acquisition public cause")
+	outcome, stdout, stderr, acquired, capabilities, publications := runPrivateDiagnosticCoreFailure(t, recorder, &operation.Failure{Code: operation.FailureInternal, Err: cause})
+	const want = "{\"schema_version\":\"lsp-trace.census-diagnostic.v1\",\"status\":\"FAILED\",\"stage\":\"acquisition\",\"code\":\"ACQUISITION_FAILED\",\"batch_ordinal\":3,\"retry\":true}\n"
+	if outcome.Diagnostic == nil || !errors.Is(acquired, cause) || stdout != "" || stderr != want || capabilities != 0 || publications != 0 {
+		t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_APPEND_PUBLIC_PATH outcome=%+v acquired=%v stdout=%q stderr=%q capability=%d publication=%d", outcome, acquired, stdout, stderr, capabilities, publications)
+	}
+}
+
+func TestPrivateAcquisitionDiagnosticLateBatchFailureCoreLeavesNoCapabilityResultOrPublication(t *testing.T) {
+	projection := censusPublicationProjection(t, 64)
+	capabilities, publications, afterCommits := 0, 0, 0
+	deps := censusCoreDependencies{
+		runSession: func(_ initializedAcquisitionRunnerConfig, callback func(context.Context, *initializedAcquisitionRuntime) int) int {
+			return callback(context.Background(), &initializedAcquisitionRuntime{sessionID: "publication-session", generation: 7})
+		},
+		discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+			return discoveryFromProjection(projection), nil
+		},
+		acquireDiagnostic: func(_ context.Context, _ *initializedAcquisitionRuntime, _ censusacquisition.Discoverer, _ acquisitionops.Limits, _, _, _ int, recorder *censusdiagnostic.Recorder) (censusAssembly, error) {
+			calls := 0
+			session := &fakeBatchSession{id: "s", generation: 7, respond: func(_ context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+				calls++
+				if calls == 2 {
+					return operation.Result{}, &operation.Failure{Code: operation.FailureInternal, Err: errors.New("late private batch failure")}
+				}
+				return successfulBatchResponse(t, request, true, false), nil
+			}}
+			acquirer := newCensusBatchAcquirer(session, acquisitionops.Limits{}, recorder)
+			if first, failure := acquirer.acquireBatch(context.Background(), batchRequest(63, 0)); failure != nil || len(first.Raw) == 0 {
+				t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_FIRST_BATCH first=%+v failure=%v", first, failure)
+			}
+			request := batchRequest(1, 1)
+			late, failure := acquirer.acquireBatch(context.Background(), request)
+			if failure == nil || len(late.Raw) != 0 {
+				t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_LATE_BATCH late=%+v failure=%v", late, failure)
+			}
+			return censusAssembly{}, &censusBatchAcquisitionFailure{ordinal: request.Ordinal, Err: failure}
+		},
+		capability: func(censusAssembly) (censusPublicationCapability, error) {
+			capabilities++
+			return censusPublicationCapability{}, nil
+		},
+		publish: func(context.Context, censusPublicationCapability, string) censusPublicationOutcome {
+			publications++
+			return censusPublicationOutcome{}
+		},
+	}
+	cfg := censusCoreConfig{afterCommit: func(context.Context, *initializedAcquisitionRuntime, censusPublicationOutcome) int {
+		afterCommits++
+		return 0
+	}}
+	outcome := runCensusCore(censusCLIOptions{}, cfg, deps)
+	var stdout, stderr strings.Builder
+	code := writeCensusOutcome(&stdout, &stderr, true, outcome)
+	if code != 1 || outcome.Result != nil || outcome.DiscoveryDiagnostic != nil || outcome.RequestReceipt != nil || outcome.Diagnostic == nil || capabilities != 0 || publications != 0 || afterCommits != 0 || stdout.Len() != 0 || strings.Contains(stderr.String(), "late private batch failure") {
+		t.Fatalf("ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_LATE_BATCH_CORE outcome=%+v code=%d capability=%d publication=%d after=%d stdout=%q stderr=%q", outcome, code, capabilities, publications, afterCommits, stdout.String(), stderr.String())
 	}
 }
 
