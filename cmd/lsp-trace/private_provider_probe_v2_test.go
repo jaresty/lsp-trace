@@ -177,6 +177,92 @@ func TestPrivateProviderProbeV2StrictCanonicalParser(t *testing.T) {
 	}
 }
 
+func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
+	valid := privateProviderProbeArtifactV2{
+		Schema: privateProviderProbeSchemaV2, Status: "COMPLETE",
+		CauseCounts: []privateProviderProbeCount{{Cause: "RESOURCE_EXHAUSTED", Count: 1}},
+		Records: []privateProviderProbeRecordV2{{
+			Sequence: 1, Phase: "DOCUMENT_SYMBOL", Class: "TYPED_SESSION_RUNTIME_FAILURE", Cause: "RESOURCE_EXHAUSTED",
+			Exhaustion: &privateProviderProbeExhaustionV2{ObservedMessages: 1, ObservedBytes: 1, ConfiguredMaxMessages: 1, ConfiguredMaxBytes: 1, Boundary: "MESSAGE_CEILING_OBSERVED"},
+		}},
+		Work: 1,
+	}
+	parse := func(t *testing.T, artifact privateProviderProbeArtifactV2, wantValid bool) {
+		t.Helper()
+		raw, err := json.Marshal(artifact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = parsePrivateProviderProbeV2(append(raw, '\n'))
+		if (err == nil) != wantValid {
+			t.Fatalf("wantValid=%v err=%v artifact=%s", wantValid, err, raw)
+		}
+	}
+	clone := func() privateProviderProbeArtifactV2 {
+		copy := valid
+		copy.CauseCounts = append([]privateProviderProbeCount(nil), valid.CauseCounts...)
+		copy.Records = append([]privateProviderProbeRecordV2(nil), valid.Records...)
+		return copy
+	}
+
+	t.Run("exact-arbitrary-pairing-reproducer", func(t *testing.T) {
+		const raw = "{\"schema\":\"lsp-trace.private-provider-probe.v2\",\"status\":\"COMPLETE\",\"file_denominator\":0,\"cause_counts\":[{\"cause\":\"RESOURCE_EXHAUSTED\",\"count\":1}],\"records\":[{\"sequence\":1,\"phase\":\"DOCUMENT_SYMBOL\",\"class\":\"DECODE_FAILURE\",\"cause\":\"RESOURCE_EXHAUSTED\"}],\"rerun_count\":0,\"work\":1}\n"
+		if _, err := parsePrivateProviderProbeV2([]byte(raw)); err == nil {
+			t.Fatal("accepted arbitrary class/cause pairing")
+		}
+	})
+	t.Run("invalid-pair", func(t *testing.T) {
+		a := clone()
+		a.Records[0].Class = "JSON_RPC_CODE_BUCKET"
+		a.Records[0].Exhaustion = nil
+		parse(t, a, false)
+	})
+	t.Run("unknown-aggregate-cause", func(t *testing.T) {
+		a := clone()
+		a.CauseCounts[0].Cause = "UNKNOWN_CAUSE"
+		parse(t, a, false)
+	})
+	t.Run("count-exceeds-work", func(t *testing.T) {
+		a := clone()
+		a.CauseCounts[0].Count = 2
+		parse(t, a, false)
+	})
+	t.Run("sum-exceeds-work", func(t *testing.T) {
+		a := clone()
+		a.Work = 2
+		a.CauseCounts = []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}, {Cause: "RESOURCE_EXHAUSTED", Count: 2}}
+		parse(t, a, false)
+	})
+	t.Run("sum-overflow", func(t *testing.T) {
+		a := clone()
+		a.Work = ^uint64(0)
+		a.CauseCounts = []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}, {Cause: "RESOURCE_EXHAUSTED", Count: ^uint64(0)}}
+		parse(t, a, false)
+	})
+	t.Run("missing-retained-cause", func(t *testing.T) {
+		a := clone()
+		a.CauseCounts = []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}}
+		parse(t, a, false)
+	})
+	t.Run("retained-multiplicity-exceeds-count", func(t *testing.T) {
+		a := clone()
+		a.Work = 2
+		a.Records = append(a.Records, privateProviderProbeRecordV2{Sequence: 2, Phase: "DOCUMENT_SUPPLY", Class: "TYPED_SESSION_RUNTIME_FAILURE", Cause: "RESOURCE_EXHAUSTED", Exhaustion: a.Records[0].Exhaustion})
+		parse(t, a, false)
+	})
+	t.Run("aggregates-beyond-retained-records", func(t *testing.T) {
+		a := clone()
+		a.Work = 3
+		a.CauseCounts[0].Count = 3
+		parse(t, a, true)
+	})
+	t.Run("success-remainder", func(t *testing.T) {
+		a := clone()
+		a.Work = 3
+		parse(t, a, true)
+	})
+}
+
 func v2Record(v map[string]any) map[string]any {
 	return v["records"].([]any)[0].(map[string]any)
 }

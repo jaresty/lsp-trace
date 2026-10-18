@@ -288,6 +288,42 @@ func parsePrivateProviderProbe(raw []byte) (privateProviderProbeArtifact, error)
 	return a, nil
 }
 
+func validPrivateProviderProbeCause(class, cause string) bool {
+	switch class {
+	case "TYPED_SESSION_RUNTIME_FAILURE":
+		switch session.Failure(cause) {
+		case session.SessionNotFound, session.StaleGeneration, session.LifecycleConflict, session.SessionStopping, session.SessionPoisoned, session.ResourceExhausted, session.SessionCrashed, session.RequestCancelled, session.RequestTimeout:
+			return true
+		}
+		return cause == "OTHER_TYPED_FAILURE"
+	case "JSON_RPC_CODE_BUCKET":
+		switch cause {
+		case "PARSE_ERROR", "INVALID_REQUEST", "METHOD_NOT_FOUND", "INVALID_PARAMS", "INTERNAL_ERROR", "SERVER_ERROR", "OTHER":
+			return true
+		}
+	case "DECODE_FAILURE":
+		return cause == "DECODE_FAILURE"
+	case "DOCUMENT_FAILURE":
+		switch session.Failure(cause) {
+		case session.RequestCancelled, session.RequestTimeout, session.StaleGeneration, session.LifecycleConflict, session.ResourceExhausted, session.SessionPoisoned, sessionruntime.DocumentSupplyUnavailable, sessionruntime.DocumentURIUnavailable, sessionruntime.DocumentOutsideWorkspace, sessionruntime.DocumentSourceUnavailable, sessionruntime.LanguageIDUnavailable:
+			return true
+		}
+		return cause == "OTHER_TYPED_FAILURE"
+	case "ADAPTER_IDENTITY_MISMATCH":
+		return cause == "ADAPTER_IDENTITY_MISMATCH"
+	}
+	return false
+}
+
+func knownPrivateProviderProbeCause(cause string) bool {
+	for _, class := range []string{"TYPED_SESSION_RUNTIME_FAILURE", "JSON_RPC_CODE_BUCKET", "DECODE_FAILURE", "DOCUMENT_FAILURE", "ADAPTER_IDENTITY_MISMATCH"} {
+		if validPrivateProviderProbeCause(class, cause) {
+			return true
+		}
+	}
+	return false
+}
+
 func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, error) {
 	var a privateProviderProbeArtifactV2
 	if len(raw) == 0 || raw[len(raw)-1] != '\n' || len(raw) > 1 && raw[len(raw)-2] == '\n' {
@@ -307,12 +343,20 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 		return a, errors.New("invalid private provider probe")
 	}
 	previousCause := ""
+	causeCounts := make(map[string]uint64, len(a.CauseCounts))
+	var totalCount uint64
 	for _, count := range a.CauseCounts {
-		if count.Cause == "" || count.Count == 0 || previousCause >= count.Cause {
+		if !knownPrivateProviderProbeCause(count.Cause) || count.Count == 0 || count.Count > a.Work || previousCause >= count.Cause || math.MaxUint64-totalCount < count.Count {
 			return a, errors.New("invalid private provider probe")
 		}
+		totalCount += count.Count
+		if totalCount > a.Work {
+			return a, errors.New("invalid private provider probe")
+		}
+		causeCounts[count.Cause] = count.Count
 		previousCause = count.Cause
 	}
+	retainedCounts := make(map[string]uint64, len(a.Records))
 	var previousSequence uint64
 	for i, record := range a.Records {
 		if record.Sequence == 0 || record.Sequence <= previousSequence || record.Sequence > a.Work || record.Cause == "" {
@@ -321,8 +365,11 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 		if i == 0 && record.Phase != "DOCUMENT_SYMBOL" || i == 1 && record.Phase != "DOCUMENT_SUPPLY" {
 			return a, errors.New("invalid private provider probe")
 		}
-		validClass := record.Class == "TYPED_SESSION_RUNTIME_FAILURE" || record.Class == "JSON_RPC_CODE_BUCKET" || record.Class == "DECODE_FAILURE" || record.Class == "DOCUMENT_FAILURE" || record.Class == "ADAPTER_IDENTITY_MISMATCH"
-		if !validClass {
+		if !validPrivateProviderProbeCause(record.Class, record.Cause) {
+			return a, errors.New("invalid private provider probe")
+		}
+		retainedCounts[record.Cause]++
+		if retainedCounts[record.Cause] > causeCounts[record.Cause] {
 			return a, errors.New("invalid private provider probe")
 		}
 		wantExhaustion := record.Class == "TYPED_SESSION_RUNTIME_FAILURE" && record.Cause == string(session.ResourceExhausted)
