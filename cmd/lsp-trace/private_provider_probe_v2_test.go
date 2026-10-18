@@ -212,6 +212,35 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 			t.Fatal("accepted arbitrary class/cause pairing")
 		}
 	})
+	t.Run("exact-symbol-work-accounting-reproducer", func(t *testing.T) {
+		a := clone()
+		a.FileDenominator = 1
+		parse(t, a, false)
+	})
+	t.Run("valid-minimum-document-supply-work", func(t *testing.T) {
+		a := clone()
+		a.FileDenominator = 1
+		a.CauseCounts = []privateProviderProbeCount{{Cause: "DOCUMENT_SOURCE_UNAVAILABLE", Count: 1}}
+		a.Records = nil
+		parse(t, a, true)
+	})
+	t.Run("valid-minimum-document-symbol-work", func(t *testing.T) {
+		a := clone()
+		a.FileDenominator = 1
+		a.Work = 2
+		parse(t, a, true)
+	})
+	t.Run("symbol-work-accounting-overflow-boundaries", func(t *testing.T) {
+		a := clone()
+		a.FileDenominator = ^uint64(0) - 1
+		a.Work = ^uint64(0)
+		parse(t, a, true)
+		a.FileDenominator = ^uint64(0)
+		parse(t, a, false)
+		a.CauseCounts = nil
+		a.Records = nil
+		parse(t, a, true)
+	})
 	t.Run("invalid-pair", func(t *testing.T) {
 		a := clone()
 		a.Records[0].Class = "JSON_RPC_CODE_BUCKET"
