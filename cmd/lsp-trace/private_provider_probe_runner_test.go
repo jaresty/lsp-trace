@@ -3,7 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,20 +16,24 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
 type providerProbeRunnerResult struct {
-	code           int
-	stdout, stderr []byte
-	publication    map[string][]byte
-	starterCalls   int
-	managerCalls   int
-	starts, stops  int
-	probe          privateProviderProbeArtifact
-	probeExists    bool
+	code                       int
+	stdout, stderr             []byte
+	discoveryLine, receiptLine []byte
+	enumerationArtifact        []byte
+	enumerationReceipt         censusenumerationprojection.Receipt
+	publication                map[string][]byte
+	starterCalls, managerCalls int
+	starts, stops              int
+	probe                      privateProviderProbeArtifact
+	probeExists                bool
 }
 
 func providerProbeRunnerArgs(workspace, root, probe string, enumeration bool) []string {
@@ -86,7 +94,15 @@ func providerProbeRunnerDeps(t *testing.T, runCore func(censusCLIOptions, census
 
 func runProviderProbeRunner(t *testing.T, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
 	t.Helper()
-	workspace, root := t.TempDir(), t.TempDir()
+	return runProviderProbeRunnerInWorkspace(t, t.TempDir(), enableProbe, enumeration, runCore)
+}
+
+func runProviderProbeRunnerInWorkspace(t *testing.T, workspace string, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"a.go", "b.go", "c.go"} {
 		if err := os.WriteFile(filepath.Join(workspace, name), []byte("package "+strings.TrimSuffix(name, ".go")+"\n"), 0600); err != nil {
 			t.Fatal(err)
@@ -94,12 +110,44 @@ func runProviderProbeRunner(t *testing.T, enableProbe, enumeration bool, runCore
 	}
 	probe := ""
 	if enableProbe {
-		probe = probePath(t)
+		probe = filepath.Join(root, "provider-probe.json")
 	}
 	deps, starters, managers := providerProbeRunnerDeps(t, runCore)
 	var stdout, stderr bytes.Buffer
 	code := runCensusWithDependencies(providerProbeRunnerArgs(workspace, root, probe, enumeration), &stdout, &stderr, deps)
 	result := providerProbeRunnerResult{code: code, stdout: append([]byte(nil), stdout.Bytes()...), stderr: append([]byte(nil), stderr.Bytes()...), publication: providerProbePublicationFiles(t, root), starterCalls: *starters, managerCalls: *managers}
+	if enumeration {
+		lines := bytes.Split(bytes.TrimSuffix(result.stderr, []byte{'\n'}), []byte{'\n'})
+		if len(lines) != 2 {
+			t.Fatalf("enumeration stderr lines=%d stderr=%q", len(lines), result.stderr)
+		}
+		result.discoveryLine = append([]byte(nil), lines[0]...)
+		result.receiptLine = append([]byte(nil), lines[1]...)
+		decoder := json.NewDecoder(bytes.NewReader(lines[1]))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&result.enumerationReceipt); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
+			t.Fatalf("enumeration receipt=%q err=%v", lines[1], err)
+		}
+		canonicalReceipt, err := censusenumerationprojection.MarshalReceipt(result.enumerationReceipt)
+		if err != nil || !bytes.Equal(canonicalReceipt, append(append([]byte(nil), lines[1]...), '\n')) {
+			t.Fatalf("noncanonical enumeration receipt=%q err=%v", lines[1], err)
+		}
+		if result.enumerationReceipt.Status != "PUBLISHED" || result.enumerationReceipt.Selector == "" {
+			t.Fatalf("enumeration not published: %+v", result.enumerationReceipt)
+		}
+		result.enumerationArtifact, err = os.ReadFile(filepath.Join(root, result.enumerationReceipt.Selector))
+		if err != nil {
+			t.Fatalf("resolve enumeration selector=%q: %v", result.enumerationReceipt.Selector, err)
+		}
+		projection, err := censusenumerationprojection.Decode(result.enumerationArtifact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		canonicalArtifact, err := censusenumerationprojection.EncodeCanonical(projection)
+		if err != nil || !bytes.Equal(canonicalArtifact, result.enumerationArtifact) {
+			t.Fatalf("noncanonical enumeration artifact selector=%q err=%v", result.enumerationReceipt.Selector, err)
+		}
+	}
 	if probe != "" {
 		raw, err := os.ReadFile(probe)
 		if err == nil {
@@ -121,25 +169,54 @@ func deterministicProviderProbeOutcome(t *testing.T) censusPublicationOutcome {
 	return successfulCorePublication(t, censusPublicationCapabilityFor(t, projection))
 }
 
-func TestRunCensusProviderProbeAbsentAndEnabledPreservePublicOutcomeAndPublication(t *testing.T) {
+func TestRunCensusProviderProbeAbsentAndEnabledPreserveEnumerationPublication(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process test uses Darwin supervisor")
 	}
-	core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
-		if err := os.WriteFile(filepath.Join(options.PublicationRoot, "publication.bin"), []byte("identical-publication"), 0600); err != nil {
-			t.Fatal(err)
+	core := func(options censusCLIOptions, cfg censusCoreConfig, deps censusCoreDependencies) censusPublicationOutcome {
+		cfg.runner.start.Process = managedprocess.Spec{Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: cfg.runner.start.Process.Dir, Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1", "LSP_TRACE_RUNTIME_HELPER_MALFORMED_DOCUMENT_SYMBOL=1")}
+		cfg.runner.timeout = 3 * time.Second
+		cfg.runner.requestTimeout = time.Second
+		runSession, discover := deps.runSession, deps.discover
+		var actual *initializedAcquisitionRuntime
+		deps.runSession = func(runner initializedAcquisitionRunnerConfig, callback func(context.Context, *initializedAcquisitionRuntime) int) int {
+			return runSession(runner, func(ctx context.Context, runtime *initializedAcquisitionRuntime) int {
+				actual = runtime
+				fixed := *runtime
+				fixed.sessionID, fixed.generation = "provider-probe-parity", 1
+				return callback(ctx, &fixed)
+			})
 		}
-		if cfg.runner.providerProbe != nil {
-			cfg.runner.providerProbe.observe("DOCUMENT_SYMBOL", "DECODE_FAILURE", "DECODE_FAILURE", false)
+		deps.discover = func(ctx context.Context, options censusCLIOptions, _ *initializedAcquisitionRuntime, callHierarchy bool) (censusacquisition.Discovery, error) {
+			discovery, err := discover(ctx, options, actual, callHierarchy)
+			discovery.Session = censusacquisition.SessionIdentity{SessionID: "provider-probe-parity", Generation: 1}
+			return discovery, err
 		}
-		return deterministicProviderProbeOutcome(t)
+		return runCensusCore(options, cfg, deps)
 	}
-	baseline := runProviderProbeRunner(t, false, true, core)
-	enabled := runProviderProbeRunner(t, true, true, core)
-	if baseline.code != enabled.code || !bytes.Equal(baseline.stdout, enabled.stdout) || !bytes.Equal(baseline.stderr, enabled.stderr) || !reflect.DeepEqual(baseline.publication, enabled.publication) {
-		t.Fatalf("public drift baseline=%d/%q/%q/%v enabled=%d/%q/%q/%v", baseline.code, baseline.stdout, baseline.stderr, baseline.publication, enabled.code, enabled.stdout, enabled.stderr, enabled.publication)
+	workspace := t.TempDir()
+	baseline := runProviderProbeRunnerInWorkspace(t, workspace, false, true, core)
+	enabled := runProviderProbeRunnerInWorkspace(t, workspace, true, true, core)
+	if baseline.code != 1 || enabled.code != baseline.code || len(baseline.stdout) != 0 || !bytes.Equal(baseline.stdout, enabled.stdout) {
+		t.Fatalf("exit/stdout drift baseline=%d/%q enabled=%d/%q", baseline.code, baseline.stdout, enabled.code, enabled.stdout)
 	}
-	if baseline.starterCalls != 1 || baseline.managerCalls != 1 || enabled.starterCalls != 1 || enabled.managerCalls != 1 || !enabled.probeExists || enabled.probe.Work != 1 {
+	if !bytes.Equal(baseline.discoveryLine, enabled.discoveryLine) || !bytes.Equal(baseline.receiptLine, enabled.receiptLine) || !bytes.Equal(baseline.stderr, enabled.stderr) {
+		t.Fatalf("diagnostic/receipt drift baseline=%q enabled=%q", baseline.stderr, enabled.stderr)
+	}
+	if baseline.enumerationReceipt.Status != "PUBLISHED" || enabled.enumerationReceipt.Status != "PUBLISHED" || !reflect.DeepEqual(baseline.enumerationReceipt, enabled.enumerationReceipt) || len(baseline.enumerationArtifact) == 0 || !bytes.Equal(baseline.enumerationArtifact, enabled.enumerationArtifact) {
+		t.Fatalf("enumeration drift baseline=%+v/%d enabled=%+v/%d", baseline.enumerationReceipt, len(baseline.enumerationArtifact), enabled.enumerationReceipt, len(enabled.enumerationArtifact))
+	}
+	sum := sha256.Sum256(baseline.enumerationArtifact)
+	wantDigest := "sha256:" + hex.EncodeToString(sum[:])
+	if baseline.enumerationReceipt.Selector != censusenumerationprojection.Selector(baseline.enumerationArtifact) || baseline.enumerationReceipt.Digest != wantDigest || baseline.enumerationReceipt.ByteLength != uint64(len(baseline.enumerationArtifact)) {
+		t.Fatalf("enumeration identity receipt=%+v digest=%s length=%d", baseline.enumerationReceipt, wantDigest, len(baseline.enumerationArtifact))
+	}
+	probeBytes, probeAdded := enabled.publication["provider-probe.json"]
+	delete(enabled.publication, "provider-probe.json")
+	if !probeAdded || len(probeBytes) == 0 || !reflect.DeepEqual(baseline.publication, enabled.publication) {
+		t.Fatalf("publication drift baseline=%v enabled=%v probe_added=%t", baseline.publication, enabled.publication, probeAdded)
+	}
+	if baseline.starterCalls != 1 || baseline.managerCalls != 1 || enabled.starterCalls != 1 || enabled.managerCalls != 1 || !enabled.probeExists || enabled.probe.Work == 0 {
 		t.Fatalf("wiring baseline=%+v enabled=%+v", baseline, enabled)
 	}
 }
