@@ -62,7 +62,7 @@ type censusCLIOptions struct {
 	DownDepth, UpDepth, MaxNodes, MaxBatchTargets                              int
 	Timeout, RequestTimeout                                                    time.Duration
 	Resume, StopAfter                                                          string
-	Machine, Help, Catalog                                                     bool
+	Machine, Help, Catalog, PrivateEnumerationProjection                       bool
 }
 type censusStringFlags []string
 
@@ -103,6 +103,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.DurationVar(&o.Timeout, "timeout", o.Timeout, "")
 	fs.DurationVar(&o.RequestTimeout, "request-timeout", o.RequestTimeout, "")
 	fs.BoolVar(&o.Machine, "machine", false, "emit machine-readable JSON")
+	fs.BoolVar(&o.PrivateEnumerationProjection, "private-enumeration-projection", false, "")
 	fs.BoolVar(&o.Help, "help", false, "show census help")
 	fs.BoolVar(&o.Help, "h", false, "show census help")
 	if err := fs.Parse(clean); err != nil {
@@ -110,6 +111,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	}
 	if machineCount > 1 {
 		return o, errors.New("duplicate machine flag")
+	}
+	if censusNamedFlagCount(clean, "private-enumeration-projection") > 1 {
+		return o, errors.New("duplicate private enumeration projection flag")
 	}
 	if len(src) > 0 {
 		o.Sources = []string(src)
@@ -137,6 +141,20 @@ func censusFlagPresent(args []string, wanted string) bool {
 	return false
 }
 
+func censusNamedFlagCount(args []string, wanted string) int {
+	count := 0
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--server-arg" {
+			i++
+			continue
+		}
+		if strings.TrimPrefix(strings.SplitN(args[i], "=", 2)[0], "--") == wanted {
+			count++
+		}
+	}
+	return count
+}
+
 func censusMachineFlagCount(args []string) int {
 	count := 0
 	for i := 0; i < len(args); i++ {
@@ -155,6 +173,9 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 	if o.Help {
 		return nil
 	}
+	if o.PrivateEnumerationProjection && (!o.Machine || o.Resume != "" || o.Catalog) {
+		return errors.New("private enumeration projection requires fresh machine census")
+	}
 	if o.StopAfter != "" {
 		if o.StopAfter != "describe-requests" {
 			return errors.New("stop-after must be describe-requests")
@@ -170,7 +191,7 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 		if o.CatalogConfigPath == "" || o.PublicationRoot == "" {
 			return errors.New("resume requires catalog config and publication root")
 		}
-		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true}
+		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true, "private-enumeration-projection": true}
 		for _, arg := range args {
 			name := strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--")
 			if forbidden[name] {

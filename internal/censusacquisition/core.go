@@ -104,12 +104,29 @@ type PreparedTarget struct {
 
 func (t PreparedTarget) Position() lsp.Position { return t.SelectionRange.Start }
 
+type EnumerationSymbol struct {
+	Ordinal, FileOrdinal int
+	SelectionStart       lsp.Position
+	Kind                 int
+	Name                 string
+	Disposition          census.SymbolDisposition
+}
+
+type ProviderFailure struct {
+	Stage         string
+	Code          string
+	FileOrdinal   *int
+	SymbolOrdinal *int
+}
+
 type Discovery struct {
 	Session                  SessionIdentity
 	Workspace                string
 	Accounting               census.Accounting
 	FileLedger, SymbolLedger captureset.Ledger
 	Targets                  []PreparedTarget
+	EnumerationSymbols       []EnumerationSymbol
+	ProviderFailures         []ProviderFailure
 	Complete                 bool
 	Observations             []DiscoveryObservation
 }

@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/censuscontinuation"
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
@@ -64,6 +65,7 @@ type censusPublicationOutcome struct {
 	Diagnostic          *censusCLIDiagnostic
 	DiscoveryDiagnostic *censusresult.DiscoveryDiagnostic
 	RequestReceipt      *censusrequest.Receipt
+	EnumerationReceipt  *censusenumerationprojection.Receipt
 	continuation        *censusContinuationCustody
 	controlFlow         *censuscontrolflow.Record
 }

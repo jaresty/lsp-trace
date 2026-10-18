@@ -149,12 +149,18 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		filesAttempted++
 		if err := a.Supplier.Supply(ctx, file); err != nil {
 			appendFile(&out, fileOrdinal, file.Path, census.FileUnreadable)
+			code := "REQUEST_FAILED"
+			if ctx.Err() != nil {
+				code = "CANCELED"
+			}
+			appendFileProviderFailure(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
 			complete = false
 			providerIncomplete = true
 			continue
 		}
 		if !a.Client.SupportsDocumentSymbols() {
 			appendFile(&out, fileOrdinal, file.Path, census.FileUnsupported)
+			appendFileProviderFailure(&out, "DOCUMENT_SYMBOL", "UNSUPPORTED", fileOrdinal)
 			complete = false
 			providerIncomplete = true
 			continue
@@ -162,6 +168,11 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		symbols, err := a.Client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}})
 		if err != nil {
 			appendFile(&out, fileOrdinal, file.Path, census.FileDocumentSymbolFailed)
+			code := "REQUEST_FAILED"
+			if ctx.Err() != nil {
+				code = "CANCELED"
+			}
+			appendFileProviderFailure(&out, "DOCUMENT_SYMBOL", code, fileOrdinal)
 			complete = false
 			providerIncomplete = true
 			continue
@@ -178,6 +189,8 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		flat, boundary := flattenDocumentSymbolsBounded(symbols, maxNodes, maxDepth, maxStrings)
 		if boundary != "" {
 			appendFile(&out, fileOrdinal, file.Path, census.FileIncomplete)
+			code := map[string]string{"nodes": "NODE_LIMIT", "depth": "DEPTH_LIMIT", "bytes": "STRING_BYTE_LIMIT"}[boundary]
+			appendFileProviderFailure(&out, "DOCUMENT_SYMBOL_FLATTEN", code, fileOrdinal)
 			complete = false
 			sourceOmissions++
 			nodeBoundary = nodeBoundary || boundary == "nodes"
@@ -201,6 +214,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				disposition = census.SymbolNonCallable
 			} else if !a.Client.SupportsCallHierarchy() {
 				disposition = census.SymbolUnsupported
+				appendSymbolProviderFailure(&out, "CALL_HIERARCHY_CAPABILITY", "UNSUPPORTED", ordinal)
 				fileComplete, complete = false, false
 				providerIncomplete = true
 			} else {
@@ -208,10 +222,17 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				switch {
 				case prepareErr != nil:
 					disposition = census.SymbolPreparationFailed
+					code := "REQUEST_FAILED"
+					if ctx.Err() != nil {
+						code = "CANCELED"
+					}
+					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", code, ordinal)
 				case len(items) == 0:
 					disposition = census.SymbolPrepareMissing
+					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "UNAVAILABLE", ordinal)
 				case len(items) != 1 || !preparedItemMatches(items[0], file.URI, symbol):
 					disposition = census.SymbolIncomplete
+					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "RESULT_MISMATCH", ordinal)
 					fileComplete, complete = false, false
 					providerIncomplete = true
 					sourceOmissions++
@@ -228,6 +249,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				}
 			}
 			out.Accounting.Symbols = append(out.Accounting.Symbols, census.SymbolEntry{Ordinal: ordinal, Disposition: disposition})
+			out.EnumerationSymbols = append(out.EnumerationSymbols, EnumerationSymbol{Ordinal: ordinal, FileOrdinal: fileOrdinal, SelectionStart: symbol.SelectionRange.Start, Kind: symbol.Kind, Name: symbol.Name, Disposition: disposition})
 			ledgerDisposition := string(disposition)
 			if disposition == census.SymbolSelected {
 				ledgerDisposition = SymbolPrepared
@@ -254,6 +276,15 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		out.Observations = discoveryObservations(a.Limits, uint64(filesAttempted+symbolOrdinal), sourceOmissions, nodeBoundary, depthBoundary, providerIncomplete, timeoutBoundary, byteBoundary)
 	}
 	return cloneDiscovery(out), nil
+}
+
+func appendFileProviderFailure(out *Discovery, stage, code string, ordinal int) {
+	value := ordinal
+	out.ProviderFailures = append(out.ProviderFailures, ProviderFailure{Stage: stage, Code: code, FileOrdinal: &value})
+}
+func appendSymbolProviderFailure(out *Discovery, stage, code string, ordinal int) {
+	value := ordinal
+	out.ProviderFailures = append(out.ProviderFailures, ProviderFailure{Stage: stage, Code: code, SymbolOrdinal: &value})
 }
 
 func appendFile(out *Discovery, ordinal int, identity string, disposition census.FileDisposition) {
@@ -475,6 +506,18 @@ func cloneDiscovery(d Discovery) Discovery {
 	d.Targets = append([]PreparedTarget(nil), d.Targets...)
 	for i := range d.Targets {
 		d.Targets[i] = cloneTarget(d.Targets[i])
+	}
+	d.EnumerationSymbols = append([]EnumerationSymbol(nil), d.EnumerationSymbols...)
+	d.ProviderFailures = append([]ProviderFailure(nil), d.ProviderFailures...)
+	for i := range d.ProviderFailures {
+		if d.ProviderFailures[i].FileOrdinal != nil {
+			v := *d.ProviderFailures[i].FileOrdinal
+			d.ProviderFailures[i].FileOrdinal = &v
+		}
+		if d.ProviderFailures[i].SymbolOrdinal != nil {
+			v := *d.ProviderFailures[i].SymbolOrdinal
+			d.ProviderFailures[i].SymbolOrdinal = &v
+		}
 	}
 	return d
 }

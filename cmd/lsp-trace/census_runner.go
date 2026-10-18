@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/censuscontinuation"
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/continuationhost"
@@ -201,6 +202,12 @@ func writeCensusOutcome(stdout, stderr io.Writer, machine bool, outcome censusPu
 			}{outcome.DiscoveryDiagnostic, outcome.RequestReceipt})
 			if err == nil {
 				_, _ = stderr.Write(append(raw, '\n'))
+				if outcome.EnumerationReceipt != nil {
+					privateRaw, privateErr := censusenumerationprojection.MarshalReceipt(*outcome.EnumerationReceipt)
+					if privateErr == nil {
+						_, _ = stderr.Write(privateRaw)
+					}
+				}
 				return 1
 			}
 		}

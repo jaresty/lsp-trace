@@ -89,7 +89,7 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 			return fail(censusStageAcquisition, nil)
 		}
 		discovery, err := deps.discover(ctx, options, runtime, cfg.callHierarchy)
-		if err != nil || len(discovery.Targets) == 0 || discovery.Session.SessionID != runtime.SessionID() || discovery.Session.Generation != runtime.Generation() {
+		if err != nil || discovery.Session.SessionID != runtime.SessionID() || discovery.Session.Generation != runtime.Generation() {
 			return fail(censusStageDiscovery, nil)
 		}
 		if !discovery.Complete {
@@ -102,7 +102,14 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 				return fail(censusStageDiscovery, nil)
 			}
 			outcome = censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt}
+			if options.PrivateEnumerationProjection {
+				privateReceipt := publishCensusEnumerationProjection(discovery, receipt, options.PublicationRoot)
+				outcome.EnumerationReceipt = &privateReceipt
+			}
 			return 1
+		}
+		if len(discovery.Targets) == 0 {
+			return fail(censusStageDiscovery, nil)
 		}
 		var assembly censusAssembly
 		if deps.acquireDiagnostic != nil {
