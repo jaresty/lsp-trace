@@ -248,6 +248,24 @@ func runnerControlFlowArgs(t *testing.T, publicationRoot, controlFlowPath string
 	return args
 }
 
+type controlFlowOrderingWriter struct {
+	t    *testing.T
+	path string
+	bytes.Buffer
+}
+
+func (w *controlFlowOrderingWriter) Write(p []byte) (int, error) {
+	w.t.Helper()
+	raw, err := os.ReadFile(w.path)
+	if err != nil && !os.IsNotExist(err) {
+		w.t.Fatalf("read control-flow ledger during public write: %v", err)
+	}
+	if len(raw) != 0 {
+		w.t.Fatalf("control-flow recorded before public write: %q", raw)
+	}
+	return w.Buffer.Write(p)
+}
+
 func TestRunCensusControlFlowAcquisitionFailurePublicParityAndSingleRecord(t *testing.T) {
 	outcome := censusPublicationOutcome{
 		Diagnostic: mustDiagnostic(t, censusStageAcquisition),
@@ -288,6 +306,51 @@ func TestRunCensusControlFlowAcquisitionFailurePublicParityAndSingleRecord(t *te
 	}
 	got, err := os.ReadFile(controlPath)
 	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("ledger=%q want=%q err=%v", got, want, err)
+	}
+}
+
+func TestRunCensusControlFlowWritesPublicBytesBeforePrivateRecord(t *testing.T) {
+	outcome := censusPublicationOutcome{
+		Diagnostic: mustDiagnostic(t, censusStageAcquisition),
+		controlFlow: &censuscontrolflow.Record{
+			SchemaVersion: censuscontrolflow.SchemaVersion,
+			FirstCause:    censuscontrolflow.CoreFailed,
+			CorePhase:     censuscontrolflow.PhaseBatchAcquire,
+			BatchRecord:   censuscontrolflow.BatchRejected,
+		},
+	}
+	deps := runnerControlFlowDeps(t, func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome {
+		return outcome
+	})
+
+	baselineRoot := t.TempDir()
+	var baselineOut, baselineErr bytes.Buffer
+	baselineCode := runCensusWithDependencies(runnerControlFlowArgs(t, baselineRoot, ""), &baselineOut, &baselineErr, deps)
+
+	enabledRoot := t.TempDir()
+	controlPath := privatePathForRunner(t)
+	var enabledOut bytes.Buffer
+	enabledErr := &controlFlowOrderingWriter{t: t, path: controlPath}
+	enabledCode := runCensusWithDependencies(runnerControlFlowArgs(t, enabledRoot, controlPath), &enabledOut, enabledErr, deps)
+	if baselineCode != enabledCode || !bytes.Equal(baselineOut.Bytes(), enabledOut.Bytes()) || !bytes.Equal(baselineErr.Bytes(), enabledErr.Bytes()) {
+		t.Fatalf("baseline=%d/%q/%q enabled=%d/%q/%q", baselineCode, baselineOut.Bytes(), baselineErr.Bytes(), enabledCode, enabledOut.Bytes(), enabledErr.Bytes())
+	}
+	if baselineCode != 1 || baselineOut.Len() != 0 {
+		t.Fatalf("code=%d stdout=%q stderr=%q", baselineCode, baselineOut.Bytes(), baselineErr.Bytes())
+	}
+	for name, root := range map[string]string{"baseline": baselineRoot, "enabled": enabledRoot} {
+		entries, err := os.ReadDir(root)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("%s publication entries=%v err=%v", name, entries, err)
+		}
+	}
+	want, err := censuscontrolflow.Marshal(*outcome.controlFlow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(controlPath)
+	if err != nil || bytes.Count(got, []byte{'\n'}) != 1 || !bytes.Equal(got, want) {
 		t.Fatalf("ledger=%q want=%q err=%v", got, want, err)
 	}
 }
