@@ -110,6 +110,13 @@ func TestExecuteChunkRejectsBeforeCore(t *testing.T) {
 			r.Plan.Chunks[r.ChunkOrdinal].Projection.SHA256 = digest([]byte("mutated"))
 			r.Plan.LogicalDigest, r.Plan.ImmutableSelector = "", ""
 		},
+		"cardinality_10001": func(r *ExecutionRequest) {
+			chunk := r.ChunkOrdinal
+			r.Projections[chunk].Targets = append(r.Projections[chunk].Targets, make([]LocalTarget, ChunkSize)...)
+			r.Sidecars[chunk].Mappings = append(r.Sidecars[chunk].Mappings, make([]Mapping, ChunkSize)...)
+			r.Plan.Chunks[chunk].TargetCount = ChunkSize + 1
+			r.Plan.LogicalDigest, r.Plan.ImmutableSelector = "", ""
+		},
 		"sidecar": func(r *ExecutionRequest) {
 			r.Sidecars[r.ChunkOrdinal].Mappings[0].LocalOrdinal = 1
 			r.Sidecars[r.ChunkOrdinal].LogicalDigest, r.Sidecars[r.ChunkOrdinal].ImmutableSelector = "", ""
@@ -139,11 +146,6 @@ func TestExecuteChunkPreservesCoreFailure(t *testing.T) {
 }
 
 func TestReconcileExecutionProjectionRejectsMutations(t *testing.T) {
-	request, _ := executionFixture(t, 64)
-	receipt, err := ExecuteChunk(context.Background(), request)
-	if err != nil {
-		t.Fatal(err)
-	}
 	mutations := map[string]func(*censusacquisition.Projection){
 		"manifest_bytes": func(p *censusacquisition.Projection) { p.ManifestBytes[0] ^= 1 },
 		"reordered_result": func(p *censusacquisition.Projection) {
@@ -157,6 +159,11 @@ func TestReconcileExecutionProjectionRejectsMutations(t *testing.T) {
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
+			request, _ := executionFixture(t, 64)
+			receipt, err := ExecuteChunk(context.Background(), request)
+			if err != nil {
+				t.Fatal(err)
+			}
 			p, err := censusacquisition.CloneProjection(receipt.Projection)
 			if err != nil {
 				t.Fatal(err)
@@ -167,10 +174,19 @@ func TestReconcileExecutionProjectionRejectsMutations(t *testing.T) {
 			}
 		})
 	}
-	p, err := censusacquisition.CloneProjection(receipt.Projection)
+	request, _ := executionFixture(t, 1)
+	receipt, err := ExecuteChunk(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
+	mappingRequest := request
+	mappingRequest.Sidecars = append([]Sidecar(nil), request.Sidecars...)
+	mappingRequest.Sidecars[mappingRequest.ChunkOrdinal].Mappings = append([]Mapping(nil), request.Sidecars[request.ChunkOrdinal].Mappings...)
+	mappingRequest.Sidecars[mappingRequest.ChunkOrdinal].Mappings[0].GlobalOrdinal++
+	if _, err := reconcileExecutionProjection(mappingRequest, receipt.Projection); err == nil || !IsExecutionStage(err, StageMapping) {
+		t.Fatalf("ASSERT_POST_CORE_GLOBAL_MAPPING_MUTATION_REJECTED: %v", err)
+	}
+	p := receipt.Projection
 	p.ManifestBytes[0] ^= 1
 	if _, err := censusacquisition.CloneProjection(p); err == nil {
 		t.Fatal("ASSERT_UNCHANGED_CAPTURE_SET_VALIDATOR_DETECTS_MUTATION")
