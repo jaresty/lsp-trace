@@ -765,7 +765,9 @@ func TestRuntimeHelperServer(t *testing.T) {
 			}
 			writeRuntimeResponse(msg.ID, []any{})
 		case "textDocument/prepareCallHierarchy":
-			time.Sleep(3 * time.Second)
+			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_PREPARE_IMMEDIATE") != "1" {
+				time.Sleep(3 * time.Second)
+			}
 			writeRuntimeResponse(msg.ID, []any{})
 		case "shutdown":
 			writeRuntimeResponse(msg.ID, nil)

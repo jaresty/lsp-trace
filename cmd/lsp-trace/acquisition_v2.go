@@ -654,7 +654,7 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 	return runInitializedAcquisitionSession(initializedAcquisitionRunnerConfig{
 		manager: manager,
 		start:   sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, ProviderIdentity: providerIdentity, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}},
-		timeout: effective.Limits.Timeout, requestTimeout: effective.Limits.RequestTimeout,
+		timeout: effective.Limits.Timeout, requestTimeout: effective.Limits.RequestTimeout, readinessTimeout: effective.Limits.Timeout,
 		diagnosticRoot: diagnosticRoot, diagnosticSelector: diagnosticSelector, stderr: stderr,
 	}, func(ctx context.Context, managed initializedAcquisitionSession) int {
 		runtime := managed.(*initializedAcquisitionRuntime)
