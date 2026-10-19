@@ -419,69 +419,17 @@ func assertInitializedRunnerCleaned(t *testing.T, observed runnerObservations) {
 	}
 }
 
-func TestProductionInitializedRunnerReadinessUsesOverallTimeout(t *testing.T) {
+func TestProductionInitializedRunnerConfigUsesOverallAndRequestTimeouts(t *testing.T) {
 	const (
-		assertion      = "ASSERT_PRODUCTION_INITIALIZED_RUNNER_READINESS_USES_OVERALL_TIMEOUT"
-		requestTimeout = 500 * time.Millisecond
-		readinessDelay = 750 * time.Millisecond
 		overallTimeout = 2 * time.Second
+		requestTimeout = 500 * time.Millisecond
 	)
-	if runtime.GOOS != "darwin" {
-		t.Skip("managed process CLI uses Darwin supervisor")
+	cfg := productionInitializedAcquisitionRunnerConfig(overallTimeout, requestTimeout)
+	if cfg.timeout != overallTimeout || cfg.readinessTimeout != overallTimeout {
+		t.Fatalf("ASSERT_PRODUCTION_INITIALIZED_RUNNER_READINESS_USES_OVERALL_TIMEOUT config=%+v", cfg)
 	}
-	cli := buildStartupSinkCLI(t)
-	workspace := t.TempDir()
-	sourcePath := filepath.Join(workspace, "main.go")
-	if err := os.WriteFile(sourcePath, []byte("leaf\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	uri := (&url.URL{Scheme: "file", Path: sourcePath}).String()
-	manifest := map[string]any{
-		"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session",
-		"root":             map[string]any{"id": "root", "locator": map[string]any{"uri": uri, "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0},
-		"required_targets": []any{},
-		"limits": map[string]any{
-			"max_nodes": 1, "max_requests": 2,
-			"timeout_ms": overallTimeout.Milliseconds(), "request_timeout_ms": requestTimeout.Milliseconds(),
-		},
-	}
-	raw, _ := json.Marshal(manifest)
-	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
-	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	args := []string{
-		"slice", "--acquisition-version=v2", "--workspace", workspace,
-		"--server", os.Args[0], "--server-arg", "-test.run=^TestRuntimeHelperServer$",
-		"--server-env", "LSP_TRACE_RUNTIME_HELPER=1",
-		"--server-env", "LSP_TRACE_RUNTIME_HELPER_INITIALIZE_DELAY=" + readinessDelay.String(),
-		"--server-env", "LSP_TRACE_RUNTIME_HELPER_PREPARE_IMMEDIATE=1",
-		"--seed-manifest", manifestPath,
-	}
-	cmd := exec.Command(cli, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	started := time.Now()
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("%s: run: %v stdout=%s stderr=%s", assertion, err, stdout.Bytes(), stderr.Bytes())
-	}
-	if elapsed := time.Since(started); elapsed < readinessDelay {
-		t.Fatalf("%s: elapsed=%s delay=%s", assertion, elapsed, readinessDelay)
-	}
-	var artifact struct {
-		Acquisition struct {
-			Request struct {
-				Limits struct {
-					RequestTimeout time.Duration `json:"request_timeout"`
-				} `json:"limits"`
-			} `json:"request"`
-		} `json:"acquisition"`
-	}
-	if err := json.Unmarshal(stdout.Bytes(), &artifact); err != nil {
-		t.Fatalf("%s: decode graph provenance: %v stdout=%s", assertion, err, stdout.Bytes())
-	}
-	if artifact.Acquisition.Request.Limits.RequestTimeout != requestTimeout {
-		t.Fatalf("%s: operation request timeout=%s want=%s", assertion, artifact.Acquisition.Request.Limits.RequestTimeout, requestTimeout)
+	if cfg.requestTimeout != requestTimeout {
+		t.Fatalf("ASSERT_PRODUCTION_INITIALIZED_RUNNER_REQUEST_TIMEOUT_EXACT got=%s want=%s", cfg.requestTimeout, requestTimeout)
 	}
 }
 

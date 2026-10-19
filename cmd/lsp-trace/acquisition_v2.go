@@ -305,6 +305,10 @@ type initializedAcquisitionRunnerConfig struct {
 	providerProbe      *privateProviderProbe
 }
 
+func productionInitializedAcquisitionRunnerConfig(timeout, requestTimeout time.Duration) initializedAcquisitionRunnerConfig {
+	return initializedAcquisitionRunnerConfig{timeout: timeout, requestTimeout: requestTimeout, readinessTimeout: timeout}
+}
+
 func (cfg initializedAcquisitionRunnerConfig) effectiveReadinessTimeout() time.Duration {
 	if cfg.readinessTimeout > 0 {
 		return cfg.readinessTimeout
@@ -651,12 +655,11 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 			ExecutableSHA256: binding.Validator.ExecutableSHA256, PayloadSHA256: binding.Validator.PayloadSHA256, ConfigSHA256: binding.Validator.ConfigSHA256,
 		}
 	}
-	return runInitializedAcquisitionSession(initializedAcquisitionRunnerConfig{
-		manager: manager,
-		start:   sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, ProviderIdentity: providerIdentity, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}},
-		timeout: effective.Limits.Timeout, requestTimeout: effective.Limits.RequestTimeout, readinessTimeout: effective.Limits.Timeout,
-		diagnosticRoot: diagnosticRoot, diagnosticSelector: diagnosticSelector, stderr: stderr,
-	}, func(ctx context.Context, managed initializedAcquisitionSession) int {
+	runnerConfig := productionInitializedAcquisitionRunnerConfig(effective.Limits.Timeout, effective.Limits.RequestTimeout)
+	runnerConfig.manager = manager
+	runnerConfig.start = sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, ProviderIdentity: providerIdentity, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}}
+	runnerConfig.diagnosticRoot, runnerConfig.diagnosticSelector, runnerConfig.stderr = diagnosticRoot, diagnosticSelector, stderr
+	return runInitializedAcquisitionSession(runnerConfig, func(ctx context.Context, managed initializedAcquisitionSession) int {
 		runtime := managed.(*initializedAcquisitionRuntime)
 		privateRuntime := runtime.privateAcquisitionRuntime
 		startedSessionID, startedGeneration := managed.SessionID(), managed.Generation()
