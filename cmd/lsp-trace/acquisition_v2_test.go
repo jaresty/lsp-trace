@@ -419,6 +419,34 @@ func assertInitializedRunnerCleaned(t *testing.T, observed runnerObservations) {
 	}
 }
 
+func TestInitializedRunnerReadinessTimeoutDefaultsToRequestTimeout(t *testing.T) {
+	cfg := initializedAcquisitionRunnerConfig{requestTimeout: 375 * time.Millisecond}
+	if got := cfg.effectiveReadinessTimeout(); got != cfg.requestTimeout {
+		t.Fatalf("ASSERT_INITIALIZED_RUNNER_READINESS_TIMEOUT_DEFAULT: got=%s want=%s", got, cfg.requestTimeout)
+	}
+}
+
+func TestInitializedRunnerUsesIndependentReadinessTimeout(t *testing.T) {
+	const assertion = "ASSERT_INITIALIZED_RUNNER_INDEPENDENT_READINESS_TIMEOUT"
+	cfg := newInitializedRunnerTestConfig(t, 2*time.Second)
+	cfg.requestTimeout = 50 * time.Millisecond
+	cfg.readinessTimeout = 500 * time.Millisecond
+	cfg.start.Process.Env = append(cfg.start.Process.Env, "LSP_TRACE_RUNTIME_HELPER_INITIALIZE_DELAY=150ms")
+	initialized := false
+	code := runInitializedAcquisitionSession(cfg, func(_ context.Context, session initializedAcquisitionSession) int {
+		initialized = session.SessionID() != "" && session.Generation() == 1
+		runtime := session.(*initializedAcquisitionRuntime)
+		if runtime.requestTimeout != 50*time.Millisecond {
+			t.Fatalf("%s: operation timeout=%s", assertion, runtime.requestTimeout)
+		}
+		return 0
+	})
+	if code != 0 || !initialized {
+		stderr := cfg.stderr.(*bytes.Buffer).String()
+		t.Fatalf("%s: code=%d initialized=%t stderr=%q", assertion, code, initialized, stderr)
+	}
+}
+
 func TestInitializedRunnerOneSessionDiscoveryAndRepeatedExecutor(t *testing.T) {
 	const assertion = "ASSERT_INITIALIZED_RUNNER_ONE_SESSION_REPEATED_EXECUTOR"
 	cfg := newInitializedRunnerTestConfig(t, 3*time.Second)

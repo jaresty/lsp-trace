@@ -754,6 +754,9 @@ func TestRuntimeHelperServer(t *testing.T) {
 			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE") == "1" {
 				return
 			}
+			if delay, err := time.ParseDuration(os.Getenv("LSP_TRACE_RUNTIME_HELPER_INITIALIZE_DELAY")); err == nil {
+				time.Sleep(delay)
+			}
 			writeRuntimeResponse(msg.ID, map[string]any{"capabilities": map[string]any{"callHierarchyProvider": true}})
 		case "textDocument/documentSymbol":
 			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_MALFORMED_DOCUMENT_SYMBOL") == "1" {

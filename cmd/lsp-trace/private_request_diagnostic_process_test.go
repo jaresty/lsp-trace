@@ -257,7 +257,7 @@ func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := runFR23WithScheduledFake(t, cmd); err != nil {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_SUCCEEDS: %v stderr=%s", err, stderr.String())
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_BARRIER_AND_INITIALIZATION_SUCCEED: %v stderr=%s", err, stderr.String())
 	}
 	if strings.Contains(stderr.String(), "topmost sibling expansion produced no exact relations") {
 		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_NOT_ERROR: %s", stderr.String())
@@ -283,6 +283,7 @@ func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
 }
 
 func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
+	const requestTimeoutMS = 500
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")
 	}
@@ -294,7 +295,7 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	}
 	uri := (&url.URL{Scheme: "file", Path: filepath.Join(workspace, "main.go")}).String()
 	target := map[string]any{"id": "root", "locator": map[string]any{"uri": uri, "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0}
-	manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": target, "required_targets": []any{}, "limits": map[string]any{"max_nodes": 1, "max_requests": 2, "timeout_ms": 1000, "request_timeout_ms": 500}}
+	manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": target, "required_targets": []any{}, "limits": map[string]any{"max_nodes": 1, "max_requests": 2, "timeout_ms": 1000, "request_timeout_ms": requestTimeoutMS}}
 	manifestRaw, _ := json.Marshal(manifest)
 	manifestPath := filepath.Join(t.TempDir(), "seeds.json")
 	if err := os.WriteFile(manifestPath, manifestRaw, 0600); err != nil {
@@ -338,8 +339,8 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 			}
 		}
 	}
-	if !prepareTimeout || bytes.Contains(privateRaw, []byte(uri)) {
-		t.Fatalf("ASSERT_FR23_PRIVATE_LIFECYCLE_TIMEOUT_AND_PRIVACY: timeout=%v", prepareTimeout)
+	if !prepareTimeout || requestTimeoutMS != 500 || bytes.Contains(privateRaw, []byte(uri)) {
+		t.Fatalf("ASSERT_FR23_PRIVATE_LIFECYCLE_500MS_TIMEOUT_AND_PRIVACY: timeout=%v configured_timeout_ms=%d", prepareTimeout, requestTimeoutMS)
 	}
 
 	absent := filepath.Join(t.TempDir(), "absent.json")

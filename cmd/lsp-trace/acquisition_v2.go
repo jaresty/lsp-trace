@@ -280,12 +280,20 @@ type initializedAcquisitionRunnerConfig struct {
 	start              sessionruntime.StartRequest
 	timeout            time.Duration
 	requestTimeout     time.Duration
+	readinessTimeout   time.Duration
 	diagnosticRoot     string
 	diagnosticSelector string
 	stderr             io.Writer
 	observeStart       func(sessionruntime.StartResult)
 	observeStop        func(session.LifecycleResult)
 	providerProbe      *privateProviderProbe
+}
+
+func (cfg initializedAcquisitionRunnerConfig) effectiveReadinessTimeout() time.Duration {
+	if cfg.readinessTimeout > 0 {
+		return cfg.readinessTimeout
+	}
+	return cfg.requestTimeout
 }
 
 func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, callback func(context.Context, initializedAcquisitionSession) int) int {
@@ -324,7 +332,7 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 			fmt.Fprintln(cfg.stderr, "managed cleanup:", err)
 		}
 	}()
-	pending := cfg.manager.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(cfg.requestTimeout))
+	pending := cfg.manager.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(cfg.effectiveReadinessTimeout()))
 	ready, ok := cfg.manager.WaitReadiness(ctx, pending.ID)
 	if !ok || ready.State != sessionruntime.ReadinessReady {
 		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
