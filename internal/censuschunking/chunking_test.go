@@ -25,7 +25,7 @@ func fixture(t *testing.T, n int) Input {
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := Input{GlobalProjection: ArtifactRef{"global/selector", digest([]byte("global")), 6}, RequestFingerprint: digest([]byte("request")), SessionID: "session", Generation: 7, WorkspaceURI: uri, WorkspaceDigest: wd, CanonicalOrderPolicy: "captureset-order-targets-v1", DuplicatePolicy: "reject-global-ordinal-identity-seed-bytes-digest-v1", BatchTargets: 63, DownDepth: 1, UpDepth: 1, Files: []GlobalFile{{Ordinal: 0, Path: "a.go", Disposition: "processed"}, {Ordinal: 4, Path: "b.go", Disposition: "processed"}}}
+	in := Input{GlobalProjection: ArtifactRef{"global/selector", digest([]byte("global")), 6}, RequestFingerprint: digest([]byte("request")), SessionID: "session", Generation: 7, WorkspaceURI: uri, WorkspaceDigest: wd, CanonicalOrderPolicy: "captureset-order-targets-v1", DuplicatePolicy: "reject-global-ordinal-identity-seed-bytes-digest-v1", BatchTargets: 63, DownDepth: 1, UpDepth: 1, Files: []GlobalFile{{Ordinal: 0, Path: "a.go", Disposition: "processed"}, {Ordinal: 4, Path: "b.go", Disposition: "processed"}}, GlobalProviderFailures: []string{}}
 	in.Targets = make([]GlobalTarget, n)
 	for i := 0; i < n; i++ {
 		fileOrd, path := 0, "a.go"
@@ -137,10 +137,37 @@ func TestValidationAndCanonicalJSON(t *testing.T) {
 	if _, err = EncodeProjection(p); err == nil {
 		t.Fatal("ASSERT_GLOBAL_FAILURES_EXCLUDED_FROM_LOCAL_COMPLETE_PROJECTION")
 	}
+	for name, mutate := range map[string]func(string) string{
+		"unknown": func(seed string) string { return strings.Replace(seed, `}`, `,"unknown":true}`, 1) },
+		"coordinate": func(seed string) string {
+			return strings.Replace(seed, `"column":2`, `"column":3`, 1)
+		},
+		"private_path": func(seed string) string {
+			return strings.Replace(seed, `"path":"a.go"`, `"path":"/secret/a.go"`, 1)
+		},
+	} {
+		t.Run("local_seed_"+name, func(t *testing.T) {
+			p := got.Chunks[0].Projection
+			p.Targets = append([]LocalTarget(nil), p.Targets...)
+			p.Targets[0].CanonicalSeedV2 = mutate(p.Targets[0].CanonicalSeedV2)
+			p.Targets[0].CanonicalSeedV2SHA256 = digest([]byte(p.Targets[0].CanonicalSeedV2))
+			p.LogicalDigest, p.ImmutableSelector = "", ""
+			if _, err := EncodeProjection(p); err == nil {
+				t.Fatal("ASSERT_LOCAL_SEED_CANONICAL_IDENTITY_PRIVACY_RECONCILIATION")
+			}
+		})
+	}
 	s := got.Chunks[0].Sidecar
 	s.Mappings[0].GlobalOrdinal = s.Mappings[1].GlobalOrdinal
 	if _, err = EncodeSidecar(s); err == nil {
 		t.Fatal("ASSERT_MAPPING_DUPLICATE_GAP_OVERLAP_FABRICATION_REJECTED")
+	}
+	index := got.Index
+	index.Chunks = append([]ChunkDescriptor(nil), index.Chunks...)
+	index.Chunks[1].TargetStart++
+	index.LogicalDigest, index.ImmutableSelector = "", ""
+	if _, err = EncodeIndex(index); err == nil {
+		t.Fatal("ASSERT_MAPPING_DUPLICATE_GAP_OVERLAP_FABRICATION_REJECTED index gap")
 	}
 	got.Plan.Accepted = true
 	if _, err = EncodePlan(got.Plan); err == nil {
