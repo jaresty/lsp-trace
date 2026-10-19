@@ -13,6 +13,7 @@ import (
 	"math"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -44,6 +45,7 @@ const (
 var (
 	ErrZeroTargets    = errors.New("census chunking requires at least one target")
 	ErrTooManyTargets = errors.New("census chunking target bound exceeded")
+	maxWorkLimit      = uint64(MaxWork)
 )
 
 type ArtifactRef struct {
@@ -241,7 +243,145 @@ func Build(in Input, compatibilityBytes []byte) (Result, error) {
 	if _, err := EncodeIndex(index); err != nil {
 		return Result{}, err
 	}
+	projections := make([]Projection, len(chunks))
+	sidecars := make([]Sidecar, len(chunks))
+	for i := range chunks {
+		projections[i] = chunks[i].Projection
+		sidecars[i] = chunks[i].Sidecar
+	}
+	work, err := aggregateWork(in, plan, index, projections, sidecars)
+	if err != nil || work > maxWorkLimit {
+		return Result{}, errors.New("work limit exceeded")
+	}
 	return Result{Plan: plan, Index: index, Chunks: chunks}, nil
+}
+
+// Reconcile validates one independently supplied aggregate. It grants no
+// authority and performs no acquisition, persistence, or publication.
+func Reconcile(in Input, plan Plan, index Index, projections []Projection, sidecars []Sidecar) error {
+	workspace, err := validateInput(in)
+	if err != nil {
+		return err
+	}
+	if err := validatePlan(plan); err != nil {
+		return err
+	}
+	if err := validateIndex(index); err != nil {
+		return err
+	}
+	if plan.GlobalProjection != in.GlobalProjection || plan.RequestFingerprint != in.RequestFingerprint || plan.SessionID != in.SessionID || plan.Generation != in.Generation || plan.WorkspaceDigest != in.WorkspaceDigest || plan.CanonicalOrderPolicy != in.CanonicalOrderPolicy || plan.DuplicatePolicy != in.DuplicatePolicy || plan.BatchTargets != in.BatchTargets || plan.DownDepth != in.DownDepth || plan.UpDepth != in.UpDepth {
+		return errors.New("plan global binding mismatch")
+	}
+	if index.PlanDigest != plan.LogicalDigest || !reflect.DeepEqual(index.Chunks, plan.Chunks) {
+		return errors.New("index plan binding mismatch")
+	}
+	if len(projections) != len(plan.Chunks) || len(sidecars) != len(plan.Chunks) {
+		return errors.New("chunk artifact count mismatch")
+	}
+	ordered := append([]GlobalTarget(nil), in.Targets...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].CanonicalSeedV2 != ordered[j].CanonicalSeedV2 {
+			return ordered[i].CanonicalSeedV2 < ordered[j].CanonicalSeedV2
+		}
+		return ordered[i].GlobalOrdinal < ordered[j].GlobalOrdinal
+	})
+	seenGlobal := make(map[int]bool, len(ordered))
+	for i, descriptor := range plan.Chunks {
+		projection, sidecar := projections[i], sidecars[i]
+		if err := validateProjection(projection); err != nil {
+			return err
+		}
+		if err := validateSidecar(sidecar); err != nil {
+			return err
+		}
+		if projection.ChunkOrdinal != i || sidecar.ChunkOrdinal != i || len(projection.Targets) != descriptor.TargetCount || len(sidecar.Mappings) != descriptor.TargetCount {
+			return errors.New("chunk ordinal or cardinality mismatch")
+		}
+		projectionBytes, err := EncodeProjection(projection)
+		if err != nil || artifactRef("census-chunk-projections/v1/", projectionBytes) != descriptor.Projection {
+			return errors.New("projection artifact binding mismatch")
+		}
+		sidecarBytes, err := EncodeSidecar(sidecar)
+		if err != nil || artifactRef("census-chunk-sidecars/v1/", sidecarBytes) != descriptor.Sidecar {
+			return errors.New("sidecar artifact binding mismatch")
+		}
+		if descriptor.TargetStart < 0 || descriptor.TargetCount < 0 {
+			return errors.New("chunk range mismatch")
+		}
+		end, ok := checkedAdd(uint64(descriptor.TargetStart), uint64(descriptor.TargetCount))
+		if !ok || end > uint64(len(ordered)) {
+			return errors.New("chunk range mismatch")
+		}
+		expected, err := projectChunk(i, ordered[descriptor.TargetStart:int(end)], in.Files, workspace)
+		if err != nil || !reflect.DeepEqual(projection, expected.Projection) || !reflect.DeepEqual(sidecar, expected.Sidecar) {
+			return errors.New("chunk projection reconciliation mismatch")
+		}
+		for j, mapping := range sidecar.Mappings {
+			global := ordered[descriptor.TargetStart+j]
+			if seenGlobal[mapping.GlobalOrdinal] || mapping.GlobalOrdinal != global.GlobalOrdinal || mapping.GlobalIdentity != global.GlobalIdentity || mapping.GlobalCanonicalSeedDigest != global.CanonicalSeedV2SHA256 || mapping.GlobalFileOrdinal != global.GlobalFileOrdinal || mapping.Coordinate != global.Coordinate {
+				return errors.New("global target concatenation mismatch")
+			}
+			seenGlobal[mapping.GlobalOrdinal] = true
+		}
+	}
+	if len(seenGlobal) != len(ordered) {
+		return errors.New("global target omission")
+	}
+	work, err := aggregateWork(in, plan, index, projections, sidecars)
+	if err != nil || work > maxWorkLimit {
+		return errors.New("work limit exceeded")
+	}
+	return nil
+}
+
+// aggregateWork counts retained canonical artifact bytes, global identity input
+// bytes, and every global or chunk-local ledger element. Input has no retained
+// canonical encoding, and localized identities are deterministic projections of
+// the already-counted global identity inputs, so neither is double-counted.
+func aggregateWork(in Input, plan Plan, index Index, projections []Projection, sidecars []Sidecar) (uint64, error) {
+	work := uint64(0)
+	add := func(n uint64) bool {
+		var ok bool
+		work, ok = checkedAdd(work, n)
+		return ok
+	}
+	planBytes, err := EncodePlan(plan)
+	if err != nil || !add(uint64(len(planBytes))) {
+		return 0, errors.New("work overflow")
+	}
+	indexBytes, err := EncodeIndex(index)
+	if err != nil || !add(uint64(len(indexBytes))) {
+		return 0, errors.New("work overflow")
+	}
+	if !add(uint64(len(in.Files))) || !add(uint64(len(in.Targets))) || !add(uint64(len(plan.Chunks))) || !add(uint64(len(index.Chunks))) {
+		return 0, errors.New("work overflow")
+	}
+	for _, target := range in.Targets {
+		_, size, err := censusenumerationprojection.SymbolIdentityDigest(target.Coordinate.Path, censusenumerationprojection.Position{Line: target.Coordinate.Line, Character: target.Coordinate.Character}, target.Kind, "", target.GlobalOrdinal)
+		if err != nil || !add(uint64(size)) {
+			return 0, errors.New("work overflow")
+		}
+	}
+	for _, projection := range projections {
+		raw, err := EncodeProjection(projection)
+		if err != nil || !add(uint64(len(raw))) || !add(uint64(len(projection.Files))) || !add(uint64(len(projection.Symbols))) || !add(uint64(len(projection.Targets))) || !add(uint64(len(projection.ProviderFailures))) {
+			return 0, errors.New("work overflow")
+		}
+	}
+	for _, sidecar := range sidecars {
+		raw, err := EncodeSidecar(sidecar)
+		if err != nil || !add(uint64(len(raw))) || !add(uint64(len(sidecar.Mappings))) {
+			return 0, errors.New("work overflow")
+		}
+	}
+	return work, nil
+}
+
+func checkedAdd(a, b uint64) (uint64, bool) {
+	if math.MaxUint64-a < b {
+		return 0, false
+	}
+	return a + b, true
 }
 
 func validateInput(in Input) (string, error) {
@@ -258,6 +398,7 @@ func validateInput(in Input) (string, error) {
 	}
 	workspace := filepath.FromSlash(u.Path)
 	files := map[int]GlobalFile{}
+	filePaths := map[string]bool{}
 	for _, f := range in.Files {
 		if f.Ordinal < 0 || f.Path == "" || f.Disposition == "" {
 			return "", errors.New("invalid global file")
@@ -265,7 +406,11 @@ func validateInput(in Input) (string, error) {
 		if _, ok := files[f.Ordinal]; ok {
 			return "", errors.New("duplicate global file ordinal")
 		}
+		if filePaths[f.Path] {
+			return "", errors.New("duplicate global file path")
+		}
 		files[f.Ordinal] = f
+		filePaths[f.Path] = true
 	}
 	seenOrdinal, seenIdentity, seenSeed, seenDigest := map[int]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 	identityBytes := uint64(0)
@@ -438,17 +583,21 @@ func validatePlan(p Plan) error {
 	if p.SchemaVersion != PlanVersion || p.Accepted || p.Authority != 0 || p.Completeness != "UNKNOWN" || !validRef(p.GlobalProjection) || !validDigest(p.RequestFingerprint) || p.SessionID == "" || p.Generation == 0 || !validDigest(p.WorkspaceDigest) || p.CanonicalOrderPolicy != "captureset-order-targets-v1" || p.DuplicatePolicy != "reject-global-ordinal-identity-seed-bytes-digest-v1" || p.BatchTargets < 1 || p.BatchTargets > captureset.MaxBatchTargets || p.DownDepth < 0 || p.DownDepth > 64 || p.UpDepth < 0 || p.UpDepth > 64 || p.Chunks == nil {
 		return errors.New("invalid chunk plan")
 	}
-	total := 0
+	total := uint64(0)
 	for i, c := range p.Chunks {
-		if c.Ordinal != i || c.TargetStart != total || c.TargetCount < 1 || c.TargetCount > ChunkSize || !validRef(c.Projection) || !validRef(c.Sidecar) {
+		if c.Ordinal != i || c.TargetStart < 0 || uint64(c.TargetStart) != total || c.TargetCount < 1 || c.TargetCount > ChunkSize || !validRef(c.Projection) || !validRef(c.Sidecar) {
 			return errors.New("invalid chunk descriptor")
 		}
 		if i < len(p.Chunks)-1 && c.TargetCount != ChunkSize {
 			return errors.New("non-maximal chunk")
 		}
-		total += c.TargetCount
+		var ok bool
+		total, ok = checkedAdd(total, uint64(c.TargetCount))
+		if !ok {
+			return errors.New("chunk plan target accounting overflow")
+		}
 	}
-	if total <= ChunkSize || total > MaxGlobalTargets {
+	if total <= uint64(ChunkSize) || total > uint64(MaxGlobalTargets) {
 		return errors.New("chunk plan target accounting")
 	}
 	return validateIdentity(p.LogicalDigest, p.ImmutableSelector, "census-chunk-plan:", planDomain, p, func(v *Plan) { v.LogicalDigest = ""; v.ImmutableSelector = "" })
@@ -457,17 +606,21 @@ func validateIndex(v Index) error {
 	if v.SchemaVersion != IndexVersion || v.Accepted || v.Authority != 0 || v.Completeness != "UNKNOWN" || !validDigest(v.PlanDigest) || v.Chunks == nil {
 		return errors.New("invalid chunk index")
 	}
-	total := 0
+	total := uint64(0)
 	for i, c := range v.Chunks {
-		if c.Ordinal != i || c.TargetStart != total || c.TargetCount < 1 || c.TargetCount > ChunkSize || !validRef(c.Projection) || !validRef(c.Sidecar) {
+		if c.Ordinal != i || c.TargetStart < 0 || uint64(c.TargetStart) != total || c.TargetCount < 1 || c.TargetCount > ChunkSize || !validRef(c.Projection) || !validRef(c.Sidecar) {
 			return errors.New("invalid chunk index descriptor")
 		}
 		if i < len(v.Chunks)-1 && c.TargetCount != ChunkSize {
 			return errors.New("non-maximal chunk index")
 		}
-		total += c.TargetCount
+		var ok bool
+		total, ok = checkedAdd(total, uint64(c.TargetCount))
+		if !ok {
+			return errors.New("chunk index target accounting overflow")
+		}
 	}
-	if total <= ChunkSize || total > MaxGlobalTargets {
+	if total <= uint64(ChunkSize) || total > uint64(MaxGlobalTargets) {
 		return errors.New("chunk index target accounting")
 	}
 	return validateIdentity(v.LogicalDigest, v.ImmutableSelector, "census-chunk-index:", indexDomain, v, func(x *Index) { x.LogicalDigest = ""; x.ImmutableSelector = "" })
