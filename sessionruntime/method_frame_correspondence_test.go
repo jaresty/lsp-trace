@@ -58,6 +58,37 @@ func TestMethodFrameCorrespondenceAcceptsLocalDefinitionAndReferences(t *testing
 	}
 }
 
+func TestMethodFrameCorrespondenceAcceptsSplitMessageBudget(t *testing.T) {
+	req, got := methodFrameTransaction(t, "success", "textDocument/definition", 2)
+	if got.notificationMessages != 1 || got.controlMessages != 2 || got.Messages != 3 {
+		t.Fatalf("BLOCKED_NOT_RED: split-budget fixture notifications=%d controls=%d messages=%d", got.notificationMessages, got.controlMessages, got.Messages)
+	}
+	if err := VerifyMethodFrameCorrespondence(req, got); err != nil {
+		t.Fatalf("ASSERT_METHOD_FRAME_SPLIT_MESSAGE_BUDGET: %v", err)
+	}
+	t.Log("ASSERT_METHOD_FRAME_SPLIT_MESSAGE_BUDGET: PASS")
+}
+
+func TestMethodFrameCorrespondenceRejectsInvalidClassBudgetProof(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(*RoundTripResult)
+	}{
+		{"missing-notification-proof", func(r *RoundTripResult) { r.notificationMessages = 0 }},
+		{"notification-overflow-proof", func(r *RoundTripResult) { r.notificationMessages++ }},
+		{"control-overflow-proof", func(r *RoundTripResult) { r.controlMessages = 3 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req, got := methodFrameTransaction(t, "success", "textDocument/definition", 2)
+			tc.change(&got)
+			if err := VerifyMethodFrameCorrespondence(req, got); !errors.Is(err, ErrMethodFrameCorrespondence) {
+				t.Fatalf("ASSERT_METHOD_FRAME_CLASS_BUDGET_PROOF_REJECTED: err=%v", err)
+			}
+			t.Log("ASSERT_METHOD_FRAME_CLASS_BUDGET_PROOF_REJECTED: PASS")
+		})
+	}
+}
+
 func TestMethodFrameCorrespondenceRejectsDecodedResultSubstitution(t *testing.T) {
 	req, got := methodFrameTransaction(t, "references-empty", "textDocument/references", 1)
 	got.Result = json.RawMessage(`[{"uri":"file:///injected.go"}]`)

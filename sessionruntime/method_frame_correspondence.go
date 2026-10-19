@@ -38,8 +38,10 @@ func VerifyMethodFrameCorrespondence(req RoundTripRequest, result RoundTripResul
 	if req.SessionID == "" || req.Generation == 0 || req.MaxMessages <= 0 || req.MaxBytes <= 0 ||
 		cap <= 0 || cap > maxMethodFrameCorrespondenceBytes || len(req.Params) > maxMethodFrameCorrespondenceBytes ||
 		result.Failure != "" || result.ServerError != nil || result.Key.Generation != req.Generation || result.Key.ID == 0 ||
-		result.Messages <= 0 || result.Messages > req.MaxMessages || result.Bytes <= 0 || result.Bytes > req.MaxBytes ||
-		result.RequestMessages != 1 {
+		result.Messages <= 0 || result.notificationMessages < 0 || result.notificationMessages > req.MaxMessages ||
+		result.controlMessages <= 0 || result.controlMessages > req.MaxMessages ||
+		result.Messages != result.notificationMessages+result.controlMessages ||
+		result.Bytes <= 0 || result.Bytes > req.MaxBytes || result.RequestMessages != 1 {
 		return ErrMethodFrameCorrespondence
 	}
 	write, wrote := result.CompletedRequestWrite()

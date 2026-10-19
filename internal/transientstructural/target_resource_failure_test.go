@@ -319,7 +319,7 @@ func assertTargetFailure(t *testing.T, failure *DomainFailure, action TargetActi
 	}
 }
 
-func TestTargetResourceFailureMessageBudget(t *testing.T) {
+func TestTargetResourceSplitMessageBudgetSucceeds(t *testing.T) {
 	manager, started, uri, starter := newTargetResourceFixture(t, targetWirePlan{
 		documentSymbolNotifications: 1,
 		documentSymbolResult:        targetDocumentSymbols(""),
@@ -327,14 +327,41 @@ func TestTargetResourceFailureMessageBudget(t *testing.T) {
 	child := starter.child(0)
 	ctx := context.Background()
 	_, failure := Execute(ctx, manager, targetResourceRequest(started.Generation, uri, 1, 8192))
+	if failure != nil {
+		t.Fatalf("ASSERT_TARGET_SPLIT_MESSAGE_BUDGET_SUCCESS: failure=%+v", failure)
+	}
+	records := manager.Records()
+	if len(records) != 1 || records[0].Generation != started.Generation || records[0].State != session.Ready {
+		t.Fatalf("ASSERT_TARGET_SPLIT_MESSAGE_BUDGET_READY: records=%+v", records)
+	}
+	notices, _, _, responseAttempted, responseWritten := waitTargetWireSnapshot(t, child, func(notices, _, _ int, responseAttempted, responseWritten bool) bool {
+		return notices == 1 && responseAttempted && responseWritten
+	})
+	if notices != 1 || !responseAttempted || !responseWritten {
+		t.Fatalf("ASSERT_TARGET_SPLIT_MESSAGE_BUDGET_ACCOUNTING: notices=%d responseAttempted=%t responseWritten=%t", notices, responseAttempted, responseWritten)
+	}
+	t.Log("ASSERT_TARGET_SPLIT_MESSAGE_BUDGET_SUCCESS: PASS")
+}
+
+func TestTargetResourceFailureMessageBudget(t *testing.T) {
+	manager, started, uri, starter := newTargetResourceFixture(t, targetWirePlan{
+		documentSymbolNotifications: 2,
+		documentSymbolResult:        targetDocumentSymbols(""),
+	})
+	child := starter.child(0)
+	ctx := context.Background()
+	_, failure := Execute(ctx, manager, targetResourceRequest(started.Generation, uri, 1, 8192))
 	assertPoisonedResourceWireBeforeClassification(t, ctx, manager, started, child)
 	assertTargetFailure(t, failure, TargetActionFailDocument)
-	notices, _, _, responseAttempted, responseWritten := waitTargetWireSnapshot(t, child, func(notices, _, _ int, responseAttempted, _ bool) bool {
-		return notices == 1 && responseAttempted
+	notices, _, _, responseAttempted, responseWritten := waitTargetWireSnapshot(t, child, func(notices, _, _ int, _, _ bool) bool {
+		return notices == 2
 	})
-	if notices != 1 || !responseAttempted || responseWritten {
-		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_MESSAGE_WIRE_SHAPE: notices=%d responseAttempted=%t responseWritten=%t", notices, responseAttempted, responseWritten)
+	methods, _, _, _, _, _ := child.snapshot()
+	wantMethods := []string{"initialize", "initialized", "textDocument/didOpen", "textDocument/documentSymbol"}
+	if notices != 2 || responseWritten || !reflect.DeepEqual(methods, wantMethods) {
+		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_MESSAGE_ACCOUNTING_NO_DISPATCH: methods=%v notices=%d responseAttempted=%t responseWritten=%t", methods, notices, responseAttempted, responseWritten)
 	}
+	t.Log("ASSERT_TARGET_RESOURCE_FAILURE_MESSAGE_ACCOUNTING_NO_DISPATCH: PASS")
 }
 
 func TestTargetResourceFailureByteBudget(t *testing.T) {

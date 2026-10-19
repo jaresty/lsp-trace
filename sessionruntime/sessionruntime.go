@@ -997,6 +997,8 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			effectiveDeadline = parentRemaining
 		}
 	}
+	// MaxMessages is configured per provider-message class. The diagnostic keeps
+	// that configured value even when total ResponseMessages spans multiple classes.
 	result.diagnostic = manageddiagnostic.RequestObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: req.DiagnosticSequence, Method: req.Method, ProtocolID: key.ID, TargetID: req.DiagnosticTargetID, CallerID: req.DiagnosticCallerID, RequestedDeadline: requestedDeadline, EffectiveDeadline: effectiveDeadline, RequestedMaxBytes: req.MaxBytes, EffectiveMaxBytes: maxBytes, RequestedMaxMessages: req.MaxMessages, EffectiveMaxMessages: maxMessages, Clock: func() int64 { return m.now().UnixNano() }}
 	if result.diagnostic.Sequence == 0 {
 		result.diagnostic.Sequence = key.ID
