@@ -1243,6 +1243,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 					result.Messages++
 					result.responseRead = &ResponseReadObservation{SessionID: req.SessionID, Generation: req.Generation, Key: key, FrameBytes: joined.frame.FrameBytes, FrameSHA256: joined.frame.FrameSHA256}
 					result.ServerError = joined.message.Error
+					result.providerMessageAccumulator.dispatchDisposition(joined.message, joined.responseDisposition)
 					if joined.message.Kind() == lspwire.KindSuccessResponse && !req.directionalV5.lease.Result(joined.message.Result) {
 						return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 					}
@@ -1365,7 +1366,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				releaseUnselectedFrame()
 				continue
 			}
-			result.providerMessageAccumulator.dispatch(read.message, true)
+			result.providerMessageAccumulator.dispatchDisposition(read.message, disposition)
 			collector.Record(diagnosticEventMatched, int64(responseID), true)
 			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDecodedMessage) {
 				releaseUnselectedFrame()

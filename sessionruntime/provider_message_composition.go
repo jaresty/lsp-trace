@@ -64,6 +64,10 @@ func isProviderInvalidProtocol(err error) bool {
 		errors.Is(err, lspwire.ErrDuplicateContentLength) || errors.Is(err, lspwire.ErrMissingContentLength)
 }
 
+func (a *providerMessageCompositionAccumulator) dispatchDisposition(message lspwire.Message, disposition lspwire.ResponseDisposition) {
+	a.dispatch(message, disposition == lspwire.ResponseAccepted)
+}
+
 func (a *providerMessageCompositionAccumulator) dispatch(message lspwire.Message, accepted bool) {
 	if !a.enabled {
 		return

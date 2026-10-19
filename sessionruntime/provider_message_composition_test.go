@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/session"
 )
 
 func providerMessageCompositionRequest(s StartResult) RoundTripRequest {
@@ -82,6 +83,51 @@ func TestProviderMessageCompositionInvalidProtocolAndPrivacy(t *testing.T) {
 	}
 }
 
+func TestProviderMessageCompositionNonDocumentSymbolSuppressed(t *testing.T) {
+	m, s, _ := roundTripManager(t, "references-empty")
+	request := providerMessageCompositionRequest(s)
+	request.Method = "textDocument/references"
+	got := m.RoundTrip(context.Background(), request)
+	if got.Failure != "" {
+		t.Fatalf("ASSERT_PROVIDER_MESSAGE_NON_DOCUMENT_SYMBOL_RETURN: %+v", got)
+	}
+	if _, ok := got.ProviderMessageComposition(); ok {
+		t.Fatal("ASSERT_PROVIDER_MESSAGE_NON_DOCUMENT_SYMBOL_SUPPRESSED")
+	}
+}
+
+func TestProviderMessageCompositionTerminalOutcomeFamilies(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		prepare func(*providerMessageCompositionAccumulator)
+		failure session.Failure
+		want    ProviderMessageOutcome
+	}{
+		{name: "byte crossing", prepare: func(a *providerMessageCompositionAccumulator) { a.byteLimit = true }, failure: session.ResourceExhausted, want: ProviderMessageOutcomeByteLimit},
+		{name: "message ceiling nonterminal", prepare: func(a *providerMessageCompositionAccumulator) { a.messageCeiling = true }, failure: session.ResourceExhausted, want: ProviderMessageOutcomeMessageCeiling},
+		{name: "cancellation", failure: session.RequestCancelled, want: ProviderMessageOutcomeCancelled},
+		{name: "timeout", failure: session.RequestTimeout, want: ProviderMessageOutcomeTimedOut},
+		{name: "eof", failure: session.SessionCrashed, want: ProviderMessageOutcomeReadOrTransportFailure},
+		{name: "transport", failure: session.Failure("transport-unavailable"), want: ProviderMessageOutcomeReadOrTransportFailure},
+		{name: "exact equality accepted terminal before limits", prepare: func(a *providerMessageCompositionAccumulator) {
+			a.dispatchDisposition(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`7`), Result: json.RawMessage(`null`)}, lspwire.ResponseAccepted)
+			a.byteLimit = true
+			a.messageCeiling = true
+		}, want: ProviderMessageOutcomeAcceptedTerminalResponse},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			accumulator := providerMessageCompositionAccumulator{enabled: true}
+			if tc.prepare != nil {
+				tc.prepare(&accumulator)
+			}
+			observation, ok := accumulator.finish(tc.failure)
+			if !ok || observation.Outcome != tc.want {
+				t.Fatalf("ASSERT_PROVIDER_MESSAGE_TERMINAL_FAMILY: observation=%+v ok=%v want=%s", observation, ok, tc.want)
+			}
+		})
+	}
+}
+
 func TestProviderMessageCompositionExactBucketsAndInvalidAllowlist(t *testing.T) {
 	var accumulator providerMessageCompositionAccumulator
 	accumulator.enabled = true
@@ -104,6 +150,31 @@ func TestProviderMessageCompositionExactBucketsAndInvalidAllowlist(t *testing.T)
 		if isProviderInvalidProtocol(err) {
 			t.Fatalf("ASSERT_PROVIDER_MESSAGE_COMPOSITION_INVALID_EXCLUSION: %v", err)
 		}
+	}
+}
+
+func TestProviderMessageCompositionLinearizedResponseDisposition(t *testing.T) {
+	response := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`7`), Result: json.RawMessage(`null`)}
+	for _, tc := range []struct {
+		name        string
+		disposition lspwire.ResponseDisposition
+		accepted    uint64
+		unaccepted  uint64
+		outcome     ProviderMessageOutcome
+	}{
+		{name: "accepted terminal", disposition: lspwire.ResponseAccepted, accepted: 1, outcome: ProviderMessageOutcomeAcceptedTerminalResponse},
+		{name: "wrong generation nonterminal", disposition: lspwire.ResponseWrongGeneration, unaccepted: 1, outcome: ProviderMessageOutcomeOtherRuntimeFailure},
+		{name: "duplicate nonterminal", disposition: lspwire.ResponseDuplicate, unaccepted: 1, outcome: ProviderMessageOutcomeOtherRuntimeFailure},
+		{name: "unknown nonterminal", disposition: lspwire.ResponseUnknown, unaccepted: 1, outcome: ProviderMessageOutcomeOtherRuntimeFailure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			accumulator := providerMessageCompositionAccumulator{enabled: true}
+			accumulator.dispatchDisposition(response, tc.disposition)
+			observation, ok := accumulator.finish("")
+			if !ok || observation.AcceptedTerminalResponses != tc.accepted || observation.UnmatchedLateInvalidResponses != tc.unaccepted || observation.Outcome != tc.outcome {
+				t.Fatalf("ASSERT_PROVIDER_MESSAGE_LINEARIZED_DISPOSITION: disposition=%v observation=%+v ok=%v", tc.disposition, observation, ok)
+			}
+		})
 	}
 }
 
