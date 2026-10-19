@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"sort"
@@ -128,6 +129,45 @@ func TestPrivateProviderProbeV2NthSuccessAndPostNthExhaustionAreObservational(t 
 	if got.Work != 2 || len(got.Records) != 1 || got.Records[0].Sequence != 2 || got.Records[0].Exhaustion == nil || got.Records[0].Exhaustion.Boundary != "BYTE_LIMIT_EXCEEDED" {
 		t.Fatalf("post-Nth observation=%+v", got)
 	}
+}
+
+func TestPrivateProviderProbeV2StatusWorkBoundary(t *testing.T) {
+	parse := func(t *testing.T, artifact privateProviderProbeArtifactV2, wantValid bool) {
+		t.Helper()
+		raw, err := json.Marshal(artifact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = parsePrivateProviderProbeV2(append(raw, '\n'))
+		if (err == nil) != wantValid {
+			t.Fatalf("ASSERT_PRIVATE_PROVIDER_PROBE_V2_STATUS_WORK_BOUNDARY wantValid=%v err=%v artifact=%s", wantValid, err, raw)
+		}
+	}
+	base := func(status string, work uint64) privateProviderProbeArtifactV2 {
+		return privateProviderProbeArtifactV2{Schema: privateProviderProbeSchemaV2, Status: status, CauseCounts: []privateProviderProbeCount{}, Work: work}
+	}
+
+	t.Run("complete-zero-work", func(t *testing.T) { parse(t, base("COMPLETE", 0), true) })
+	t.Run("incomplete-zero-work", func(t *testing.T) { parse(t, base("INCOMPLETE", 0), false) })
+	t.Run("complete-positive-work", func(t *testing.T) { parse(t, base("COMPLETE", 1), true) })
+	t.Run("incomplete-positive-work-produced", func(t *testing.T) {
+		p := &privateProviderProbe{counts: make(map[string]uint64), work: math.MaxUint64}
+		p.observeSuccess(false)
+		artifact := p.artifactV2()
+		if artifact.Status != "INCOMPLETE" || artifact.Work == 0 {
+			t.Fatalf("producer did not construct positive-work incomplete artifact: %+v", artifact)
+		}
+		parse(t, artifact, true)
+	})
+	t.Run("incomplete-counter-saturation-produced", func(t *testing.T) {
+		p := &privateProviderProbe{counts: map[string]uint64{"DECODE_FAILURE": math.MaxUint64}, work: math.MaxUint64 - 1}
+		p.observe("DOCUMENT_SYMBOL", "DECODE_FAILURE", "DECODE_FAILURE", false)
+		artifact := p.artifactV2()
+		if artifact.Status != "INCOMPLETE" || artifact.Work == 0 {
+			t.Fatalf("producer did not construct saturated positive-work incomplete artifact: %+v", artifact)
+		}
+		parse(t, artifact, true)
+	})
 }
 
 func TestPrivateProviderProbeV2StrictCanonicalParser(t *testing.T) {
