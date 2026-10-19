@@ -585,46 +585,69 @@ func parsePrivateProviderProbeV3(raw []byte) (privateProviderProbeArtifactV3, er
 	v2 := privateProviderProbeArtifactV2{privateProviderProbeSchemaV2, a.Status, a.FileDenominator, a.CauseCounts, a.Records, a.RerunCount, a.Work}
 	v2raw, _ := json.Marshal(v2)
 	if _, err := parsePrivateProviderProbeV2(append(v2raw, '\n')); err != nil {
-		return bad()
+		if a.Status != "INCOMPLETE" {
+			return bad()
+		}
+		v2.Status = "COMPLETE"
+		v2raw, _ = json.Marshal(v2)
+		if _, err = parsePrivateProviderProbeV2(append(v2raw, '\n')); err != nil {
+			return bad()
+		}
 	}
 	if a.Composition == nil {
+		if a.Status != "INCOMPLETE" {
+			return bad()
+		}
 		return a, nil
 	}
 	c := a.Composition
 	if c.Sequence == 0 || c.Sequence > a.Work || c.Selection != "FIRST_COMPLETED" && c.Selection != "FIRST_RESOURCE_EXHAUSTED" || c.ConfiguredMaxMessages == 0 || c.ConfiguredMaxBytes == 0 {
 		return bad()
 	}
-	var sum uint64
-	for _, n := range []uint64{c.ProgressNotifications, c.LogShowTelemetryNotifications, c.OtherNotifications, c.ServerRequests, c.UnmatchedLateInvalidResponses, c.AcceptedTerminalResponses, c.InvalidProtocolMessages} {
-		if math.MaxUint64-sum < n {
+	var dispatched uint64
+	for _, n := range []uint64{c.ProgressNotifications, c.LogShowTelemetryNotifications, c.OtherNotifications, c.ServerRequests, c.UnmatchedLateInvalidResponses, c.AcceptedTerminalResponses} {
+		if math.MaxUint64-dispatched < n {
 			return bad()
 		}
-		sum += n
+		dispatched += n
 	}
-	if sum != c.ManagerMessages || c.AcceptedTerminalResponses > 1 || c.InvalidProtocolMessages > c.ManagerMessages {
+	causeCount := uint64(0)
+	for _, count := range a.CauseCounts {
+		if count.Cause == c.Failure {
+			causeCount = count.Count
+			break
+		}
+	}
+	resourceExhausted := c.Failure == string(session.ResourceExhausted)
+	if (c.Selection == "FIRST_RESOURCE_EXHAUSTED") != resourceExhausted || c.Failure != "" && causeCount == 0 {
 		return bad()
+	}
+	normalTerminal := func(failure string) bool {
+		return dispatched == c.ManagerMessages && c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages < c.ConfiguredMaxMessages && c.Failure == failure
 	}
 	valid := false
 	switch sessionruntime.ProviderMessageOutcome(c.Outcome) {
 	case sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse:
 		acceptedCause := c.Failure == "" || validPrivateProviderProbeCause("DECODE_FAILURE", c.Failure) || validPrivateProviderProbeCause("JSON_RPC_CODE_BUCKET", c.Failure)
-		valid = c.AcceptedTerminalResponses == 1 && acceptedCause
+		valid = dispatched == c.ManagerMessages && c.AcceptedTerminalResponses == 1 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages <= c.ConfiguredMaxMessages && acceptedCause
 	case sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage:
-		valid = c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages > 0
+		valid = dispatched == c.ManagerMessages && c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 1 && c.Failure == string(session.SessionPoisoned)
 	case sessionruntime.ProviderMessageOutcomeByteLimit:
-		valid = c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes > c.ConfiguredMaxBytes
+		valid = c.ManagerMessages > 0 && dispatched == c.ManagerMessages-1 && c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes > c.ConfiguredMaxBytes && c.Failure == string(session.ResourceExhausted)
 	case sessionruntime.ProviderMessageOutcomeMessageCeiling:
-		valid = c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages >= c.ConfiguredMaxMessages
+		valid = dispatched == c.ManagerMessages && c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages == c.ConfiguredMaxMessages && c.Failure == string(session.ResourceExhausted)
 	case sessionruntime.ProviderMessageOutcomeCancelled:
-		valid = c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages < c.ConfiguredMaxMessages && c.Failure == string(session.RequestCancelled)
+		valid = normalTerminal(string(session.RequestCancelled))
 	case sessionruntime.ProviderMessageOutcomeTimedOut:
-		valid = c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages < c.ConfiguredMaxMessages && c.Failure == string(session.RequestTimeout)
+		valid = normalTerminal(string(session.RequestTimeout))
 	case sessionruntime.ProviderMessageOutcomeReadOrTransportFailure:
-		valid = c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages < c.ConfiguredMaxMessages && (c.Failure == string(session.SessionCrashed) || c.Failure == "transport-unavailable")
+		valid = normalTerminal(string(session.SessionCrashed)) || normalTerminal("OTHER_TYPED_FAILURE")
 	case sessionruntime.ProviderMessageOutcomeOtherRuntimeFailure:
-		valid = c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages < c.ConfiguredMaxMessages && c.Failure != string(session.RequestCancelled) && c.Failure != string(session.RequestTimeout) && c.Failure != string(session.SessionCrashed) && c.Failure != "transport-unavailable"
+		otherCause := validPrivateProviderProbeCause("TYPED_SESSION_RUNTIME_FAILURE", c.Failure) &&
+			c.Failure != string(session.RequestCancelled) && c.Failure != string(session.RequestTimeout) && c.Failure != string(session.SessionCrashed)
+		valid = otherCause && normalTerminal(c.Failure)
 	}
-	if !valid || c.Selection == "FIRST_RESOURCE_EXHAUSTED" && c.Failure != string(session.ResourceExhausted) {
+	if !valid {
 		return bad()
 	}
 	return a, nil
