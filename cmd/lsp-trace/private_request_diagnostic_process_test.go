@@ -229,7 +229,16 @@ func TestRunFR23WithScheduledFakeSuccessfulDial(t *testing.T) {
 	}
 }
 
+const (
+	builtProcessFixtureOverallTimeoutMS = 29_000
+	managedV5SemanticRequestTimeoutMS   = 1_000
+	fr23SemanticRequestTimeoutMS        = 500
+)
+
 func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
+	if builtProcessFixtureOverallTimeoutMS <= managedV5SemanticRequestTimeoutMS || builtProcessFixtureOverallTimeoutMS >= int((30*time.Second)/time.Millisecond) {
+		t.Fatalf("ASSERT_MANAGED_V5_FIXTURE_OVERALL_BUDGET_BOUNDS: overall_timeout_ms=%d request_timeout_ms=%d", builtProcessFixtureOverallTimeoutMS, managedV5SemanticRequestTimeoutMS)
+	}
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")
 	}
@@ -245,7 +254,7 @@ func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
 	manifest := map[string]any{
 		"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session",
 		"root": target, "required_targets": []any{}, "expansion": map[string]any{"topmost_siblings": true},
-		"limits": map[string]any{"max_nodes": 4, "max_requests": 8, "timeout_ms": 5000, "request_timeout_ms": 1000},
+		"limits": map[string]any{"max_nodes": 4, "max_requests": 8, "timeout_ms": builtProcessFixtureOverallTimeoutMS, "request_timeout_ms": managedV5SemanticRequestTimeoutMS},
 	}
 	manifestRaw, _ := json.Marshal(manifest)
 	manifestPath := filepath.Join(t.TempDir(), "seeds.json")
@@ -283,7 +292,10 @@ func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
 }
 
 func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
-	const requestTimeoutMS = 500
+	const requestTimeoutMS = fr23SemanticRequestTimeoutMS
+	if builtProcessFixtureOverallTimeoutMS <= requestTimeoutMS || builtProcessFixtureOverallTimeoutMS >= int((30*time.Second)/time.Millisecond) {
+		t.Fatalf("ASSERT_FR23_FIXTURE_OVERALL_BUDGET_BOUNDS: overall_timeout_ms=%d request_timeout_ms=%d", builtProcessFixtureOverallTimeoutMS, requestTimeoutMS)
+	}
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")
 	}
@@ -295,7 +307,7 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	}
 	uri := (&url.URL{Scheme: "file", Path: filepath.Join(workspace, "main.go")}).String()
 	target := map[string]any{"id": "root", "locator": map[string]any{"uri": uri, "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0}
-	manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": target, "required_targets": []any{}, "limits": map[string]any{"max_nodes": 1, "max_requests": 2, "timeout_ms": 1000, "request_timeout_ms": requestTimeoutMS}}
+	manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": target, "required_targets": []any{}, "limits": map[string]any{"max_nodes": 1, "max_requests": 2, "timeout_ms": builtProcessFixtureOverallTimeoutMS, "request_timeout_ms": requestTimeoutMS}}
 	manifestRaw, _ := json.Marshal(manifest)
 	manifestPath := filepath.Join(t.TempDir(), "seeds.json")
 	if err := os.WriteFile(manifestPath, manifestRaw, 0600); err != nil {
