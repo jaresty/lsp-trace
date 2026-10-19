@@ -346,11 +346,11 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	absent := filepath.Join(t.TempDir(), "absent.json")
 	without := exec.Command(cli, args[:len(args)-4]...)
 	without.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_HANG_PREPARE=1")
-	var withoutOutput bytes.Buffer
-	without.Stdout = &withoutOutput
-	without.Stderr = &withoutOutput
+	var withoutStdout, withoutStderr bytes.Buffer
+	without.Stdout = &withoutStdout
+	without.Stderr = &withoutStderr
 	if err := runFR23WithScheduledFake(t, without); err != nil {
-		t.Fatalf("ASSERT_FR23_PRIVATE_NO_OPT_IN_RUN: %v %s", err, withoutOutput.Bytes())
+		t.Fatalf("ASSERT_FR23_PRIVATE_NO_OPT_IN_RUN: %v stdout=%s stderr=%s", err, withoutStdout.Bytes(), withoutStderr.Bytes())
 	}
 	if _, err := os.Stat(absent); !os.IsNotExist(err) {
 		t.Fatalf("ASSERT_FR23_PRIVATE_NO_OPT_IN_NO_ARTIFACT: %v", err)
