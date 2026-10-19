@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
@@ -31,6 +33,10 @@ func buildFR23Binary(t *testing.T, name, pkg string) string {
 }
 
 func runFR23WithScheduledFake(t *testing.T, cmd *exec.Cmd) error {
+	return runFR23WithScheduledFakeDeadline(t, cmd, 30*time.Second)
+}
+
+func runFR23WithScheduledFakeDeadline(t *testing.T, cmd *exec.Cmd, timeout time.Duration) error {
 	t.Helper()
 	socketFile, err := os.CreateTemp("", "fr23-scheduled-*.sock")
 	if err != nil {
@@ -49,33 +55,178 @@ func runFR23WithScheduledFake(t *testing.T, cmd *exec.Cmd) error {
 		t.Fatalf("listen for fake-lsp scheduling barrier: %v", err)
 	}
 	defer listener.Close()
+
+	var capturedStderr bytes.Buffer
+	if cmd.Stderr == nil {
+		cmd.Stderr = &capturedStderr
+	} else {
+		cmd.Stderr = io.MultiWriter(cmd.Stderr, &capturedStderr)
+	}
 	cmd.Env = append(cmd.Env, "LSP_TRACE_FAKE_LSP_SCHEDULE_BARRIER="+socket)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	conn, err := listener.Accept()
-	if err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return err
+
+	type acceptResult struct {
+		conn net.Conn
+		err  error
 	}
+	accepted := make(chan acceptResult, 1)
+	go func() {
+		conn, err := listener.Accept()
+		accepted <- acceptResult{conn: conn, err: err}
+	}()
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait() }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	deadline := time.Now().Add(timeout)
+
+	closeListenerAndJoinAccept := func() {
+		_ = listener.Close()
+		result := <-accepted
+		if result.conn != nil {
+			_ = result.conn.Close()
+		}
+	}
+	killAndReap := func() error {
+		select {
+		case waitErr := <-waited:
+			return waitErr
+		default:
+		}
+		_ = cmd.Process.Kill()
+		return <-waited
+	}
+	timeoutError := func() error {
+		closeListenerAndJoinAccept()
+		waitErr := killAndReap()
+		return fmt.Errorf("timed out after %s waiting for fake-lsp scheduling barrier; child reaped: %v; stderr=%s", timeout, waitErr, capturedStderr.String())
+	}
+
+	var conn net.Conn
+	select {
+	case result := <-accepted:
+		if result.err != nil {
+			waitErr := killAndReap()
+			return fmt.Errorf("accept fake-lsp scheduling barrier: %w; child=%v; stderr=%s", result.err, waitErr, capturedStderr.String())
+		}
+		conn = result.conn
+	case waitErr := <-waited:
+		closeListenerAndJoinAccept()
+		return fmt.Errorf("child exited before fake-lsp scheduling barrier: %v; stderr=%s", waitErr, capturedStderr.String())
+	case <-timer.C:
+		return timeoutError()
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(deadline); err != nil {
+		_ = killAndReap()
+		return fmt.Errorf("deadline fake-lsp scheduling barrier: %w", err)
+	}
+
 	var scheduled [10]byte
 	if _, err := io.ReadFull(conn, scheduled[:]); err != nil || string(scheduled[:]) != "scheduled\n" {
-		_ = conn.Close()
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		t.Fatalf("ASSERT_FR23_PRIVATE_BUILT_CHILD_SCHEDULED: marker=%q err=%v", scheduled, err)
+		waitErr := killAndReap()
+		if timeoutErr, ok := err.(net.Error); ok && timeoutErr.Timeout() {
+			return fmt.Errorf("timed out after %s reading fake-lsp scheduling marker; child reaped: %v; stderr=%s", timeout, waitErr, capturedStderr.String())
+		}
+		return fmt.Errorf("ASSERT_FR23_PRIVATE_BUILT_CHILD_SCHEDULED: marker=%q err=%v child=%v stderr=%s", scheduled, err, waitErr, capturedStderr.String())
 	}
 	if os.Getenv("LSP_TRACE_FR23_WITHHOLD_SCHEDULE_RELEASE") != "1" {
 		if _, err := conn.Write([]byte{1}); err != nil {
-			_ = conn.Close()
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-			t.Fatalf("ASSERT_FR23_PRIVATE_BUILT_CHILD_RELEASED: %v", err)
+			waitErr := killAndReap()
+			return fmt.Errorf("ASSERT_FR23_PRIVATE_BUILT_CHILD_RELEASED: %v child=%v stderr=%s", err, waitErr, capturedStderr.String())
 		}
 	}
 	_ = conn.Close()
-	return cmd.Wait()
+	select {
+	case waitErr := <-waited:
+		return waitErr
+	case <-timer.C:
+		waitErr := killAndReap()
+		return fmt.Errorf("timed out after %s waiting for child after fake-lsp scheduling release; child reaped: %v; stderr=%s", timeout, waitErr, capturedStderr.String())
+	}
+}
+
+func TestFR23ScheduledFakeHelperProcess(t *testing.T) {
+	mode := os.Getenv("LSP_TRACE_FR23_HELPER_PROCESS")
+	if mode == "" {
+		return
+	}
+	switch mode {
+	case "exit-without-dial":
+		_, _ = os.Stderr.WriteString("helper exited before dialing\n")
+		os.Exit(23)
+	case "stay-alive-without-dial":
+		time.Sleep(time.Hour)
+	case "dial-and-release":
+		conn, err := net.Dial("unix", os.Getenv("LSP_TRACE_FAKE_LSP_SCHEDULE_BARRIER"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		if _, err := conn.Write([]byte("scheduled\n")); err != nil {
+			t.Fatal(err)
+		}
+		var release [1]byte
+		if _, err := io.ReadFull(conn, release[:]); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unknown helper process mode %q", mode)
+	}
+}
+
+func fr23HelperCommand(t *testing.T, mode string) (*exec.Cmd, *bytes.Buffer) {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestFR23ScheduledFakeHelperProcess$")
+	cmd.Env = append(os.Environ(), "LSP_TRACE_FR23_HELPER_PROCESS="+mode)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	return cmd, &stderr
+}
+
+func TestRunFR23WithScheduledFakeChildExitsWithoutDial(t *testing.T) {
+	cmd, stderr := fr23HelperCommand(t, "exit-without-dial")
+	started := time.Now()
+	err := runFR23WithScheduledFake(t, cmd)
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_CHILD_EXIT_PROMPT: elapsed=%s", elapsed)
+	}
+	if err == nil || !strings.Contains(err.Error(), "child exited before fake-lsp scheduling barrier") {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_CHILD_EXIT_DIAGNOSTIC: err=%v", err)
+	}
+	if !strings.Contains(err.Error(), "helper exited before dialing") || !strings.Contains(stderr.String(), "helper exited before dialing") {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_CHILD_EXIT_STDERR: err=%v stderr=%q", err, stderr.String())
+	}
+	if cmd.ProcessState == nil || !cmd.ProcessState.Exited() {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_CHILD_EXIT_REAPED: state=%v", cmd.ProcessState)
+	}
+}
+
+func TestRunFR23WithScheduledFakeDeadlineWithoutDial(t *testing.T) {
+	cmd, _ := fr23HelperCommand(t, "stay-alive-without-dial")
+	started := time.Now()
+	err := runFR23WithScheduledFakeDeadline(t, cmd, 150*time.Millisecond)
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_DEADLINE_PROMPT: elapsed=%s", elapsed)
+	}
+	if err == nil || !strings.Contains(err.Error(), "timed out") || !strings.Contains(err.Error(), "waiting for fake-lsp scheduling barrier") {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_DEADLINE_DIAGNOSTIC: err=%v", err)
+	}
+	if cmd.ProcessState == nil {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_DEADLINE_REAPED: state=%v", cmd.ProcessState)
+	}
+}
+
+func TestRunFR23WithScheduledFakeSuccessfulDial(t *testing.T) {
+	cmd, stderr := fr23HelperCommand(t, "dial-and-release")
+	if err := runFR23WithScheduledFakeDeadline(t, cmd, 2*time.Second); err != nil {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_SUCCESS: err=%v stderr=%q", err, stderr.String())
+	}
+	if cmd.ProcessState == nil || !cmd.ProcessState.Success() {
+		t.Fatalf("ASSERT_FR23_SCHEDULE_BARRIER_SUCCESS_REAPED: state=%v", cmd.ProcessState)
+	}
 }
 
 func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
