@@ -207,7 +207,7 @@ func TestADR0011ManagerAggregateAndMessageBoundary(t *testing.T) {
 	}{
 		{"four-at-aggregate", 3, false, ""},
 		{"four-over-aggregate", 3, true, session.ResourceExhausted},
-		{"fifth-message", 4, false, session.ResourceExhausted},
+		{"four-notifications-plus-response", 4, false, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input, stdin := io.Pipe()
@@ -259,8 +259,8 @@ func TestADR0011ManagerAggregateAndMessageBoundary(t *testing.T) {
 			if !tc.overBytes && got.Bytes != 4194304 && tc.notifications == 3 {
 				t.Fatalf("aggregate=%d", got.Bytes)
 			}
-			if tc.notifications == 4 && got.Messages != 4 {
-				t.Fatalf("fifth not bounded: %d", got.Messages)
+			if tc.notifications == 4 && got.Messages != 5 {
+				t.Fatalf("split-boundary messages=%d want=5", got.Messages)
 			}
 			if _, ok := got.CompletedOwnedMethodPair(); ok {
 				t.Fatal("synthetic oversized notification yielded pair")

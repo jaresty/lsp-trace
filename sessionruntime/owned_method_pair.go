@@ -156,7 +156,9 @@ func eligibleOwnedMethodRequest(req RoundTripRequest) bool {
 func validOwnedMethodPair(req RoundTripRequest, r RoundTripResult, raw json.RawMessage) bool {
 	return eligibleOwnedMethodRequest(req) && r.ServerError == nil && r.Key.Generation == req.Generation && r.Key.ID != 0 &&
 		r.RequestMessages == 1 && r.RequestBytes >= 1 && r.RequestBytes <= req.MaxBytes &&
-		r.Messages >= 1 && r.Messages <= req.MaxMessages && r.Bytes >= 1 && r.Bytes <= req.MaxBytes &&
+		r.Messages >= 1 && r.notificationMessages >= 0 && r.notificationMessages <= req.MaxMessages &&
+		r.controlMessages >= 1 && r.controlMessages <= req.MaxMessages &&
+		r.Messages == r.notificationMessages+r.controlMessages && r.Bytes >= 1 && r.Bytes <= req.MaxBytes &&
 		len(raw) >= 1 && int64(len(raw)) <= req.MaxBytes && bytes.Equal(raw, r.Result) &&
 		r.requestWrite != nil && r.responseRead != nil && r.requestWrite.FrameBytes >= 1 && r.responseRead.FrameBytes >= 1 &&
 		r.requestWrite.SessionID == req.SessionID && r.responseRead.SessionID == req.SessionID &&

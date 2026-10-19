@@ -714,6 +714,8 @@ type RoundTripResult struct {
 	Failure                           session.Failure
 	Messages                          int
 	Bytes                             int64
+	notificationMessages              int
+	controlMessages                   int
 	RequestMessages                   int
 	RequestBytes                      int64
 	Duration                          time.Duration
@@ -747,6 +749,13 @@ type RoundTripResult struct {
 	providerMessageCompositionPresent bool                                  `json:"-"`
 	providerMessageAccumulator        providerMessageCompositionAccumulator `json:"-"`
 	providerTransaction               privateProviderTransactionCapture
+}
+
+func checkedMessageClassIncrement(value int) (int, bool) {
+	if value == int(^uint(0)>>1) {
+		return value, false
+	}
+	return value + 1, true
 }
 
 // ProviderMessageComposition returns the immutable privacy-reduced observation.
@@ -1174,7 +1183,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		reader.LimitOriginalFrameBytes(2 << 20)
 		reader.LimitCumulativeOriginalFrameBytes(8 << 20)
 	}
-	for result.Messages < maxMessages {
+	for {
 		if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointCumulativeWire) {
 			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 		}
@@ -1311,6 +1320,22 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			result.Messages++
 			if result.Bytes > maxBytes {
 				result.providerMessageAccumulator.byteLimit = true
+				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+			}
+			var classCount int
+			var classIncremented bool
+			switch read.message.Kind() {
+			case lspwire.KindNotification:
+				result.notificationMessages, classIncremented = checkedMessageClassIncrement(result.notificationMessages)
+				classCount = result.notificationMessages
+			case lspwire.KindRequest, lspwire.KindSuccessResponse, lspwire.KindErrorResponse:
+				result.controlMessages, classIncremented = checkedMessageClassIncrement(result.controlMessages)
+				classCount = result.controlMessages
+			default:
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
+			if !classIncremented || classCount > maxMessages {
+				result.providerMessageAccumulator.messageCeiling = true
 				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 			}
 			releaseUnselectedFrame := func() {
@@ -1539,9 +1564,10 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			return m.finishRoundTrip(req.SessionID, owner, result, "", false)
 		}
+		if result.Failure != "" {
+			return m.finishRoundTrip(req.SessionID, owner, result, result.Failure, true)
+		}
 	}
-	result.providerMessageAccumulator.messageCeiling = true
-	return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 }
 
 // canonicalRequestFrameBytes counts the writer's canonical header and body.

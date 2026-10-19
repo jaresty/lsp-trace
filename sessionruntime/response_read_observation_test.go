@@ -44,12 +44,12 @@ func expectManagedResponseFrame(t *testing.T, got RoundTripResult, sessionID str
 
 func TestCompletedResponseReadBindsOnlyAcceptedManagerFrame(t *testing.T) {
 	for _, tc := range []struct {
-		name, mode string
-		messages   int
-		wantError  bool
+		name, mode                string
+		maxMessages, wantMessages int
+		wantError                 bool
 	}{
-		{"interleaved-success", "success", 3, false},
-		{"server-error", "server-error", 1, true},
+		{"interleaved-success-split-budget", "success", 2, 3, false},
+		{"server-error", "server-error", 1, 1, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, started, _ := roundTripManager(t, tc.mode)
@@ -57,9 +57,9 @@ func TestCompletedResponseReadBindsOnlyAcceptedManagerFrame(t *testing.T) {
 			got := m.RoundTrip(context.Background(), RoundTripRequest{
 				SessionID: started.SessionID, Generation: started.Generation,
 				Method: "textDocument/definition", Params: json.RawMessage(`{"textDocument":{"uri":"file:///a.go"}}`),
-				Deadline: time.Now().Add(time.Second), MaxMessages: tc.messages, MaxBytes: 4096,
+				Deadline: time.Now().Add(time.Second), MaxMessages: tc.maxMessages, MaxBytes: 4096,
 			})
-			if got.Messages != tc.messages || (got.ServerError != nil) != tc.wantError || tc.name == "interleaved-success" && len(got.Responses) != 1 {
+			if got.Messages != tc.wantMessages || (got.ServerError != nil) != tc.wantError || tc.name == "interleaved-success-split-budget" && len(got.Responses) != 1 {
 				t.Fatalf("fixture setup: messages=%d responses=%d serverError=%+v", got.Messages, len(got.Responses), got.ServerError)
 			}
 			response := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(fmt.Sprint(got.Key.ID))}
@@ -84,7 +84,6 @@ func TestCompletedResponseReadWithheldWithoutAcceptedBoundedResponse(t *testing.
 		stale       bool
 		want        session.Failure
 	}{
-		{"unmatched-message-limit", "success", 2, 4096, false, session.ResourceExhausted},
 		{"matched-over-byte-limit", "server-error", 1, 1, false, session.ResourceExhausted},
 		{"malformed-frame", "malformed", 1, 4096, false, session.SessionPoisoned},
 		{"timeout", "hang", 1, 4096, false, session.RequestTimeout},
