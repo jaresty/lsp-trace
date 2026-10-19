@@ -763,6 +763,10 @@ func TestRuntimeHelperServer(t *testing.T) {
 				writeRuntimeResponse(msg.ID, map[string]any{"malformed": true})
 				continue
 			}
+			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_OVERSIZE_DOCUMENT_SYMBOL") == "1" {
+				writeRuntimeResponse(msg.ID, strings.Repeat("x", (4<<20)+1))
+				continue
+			}
 			writeRuntimeResponse(msg.ID, []any{})
 		case "textDocument/prepareCallHierarchy":
 			time.Sleep(3 * time.Second)

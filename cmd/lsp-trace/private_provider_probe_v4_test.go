@@ -86,7 +86,7 @@ func TestPrivateProviderProbeV4OutcomeFailureAccountingAndConcurrentCustody(t *t
 	}
 	wg.Wait()
 	got := p.artifactV4()
-	if got.Work != n || p.sequence != n || got.Composition == nil || got.Composition.Selection != "FIRST_RESOURCE_EXHAUSTED" {
+	if got.Work != n || p.sequence != n || len(got.Records) != 1 || got.Records[0].Cause != string(session.ResourceExhausted) || got.Records[0].Exhaustion == nil || got.Records[0].Exhaustion.Boundary != "BYTE_LIMIT_EXCEEDED" || got.Composition == nil || got.Composition.Selection != "FIRST_RESOURCE_EXHAUSTED" {
 		t.Fatalf("ASSERT_PROVIDER_PROBE_V4_CONCURRENT_CUSTODY %+v", got)
 	}
 }

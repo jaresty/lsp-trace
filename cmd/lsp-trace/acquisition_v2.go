@@ -175,7 +175,7 @@ func (r *privateAcquisitionRuntime) diagnosticHandles() []sessionruntime.Diagnos
 	return append([]sessionruntime.DiagnosticOperationHandle(nil), r.handles...)
 }
 func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
-	if r.probe != nil && r.probe.version == "v3" && request.Method == "textDocument/documentSymbol" {
+	if r.probe != nil && (r.probe.version == "v3" || r.probe.version == "v4") && request.Method == "textDocument/documentSymbol" {
 		request.CaptureProviderMessageComposition = true
 	}
 	result := r.manager.RoundTrip(ctx, request)
@@ -186,7 +186,7 @@ func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMa
 	if r.probe == nil {
 		return
 	}
-	if r.probe.version == "v3" && privateProbePhase(method) == "DOCUMENT_SYMBOL" {
+	if (r.probe.version == "v3" || r.probe.version == "v4") && privateProbePhase(method) == "DOCUMENT_SYMBOL" {
 		composition, present := result.ProviderMessageComposition()
 		class, cause := "", ""
 		if result.Failure != "" {
