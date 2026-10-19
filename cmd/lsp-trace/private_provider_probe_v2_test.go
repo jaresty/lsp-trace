@@ -170,6 +170,60 @@ func TestPrivateProviderProbeV2StatusWorkBoundary(t *testing.T) {
 	})
 }
 
+func TestPrivateProviderProbeV2IncompleteProducerSchedules(t *testing.T) {
+	parse := func(t *testing.T, artifact privateProviderProbeArtifactV2, wantValid bool) {
+		t.Helper()
+		raw, err := json.Marshal(artifact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = parsePrivateProviderProbeV2(append(raw, '\n'))
+		if (err == nil) != wantValid {
+			t.Fatalf("ASSERT_PRIVATE_PROVIDER_PROBE_V2_INCOMPLETE_SCHEDULE wantValid=%v err=%v artifact=%s", wantValid, err, raw)
+		}
+	}
+	artifact := func(p *privateProviderProbe) privateProviderProbeArtifactV2 {
+		p.version = "v2"
+		if p.counts == nil {
+			p.counts = make(map[string]uint64)
+		}
+		return p.artifactV2()
+	}
+
+	t.Run("exact-low-work-no-cause-reviewer-reproducer", func(t *testing.T) {
+		parse(t, privateProviderProbeArtifactV2{Schema: privateProviderProbeSchemaV2, Status: "INCOMPLETE", CauseCounts: []privateProviderProbeCount{}, Work: 1}, false)
+	})
+	t.Run("work-saturation", func(t *testing.T) {
+		p := &privateProviderProbe{work: math.MaxUint64}
+		p.observeSuccess(false)
+		parse(t, artifact(p), true)
+	})
+	t.Run("sequence-saturation", func(t *testing.T) {
+		p := &privateProviderProbe{work: math.MaxUint64 - 1, sequence: math.MaxUint64}
+		p.observeSuccess(false)
+		parse(t, artifact(p), true)
+	})
+	t.Run("file-saturation", func(t *testing.T) {
+		p := &privateProviderProbe{work: math.MaxUint64 - 1, sequence: math.MaxUint64 - 1, files: math.MaxUint64}
+		p.observeSuccess(true)
+		parse(t, artifact(p), true)
+	})
+	t.Run("cause-counter-at-saturation", func(t *testing.T) {
+		p := &privateProviderProbe{work: math.MaxUint64, sequence: math.MaxUint64, counts: map[string]uint64{"DECODE_FAILURE": math.MaxUint64}}
+		p.observe("DOCUMENT_SYMBOL", "DECODE_FAILURE", "DECODE_FAILURE", false)
+		parse(t, artifact(p), true)
+	})
+	t.Run("invalid-exhaustion-observation", func(t *testing.T) {
+		p := &privateProviderProbe{counts: make(map[string]uint64), version: "v2"}
+		p.observeExhaustion("DOCUMENT_SYMBOL", "TYPED_SESSION_RUNTIME_FAILURE", string(session.ResourceExhausted), 64, 100, sessionruntime.RoundTripResult{Messages: -1})
+		got := p.artifactV2()
+		if got.Status != "INCOMPLETE" || got.Work != 1 || len(got.CauseCounts) != 1 || got.CauseCounts[0].Cause != string(session.ResourceExhausted) || len(got.Records) != 0 {
+			t.Fatalf("unexpected exhaustion schedule: %+v", got)
+		}
+		parse(t, got, true)
+	})
+}
+
 func TestPrivateProviderProbeV2StrictCanonicalParser(t *testing.T) {
 	p, err := newPrivateProviderProbeVersion(probePath(t), "v2")
 	if err != nil {
@@ -371,7 +425,7 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 	})
 	t.Run("aggregates-beyond-retained-records", func(t *testing.T) {
 		a := clone()
-		a.FileDenominator = 1
+		a.FileDenominator = 3
 		a.Work = 4
 		a.CauseCounts = []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}, {Cause: "DOCUMENT_SOURCE_UNAVAILABLE", Count: 3}}
 		a.Records = []privateProviderProbeRecordV2{
@@ -396,6 +450,87 @@ func TestPrivateProviderProbeV2SemanticProducibility(t *testing.T) {
 		a.Work = 3
 		parse(t, a, true)
 	})
+}
+
+func TestPrivateProviderProbeV2ProducerScheduleCausePartition(t *testing.T) {
+	type scheduleCase struct {
+		cause     string
+		schedule  string
+		wantValid bool
+	}
+	const (
+		roundTripOnly = "round-trip-only"
+		supplyOnly    = "supply-only"
+		shared        = "shared"
+	)
+	cases := []scheduleCase{
+		{string(session.SessionNotFound), roundTripOnly, false},
+		{string(session.SessionStopping), roundTripOnly, false},
+		{string(session.SessionCrashed), roundTripOnly, false},
+		{"PARSE_ERROR", roundTripOnly, false},
+		{"INVALID_REQUEST", roundTripOnly, false},
+		{"METHOD_NOT_FOUND", roundTripOnly, false},
+		{"INVALID_PARAMS", roundTripOnly, false},
+		{"INTERNAL_ERROR", roundTripOnly, false},
+		{"SERVER_ERROR", roundTripOnly, false},
+		{"OTHER", roundTripOnly, false},
+		{"DECODE_FAILURE", roundTripOnly, false},
+		{string(sessionruntime.DocumentSupplyUnavailable), supplyOnly, false},
+		{string(sessionruntime.DocumentURIUnavailable), supplyOnly, false},
+		{string(sessionruntime.DocumentOutsideWorkspace), supplyOnly, false},
+		{string(sessionruntime.DocumentSourceUnavailable), supplyOnly, false},
+		{string(sessionruntime.LanguageIDUnavailable), supplyOnly, false},
+		{"ADAPTER_IDENTITY_MISMATCH", supplyOnly, false},
+		{string(session.RequestCancelled), shared, true},
+		{string(session.RequestTimeout), shared, true},
+		{string(session.StaleGeneration), shared, true},
+		{string(session.LifecycleConflict), shared, true},
+		{string(session.ResourceExhausted), shared, true},
+		{string(session.SessionPoisoned), shared, true},
+		{"OTHER_TYPED_FAILURE", shared, true},
+	}
+	for _, tc := range cases {
+		t.Run(strings.ToLower(tc.schedule+"-"+tc.cause), func(t *testing.T) {
+			artifact := privateProviderProbeArtifactV2{
+				Schema: privateProviderProbeSchemaV2, Status: "COMPLETE", FileDenominator: 1,
+				CauseCounts: []privateProviderProbeCount{{Cause: tc.cause, Count: 2}}, Work: 2,
+			}
+			raw, err := json.Marshal(artifact)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = parsePrivateProviderProbeV2(append(raw, '\n'))
+			if (err == nil) != tc.wantValid {
+				t.Fatalf("ASSERT_PRIVATE_PROVIDER_PROBE_V2_CAUSE_PARTITION schedule=%s cause=%s wantValid=%v err=%v", tc.schedule, tc.cause, tc.wantValid, err)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name        string
+		work, files uint64
+		causeCounts []privateProviderProbeCount
+		wantValid   bool
+	}{
+		{"exact-round-trip-aggregate-reviewer-reproducer", 2, 1, []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 2}}, false},
+		{"exact-supply-aggregate-reviewer-reproducer", 2, 1, []privateProviderProbeCount{{Cause: string(sessionruntime.DocumentSourceUnavailable), Count: 2}}, false},
+		{"shared-not-charged-to-either-denominator", 2, 1, []privateProviderProbeCount{{Cause: string(session.RequestTimeout), Count: 2}}, true},
+		{"success-remainder", 3, 1, []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}, {Cause: string(sessionruntime.DocumentSourceUnavailable), Count: 1}}, true},
+		{"round-trip-overflow-safe-equality", math.MaxUint64, math.MaxUint64 - 1, []privateProviderProbeCount{{Cause: "DECODE_FAILURE", Count: 1}}, true},
+		{"supply-overflow-safe-equality", math.MaxUint64, math.MaxUint64, []privateProviderProbeCount{{Cause: string(sessionruntime.DocumentSourceUnavailable), Count: math.MaxUint64}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			artifact := privateProviderProbeArtifactV2{Schema: privateProviderProbeSchemaV2, Status: "COMPLETE", FileDenominator: tc.files, CauseCounts: tc.causeCounts, Work: tc.work}
+			raw, err := json.Marshal(artifact)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = parsePrivateProviderProbeV2(append(raw, '\n'))
+			if (err == nil) != tc.wantValid {
+				t.Fatalf("ASSERT_PRIVATE_PROVIDER_PROBE_V2_AGGREGATE_SCHEDULE wantValid=%v err=%v artifact=%s", tc.wantValid, err, raw)
+			}
+		})
+	}
 }
 
 func TestPrivateProviderProbeV2PhaseClassClosure(t *testing.T) {

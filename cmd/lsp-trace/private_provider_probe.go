@@ -334,6 +334,27 @@ func knownPrivateProviderProbeCause(cause string) bool {
 	return false
 }
 
+const (
+	privateProviderProbeCauseRoundTripOnly = iota
+	privateProviderProbeCauseSupplyOnly
+	privateProviderProbeCauseShared
+)
+
+func privateProviderProbeCauseSchedule(cause string) int {
+	roundTrip := validPrivateProviderProbeCause("TYPED_SESSION_RUNTIME_FAILURE", cause) ||
+		validPrivateProviderProbeCause("JSON_RPC_CODE_BUCKET", cause) ||
+		validPrivateProviderProbeCause("DECODE_FAILURE", cause)
+	supply := validPrivateProviderProbeCause("DOCUMENT_FAILURE", cause) ||
+		validPrivateProviderProbeCause("ADAPTER_IDENTITY_MISMATCH", cause)
+	if roundTrip && supply {
+		return privateProviderProbeCauseShared
+	}
+	if supply {
+		return privateProviderProbeCauseSupplyOnly
+	}
+	return privateProviderProbeCauseRoundTripOnly
+}
+
 func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, error) {
 	var a privateProviderProbeArtifactV2
 	if len(raw) == 0 || raw[len(raw)-1] != '\n' || len(raw) > 1 && raw[len(raw)-2] == '\n' {
@@ -357,7 +378,7 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 	}
 	previousCause := ""
 	causeCounts := make(map[string]uint64, len(a.CauseCounts))
-	var totalCount uint64
+	var totalCount, roundTripOnlyCount, supplyOnlyCount uint64
 	for _, count := range a.CauseCounts {
 		if !knownPrivateProviderProbeCause(count.Cause) || count.Count == 0 || count.Count > a.Work || previousCause >= count.Cause || math.MaxUint64-totalCount < count.Count {
 			return a, errors.New("invalid private provider probe")
@@ -366,8 +387,26 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 		if totalCount > a.Work {
 			return a, errors.New("invalid private provider probe")
 		}
+		switch privateProviderProbeCauseSchedule(count.Cause) {
+		case privateProviderProbeCauseRoundTripOnly:
+			if math.MaxUint64-roundTripOnlyCount < count.Count {
+				return a, errors.New("invalid private provider probe")
+			}
+			roundTripOnlyCount += count.Count
+		case privateProviderProbeCauseSupplyOnly:
+			if math.MaxUint64-supplyOnlyCount < count.Count {
+				return a, errors.New("invalid private provider probe")
+			}
+			supplyOnlyCount += count.Count
+		}
 		causeCounts[count.Cause] = count.Count
 		previousCause = count.Cause
+	}
+	if roundTripOnlyCount > a.Work-a.FileDenominator || supplyOnlyCount > a.FileDenominator {
+		return a, errors.New("invalid private provider probe")
+	}
+	if a.Status == "INCOMPLETE" && a.Work != math.MaxUint64 && causeCounts[string(session.ResourceExhausted)] == 0 {
+		return a, errors.New("invalid private provider probe")
 	}
 	retainedCounts := make(map[string]uint64, len(a.Records))
 	var previousSequence, retainedSymbolCount, retainedSupplyCount uint64
