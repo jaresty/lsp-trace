@@ -168,6 +168,36 @@ func TestPrivateProviderProbeV2StatusWorkBoundary(t *testing.T) {
 		}
 		parse(t, artifact, true)
 	})
+
+	invalidExhaustion := func(status string, work uint64) privateProviderProbeArtifactV2 {
+		return privateProviderProbeArtifactV2{
+			Schema:      privateProviderProbeSchemaV2,
+			Status:      status,
+			CauseCounts: []privateProviderProbeCount{{Cause: string(session.ResourceExhausted), Count: 1}},
+			Records: []privateProviderProbeRecordV2{{
+				Sequence: 1, Phase: "DOCUMENT_SYMBOL", Class: "TYPED_SESSION_RUNTIME_FAILURE", Cause: string(session.ResourceExhausted),
+				Exhaustion: &privateProviderProbeExhaustionV2{ObservedMessages: -1, ConfiguredMaxMessages: 64, ConfiguredMaxBytes: 100, Boundary: "INVALID_OBSERVATION"},
+			}},
+			Work: work,
+		}
+	}
+	for _, tc := range []struct {
+		name      string
+		status    string
+		work      uint64
+		wantValid bool
+	}{
+		{"incomplete-invalid-low-work", "INCOMPLETE", 1, true},
+		{"incomplete-invalid-max-work", "INCOMPLETE", math.MaxUint64, true},
+		{"complete-invalid-low-work", "COMPLETE", 1, false},
+		{"complete-invalid-max-work-reviewer-reproducer", "COMPLETE", math.MaxUint64, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parse(t, invalidExhaustion(tc.status, tc.work), tc.wantValid)
+		})
+	}
+	t.Run("complete-max-work-without-invalid-observation", func(t *testing.T) { parse(t, base("COMPLETE", math.MaxUint64), true) })
+	t.Run("incomplete-max-work-without-invalid-observation", func(t *testing.T) { parse(t, base("INCOMPLETE", math.MaxUint64), true) })
 }
 
 func TestPrivateProviderProbeV2IncompleteProducerSchedules(t *testing.T) {

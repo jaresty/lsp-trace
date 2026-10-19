@@ -461,7 +461,7 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 	if retainedSymbolCount > a.Work-a.FileDenominator || retainedSupplyCount > a.FileDenominator {
 		return a, errors.New("invalid private provider probe")
 	}
-	if a.Work != math.MaxUint64 && (a.Status == "INCOMPLETE") != invalidExhaustionWitness {
+	if invalidExhaustionWitness && a.Status != "INCOMPLETE" || a.Work != math.MaxUint64 && a.Status == "INCOMPLETE" && !invalidExhaustionWitness {
 		return a, errors.New("invalid private provider probe")
 	}
 	return a, nil
