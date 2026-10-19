@@ -759,6 +759,10 @@ func TestRuntimeHelperServer(t *testing.T) {
 			}
 			writeRuntimeResponse(msg.ID, map[string]any{"capabilities": map[string]any{"callHierarchyProvider": true}})
 		case "textDocument/documentSymbol":
+			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_MALFORMED_DOCUMENT_SYMBOL_FRAME") == "1" {
+				fmt.Fprint(os.Stdout, "Content-Length: 1\r\n\r\n{")
+				continue
+			}
 			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_MALFORMED_DOCUMENT_SYMBOL") == "1" {
 				writeRuntimeResponse(msg.ID, map[string]any{"malformed": true})
 				continue

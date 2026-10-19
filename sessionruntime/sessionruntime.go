@@ -285,6 +285,8 @@ type RoundTripRequest struct {
 	CaptureDocumentSymbolResponseFrameMaxBytes int64 `json:"-"`
 	// Private documentSymbol-only message-composition observation; zero value disables.
 	CaptureProviderMessageComposition bool `json:"-"`
+	// Private documentSymbol-only scalar transaction observation; zero value disables.
+	CaptureProviderTransactionObservation bool `json:"-"`
 	// Diagnostic join values must be opaque safe identities, never labels or paths.
 	DiagnosticCallerID       string
 	DiagnosticTargetID       string
@@ -744,6 +746,7 @@ type RoundTripResult struct {
 	providerMessageComposition        ProviderMessageComposition            `json:"-"`
 	providerMessageCompositionPresent bool                                  `json:"-"`
 	providerMessageAccumulator        providerMessageCompositionAccumulator `json:"-"`
+	providerTransaction               privateProviderTransactionCapture
 }
 
 // ProviderMessageComposition returns the immutable privacy-reduced observation.
@@ -954,6 +957,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	started := m.now()
 	result := RoundTripResult{directionalV5: req.directionalV5, Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
 	result.providerMessageAccumulator.enabled = req.CaptureProviderMessageComposition && req.Method == "textDocument/documentSymbol"
+	result.providerTransaction.enabled = req.CaptureProviderTransactionObservation && req.Method == "textDocument/documentSymbol"
 	var privateRetainedNotifications []lspwire.Message
 	var privateRetainedResponses []lspwire.Message
 	maxMessages := req.MaxMessages
@@ -1367,6 +1371,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				continue
 			}
 			result.providerMessageAccumulator.dispatchDisposition(read.message, disposition)
+			result.providerTransaction.selectedResponseObserved = true
 			collector.Record(diagnosticEventMatched, int64(responseID), true)
 			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDecodedMessage) {
 				releaseUnselectedFrame()
@@ -1554,6 +1559,7 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 		owner.retire()
 	}
 	m.mu.Lock()
+	terminalState := session.State("")
 	if r := m.sessions[id]; r != nil && r.record.Generation == result.Key.Generation {
 		delete(r.requests, result.Key)
 		r.protocolOwned = false
@@ -1561,9 +1567,32 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 			r.record.State = session.Poisoned
 			r.retired = owner
 		}
+		terminalState = r.record.State
 		m.observe(id, result.Key.Generation, "response", r.record.State, failure)
 	}
 	result.Failure = failure
+	if result.providerTransaction.enabled {
+		lifecycle := ProviderTransactionLifecycle("")
+		switch terminalState {
+		case session.Ready:
+			lifecycle = ProviderTransactionLifecycleReady
+		case session.Poisoned:
+			lifecycle = ProviderTransactionLifecyclePoisoned
+		}
+		if lifecycle != "" && result.Messages >= 0 {
+			_, requestWriteCompleted := result.CompletedRequestWrite()
+			result.providerTransaction.observation = ProviderTransactionObservation{
+				SelectedResponseObserved:       result.providerTransaction.selectedResponseObserved,
+				RequestWriteCompleted:          requestWriteCompleted,
+				ProviderMessagesProcessed:      uint64(result.Messages),
+				ProviderResponseWriteCompleted: result.providerTransaction.selectedResponseObserved && result.responseRead != nil,
+				FailurePostEffect:              failure != "" && requestWriteCompleted,
+				TerminalPoisonObserved:         terminalState == session.Poisoned,
+				TerminalLifecycle:              lifecycle,
+			}
+			result.providerTransaction.present = true
+		}
+	}
 	result.providerMessageComposition, result.providerMessageCompositionPresent = result.providerMessageAccumulator.finish(failure)
 	result.providerMessageAccumulator = providerMessageCompositionAccumulator{}
 	result.Duration = m.now().Sub(result.started)

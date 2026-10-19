@@ -36,6 +36,7 @@ type providerProbeRunnerResult struct {
 	probeV2                    privateProviderProbeArtifactV2
 	probeV3                    privateProviderProbeArtifactV3
 	probeV4                    privateProviderProbeArtifactV4
+	probeV5                    privateProviderProbeArtifactV5
 	probeErr                   error
 	probeExists                bool
 }
@@ -180,10 +181,13 @@ func runProviderProbeRunnerInWorkspaceVersion(t *testing.T, workspace, version s
 			case "v4":
 				result.probeV4, err = parsePrivateProviderProbeV4(raw)
 				result.probeErr = err
+			case "v5":
+				result.probeV5, err = parsePrivateProviderProbeV5(raw)
+				result.probeErr = err
 			default:
 				result.probe, err = parsePrivateProviderProbe(raw)
 			}
-			if err != nil && version != "v4" {
+			if err != nil && version != "v4" && version != "v5" {
 				t.Fatalf("%v: %s", err, raw)
 			}
 			result.probeExists = true

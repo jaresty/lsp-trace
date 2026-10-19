@@ -21,6 +21,7 @@ const (
 	privateProviderProbeSchemaV2 = "lsp-trace.private-provider-probe.v2"
 	privateProviderProbeSchemaV3 = "lsp-trace.private-provider-probe.v3"
 	privateProviderProbeSchemaV4 = "lsp-trace.private-provider-probe.v4"
+	privateProviderProbeSchemaV5 = "lsp-trace.private-provider-probe.v5"
 )
 
 type privateProviderProbeRecord struct {
@@ -121,6 +122,26 @@ type privateProviderProbeArtifactV4 struct {
 	Work            uint64                             `json:"work"`
 	Composition     *privateProviderProbeCompositionV4 `json:"message_composition,omitempty"`
 }
+type privateProviderProbeTransactionV5 struct {
+	SelectedResponseObserved       bool                                        `json:"selected_response_observed"`
+	RequestWriteCompleted          bool                                        `json:"request_write_completed"`
+	ProviderMessagesProcessed      uint64                                      `json:"provider_messages_processed"`
+	ProviderResponseWriteCompleted bool                                        `json:"provider_response_write_completed"`
+	FailurePostEffect              bool                                        `json:"failure_post_effect"`
+	TerminalPoisonObserved         bool                                        `json:"terminal_poison_observed"`
+	TerminalLifecycle              sessionruntime.ProviderTransactionLifecycle `json:"terminal_lifecycle"`
+}
+type privateProviderProbeArtifactV5 struct {
+	Schema          string                             `json:"schema"`
+	Status          string                             `json:"status"`
+	FileDenominator uint64                             `json:"file_denominator"`
+	CauseCounts     []privateProviderProbeCount        `json:"cause_counts"`
+	Records         []privateProviderProbeRecordV2     `json:"records"`
+	RerunCount      uint64                             `json:"rerun_count"`
+	Work            uint64                             `json:"work"`
+	Composition     *privateProviderProbeCompositionV4 `json:"message_composition,omitempty"`
+	Transaction     *privateProviderProbeTransactionV5 `json:"document_symbol_transaction,omitempty"`
+}
 type privateProviderProbe struct {
 	mu                    sync.Mutex
 	path, version         string
@@ -130,6 +151,7 @@ type privateProviderProbe struct {
 	recordsV2             []privateProviderProbeRecordV2
 	compositionV3         *privateProviderProbeCompositionV3
 	compositionV4         *privateProviderProbeCompositionV4
+	transactionV5         *privateProviderProbeTransactionV5
 	incomplete            bool
 }
 
@@ -137,7 +159,7 @@ func newPrivateProviderProbe(path string) (*privateProviderProbe, error) {
 	return newPrivateProviderProbeVersion(path, "v1")
 }
 func newPrivateProviderProbeVersion(path, version string) (*privateProviderProbe, error) {
-	if version != "v1" && version != "v2" && version != "v3" && version != "v4" {
+	if version != "v1" && version != "v2" && version != "v3" && version != "v4" && version != "v5" {
 		return nil, errors.New("invalid private provider probe version")
 	}
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -296,25 +318,58 @@ func (p *privateProviderProbe) observeV3(phase, class, cause string, file bool, 
 			p.recordsV2 = append(p.recordsV2, r)
 		}
 	}
-	if p.version != "v3" && p.version != "v4" || phase != "DOCUMENT_SYMBOL" || !present || messages < 0 || bytes < 0 || maxMessages <= 0 || maxBytes <= 0 {
-		if (p.version == "v3" || p.version == "v4") && phase == "DOCUMENT_SYMBOL" {
+	if p.version != "v3" && p.version != "v4" && p.version != "v5" || phase != "DOCUMENT_SYMBOL" || !present || messages < 0 || bytes < 0 || maxMessages <= 0 || maxBytes <= 0 {
+		if (p.version == "v3" || p.version == "v4" || p.version == "v5") && phase == "DOCUMENT_SYMBOL" {
 			p.incomplete = true
 		}
 		return
 	}
 	exhausted := cause == string(session.ResourceExhausted)
-	if p.version == "v3" && p.compositionV3 != nil && (p.compositionV3.Selection == "FIRST_RESOURCE_EXHAUSTED" || !exhausted) || p.version == "v4" && p.compositionV4 != nil && (p.compositionV4.Selection == "FIRST_RESOURCE_EXHAUSTED" || !exhausted) {
+	if p.version == "v3" && p.compositionV3 != nil && (p.compositionV3.Selection == "FIRST_RESOURCE_EXHAUSTED" || !exhausted) || (p.version == "v4" || p.version == "v5") && p.compositionV4 != nil && (p.compositionV4.Selection == "FIRST_RESOURCE_EXHAUSTED" || !exhausted) {
 		return
 	}
 	selection := "FIRST_COMPLETED"
 	if exhausted {
 		selection = "FIRST_RESOURCE_EXHAUSTED"
 	}
-	if p.version == "v4" {
+	if p.version == "v4" || p.version == "v5" {
 		p.compositionV4 = &privateProviderProbeCompositionV4{p.sequence, selection, c.ProgressNotifications, c.LogShowTelemetryNotifications, c.PublishDiagnosticsNotifications, c.OtherNotifications, c.ServerRequests, c.UnmatchedLateInvalidResponses, c.AcceptedTerminalResponses, c.InvalidProtocolMessages, uint64(messages), uint64(bytes), uint64(maxMessages), uint64(maxBytes), string(c.Outcome), cause}
 		return
 	}
 	p.compositionV3 = &privateProviderProbeCompositionV3{Sequence: p.sequence, Selection: selection, ProgressNotifications: c.ProgressNotifications, LogShowTelemetryNotifications: c.LogShowTelemetryNotifications, OtherNotifications: c.OtherNotifications + c.PublishDiagnosticsNotifications, ServerRequests: c.ServerRequests, UnmatchedLateInvalidResponses: c.UnmatchedLateInvalidResponses, AcceptedTerminalResponses: c.AcceptedTerminalResponses, InvalidProtocolMessages: c.InvalidProtocolMessages, ManagerMessages: uint64(messages), ManagerBytes: uint64(bytes), ConfiguredMaxMessages: uint64(maxMessages), ConfiguredMaxBytes: uint64(maxBytes), Outcome: string(c.Outcome), Failure: cause}
+}
+
+func (p *privateProviderProbe) observeV5(observation sessionruntime.ProviderTransactionObservation, present bool) {
+	if p == nil || p.version != "v5" || !present {
+		if p != nil && p.version == "v5" {
+			p.mu.Lock()
+			p.incomplete = true
+			p.mu.Unlock()
+		}
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady && observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned ||
+		observation.TerminalPoisonObserved != (observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) ||
+		observation.ProviderResponseWriteCompleted && !observation.SelectedResponseObserved ||
+		observation.FailurePostEffect && !observation.RequestWriteCompleted {
+		p.incomplete = true
+		return
+	}
+	poisoned := observation.TerminalPoisonObserved
+	if p.transactionV5 != nil && (p.transactionV5.TerminalPoisonObserved || !poisoned) {
+		return
+	}
+	p.transactionV5 = &privateProviderProbeTransactionV5{
+		SelectedResponseObserved:       observation.SelectedResponseObserved,
+		RequestWriteCompleted:          observation.RequestWriteCompleted,
+		ProviderMessagesProcessed:      observation.ProviderMessagesProcessed,
+		ProviderResponseWriteCompleted: observation.ProviderResponseWriteCompleted,
+		FailurePostEffect:              observation.FailurePostEffect,
+		TerminalPoisonObserved:         observation.TerminalPoisonObserved,
+		TerminalLifecycle:              observation.TerminalLifecycle,
+	}
 }
 
 func (p *privateProviderProbe) artifact() privateProviderProbeArtifact {
@@ -388,6 +443,22 @@ func (p *privateProviderProbe) artifactV4() privateProviderProbeArtifactV4 {
 	}
 	return privateProviderProbeArtifactV4{privateProviderProbeSchemaV4, status, p.files, counts, append([]privateProviderProbeRecordV2(nil), p.recordsV2...), 0, p.work, c}
 }
+func (p *privateProviderProbe) artifactV5() privateProviderProbeArtifactV5 {
+	v4 := p.artifactV4()
+	p.mu.Lock()
+	var transaction *privateProviderProbeTransactionV5
+	if p.transactionV5 != nil {
+		copy := *p.transactionV5
+		transaction = &copy
+	}
+	p.mu.Unlock()
+	status := v4.Status
+	if transaction == nil {
+		status = "INCOMPLETE"
+	}
+	return privateProviderProbeArtifactV5{privateProviderProbeSchemaV5, status, v4.FileDenominator, v4.CauseCounts, v4.Records, v4.RerunCount, v4.Work, v4.Composition, transaction}
+}
+
 func (p *privateProviderProbe) finalize() error {
 	if p == nil {
 		return nil
@@ -399,6 +470,8 @@ func (p *privateProviderProbe) finalize() error {
 		value = p.artifactV3()
 	} else if p.version == "v4" {
 		value = p.artifactV4()
+	} else if p.version == "v5" {
+		value = p.artifactV5()
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -739,6 +812,40 @@ func parsePrivateProviderProbeV4(raw []byte) (privateProviderProbeArtifactV4, er
 	v3 := privateProviderProbeArtifactV3{privateProviderProbeSchemaV3, a.Status, a.FileDenominator, a.CauseCounts, a.Records, a.RerunCount, a.Work, c3}
 	v3raw, _ := json.Marshal(v3)
 	if _, err := parsePrivateProviderProbeV3(append(v3raw, '\n')); err != nil {
+		return bad()
+	}
+	return a, nil
+}
+
+func parsePrivateProviderProbeV5(raw []byte) (privateProviderProbeArtifactV5, error) {
+	var a privateProviderProbeArtifactV5
+	bad := func() (privateProviderProbeArtifactV5, error) { return a, errors.New("invalid private provider probe") }
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' || len(raw) > 1 && raw[len(raw)-2] == '\n' {
+		return bad()
+	}
+	line := bytes.TrimSuffix(raw, []byte{'\n'})
+	d := json.NewDecoder(bytes.NewReader(line))
+	d.DisallowUnknownFields()
+	if d.Decode(&a) != nil || d.Decode(&struct{}{}) != io.EOF {
+		return bad()
+	}
+	canonical, _ := json.Marshal(a)
+	if !bytes.Equal(canonical, line) || a.Schema != privateProviderProbeSchemaV5 || a.Transaction == nil && a.Status != "INCOMPLETE" {
+		return bad()
+	}
+	v4 := privateProviderProbeArtifactV4{privateProviderProbeSchemaV4, a.Status, a.FileDenominator, a.CauseCounts, a.Records, a.RerunCount, a.Work, a.Composition}
+	v4raw, _ := json.Marshal(v4)
+	if _, err := parsePrivateProviderProbeV4(append(v4raw, '\n')); err != nil {
+		return bad()
+	}
+	if a.Transaction == nil {
+		return a, nil
+	}
+	t := a.Transaction
+	if t.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady && t.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned ||
+		t.TerminalPoisonObserved != (t.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) ||
+		t.ProviderResponseWriteCompleted && !t.SelectedResponseObserved ||
+		t.FailurePostEffect && !t.RequestWriteCompleted {
 		return bad()
 	}
 	return a, nil
