@@ -252,6 +252,9 @@ type RoundTripRequest struct {
 	Deadline      time.Time
 	MaxMessages   int
 	MaxBytes      int64
+	// PrivateNotificationMaxMessages independently configures the notification
+	// count policy. Zero preserves MaxMessages; -1 disables only this count ceiling.
+	PrivateNotificationMaxMessages int `json:"-"`
 	// Private default-off in-memory D/R query/result observation, not a receipt.
 	CaptureOwnedMethodPair            bool                                 `json:"-"`
 	callHierarchyLayer1               callHierarchyLayer1RequestAttachment `json:"-"`
@@ -973,6 +976,12 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	if maxMessages <= 0 {
 		maxMessages = 1
 	}
+	notificationMaxMessages := req.PrivateNotificationMaxMessages
+	if notificationMaxMessages == 0 {
+		notificationMaxMessages = maxMessages
+	} else if notificationMaxMessages < -1 {
+		return m.finishRoundTrip(req.SessionID, &ownedTransport{child: child}, result, session.ToolNotImplemented, true)
+	}
 	maxBytes := req.MaxBytes
 	if maxBytes <= 0 {
 		maxBytes = m.wire.MaxBodyBytes
@@ -980,6 +989,12 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			maxBytes = lspwire.DefaultLimits().MaxBodyBytes
 		}
 	}
+	result.providerTransaction.notificationCeilingPolicy = ProviderNotificationCeilingConfiguredCount
+	if notificationMaxMessages == -1 {
+		result.providerTransaction.notificationCeilingPolicy = ProviderNotificationCeilingByteTimeBounded
+	}
+	result.providerTransaction.configuredControlCeiling = uint64(maxMessages)
+	result.providerTransaction.configuredMaxBytes = uint64(maxBytes)
 	requestedDeadline := time.Duration(0)
 	if !req.Deadline.IsZero() {
 		requestedDeadline = req.Deadline.Sub(started)
@@ -1336,7 +1351,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			default:
 				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 			}
-			if !classIncremented || classCount > maxMessages {
+			classLimit := maxMessages
+			if read.message.Kind() == lspwire.KindNotification {
+				classLimit = notificationMaxMessages
+			}
+			if !classIncremented || classLimit >= 0 && classCount > classLimit {
 				result.providerMessageAccumulator.messageCeiling = true
 				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 			}
@@ -1613,6 +1632,11 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 				SelectedResponseObserved:      result.providerTransaction.selectedResponseObserved,
 				RequestWriteCompleted:         requestWriteCompleted,
 				ProviderMessagesProcessed:     uint64(result.Messages),
+				NotificationMessagesProcessed: uint64(result.notificationMessages),
+				ControlMessagesProcessed:      uint64(result.controlMessages),
+				NotificationCeilingPolicy:     result.providerTransaction.notificationCeilingPolicy,
+				ConfiguredControlCeiling:      result.providerTransaction.configuredControlCeiling,
+				ConfiguredMaxBytes:            result.providerTransaction.configuredMaxBytes,
 				SelectedResponseReadCompleted: result.responseRead != nil,
 				FailurePostEffect:             failure != "" && requestWriteCompleted,
 				TerminalPoisonObserved:        terminalState == session.Poisoned,
@@ -3323,6 +3347,13 @@ const (
 	ProviderTransactionLifecyclePoisoned ProviderTransactionLifecycle = "POISONED"
 )
 
+type ProviderNotificationCeilingPolicy string
+
+const (
+	ProviderNotificationCeilingConfiguredCount ProviderNotificationCeilingPolicy = "CONFIGURED_COUNT"
+	ProviderNotificationCeilingByteTimeBounded ProviderNotificationCeilingPolicy = "BYTE_TIME_BOUNDED"
+)
+
 // ProviderTransactionObservation contains only privacy-reduced scalar facts
 // owned by one completed document-symbol transaction. SelectedResponseReadCompleted
 // means the Manager completed reading the selected response frame; it does not
@@ -3331,6 +3362,11 @@ type ProviderTransactionObservation struct {
 	SelectedResponseObserved      bool
 	RequestWriteCompleted         bool
 	ProviderMessagesProcessed     uint64
+	NotificationMessagesProcessed uint64
+	ControlMessagesProcessed      uint64
+	NotificationCeilingPolicy     ProviderNotificationCeilingPolicy
+	ConfiguredControlCeiling      uint64
+	ConfiguredMaxBytes            uint64
 	SelectedResponseReadCompleted bool
 	FailurePostEffect             bool
 	TerminalPoisonObserved        bool
@@ -3338,10 +3374,13 @@ type ProviderTransactionObservation struct {
 }
 
 type privateProviderTransactionCapture struct {
-	enabled                  bool
-	selectedResponseObserved bool
-	observation              ProviderTransactionObservation
-	present                  bool
+	enabled                   bool
+	selectedResponseObserved  bool
+	notificationCeilingPolicy ProviderNotificationCeilingPolicy
+	configuredControlCeiling  uint64
+	configuredMaxBytes        uint64
+	observation               ProviderTransactionObservation
+	present                   bool
 }
 
 // ProviderTransactionObservation returns a value copy only when private

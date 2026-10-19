@@ -175,9 +175,12 @@ func (r *privateAcquisitionRuntime) diagnosticHandles() []sessionruntime.Diagnos
 	return append([]sessionruntime.DiagnosticOperationHandle(nil), r.handles...)
 }
 func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
-	if r.probe != nil && (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5") && request.Method == "textDocument/documentSymbol" {
+	if r.probe != nil && (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5" || r.probe.version == "v6") && request.Method == "textDocument/documentSymbol" {
 		request.CaptureProviderMessageComposition = true
-		request.CaptureProviderTransactionObservation = r.probe.version == "v5"
+		request.CaptureProviderTransactionObservation = r.probe.version == "v5" || r.probe.version == "v6"
+		if r.probe.version == "v6" && r.probe.byteTimeNotifications {
+			request.PrivateNotificationMaxMessages = -1
+		}
 	}
 	result := r.manager.RoundTrip(ctx, request)
 	r.retainHandle(result.DiagnosticOperation)
@@ -187,7 +190,7 @@ func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMa
 	if r.probe == nil {
 		return
 	}
-	if (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5") && privateProbePhase(method) == "DOCUMENT_SYMBOL" {
+	if (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5" || r.probe.version == "v6") && privateProbePhase(method) == "DOCUMENT_SYMBOL" {
 		composition, present := result.ProviderMessageComposition()
 		class, cause := "", ""
 		if result.Failure != "" {
@@ -198,9 +201,13 @@ func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMa
 			class, cause = "DECODE_FAILURE", "DECODE_FAILURE"
 		}
 		r.probe.observeV3("DOCUMENT_SYMBOL", class, cause, false, composition, present, configuredMaxMessages, configuredMaxBytes, result.Messages, result.Bytes)
-		if r.probe.version == "v5" {
+		if r.probe.version == "v5" || r.probe.version == "v6" {
 			transaction, transactionPresent := result.ProviderTransactionObservation()
-			r.probe.observeV5(transaction, transactionPresent)
+			if r.probe.version == "v5" {
+				r.probe.observeV5(transaction, transactionPresent)
+			} else {
+				r.probe.observeV6(transaction, transactionPresent)
+			}
 		}
 		return
 	}

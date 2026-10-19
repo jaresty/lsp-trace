@@ -759,6 +759,11 @@ func TestRuntimeHelperServer(t *testing.T) {
 			}
 			writeRuntimeResponse(msg.ID, map[string]any{"capabilities": map[string]any{"callHierarchyProvider": true}})
 		case "textDocument/documentSymbol":
+			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_DOCUMENT_SYMBOL_NOTIFICATION_BURST") == "1" {
+				for i := 0; i < 65; i++ {
+					writeRuntimeNotification("window/logMessage", map[string]any{"type": 3, "message": "bounded"})
+				}
+			}
 			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_MALFORMED_DOCUMENT_SYMBOL_FRAME") == "1" {
 				fmt.Fprint(os.Stdout, "Content-Length: 1\r\n\r\n{")
 				continue
@@ -810,6 +815,11 @@ func readRuntimeMessage(r *bufio.Reader) ([]byte, error) {
 
 func writeRuntimeResponse(id json.RawMessage, result any) {
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
+	fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
+}
+
+func writeRuntimeNotification(method string, params any) {
+	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
 	fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
 }
 

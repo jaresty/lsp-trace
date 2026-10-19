@@ -148,6 +148,7 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		if err != nil {
 			return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
 		}
+		providerProbe.byteTimeNotifications = options.PrivateProviderProbeByteTimeNotifications
 		defer func() { _ = providerProbe.finalize() }()
 	}
 	starter, err := deps.newStarter()

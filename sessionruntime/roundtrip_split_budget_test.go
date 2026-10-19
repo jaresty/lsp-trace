@@ -110,6 +110,35 @@ func runSplitBudget(t *testing.T, messages []lspwire.Message, malformed bool, ma
 	})
 }
 
+func TestRoundTripPrivateNotificationByteTimePolicy(t *testing.T) {
+	const maxMessages = 64
+	messages := make([]lspwire.Message, 0, maxMessages+2)
+	for i := 0; i < maxMessages+1; i++ {
+		messages = append(messages, splitNotification("window/logMessage"))
+	}
+	messages = append(messages, splitTerminal())
+
+	manager, started, _ := splitBudgetManager(t, messages, false)
+	private := manager.RoundTrip(context.Background(), RoundTripRequest{
+		SessionID: started.SessionID, Generation: started.Generation, Method: "textDocument/documentSymbol",
+		Params: json.RawMessage(`{"textDocument":{"uri":"file:///fixture.go"}}`), Deadline: time.Now().Add(time.Second),
+		MaxMessages: maxMessages, MaxBytes: 1 << 20, PrivateNotificationMaxMessages: -1,
+		CaptureProviderMessageComposition: true, CaptureProviderTransactionObservation: true,
+	})
+	observation, present := private.ProviderTransactionObservation()
+	if private.Failure != "" || private.Messages != maxMessages+2 || len(private.Notifications) != maxMessages+1 || string(private.Result) != `{"ok":true}` {
+		t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_BYTE_TIME_MODE_EXCEEDS_64_AND_NORMAL_FAILS private=%+v", private)
+	}
+	if !present || observation.NotificationCeilingPolicy != ProviderNotificationCeilingByteTimeBounded || observation.ConfiguredControlCeiling != maxMessages || observation.ConfiguredMaxBytes != 1<<20 || observation.NotificationMessagesProcessed != maxMessages+1 || observation.ControlMessagesProcessed != 1 || !observation.SelectedResponseObserved || !observation.SelectedResponseReadCompleted {
+		t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_POLICY_SCALAR_ACCOUNTING observation=%+v present=%t", observation, present)
+	}
+
+	normal := runSplitBudget(t, messages, false, maxMessages, 1<<20, time.Second)
+	if normal.Failure != session.ResourceExhausted || normal.Messages != maxMessages+1 || len(normal.Notifications) != maxMessages || len(normal.Result) != 0 {
+		t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_BYTE_TIME_MODE_EXCEEDS_64_AND_NORMAL_FAILS normal=%+v", normal)
+	}
+}
+
 func TestRoundTripSplitMessageBudgetBoundaries(t *testing.T) {
 	for _, n := range []int{1, 4, 67} {
 		t.Run("notifications-plus-terminal", func(t *testing.T) {
@@ -163,6 +192,63 @@ func TestRoundTripSplitMessageBudgetBoundaries(t *testing.T) {
 		got := runSplitBudget(t, messages, false, n, 1<<20, time.Second)
 		if got.Failure != "" || got.Messages != 2*n || len(got.Notifications) != n || len(got.Responses) != n-1 || string(got.Result) != `{"ok":true}` {
 			t.Fatalf("ASSERT_SPLIT_BUDGET_BOTH_CLASSES_EXACT_TOTAL: %+v", got)
+		}
+	})
+}
+
+func TestRoundTripPrivateNotificationByteMalformedTimeoutCancelAndControl(t *testing.T) {
+	privateRun := func(t *testing.T, messages []lspwire.Message, malformed bool, maxBytes int64, deadline time.Duration) RoundTripResult {
+		t.Helper()
+		manager, started, _ := splitBudgetManager(t, messages, malformed)
+		return manager.RoundTrip(context.Background(), RoundTripRequest{
+			SessionID: started.SessionID, Generation: started.Generation, Method: "textDocument/documentSymbol",
+			Params: json.RawMessage(`{"textDocument":{"uri":"file:///fixture.go"}}`), Deadline: time.Now().Add(deadline),
+			MaxMessages: 64, MaxBytes: maxBytes, PrivateNotificationMaxMessages: -1,
+		})
+	}
+	t.Run("aggregate-byte-crossing", func(t *testing.T) {
+		notification := splitNotification("window/logMessage")
+		body, _ := json.Marshal(notification)
+		got := privateRun(t, []lspwire.Message{notification, splitTerminal()}, false, int64(len(body)), time.Second)
+		if got.Failure != session.ResourceExhausted || got.Messages != 2 || len(got.Notifications) != 1 || len(got.Result) != 0 {
+			t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_BYTE_MALFORMED_TIMEOUT_CANCEL_CONTROL_FAIL_CLOSED byte=%+v", got)
+		}
+	})
+	t.Run("control-ceiling", func(t *testing.T) {
+		messages := make([]lspwire.Message, 0, 66)
+		for i := 0; i < 65; i++ {
+			messages = append(messages, splitControl(7+i%3))
+		}
+		messages = append(messages, splitTerminal())
+		got := privateRun(t, messages, false, 1<<20, time.Second)
+		if got.Failure != session.ResourceExhausted || got.Messages != 65 || len(got.Responses) != 64 || len(got.Result) != 0 {
+			t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_BYTE_MALFORMED_TIMEOUT_CANCEL_CONTROL_FAIL_CLOSED control=%+v", got)
+		}
+	})
+	t.Run("malformed", func(t *testing.T) {
+		got := privateRun(t, []lspwire.Message{splitNotification("window/logMessage")}, true, 1<<20, time.Second)
+		if got.Failure != session.SessionPoisoned || got.Messages != 1 || len(got.Notifications) != 1 {
+			t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_BYTE_MALFORMED_TIMEOUT_CANCEL_CONTROL_FAIL_CLOSED malformed=%+v", got)
+		}
+	})
+	t.Run("timeout", func(t *testing.T) {
+		got := privateRun(t, []lspwire.Message{splitNotification("window/logMessage")}, false, 1<<20, 20*time.Millisecond)
+		if got.Failure != session.RequestTimeout || got.Messages != 1 || len(got.Notifications) != 1 {
+			t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_BYTE_MALFORMED_TIMEOUT_CANCEL_CONTROL_FAIL_CLOSED timeout=%+v", got)
+		}
+	})
+	t.Run("cancellation", func(t *testing.T) {
+		manager, started, _ := splitBudgetManager(t, []lspwire.Message{splitNotification("window/logMessage")}, false)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan RoundTripResult, 1)
+		go func() {
+			done <- manager.RoundTrip(ctx, RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: "textDocument/documentSymbol", Params: json.RawMessage(`{"textDocument":{"uri":"file:///fixture.go"}}`), Deadline: time.Now().Add(time.Second), MaxMessages: 64, MaxBytes: 1 << 20, PrivateNotificationMaxMessages: -1})
+		}()
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+		got := <-done
+		if got.Failure != session.RequestCancelled || got.Messages != 1 || len(got.Notifications) != 1 {
+			t.Fatalf("ASSERT_PRIVATE_NOTIFICATION_BYTE_MALFORMED_TIMEOUT_CANCEL_CONTROL_FAIL_CLOSED cancel=%+v", got)
 		}
 	})
 }

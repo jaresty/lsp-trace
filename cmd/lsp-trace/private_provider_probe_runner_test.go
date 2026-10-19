@@ -37,6 +37,7 @@ type providerProbeRunnerResult struct {
 	probeV3                    privateProviderProbeArtifactV3
 	probeV4                    privateProviderProbeArtifactV4
 	probeV5                    privateProviderProbeArtifactV5
+	probeV6                    privateProviderProbeArtifactV6
 	probeErr                   error
 	probeExists                bool
 }
@@ -54,6 +55,9 @@ func providerProbeRunnerArgsVersion(workspace, root, probe, version string, enum
 		args = append(args, "--private-provider-probe-path", probe)
 		if version != "v1" {
 			args = append(args, "--private-provider-probe-version", version)
+		}
+		if version == "v6" {
+			args = append(args, "--private-provider-probe-byte-time-notifications")
 		}
 	}
 	return args
@@ -184,10 +188,13 @@ func runProviderProbeRunnerInWorkspaceVersion(t *testing.T, workspace, version s
 			case "v5":
 				result.probeV5, err = parsePrivateProviderProbeV5(raw)
 				result.probeErr = err
+			case "v6":
+				result.probeV6, err = parsePrivateProviderProbeV6(raw)
+				result.probeErr = err
 			default:
 				result.probe, err = parsePrivateProviderProbe(raw)
 			}
-			if err != nil && version != "v4" && version != "v5" {
+			if err != nil && version != "v4" && version != "v5" && version != "v6" {
 				t.Fatalf("%v: %s", err, raw)
 			}
 			result.probeExists = true

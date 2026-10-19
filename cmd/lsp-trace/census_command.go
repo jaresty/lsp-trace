@@ -59,6 +59,7 @@ type censusCLIOptions struct {
 	Workspace, Server, Profile, ConfigPath, CatalogConfigPath, PublicationRoot string
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
 	PrivateProviderProbePath, PrivateProviderProbeVersion                      string
+	PrivateProviderProbeByteTimeNotifications                                  bool
 	ServerArgs                                                                 []string
 	DownDepth, UpDepth, MaxNodes, MaxBatchTargets                              int
 	Timeout, RequestTimeout                                                    time.Duration
@@ -96,6 +97,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.StringVar(&o.PrivateControlFlowDiagnosticPath, "private-control-flow-diagnostic-path", "", "")
 	fs.StringVar(&o.PrivateProviderProbePath, "private-provider-probe-path", "", "")
 	fs.StringVar(&o.PrivateProviderProbeVersion, "private-provider-probe-version", "v1", "")
+	fs.BoolVar(&o.PrivateProviderProbeByteTimeNotifications, "private-provider-probe-byte-time-notifications", false, "")
 	fs.BoolVar(&o.Catalog, "catalog", false, "continue to the provisional feature catalog")
 	fs.StringVar(&o.Resume, "resume", "", "resume an opaque catalog continuation selector")
 	fs.StringVar(&o.StopAfter, "stop-after", "", "stop catalog continuation after describe-requests")
@@ -121,6 +123,10 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	if censusNamedFlagCount(clean, "private-provider-probe-path") > 1 {
 		return o, errors.New("duplicate private provider probe path flag")
 	}
+	byteTimeCount := censusNamedFlagCount(clean, "private-provider-probe-byte-time-notifications")
+	if byteTimeCount > 1 {
+		return o, errors.New("duplicate private provider probe byte-time notification flag")
+	}
 	versionCount := censusNamedFlagCount(clean, "private-provider-probe-version")
 	if versionCount > 1 {
 		return o, errors.New("duplicate private provider probe version flag")
@@ -128,7 +134,10 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	if versionCount != 0 && o.PrivateProviderProbePath == "" {
 		return o, errors.New("private provider probe version requires path")
 	}
-	if o.PrivateProviderProbeVersion != "v1" && o.PrivateProviderProbeVersion != "v2" && o.PrivateProviderProbeVersion != "v3" && o.PrivateProviderProbeVersion != "v4" && o.PrivateProviderProbeVersion != "v5" {
+	if o.PrivateProviderProbeVersion != "v1" && o.PrivateProviderProbeVersion != "v2" && o.PrivateProviderProbeVersion != "v3" && o.PrivateProviderProbeVersion != "v4" && o.PrivateProviderProbeVersion != "v5" && o.PrivateProviderProbeVersion != "v6" {
+		return o, errors.New("invalid private provider probe version")
+	}
+	if o.PrivateProviderProbeByteTimeNotifications && (o.PrivateProviderProbePath == "" || o.PrivateProviderProbeVersion != "v6") {
 		return o, errors.New("invalid private provider probe version")
 	}
 	if len(src) > 0 {
@@ -210,7 +219,7 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 		if o.CatalogConfigPath == "" || o.PublicationRoot == "" {
 			return errors.New("resume requires catalog config and publication root")
 		}
-		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true, "private-enumeration-projection": true, "private-provider-probe-path": true, "private-provider-probe-version": true}
+		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true, "private-enumeration-projection": true, "private-provider-probe-path": true, "private-provider-probe-version": true, "private-provider-probe-byte-time-notifications": true}
 		for _, arg := range args {
 			name := strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--")
 			if forbidden[name] {
