@@ -97,10 +97,19 @@ func TestTraceRecordsOrderedTraffic(t *testing.T) {
 	defer server.Close()
 	var mu sync.Mutex
 	var events []TraceEvent
-	conn := NewWithTrace(client, client, func(e TraceEvent) { mu.Lock(); events = append(events, e); mu.Unlock() })
+	sendRecorded := make(chan struct{})
+	conn := NewWithTrace(client, client, func(e TraceEvent) {
+		mu.Lock()
+		events = append(events, e)
+		mu.Unlock()
+		if e.Direction == "send" {
+			close(sendRecorded)
+		}
+	})
 	go func() {
 		r := bufio.NewReader(server)
 		req, _ := readMessage(r)
+		<-sendRecorded
 		writeTestMessage(t, server, message{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`null`)})
 	}()
 	if err := conn.Call(context.Background(), "shutdown", nil, nil); err != nil {
