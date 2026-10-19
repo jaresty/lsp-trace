@@ -34,6 +34,7 @@ type providerProbeRunnerResult struct {
 	starts, stops              int
 	probe                      privateProviderProbeArtifact
 	probeV2                    privateProviderProbeArtifactV2
+	probeV3                    privateProviderProbeArtifactV3
 	probeExists                bool
 }
 
@@ -169,13 +170,16 @@ func runProviderProbeRunnerInWorkspaceVersion(t *testing.T, workspace, version s
 	if probe != "" {
 		raw, err := os.ReadFile(probe)
 		if err == nil {
-			if version == "v2" {
+			switch version {
+			case "v2":
 				result.probeV2, err = parsePrivateProviderProbeV2(raw)
-			} else {
+			case "v3":
+				result.probeV3, err = parsePrivateProviderProbeV3(raw)
+			default:
 				result.probe, err = parsePrivateProviderProbe(raw)
 			}
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("%v: %s", err, raw)
 			}
 			result.probeExists = true
 		} else if !os.IsNotExist(err) {
@@ -361,13 +365,17 @@ func TestRunCensusProviderProbeV2RealSessionParityAndSingleLifecycle(t *testing.
 	}
 	v1 := runProviderProbeRunnerVersion(t, "v1", true, false, core)
 	v2 := runProviderProbeRunnerVersion(t, "v2", true, false, core)
-	if v1.code != v2.code || !bytes.Equal(v1.stdout, v2.stdout) || !bytes.Equal(v1.stderr, v2.stderr) {
-		t.Fatalf("public drift v1=%d/%q/%q v2=%d/%q/%q", v1.code, v1.stdout, v1.stderr, v2.code, v2.stdout, v2.stderr)
+	v3 := runProviderProbeRunnerVersion(t, "v3", true, false, core)
+	if v1.code != v2.code || v1.code != v3.code || !bytes.Equal(v1.stdout, v2.stdout) || !bytes.Equal(v1.stdout, v3.stdout) || !bytes.Equal(v1.stderr, v2.stderr) || !bytes.Equal(v1.stderr, v3.stderr) {
+		t.Fatalf("public drift v1=%d/%q/%q v2=%d/%q/%q v3=%d/%q/%q", v1.code, v1.stdout, v1.stderr, v2.code, v2.stdout, v2.stderr, v3.code, v3.stdout, v3.stderr)
 	}
-	if starts != 2 || stops != 2 || v1.starterCalls != 1 || v1.managerCalls != 1 || v2.starterCalls != 1 || v2.managerCalls != 1 {
-		t.Fatalf("lifecycle starts=%d stops=%d v1=%d/%d v2=%d/%d", starts, stops, v1.starterCalls, v1.managerCalls, v2.starterCalls, v2.managerCalls)
+	if starts != 3 || stops != 3 || v1.starterCalls != 1 || v1.managerCalls != 1 || v2.starterCalls != 1 || v2.managerCalls != 1 || v3.starterCalls != 1 || v3.managerCalls != 1 {
+		t.Fatalf("lifecycle starts=%d stops=%d v1=%d/%d v2=%d/%d v3=%d/%d", starts, stops, v1.starterCalls, v1.managerCalls, v2.starterCalls, v2.managerCalls, v3.starterCalls, v3.managerCalls)
 	}
 	if !v2.probeExists || v2.probeV2.Schema != privateProviderProbeSchemaV2 || v2.probeV2.Work != v1.probe.Work || v2.probeV2.FileDenominator != v1.probe.FileDenominator || !reflect.DeepEqual(v2.probeV2.CauseCounts, v1.probe.CauseCounts) {
 		t.Fatalf("private parity v1=%+v v2=%+v", v1.probe, v2.probeV2)
+	}
+	if !v3.probeExists || v3.probeV3.Schema != privateProviderProbeSchemaV3 || v3.probeV3.Work != v1.probe.Work || v3.probeV3.Composition == nil {
+		t.Fatalf("v3 probe=%+v", v3.probeV3)
 	}
 }

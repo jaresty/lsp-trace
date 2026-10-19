@@ -175,12 +175,28 @@ func (r *privateAcquisitionRuntime) diagnosticHandles() []sessionruntime.Diagnos
 	return append([]sessionruntime.DiagnosticOperationHandle(nil), r.handles...)
 }
 func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	if r.probe != nil && r.probe.version == "v3" && request.Method == "textDocument/documentSymbol" {
+		request.CaptureProviderMessageComposition = true
+	}
 	result := r.manager.RoundTrip(ctx, request)
 	r.retainHandle(result.DiagnosticOperation)
 	return result
 }
 func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMaxMessages int, configuredMaxBytes int64, result sessionruntime.RoundTripResult, decodeErr error) {
 	if r.probe == nil {
+		return
+	}
+	if r.probe.version == "v3" && privateProbePhase(method) == "DOCUMENT_SYMBOL" {
+		composition, present := result.ProviderMessageComposition()
+		class, cause := "", ""
+		if result.Failure != "" {
+			class, cause = privateSessionFailureCause(result.Failure)
+		} else if result.ServerError != nil {
+			class, cause = privateRPCErrorCause(result.ServerError)
+		} else if decodeErr != nil {
+			class, cause = "DECODE_FAILURE", "DECODE_FAILURE"
+		}
+		r.probe.observeV3("DOCUMENT_SYMBOL", class, cause, false, composition, present, configuredMaxMessages, configuredMaxBytes, result.Messages, result.Bytes)
 		return
 	}
 	if result.Failure != "" {
