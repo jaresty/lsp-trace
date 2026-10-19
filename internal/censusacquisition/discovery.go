@@ -246,7 +246,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				}
 				appendSymbolIncompleteCause(&out, "DISCOVERY", code, ordinal)
 				timeoutBoundary = timeoutBoundary || ctx.Err() != nil
-				nodeBoundary = nodeBoundary || ordinal >= captureset.MaxTargets || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols)
+				nodeBoundary = nodeBoundary || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols)
 			} else if !callableSymbolKind(symbol.Kind) {
 				disposition = census.SymbolNonCallable
 			} else if !a.Client.SupportsCallHierarchy() {

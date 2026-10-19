@@ -434,6 +434,45 @@ func TestDiscoverToCoreRunAcquiresNestedSameFileTargets(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAdapterTargetAdmissionCapIsNotTraversalNodeCeiling(t *testing.T) {
+	workspace := t.TempDir()
+	files := StaticFiles{testSource(workspace, "a.go"), testSource(workspace, "b.go")}
+	symbols := make(map[string][]lsp.DocumentSymbol, len(files))
+	for fileIndex, file := range files {
+		count := captureset.MaxTargets / 2
+		if fileIndex == len(files)-1 {
+			count = captureset.MaxTargets + 1 - count
+		}
+		items := make([]lsp.DocumentSymbol, count)
+		for i := range items {
+			items[i] = sym(fmt.Sprintf("S%d", i), 12, uint32(i), 0)
+		}
+		symbols[file.URI] = items
+	}
+	client := &fakeDiscoveryClient{documentSupported: true, symbols: symbols}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: files, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Complete || got.Accounting.FileDenominator != len(files) || got.Accounting.SymbolDenominator != captureset.MaxTargets+1 {
+		t.Fatalf("ASSERT_TARGET_CAP_ACCOUNTING: complete=%v files=%d symbols=%d", got.Complete, got.Accounting.FileDenominator, got.Accounting.SymbolDenominator)
+	}
+	if len(got.Accounting.Files) != len(files) || len(got.Accounting.Symbols) != captureset.MaxTargets+1 {
+		t.Fatalf("ASSERT_TARGET_CAP_OBSERVED_FILES_SYMBOLS: files=%d symbols=%d", len(got.Accounting.Files), len(got.Accounting.Symbols))
+	}
+	observations := make(map[DiscoveryDimension]DiscoveryObservation, len(got.Observations))
+	for _, observation := range got.Observations {
+		observations[observation.Dimension] = observation
+	}
+	if observations[DiscoveryNodeCeiling].Known {
+		t.Fatalf("ASSERT_TARGET_CAP_NOT_NODE_CEILING: %+v", observations[DiscoveryNodeCeiling])
+	}
+	omissions := observations[DiscoveryTargetSourceOmissions]
+	if !omissions.Known || omissions.Omitted == nil || *omissions.Omitted != 1 {
+		t.Fatalf("ASSERT_TARGET_CAP_OMITTED_DENOMINATOR: %+v", omissions)
+	}
+}
+
 func TestDiscoveryAdapterTerminalResponseIncompleteBounds(t *testing.T) {
 	workspace := t.TempDir()
 	f := testSource(workspace, "bounded.go")
