@@ -131,13 +131,13 @@ func TestProviderMessageCompositionTerminalOutcomeFamilies(t *testing.T) {
 func TestProviderMessageCompositionExactBucketsAndInvalidAllowlist(t *testing.T) {
 	var accumulator providerMessageCompositionAccumulator
 	accumulator.enabled = true
-	for _, method := range []string{"$/progress", "window/logMessage", "window/showMessage", "telemetry/event", "$/progress/near", "window/logMessage/near"} {
+	for _, method := range []string{"$/progress", "window/logMessage", "window/showMessage", "telemetry/event", "textDocument/publishDiagnostics", "$/progress/near", "window/logMessage/near"} {
 		accumulator.dispatch(lspwire.Message{JSONRPC: lspwire.Version, Method: method}, false)
 	}
 	accumulator.dispatch(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`7`), Method: "workspace/configuration"}, false)
 	accumulator.dispatch(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`8`), Result: json.RawMessage(`null`)}, false)
 	accumulator.dispatch(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`9`), Error: &lspwire.RPCError{Code: -32603}}, true)
-	if accumulator.ProgressNotifications != 1 || accumulator.LogShowTelemetryNotifications != 3 || accumulator.OtherNotifications != 2 || accumulator.ServerRequests != 1 || accumulator.UnmatchedLateInvalidResponses != 1 || accumulator.AcceptedTerminalResponses != 1 {
+	if accumulator.ProgressNotifications != 1 || accumulator.LogShowTelemetryNotifications != 3 || accumulator.PublishDiagnosticsNotifications != 1 || accumulator.OtherNotifications != 2 || accumulator.ServerRequests != 1 || accumulator.UnmatchedLateInvalidResponses != 1 || accumulator.AcceptedTerminalResponses != 1 {
 		t.Fatalf("ASSERT_PROVIDER_MESSAGE_COMPOSITION_EXACT_BUCKETS: %+v", accumulator.ProviderMessageComposition)
 	}
 

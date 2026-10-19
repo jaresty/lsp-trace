@@ -23,7 +23,7 @@ func TestPrivateProviderProbeVersionAdmission(t *testing.T) {
 		args []string
 	}{
 		{"duplicate", append(append([]string{}, base...), "--private-provider-probe-version", "v1", "--private-provider-probe-version", "v2")},
-		{"unknown", append(append([]string{}, base...), "--private-provider-probe-version", "v4")},
+		{"unknown", append(append([]string{}, base...), "--private-provider-probe-version", "v5")},
 		{"empty", append(append([]string{}, base...), "--private-provider-probe-version=")},
 		{"case-variant", append(append([]string{}, base...), "--private-provider-probe-version", "V2")},
 		{"without-path", []string{"census", "--workspace", ".", "--server", "gopls", "--publication-root", probePath(t), "--machine", "--private-provider-probe-version", "v2"}},
@@ -34,7 +34,7 @@ func TestPrivateProviderProbeVersionAdmission(t *testing.T) {
 			}
 		})
 	}
-	for _, version := range []string{"", "v1", "v2", "v3"} {
+	for _, version := range []string{"", "v1", "v2", "v3", "v4"} {
 		args := append([]string{}, base...)
 		if version != "" {
 			args = append(args, "--private-provider-probe-version", version)

@@ -24,14 +24,15 @@ const (
 
 // ProviderMessageComposition contains only bounded counters and a closed outcome.
 type ProviderMessageComposition struct {
-	ProgressNotifications         uint64                 `json:"-"`
-	LogShowTelemetryNotifications uint64                 `json:"-"`
-	OtherNotifications            uint64                 `json:"-"`
-	ServerRequests                uint64                 `json:"-"`
-	UnmatchedLateInvalidResponses uint64                 `json:"-"`
-	AcceptedTerminalResponses     uint64                 `json:"-"`
-	InvalidProtocolMessages       uint64                 `json:"-"`
-	Outcome                       ProviderMessageOutcome `json:"-"`
+	ProgressNotifications           uint64                 `json:"-"`
+	LogShowTelemetryNotifications   uint64                 `json:"-"`
+	PublishDiagnosticsNotifications uint64                 `json:"-"`
+	OtherNotifications              uint64                 `json:"-"`
+	ServerRequests                  uint64                 `json:"-"`
+	UnmatchedLateInvalidResponses   uint64                 `json:"-"`
+	AcceptedTerminalResponses       uint64                 `json:"-"`
+	InvalidProtocolMessages         uint64                 `json:"-"`
+	Outcome                         ProviderMessageOutcome `json:"-"`
 }
 
 type providerMessageCompositionAccumulator struct {
@@ -79,6 +80,8 @@ func (a *providerMessageCompositionAccumulator) dispatch(message lspwire.Message
 			a.increment(&a.ProgressNotifications)
 		case "window/logMessage", "window/showMessage", "telemetry/event":
 			a.increment(&a.LogShowTelemetryNotifications)
+		case "textDocument/publishDiagnostics":
+			a.increment(&a.PublishDiagnosticsNotifications)
 		default:
 			a.increment(&a.OtherNotifications)
 		}

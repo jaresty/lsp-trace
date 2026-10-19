@@ -20,6 +20,7 @@ const (
 	privateProviderProbeSchema   = "lsp-trace.private-provider-probe.v1"
 	privateProviderProbeSchemaV2 = "lsp-trace.private-provider-probe.v2"
 	privateProviderProbeSchemaV3 = "lsp-trace.private-provider-probe.v3"
+	privateProviderProbeSchemaV4 = "lsp-trace.private-provider-probe.v4"
 )
 
 type privateProviderProbeRecord struct {
@@ -92,6 +93,34 @@ type privateProviderProbeArtifactV3 struct {
 	Work            uint64                             `json:"work"`
 	Composition     *privateProviderProbeCompositionV3 `json:"message_composition,omitempty"`
 }
+type privateProviderProbeCompositionV4 struct {
+	Sequence                        uint64 `json:"sequence"`
+	Selection                       string `json:"selection"`
+	ProgressNotifications           uint64 `json:"progress_notifications"`
+	LogShowTelemetryNotifications   uint64 `json:"log_show_telemetry_notifications"`
+	PublishDiagnosticsNotifications uint64 `json:"publish_diagnostics_notifications"`
+	OtherNotifications              uint64 `json:"other_notifications"`
+	ServerRequests                  uint64 `json:"server_requests"`
+	UnmatchedLateInvalidResponses   uint64 `json:"unmatched_late_invalid_responses"`
+	AcceptedTerminalResponses       uint64 `json:"accepted_terminal_responses"`
+	InvalidProtocolMessages         uint64 `json:"invalid_protocol_messages"`
+	ManagerMessages                 uint64 `json:"manager_messages"`
+	ManagerBytes                    uint64 `json:"manager_bytes"`
+	ConfiguredMaxMessages           uint64 `json:"configured_max_messages"`
+	ConfiguredMaxBytes              uint64 `json:"configured_max_bytes"`
+	Outcome                         string `json:"outcome"`
+	Failure                         string `json:"failure"`
+}
+type privateProviderProbeArtifactV4 struct {
+	Schema          string                             `json:"schema"`
+	Status          string                             `json:"status"`
+	FileDenominator uint64                             `json:"file_denominator"`
+	CauseCounts     []privateProviderProbeCount        `json:"cause_counts"`
+	Records         []privateProviderProbeRecordV2     `json:"records"`
+	RerunCount      uint64                             `json:"rerun_count"`
+	Work            uint64                             `json:"work"`
+	Composition     *privateProviderProbeCompositionV4 `json:"message_composition,omitempty"`
+}
 type privateProviderProbe struct {
 	mu                    sync.Mutex
 	path, version         string
@@ -100,6 +129,7 @@ type privateProviderProbe struct {
 	records               []privateProviderProbeRecord
 	recordsV2             []privateProviderProbeRecordV2
 	compositionV3         *privateProviderProbeCompositionV3
+	compositionV4         *privateProviderProbeCompositionV4
 	incomplete            bool
 }
 
@@ -107,7 +137,7 @@ func newPrivateProviderProbe(path string) (*privateProviderProbe, error) {
 	return newPrivateProviderProbeVersion(path, "v1")
 }
 func newPrivateProviderProbeVersion(path, version string) (*privateProviderProbe, error) {
-	if version != "v1" && version != "v2" && version != "v3" {
+	if version != "v1" && version != "v2" && version != "v3" && version != "v4" {
 		return nil, errors.New("invalid private provider probe version")
 	}
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -266,21 +296,25 @@ func (p *privateProviderProbe) observeV3(phase, class, cause string, file bool, 
 			p.recordsV2 = append(p.recordsV2, r)
 		}
 	}
-	if p.version != "v3" || phase != "DOCUMENT_SYMBOL" || !present || messages < 0 || bytes < 0 || maxMessages <= 0 || maxBytes <= 0 {
-		if p.version == "v3" && phase == "DOCUMENT_SYMBOL" {
+	if p.version != "v3" && p.version != "v4" || phase != "DOCUMENT_SYMBOL" || !present || messages < 0 || bytes < 0 || maxMessages <= 0 || maxBytes <= 0 {
+		if (p.version == "v3" || p.version == "v4") && phase == "DOCUMENT_SYMBOL" {
 			p.incomplete = true
 		}
 		return
 	}
 	exhausted := cause == string(session.ResourceExhausted)
-	if p.compositionV3 != nil && (p.compositionV3.Selection == "FIRST_RESOURCE_EXHAUSTED" || !exhausted) {
+	if p.version == "v3" && p.compositionV3 != nil && (p.compositionV3.Selection == "FIRST_RESOURCE_EXHAUSTED" || !exhausted) || p.version == "v4" && p.compositionV4 != nil && (p.compositionV4.Selection == "FIRST_RESOURCE_EXHAUSTED" || !exhausted) {
 		return
 	}
 	selection := "FIRST_COMPLETED"
 	if exhausted {
 		selection = "FIRST_RESOURCE_EXHAUSTED"
 	}
-	p.compositionV3 = &privateProviderProbeCompositionV3{Sequence: p.sequence, Selection: selection, ProgressNotifications: c.ProgressNotifications, LogShowTelemetryNotifications: c.LogShowTelemetryNotifications, OtherNotifications: c.OtherNotifications, ServerRequests: c.ServerRequests, UnmatchedLateInvalidResponses: c.UnmatchedLateInvalidResponses, AcceptedTerminalResponses: c.AcceptedTerminalResponses, InvalidProtocolMessages: c.InvalidProtocolMessages, ManagerMessages: uint64(messages), ManagerBytes: uint64(bytes), ConfiguredMaxMessages: uint64(maxMessages), ConfiguredMaxBytes: uint64(maxBytes), Outcome: string(c.Outcome), Failure: cause}
+	if p.version == "v4" {
+		p.compositionV4 = &privateProviderProbeCompositionV4{p.sequence, selection, c.ProgressNotifications, c.LogShowTelemetryNotifications, c.PublishDiagnosticsNotifications, c.OtherNotifications, c.ServerRequests, c.UnmatchedLateInvalidResponses, c.AcceptedTerminalResponses, c.InvalidProtocolMessages, uint64(messages), uint64(bytes), uint64(maxMessages), uint64(maxBytes), string(c.Outcome), cause}
+		return
+	}
+	p.compositionV3 = &privateProviderProbeCompositionV3{Sequence: p.sequence, Selection: selection, ProgressNotifications: c.ProgressNotifications, LogShowTelemetryNotifications: c.LogShowTelemetryNotifications, OtherNotifications: c.OtherNotifications + c.PublishDiagnosticsNotifications, ServerRequests: c.ServerRequests, UnmatchedLateInvalidResponses: c.UnmatchedLateInvalidResponses, AcceptedTerminalResponses: c.AcceptedTerminalResponses, InvalidProtocolMessages: c.InvalidProtocolMessages, ManagerMessages: uint64(messages), ManagerBytes: uint64(bytes), ConfiguredMaxMessages: uint64(maxMessages), ConfiguredMaxBytes: uint64(maxBytes), Outcome: string(c.Outcome), Failure: cause}
 }
 
 func (p *privateProviderProbe) artifact() privateProviderProbeArtifact {
@@ -331,6 +365,29 @@ func (p *privateProviderProbe) artifactV3() privateProviderProbeArtifactV3 {
 	}
 	return privateProviderProbeArtifactV3{privateProviderProbeSchemaV3, status, p.files, counts, append([]privateProviderProbeRecordV2(nil), p.recordsV2...), 0, p.work, c}
 }
+func (p *privateProviderProbe) artifactV4() privateProviderProbeArtifactV4 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	causes := make([]string, 0, len(p.counts))
+	for cause := range p.counts {
+		causes = append(causes, cause)
+	}
+	sort.Strings(causes)
+	counts := make([]privateProviderProbeCount, 0, len(causes))
+	for _, cause := range causes {
+		counts = append(counts, privateProviderProbeCount{cause, p.counts[cause]})
+	}
+	status := "COMPLETE"
+	if p.incomplete {
+		status = "INCOMPLETE"
+	}
+	var c *privateProviderProbeCompositionV4
+	if p.compositionV4 != nil {
+		copy := *p.compositionV4
+		c = &copy
+	}
+	return privateProviderProbeArtifactV4{privateProviderProbeSchemaV4, status, p.files, counts, append([]privateProviderProbeRecordV2(nil), p.recordsV2...), 0, p.work, c}
+}
 func (p *privateProviderProbe) finalize() error {
 	if p == nil {
 		return nil
@@ -340,6 +397,8 @@ func (p *privateProviderProbe) finalize() error {
 		value = p.artifactV2()
 	} else if p.version == "v3" {
 		value = p.artifactV3()
+	} else if p.version == "v4" {
+		value = p.artifactV4()
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -648,6 +707,38 @@ func parsePrivateProviderProbeV3(raw []byte) (privateProviderProbeArtifactV3, er
 		valid = otherCause && normalTerminal(c.Failure)
 	}
 	if !valid {
+		return bad()
+	}
+	return a, nil
+}
+
+func parsePrivateProviderProbeV4(raw []byte) (privateProviderProbeArtifactV4, error) {
+	var a privateProviderProbeArtifactV4
+	bad := func() (privateProviderProbeArtifactV4, error) { return a, errors.New("invalid private provider probe") }
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' || len(raw) > 1 && raw[len(raw)-2] == '\n' {
+		return bad()
+	}
+	line := bytes.TrimSuffix(raw, []byte{'\n'})
+	d := json.NewDecoder(bytes.NewReader(line))
+	d.DisallowUnknownFields()
+	if d.Decode(&a) != nil || d.Decode(&struct{}{}) != io.EOF {
+		return bad()
+	}
+	canonical, _ := json.Marshal(a)
+	if !bytes.Equal(canonical, line) || a.Schema != privateProviderProbeSchemaV4 {
+		return bad()
+	}
+	var c3 *privateProviderProbeCompositionV3
+	if a.Composition != nil {
+		c := a.Composition
+		if math.MaxUint64-c.OtherNotifications < c.PublishDiagnosticsNotifications {
+			return bad()
+		}
+		c3 = &privateProviderProbeCompositionV3{c.Sequence, c.Selection, c.ProgressNotifications, c.LogShowTelemetryNotifications, c.OtherNotifications + c.PublishDiagnosticsNotifications, c.ServerRequests, c.UnmatchedLateInvalidResponses, c.AcceptedTerminalResponses, c.InvalidProtocolMessages, c.ManagerMessages, c.ManagerBytes, c.ConfiguredMaxMessages, c.ConfiguredMaxBytes, c.Outcome, c.Failure}
+	}
+	v3 := privateProviderProbeArtifactV3{privateProviderProbeSchemaV3, a.Status, a.FileDenominator, a.CauseCounts, a.Records, a.RerunCount, a.Work, c3}
+	v3raw, _ := json.Marshal(v3)
+	if _, err := parsePrivateProviderProbeV3(append(v3raw, '\n')); err != nil {
 		return bad()
 	}
 	return a, nil
