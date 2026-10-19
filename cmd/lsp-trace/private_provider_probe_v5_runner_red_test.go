@@ -46,7 +46,7 @@ func TestRunCensusProviderProbeV5RealManagerMalformedDocumentSymbolPoisonTuple(t
 		t.Fatalf("ASSERT_PROVIDER_PROBE_V5_PRODUCTION_MANAGER_ROUTING exists=%t err=%v probe=%+v", got.probeExists, got.probeErr, got.probeV5)
 	}
 	tuple := got.probeV5.Transaction
-	if tuple.SelectedResponseObserved || !tuple.RequestWriteCompleted || tuple.ProviderMessagesProcessed != 0 || tuple.ProviderResponseWriteCompleted || !tuple.FailurePostEffect || !tuple.TerminalPoisonObserved || tuple.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned {
+	if tuple.SelectedResponseObserved || !tuple.RequestWriteCompleted || tuple.ProviderMessagesProcessed != 0 || tuple.SelectedResponseReadCompleted || !tuple.FailurePostEffect || !tuple.TerminalPoisonObserved || tuple.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned {
 		t.Fatalf("ASSERT_PROVIDER_PROBE_V5_POISON_TUPLE tuple=%+v", tuple)
 	}
 	if starts != 2 || stops != 2 || got.starterCalls != 1 || got.managerCalls != 1 {

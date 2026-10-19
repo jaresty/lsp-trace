@@ -14,7 +14,7 @@ func TestProviderTransactionObservationAcceptedResponse(t *testing.T) {
 	req.CaptureProviderTransactionObservation = true
 	got := m.RoundTrip(context.Background(), req)
 	observation, ok := got.ProviderTransactionObservation()
-	if got.Failure != "" || !ok || !observation.SelectedResponseObserved || !observation.RequestWriteCompleted || observation.ProviderMessagesProcessed != 3 || !observation.ProviderResponseWriteCompleted || observation.FailurePostEffect || observation.TerminalPoisonObserved || observation.TerminalLifecycle != ProviderTransactionLifecycleReady {
+	if got.Failure != "" || !ok || !observation.SelectedResponseObserved || !observation.RequestWriteCompleted || observation.ProviderMessagesProcessed != 3 || !observation.SelectedResponseReadCompleted || observation.FailurePostEffect || observation.TerminalPoisonObserved || observation.TerminalLifecycle != ProviderTransactionLifecycleReady {
 		t.Fatalf("ASSERT_PROVIDER_TRANSACTION_ACCEPTED observation=%+v present=%t failure=%s", observation, ok, got.Failure)
 	}
 }
@@ -26,7 +26,7 @@ func TestProviderTransactionObservationPostEffectPoisonAndRefusalWithoutRedispat
 	req.CaptureProviderTransactionObservation = true
 	got := m.RoundTrip(context.Background(), req)
 	observation, ok := got.ProviderTransactionObservation()
-	if got.Failure != session.SessionPoisoned || !ok || observation.SelectedResponseObserved || !observation.RequestWriteCompleted || observation.ProviderMessagesProcessed != 0 || observation.ProviderResponseWriteCompleted || !observation.FailurePostEffect || !observation.TerminalPoisonObserved || observation.TerminalLifecycle != ProviderTransactionLifecyclePoisoned {
+	if got.Failure != session.SessionPoisoned || !ok || observation.SelectedResponseObserved || !observation.RequestWriteCompleted || observation.ProviderMessagesProcessed != 0 || observation.SelectedResponseReadCompleted || !observation.FailurePostEffect || !observation.TerminalPoisonObserved || observation.TerminalLifecycle != ProviderTransactionLifecyclePoisoned {
 		t.Fatalf("ASSERT_PROVIDER_TRANSACTION_POST_EFFECT_POISON observation=%+v present=%t failure=%s", observation, ok, got.Failure)
 	}
 	before, _ := child.snapshot()

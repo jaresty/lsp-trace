@@ -1582,13 +1582,13 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 		if lifecycle != "" && result.Messages >= 0 {
 			_, requestWriteCompleted := result.CompletedRequestWrite()
 			result.providerTransaction.observation = ProviderTransactionObservation{
-				SelectedResponseObserved:       result.providerTransaction.selectedResponseObserved,
-				RequestWriteCompleted:          requestWriteCompleted,
-				ProviderMessagesProcessed:      uint64(result.Messages),
-				ProviderResponseWriteCompleted: result.providerTransaction.selectedResponseObserved && result.responseRead != nil,
-				FailurePostEffect:              failure != "" && requestWriteCompleted,
-				TerminalPoisonObserved:         terminalState == session.Poisoned,
-				TerminalLifecycle:              lifecycle,
+				SelectedResponseObserved:      result.providerTransaction.selectedResponseObserved,
+				RequestWriteCompleted:         requestWriteCompleted,
+				ProviderMessagesProcessed:     uint64(result.Messages),
+				SelectedResponseReadCompleted: result.responseRead != nil,
+				FailurePostEffect:             failure != "" && requestWriteCompleted,
+				TerminalPoisonObserved:        terminalState == session.Poisoned,
+				TerminalLifecycle:             lifecycle,
 			}
 			result.providerTransaction.present = true
 		}
@@ -3296,15 +3296,17 @@ const (
 )
 
 // ProviderTransactionObservation contains only privacy-reduced scalar facts
-// owned by one completed document-symbol transaction.
+// owned by one completed document-symbol transaction. SelectedResponseReadCompleted
+// means the Manager completed reading the selected response frame; it does not
+// establish that the provider completed writing that frame.
 type ProviderTransactionObservation struct {
-	SelectedResponseObserved       bool
-	RequestWriteCompleted          bool
-	ProviderMessagesProcessed      uint64
-	ProviderResponseWriteCompleted bool
-	FailurePostEffect              bool
-	TerminalPoisonObserved         bool
-	TerminalLifecycle              ProviderTransactionLifecycle
+	SelectedResponseObserved      bool
+	RequestWriteCompleted         bool
+	ProviderMessagesProcessed     uint64
+	SelectedResponseReadCompleted bool
+	FailurePostEffect             bool
+	TerminalPoisonObserved        bool
+	TerminalLifecycle             ProviderTransactionLifecycle
 }
 
 type privateProviderTransactionCapture struct {

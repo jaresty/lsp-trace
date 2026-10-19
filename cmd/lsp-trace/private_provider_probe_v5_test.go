@@ -38,8 +38,15 @@ func TestPrivateProviderProbeV5SelectionPresenceAndStability(t *testing.T) {
 		t.Fatal("ASSERT_PROVIDER_PROBE_V5_PRESENT_ALL_FALSE")
 	}
 	p.transactionV5 = nil
+	observedWithoutCompletedRead := providerProbeV5Observation(false)
+	observedWithoutCompletedRead.SelectedResponseObserved = true
+	p.observeV5(observedWithoutCompletedRead, true)
+	if got := p.artifactV5(); got.Transaction == nil || !got.Transaction.SelectedResponseObserved || got.Transaction.SelectedResponseReadCompleted {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V5_RESPONSE_OBSERVED_WITHOUT_COMPLETED_READ artifact=%+v", got)
+	}
+	p.transactionV5 = nil
 	accepted := providerProbeV5Observation(false)
-	accepted.SelectedResponseObserved, accepted.ProviderResponseWriteCompleted, accepted.ProviderMessagesProcessed = true, true, 2
+	accepted.SelectedResponseObserved, accepted.SelectedResponseReadCompleted, accepted.ProviderMessagesProcessed = true, true, 2
 	p.observeV3("DOCUMENT_SYMBOL", "", "", false, sessionruntime.ProviderMessageComposition{AcceptedTerminalResponses: 1, Outcome: sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse}, true, 64, 4096, 2, 100)
 	p.observeV5(accepted, true)
 	poisoned := providerProbeV5Observation(true)
@@ -65,10 +72,19 @@ func TestPrivateProviderProbeV5CanonicalParserPrivacyAndV1V4Bytes(t *testing.T) 
 	if got, err := parsePrivateProviderProbeV5(raw); err != nil || !reflect.DeepEqual(got, a) {
 		t.Fatalf("ASSERT_PROVIDER_PROBE_V5_CANONICAL err=%v got=%+v", err, got)
 	}
+	observedWithoutCompletedRead := a
+	transaction := *a.Transaction
+	observedWithoutCompletedRead.Transaction = &transaction
+	observedWithoutCompletedRead.Transaction.SelectedResponseObserved = true
+	observedWithoutCompletedRead.Transaction.SelectedResponseReadCompleted = false
+	observedWithoutCompletedReadRaw, _ := json.Marshal(observedWithoutCompletedRead)
+	if _, err := parsePrivateProviderProbeV5(append(observedWithoutCompletedReadRaw, '\n')); err != nil {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V5_RESPONSE_OBSERVED_WITHOUT_COMPLETED_READ_CANONICAL: %v", err)
+	}
 	for _, mutate := range []func(*privateProviderProbeArtifactV5){
 		func(v *privateProviderProbeArtifactV5) { v.Transaction.TerminalLifecycle = "UNKNOWN" },
 		func(v *privateProviderProbeArtifactV5) { v.Transaction.TerminalPoisonObserved = false },
-		func(v *privateProviderProbeArtifactV5) { v.Transaction.ProviderResponseWriteCompleted = true },
+		func(v *privateProviderProbeArtifactV5) { v.Transaction.SelectedResponseReadCompleted = true },
 		func(v *privateProviderProbeArtifactV5) { v.Transaction.RequestWriteCompleted = false },
 	} {
 		candidate := a

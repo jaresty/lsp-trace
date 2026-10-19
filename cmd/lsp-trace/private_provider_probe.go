@@ -122,14 +122,17 @@ type privateProviderProbeArtifactV4 struct {
 	Work            uint64                             `json:"work"`
 	Composition     *privateProviderProbeCompositionV4 `json:"message_composition,omitempty"`
 }
+
+// privateProviderProbeTransactionV5 reports Manager-side transaction facts.
+// SelectedResponseReadCompleted never claims provider write completion.
 type privateProviderProbeTransactionV5 struct {
-	SelectedResponseObserved       bool                                        `json:"selected_response_observed"`
-	RequestWriteCompleted          bool                                        `json:"request_write_completed"`
-	ProviderMessagesProcessed      uint64                                      `json:"provider_messages_processed"`
-	ProviderResponseWriteCompleted bool                                        `json:"provider_response_write_completed"`
-	FailurePostEffect              bool                                        `json:"failure_post_effect"`
-	TerminalPoisonObserved         bool                                        `json:"terminal_poison_observed"`
-	TerminalLifecycle              sessionruntime.ProviderTransactionLifecycle `json:"terminal_lifecycle"`
+	SelectedResponseObserved      bool                                        `json:"selected_response_observed"`
+	RequestWriteCompleted         bool                                        `json:"request_write_completed"`
+	ProviderMessagesProcessed     uint64                                      `json:"provider_messages_processed"`
+	SelectedResponseReadCompleted bool                                        `json:"selected_response_read_completed"`
+	FailurePostEffect             bool                                        `json:"failure_post_effect"`
+	TerminalPoisonObserved        bool                                        `json:"terminal_poison_observed"`
+	TerminalLifecycle             sessionruntime.ProviderTransactionLifecycle `json:"terminal_lifecycle"`
 }
 type privateProviderProbeArtifactV5 struct {
 	Schema          string                             `json:"schema"`
@@ -352,7 +355,7 @@ func (p *privateProviderProbe) observeV5(observation sessionruntime.ProviderTran
 	defer p.mu.Unlock()
 	if observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady && observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned ||
 		observation.TerminalPoisonObserved != (observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) ||
-		observation.ProviderResponseWriteCompleted && !observation.SelectedResponseObserved ||
+		observation.SelectedResponseReadCompleted && !observation.SelectedResponseObserved ||
 		observation.FailurePostEffect && !observation.RequestWriteCompleted {
 		p.incomplete = true
 		return
@@ -362,13 +365,13 @@ func (p *privateProviderProbe) observeV5(observation sessionruntime.ProviderTran
 		return
 	}
 	p.transactionV5 = &privateProviderProbeTransactionV5{
-		SelectedResponseObserved:       observation.SelectedResponseObserved,
-		RequestWriteCompleted:          observation.RequestWriteCompleted,
-		ProviderMessagesProcessed:      observation.ProviderMessagesProcessed,
-		ProviderResponseWriteCompleted: observation.ProviderResponseWriteCompleted,
-		FailurePostEffect:              observation.FailurePostEffect,
-		TerminalPoisonObserved:         observation.TerminalPoisonObserved,
-		TerminalLifecycle:              observation.TerminalLifecycle,
+		SelectedResponseObserved:      observation.SelectedResponseObserved,
+		RequestWriteCompleted:         observation.RequestWriteCompleted,
+		ProviderMessagesProcessed:     observation.ProviderMessagesProcessed,
+		SelectedResponseReadCompleted: observation.SelectedResponseReadCompleted,
+		FailurePostEffect:             observation.FailurePostEffect,
+		TerminalPoisonObserved:        observation.TerminalPoisonObserved,
+		TerminalLifecycle:             observation.TerminalLifecycle,
 	}
 }
 
@@ -844,7 +847,7 @@ func parsePrivateProviderProbeV5(raw []byte) (privateProviderProbeArtifactV5, er
 	t := a.Transaction
 	if t.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady && t.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned ||
 		t.TerminalPoisonObserved != (t.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) ||
-		t.ProviderResponseWriteCompleted && !t.SelectedResponseObserved ||
+		t.SelectedResponseReadCompleted && !t.SelectedResponseObserved ||
 		t.FailurePostEffect && !t.RequestWriteCompleted {
 		return bad()
 	}
