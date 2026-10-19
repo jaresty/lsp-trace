@@ -1,11 +1,29 @@
 package sessionruntime
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"unsafe"
 
+	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/session"
 )
+
+func TestManagerDiagnosticRepresentationFollowsManagedDiagnostic(t *testing.T) {
+	if managerDiagnosticRepresentationSupported() && !manageddiagnostic.EventRepresentationSupported() {
+		t.Fatal("ASSERT_C15_MANAGER_DIAGNOSTIC_REPRESENTATION_GATE_AGREEMENT")
+	}
+	for _, sourceFile := range []string{"diagnostic_backing_c15_private.go", "diagnostic_history_storage_c15_private.go"} {
+		source, err := os.ReadFile(sourceFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(source), "manageddiagnostic.EventRepresentationSupported()") {
+			t.Fatalf("ASSERT_C15_DIAGNOSTIC_AUTHORITATIVE_PLATFORM_PREDICATE file=%s", sourceFile)
+		}
+	}
+}
 
 func TestManagerDiagnosticOwnerLayoutEqualityAndPlusOne(t *testing.T) {
 	if unsafe.Sizeof(managerDiagnosticEntry{}) != 24 || unsafe.Alignof(managerDiagnosticEntry{}) != 8 ||
@@ -16,6 +34,7 @@ func TestManagerDiagnosticOwnerLayoutEqualityAndPlusOne(t *testing.T) {
 		managerDiagnosticSlots != 1024 || managerDiagnosticTableBytes != 24576 {
 		t.Fatal("ASSERT_C15_MANAGER_DIAGNOSTIC_LAYOUT")
 	}
+	requireC15DiagnosticRepresentation(t)
 	owner, failure := newManagerDiagnosticOwner()
 	if failure != "" {
 		t.Fatal(failure)

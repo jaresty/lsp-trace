@@ -216,6 +216,7 @@ type privateC15ExpectedEvent struct {
 
 type privateC15RuntimeFixture struct {
 	name              string
+	diagnostic        bool
 	targetSites       map[string]int
 	extraOperations   []privateC15ExpectedEvent
 	expectedOrder     []privateC15ExpectedEvent
@@ -413,7 +414,8 @@ func TestADR0011C17C15ObserverAccepted44RuntimeFixtureMatrix(t *testing.T) {
 			},
 		},
 		{
-			name: "production private transaction, source, successor, capture, diagnostic, and server-request paths",
+			name:       "production private transaction, source, successor, capture, diagnostic, and server-request paths",
+			diagnostic: true,
 			targetSites: privateC15ExpectedSiteCounts(
 				"c15.owner.01.v2-transaction-table", "c15.owner.04.manager-source-ingress-table", "c15.owner.05.per-source-ingress-state", "c15.owner.08.source-descriptor-transfer",
 				"c15.owner.09.request-frame-capture-charge", "c15.owner.10.request-frame-retained-charge", "c15.owner.11.caller-request-frame",
@@ -475,6 +477,9 @@ func TestADR0011C17C15ObserverAccepted44RuntimeFixtureMatrix(t *testing.T) {
 	for _, fixture := range fixtures {
 		fixture := fixture
 		t.Run(fixture.name, func(t *testing.T) {
+			if fixture.diagnostic {
+				requireC15DiagnosticRepresentation(t)
+			}
 			ledger := newPrivateC15ObservedLedger()
 			fixture.run(t, ledger.observe)
 			expectedEvents := privateC15ExpectedLifecycle(fixture)

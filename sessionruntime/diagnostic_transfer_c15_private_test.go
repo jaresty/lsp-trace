@@ -7,6 +7,7 @@ import (
 )
 
 func TestPrivateB4DiagnosticTransferRejectsAliasAndCompletesTerminalJoin(t *testing.T) {
+	requireC15DiagnosticRepresentation(t)
 	account := mustPrivateB4ByteAccountV2(t)
 	source, failure := account.reserve(40)
 	if failure != "" {
@@ -28,6 +29,7 @@ func TestPrivateB4DiagnosticTransferRejectsAliasAndCompletesTerminalJoin(t *test
 }
 
 func TestPrivateB4DiagnosticTransferAtomicEqualityAndPlusOne(t *testing.T) {
+	requireC15DiagnosticRepresentation(t)
 	account := mustPrivateB4ByteAccountV2(t)
 	source, failure := account.reserve(40)
 	if failure != "" {

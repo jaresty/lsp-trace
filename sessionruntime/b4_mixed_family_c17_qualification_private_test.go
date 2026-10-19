@@ -554,37 +554,41 @@ func TestPrivateB4C17MixedC18ObservationsDoNotAlterEventsEmitted(t *testing.T) {
 }
 
 func TestPrivateB4C17DiagnosticsExcludedAndDefaultOffPreserved(t *testing.T) {
-	bytesAccount := mustPrivateB4ByteAccountV2(t)
-	profile, failure := newPrivateB4EventAccountC17WithBytes(bytesAccount)
-	if failure != "" {
-		t.Fatal(failure)
-	}
-	fillPrivateB4C17Capability(t, profile, 1)
-	before := profile.eventSnapshot()
-	manager := newC15DiagnosticManager(t)
-	generation := manager.newDiagnosticGeneration("attempt", "session", 1)
-	handle, collector := manager.newPrivateB4DiagnosticOperation(generation, managedprocess.Identity{}, bytesAccount)
-	manager.describeDiagnosticOperation(handle, "method", "file:///diagnostic.go", SessionMetadata{})
-	manager.completeDiagnosticOperation(handle, collector, diagnosticEventTerminalResponse)
-	if after := profile.eventSnapshot(); after != before {
-		t.Fatalf("ASSERT_C17_DIAGNOSTICS_EXCLUDED before=%+v after=%+v", before, after)
-	}
-	if err := manager.Shutdown(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if failure := profile.requestTerminalReleaseC17(context.Background()); failure != "" {
-		t.Fatal(failure)
-	}
+	t.Run("diagnostics excluded", func(t *testing.T) {
+		bytesAccount := mustPrivateB4ByteAccountV2(t)
+		profile, failure := newPrivateB4EventAccountC17WithBytes(bytesAccount)
+		if failure != "" {
+			t.Fatal(failure)
+		}
+		fillPrivateB4C17Capability(t, profile, 1)
+		before := profile.eventSnapshot()
+		manager := newC15DiagnosticManager(t)
+		generation := manager.newDiagnosticGeneration("attempt", "session", 1)
+		handle, collector := manager.newPrivateB4DiagnosticOperation(generation, managedprocess.Identity{}, bytesAccount)
+		manager.describeDiagnosticOperation(handle, "method", "file:///diagnostic.go", SessionMetadata{})
+		manager.completeDiagnosticOperation(handle, collector, diagnosticEventTerminalResponse)
+		if after := profile.eventSnapshot(); after != before {
+			t.Fatalf("ASSERT_C17_DIAGNOSTICS_EXCLUDED before=%+v after=%+v", before, after)
+		}
+		if err := manager.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if failure := profile.requestTerminalReleaseC17(context.Background()); failure != "" {
+			t.Fatal(failure)
+		}
+	})
 
-	called := false
-	if failure, poison := writePrivateB4CapabilityResponseC17(nil, "client/registerCapability", []byte(`{"registrations":[{"id":"a","method":"m"}]}`), func() (session.Failure, bool) {
-		called = true
-		return "", false
-	}); failure != "" || poison || !called {
-		t.Fatalf("ASSERT_C17_MIXED_DEFAULT_OFF_CAPABILITY failure=%s poison=%t called=%t", failure, poison, called)
-	}
-	called = false
-	if err := (PrivateB4DefinitionBorrow{}).WithTargetAppendAdmission(1, func() error { called = true; return nil }); !errors.Is(err, ErrPrivateB4C17NotEnabled) || called {
-		t.Fatalf("ASSERT_C17_MIXED_DEFAULT_OFF_TARGET err=%v called=%t", err, called)
-	}
+	t.Run("default off preserved", func(t *testing.T) {
+		called := false
+		if failure, poison := writePrivateB4CapabilityResponseC17(nil, "client/registerCapability", []byte(`{"registrations":[{"id":"a","method":"m"}]}`), func() (session.Failure, bool) {
+			called = true
+			return "", false
+		}); failure != "" || poison || !called {
+			t.Fatalf("ASSERT_C17_MIXED_DEFAULT_OFF_CAPABILITY failure=%s poison=%t called=%t", failure, poison, called)
+		}
+		called = false
+		if err := (PrivateB4DefinitionBorrow{}).WithTargetAppendAdmission(1, func() error { called = true; return nil }); !errors.Is(err, ErrPrivateB4C17NotEnabled) || called {
+			t.Fatalf("ASSERT_C17_MIXED_DEFAULT_OFF_TARGET err=%v called=%t", err, called)
+		}
+	})
 }

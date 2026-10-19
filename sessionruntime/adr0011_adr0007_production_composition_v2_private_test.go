@@ -31,24 +31,24 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const fixedWorkspaceURIPrivate = "file:///private/tmp/adr0011-fixed-workspace/calls.go"
-const fixedWorkspacePathPrivate = "/private/tmp/adr0011-fixed-workspace"
+const fixedWorkspaceURIPrivate = "file:///tmp/adr0011-fixed-workspace/calls.go"
+const fixedWorkspacePathPrivate = "/tmp/adr0011-fixed-workspace"
 const expectedIncomingRequestIDPrivate = uint64(4)
 const expectedOutgoingRequestIDPrivate = uint64(7)
-const expectedIncomingRequestBodyPrivate = `{"id":4,"jsonrpc":"2.0","method":"callHierarchy/incomingCalls","params":{"item":{"name":"Target","kind":12,"uri":"file:///private/tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}}}`
-const expectedOutgoingRequestBodyPrivate = `{"id":7,"jsonrpc":"2.0","method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Target","kind":12,"uri":"file:///private/tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}}}`
-const expectedIncomingRequestBytesPrivate = 350
-const expectedIncomingResponseBytesPrivate = 33554082
-const expectedOutgoingRequestBytesPrivate = 350
-const expectedOutgoingResponseBytesPrivate = 33554082
+const expectedIncomingRequestBodyPrivate = `{"id":4,"jsonrpc":"2.0","method":"callHierarchy/incomingCalls","params":{"item":{"name":"Target","kind":12,"uri":"file:///tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}}}`
+const expectedOutgoingRequestBodyPrivate = `{"id":7,"jsonrpc":"2.0","method":"callHierarchy/outgoingCalls","params":{"item":{"name":"Target","kind":12,"uri":"file:///tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}}}`
+const expectedIncomingRequestBytesPrivate = 342
+const expectedIncomingResponseBytesPrivate = 33554090
+const expectedOutgoingRequestBytesPrivate = 342
+const expectedOutgoingResponseBytesPrivate = 33554090
 const expectedIncomingTotalBytesPrivate = expectedIncomingRequestBytesPrivate + expectedIncomingResponseBytesPrivate
 const expectedOutgoingTotalBytesPrivate = expectedOutgoingRequestBytesPrivate + expectedOutgoingResponseBytesPrivate
 const expectedRootTotalBytesPrivate = expectedIncomingTotalBytesPrivate + expectedOutgoingTotalBytesPrivate
 const exactDirectionBytesPrivate = expectedIncomingTotalBytesPrivate
-const expectedIncomingRequestSHA256Private = "6597867748ca95c13d93ce4713a66eac7298dde97e2676e921c57b8eaac82b8b"
-const expectedIncomingResponseSHA256Private = "17a5c51335cca2598952aaee84aedb785cd9596d3a0f5aedeaba92bc0459c18a"
-const expectedOutgoingRequestSHA256Private = "16b99dd104b9833d42418376e02a9271a2246c91f91c83bde2f00819364d6430"
-const expectedOutgoingResponseSHA256Private = "76a3bae9a074b33df6cad1c7c4f52bfcf84d853967f3214d687b31b5cbe135f5"
+const expectedIncomingRequestSHA256Private = "05c80da43d44948387c5d96a8393b3b7c33f545946d923bbeeb8bfc99ce13745"
+const expectedIncomingResponseSHA256Private = "ceb15d68659c49cf08575d29353c243677deefc5915cd422092d07b1123aee14"
+const expectedOutgoingRequestSHA256Private = "98d0e58b340adbb865526390e25a6fcb112d7d03967803376a61e40676fda8b8"
+const expectedOutgoingResponseSHA256Private = "06c5f7cf578065de14610f76252e8eb08c34aec0926e36a56c1be0719e67cab2"
 
 type wireRecordPrivate struct {
 	Method string
@@ -111,7 +111,7 @@ func errorFramePrivate(id uint64, message string) []byte {
 }
 
 func callItemPrivate() []byte {
-	return []byte(`{"name":"Target","kind":12,"uri":"file:///private/tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}`)
+	return []byte(`{"name":"Target","kind":12,"uri":"file:///tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}`)
 }
 
 func sizedDirectionalResponsePrivate(id uint64, direction string, total int) []byte {
@@ -202,6 +202,21 @@ func (c *scriptedTransportPrivate) Teardown(context.Context) managedprocess.Tear
 func (c *scriptedTransportPrivate) Close() managedprocess.ResourceObservation {
 	_ = c.stdout.Close()
 	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
+}
+
+func TestADR0011ADR0007ProductionCompositionV2PortableFixture(t *testing.T) {
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("ASSERT_ADR0011_ADR0007_V2_FIXTURE_SOURCE")
+	}
+	sourceBytes, err := os.ReadFile(sourceFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forbidden := []byte("/pri" + "vate")
+	if bytes.Contains(sourceBytes, forbidden) {
+		t.Fatalf("ASSERT_ADR0011_ADR0007_V2_FIXTURE_PORTABLE forbidden=%q", forbidden)
+	}
 }
 
 func mustHashPrivate(t *testing.T, encoded string) [32]byte {
@@ -480,34 +495,34 @@ func retryWirePinPrivate(t *testing.T, scenario string) (sequence, failureDirect
 	case "cancel-before":
 		sequence = append([]wireRecordPrivate{{Method: "textDocument/didOpen", Kind: "request"}}, sequence...)
 		retryDirectional = []wireRecordPrivate{
-			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 350, SHA256: mustHashPrivate(t, "6597867748ca95c13d93ce4713a66eac7298dde97e2676e921c57b8eaac82b8b")},
-			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 329, SHA256: mustHashPrivate(t, "6c515127b5bdd30e36cc1e20fc483180016ff417914e0bb05bc50ffcb8b2c38f")},
-			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 350, SHA256: mustHashPrivate(t, "16b99dd104b9833d42418376e02a9271a2246c91f91c83bde2f00819364d6430")},
-			{Method: "callHierarchy/outgoingCalls", Kind: "response", Bytes: 327, SHA256: mustHashPrivate(t, "6ff9e9833f36a803a73409625f7e0098557e5ed3c504a183fd90a96b70df89fa")},
+			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 342, SHA256: mustHashPrivate(t, "05c80da43d44948387c5d96a8393b3b7c33f545946d923bbeeb8bfc99ce13745")},
+			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 321, SHA256: mustHashPrivate(t, "db4854a6b4e70be38c22f53b13713740d10d8192209ee96e0b00e2008147f66e")},
+			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 342, SHA256: mustHashPrivate(t, "98d0e58b340adbb865526390e25a6fcb112d7d03967803376a61e40676fda8b8")},
+			{Method: "callHierarchy/outgoingCalls", Kind: "response", Bytes: 319, SHA256: mustHashPrivate(t, "95e11344f056141f7de909c812abacd768b85edc029d94f823a18b7df639d2fa")},
 		}
 	case "cancel-between":
 		failureDirectional = []wireRecordPrivate{
-			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 350, SHA256: mustHashPrivate(t, "6597867748ca95c13d93ce4713a66eac7298dde97e2676e921c57b8eaac82b8b")},
-			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 329, SHA256: mustHashPrivate(t, "6c515127b5bdd30e36cc1e20fc483180016ff417914e0bb05bc50ffcb8b2c38f")},
+			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 342, SHA256: mustHashPrivate(t, "05c80da43d44948387c5d96a8393b3b7c33f545946d923bbeeb8bfc99ce13745")},
+			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 321, SHA256: mustHashPrivate(t, "db4854a6b4e70be38c22f53b13713740d10d8192209ee96e0b00e2008147f66e")},
 		}
 		retryDirectional = []wireRecordPrivate{
-			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 350, SHA256: mustHashPrivate(t, "91f39d226cb32cbaf0dbde7e460adef2feebf5be77b761d2aee57d7d479716c9")},
-			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 329, SHA256: mustHashPrivate(t, "ef213c1234df5de6b77c10767fe0d3765779fb94c1638913b0f4365649d8757e")},
-			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 351, SHA256: mustHashPrivate(t, "51e8d19750bfc22b50cdac7eb1cf9023055e6cac0ce66bc5664dfb1e224aecdd")},
-			{Method: "callHierarchy/outgoingCalls", Kind: "response", Bytes: 328, SHA256: mustHashPrivate(t, "496eb91fe7519d088f2411a893086de734b16d07dfaf08f3e06e657e3f18e434")},
+			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 342, SHA256: mustHashPrivate(t, "5da7a803e8be9d7ec06d7b1a93db584bec760377356f42dfbe1f56bfa31f2358")},
+			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 321, SHA256: mustHashPrivate(t, "2b8c571555b5243a70b1b7b55f1072e6e7202a44f180ec44b29219e34b8e111d")},
+			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 343, SHA256: mustHashPrivate(t, "462e2608565167f1caa540821b2b4fed2d0c7f923498822b4c0057b580e0b83a")},
+			{Method: "callHierarchy/outgoingCalls", Kind: "response", Bytes: 320, SHA256: mustHashPrivate(t, "cc85e93dc67317d2c99a0bdcdec9d4110b89a5e5106e88fe7a6749aacc6305c1")},
 		}
 	case "partial-outgoing-error":
 		failureDirectional = []wireRecordPrivate{
-			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 350, SHA256: mustHashPrivate(t, "6597867748ca95c13d93ce4713a66eac7298dde97e2676e921c57b8eaac82b8b")},
-			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 329, SHA256: mustHashPrivate(t, "6c515127b5bdd30e36cc1e20fc483180016ff417914e0bb05bc50ffcb8b2c38f")},
-			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 350, SHA256: mustHashPrivate(t, "16b99dd104b9833d42418376e02a9271a2246c91f91c83bde2f00819364d6430")},
+			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 342, SHA256: mustHashPrivate(t, "05c80da43d44948387c5d96a8393b3b7c33f545946d923bbeeb8bfc99ce13745")},
+			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 321, SHA256: mustHashPrivate(t, "db4854a6b4e70be38c22f53b13713740d10d8192209ee96e0b00e2008147f66e")},
+			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 342, SHA256: mustHashPrivate(t, "98d0e58b340adbb865526390e25a6fcb112d7d03967803376a61e40676fda8b8")},
 			{Method: "callHierarchy/outgoingCalls", Kind: "response", Bytes: 108, SHA256: mustHashPrivate(t, "c629aaa98728cb3405b713f558e05f0d14b83798f338b650d0ab253eb19019bc")},
 		}
 		retryDirectional = []wireRecordPrivate{
-			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 351, SHA256: mustHashPrivate(t, "0a6b1855344704b7271c3e46bc815e0130c31f5f420800c2dce329da8db178a7")},
-			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 330, SHA256: mustHashPrivate(t, "49bd6532e4cde2fb5164af0aa50664146173ffbce30b91d80e66788da0dc413f")},
-			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 351, SHA256: mustHashPrivate(t, "2721ab48c58790768490216cdbfb0cf319c8ac4c3a0449b1f79bf830fe0ccbfd")},
-			{Method: "callHierarchy/outgoingCalls", Kind: "response", Bytes: 328, SHA256: mustHashPrivate(t, "2276b19223a031364439e09468305350af13dbea9439667b41a62c7ae38443a4")},
+			{Method: "callHierarchy/incomingCalls", Kind: "request", Bytes: 343, SHA256: mustHashPrivate(t, "05efaa4f2236ed3ff1abfca27aba76e29a1fcdc3754a496d4cbec9cfd68e93eb")},
+			{Method: "callHierarchy/incomingCalls", Kind: "response", Bytes: 322, SHA256: mustHashPrivate(t, "37019ec75f245cc0d4b3a183cb85609709cc97b741d813f9f7405320713b7765")},
+			{Method: "callHierarchy/outgoingCalls", Kind: "request", Bytes: 343, SHA256: mustHashPrivate(t, "593fed8d8b0ab09e37fafb72c3b4b07c17de9adc5ea9f5ea387b55884135c58f")},
+			{Method: "callHierarchy/outgoingCalls", Kind: "response", Bytes: 320, SHA256: mustHashPrivate(t, "18fefaf3fdc09f3a85c649488b5ab79e756a083c6d677f7a9dad029f43fecab0")},
 		}
 	default:
 		t.Fatalf("ASSERT_RETRY_WIRE_FROZEN_SCENARIO: %q", scenario)
@@ -638,7 +653,7 @@ func TestScriptedTransportDirectionalVariantsPrivate(t *testing.T) {
 
 func TestDirectionalPreparedItemExactLexicalIdentityPrivate(t *testing.T) {
 	child := newScriptedTransportPrivate("nonempty", "nonempty", false)
-	child.prepareItem = []byte(`{ "data" : {"n":1e0,"escaped":"\u0054arget"}, "selectionRange":{"end":{"character":6,"line":0},"start":{"character":0,"line":0}}, "range" : {"end":{"character":6,"line":0},"start":{"character":0,"line":0}}, "uri":"file:///private/tmp/adr0011-fixed-workspace/calls.go", "kind":12, "name":"Target" }`)
+	child.prepareItem = []byte(`{ "data" : {"n":1e0,"escaped":"\u0054arget"}, "selectionRange":{"end":{"character":6,"line":0},"start":{"character":0,"line":0}}, "range" : {"end":{"character":6,"line":0},"start":{"character":0,"line":0}}, "uri":"file:///tmp/adr0011-fixed-workspace/calls.go", "kind":12, "name":"Target" }`)
 	manager, started, uri := readyManagerPrivate(t, child)
 	result := executePrivate(t, context.Background(), manager, privateRequestPrivate(t, started, uri, directionalraw.BidirectionalPlanPrivate{IncomingBytes: 4096, OutgoingBytes: 4096}, false))
 	if result.FailurePrivate() != nil {
@@ -683,7 +698,7 @@ func TestDirectionalCandidateOverlapRefusalIsolationPrivate(t *testing.T) {
 	child.directionalEntered = make(chan wireRecordPrivate, 1)
 	child.directionalRelease = make(chan struct{})
 	manager, started, _ := readyManagerPrivate(t, child)
-	params := json.RawMessage(`{"item":{"name":"Target","kind":12,"uri":"file:///private/tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}}`)
+	params := json.RawMessage(`{"item":{"name":"Target","kind":12,"uri":"file:///tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}}`)
 	firstReservation := directionalraw.NewReservation("candidate-overlap-first")
 	secondReservation := directionalraw.NewReservation("candidate-overlap-second")
 	type outcome struct {

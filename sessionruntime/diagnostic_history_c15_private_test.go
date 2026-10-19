@@ -9,11 +9,16 @@ import (
 	"lsp-trace/internal/managedprocess"
 )
 
-func newC15DiagnosticManager(t *testing.T) *Manager {
+func requireC15DiagnosticRepresentation(t *testing.T) {
 	t.Helper()
-	if !managerDiagnosticRepresentationSupported() || !privateDiagnosticHistoryRepresentationSupported() {
+	if !manageddiagnostic.EventRepresentationSupported() || !managerDiagnosticRepresentationSupported() || !privateDiagnosticHistoryRepresentationSupported() {
 		t.Skip("C15 diagnostic storage requires the qualified runtime representation")
 	}
+}
+
+func newC15DiagnosticManager(t *testing.T) *Manager {
+	t.Helper()
+	requireC15DiagnosticRepresentation(t)
 	owner, failure := newManagerDiagnosticOwner()
 	if failure != "" {
 		t.Fatal(failure)
