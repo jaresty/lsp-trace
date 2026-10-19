@@ -123,12 +123,13 @@ func (p *privateProviderProbe) observe(phase, class, cause string, file bool) {
 		return
 	}
 	p.counts[cause]++
-	want := phase == "DOCUMENT_SYMBOL" && !hasProbePhase(p.records, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhase(p.records, "DOCUMENT_SYMBOL") && !hasProbePhase(p.records, phase)
-	if want && len(p.records) < 2 {
+	wantV1 := phase == "DOCUMENT_SYMBOL" && !hasProbePhase(p.records, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhase(p.records, "DOCUMENT_SYMBOL") && !hasProbePhase(p.records, phase)
+	if wantV1 && len(p.records) < 2 {
 		p.records = append(p.records, privateProviderProbeRecord{p.sequence, phase, class, cause})
-		if p.version == "v2" {
-			p.recordsV2 = append(p.recordsV2, privateProviderProbeRecordV2{Sequence: p.sequence, Phase: phase, Class: class, Cause: cause})
-		}
+	}
+	wantV2 := phase == "DOCUMENT_SYMBOL" && !hasProbePhaseV2(p.recordsV2, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhaseV2(p.recordsV2, "DOCUMENT_SYMBOL") && !hasProbePhaseV2(p.recordsV2, phase)
+	if p.version == "v2" && wantV2 && len(p.recordsV2) < 2 {
+		p.recordsV2 = append(p.recordsV2, privateProviderProbeRecordV2{Sequence: p.sequence, Phase: phase, Class: class, Cause: cause})
 	}
 }
 func hasProbePhase(records []privateProviderProbeRecord, phase string) bool {
@@ -139,9 +140,17 @@ func hasProbePhase(records []privateProviderProbeRecord, phase string) bool {
 	}
 	return false
 }
+func hasProbePhaseV2(records []privateProviderProbeRecordV2, phase string) bool {
+	for _, r := range records {
+		if r.Phase == phase {
+			return true
+		}
+	}
+	return false
+}
 func privateProviderProbeBoundary(observedMessages int, observedBytes int64, configuredMaxMessages int, configuredMaxBytes int64) (string, error) {
 	if observedMessages < 0 || observedBytes < 0 {
-		return "", errors.New("invalid private provider probe exhaustion")
+		return "INVALID_OBSERVATION", nil
 	}
 	if configuredMaxMessages <= 0 || configuredMaxBytes <= 0 {
 		return "UNKNOWN", nil
@@ -169,15 +178,21 @@ func (p *privateProviderProbe) observeExhaustion(phase, class, cause string, con
 		return
 	}
 	p.counts[cause]++
-	want := phase == "DOCUMENT_SYMBOL" && !hasProbePhase(p.records, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhase(p.records, "DOCUMENT_SYMBOL") && !hasProbePhase(p.records, phase)
-	if !want || len(p.records) >= 2 {
+	wantV1 := phase == "DOCUMENT_SYMBOL" && !hasProbePhase(p.records, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhase(p.records, "DOCUMENT_SYMBOL") && !hasProbePhase(p.records, phase)
+	if wantV1 && len(p.records) < 2 {
+		p.records = append(p.records, privateProviderProbeRecord{p.sequence, phase, class, cause})
+	}
+	wantV2 := phase == "DOCUMENT_SYMBOL" && !hasProbePhaseV2(p.recordsV2, phase) || phase == "DOCUMENT_SUPPLY" && hasProbePhaseV2(p.recordsV2, "DOCUMENT_SYMBOL") && !hasProbePhaseV2(p.recordsV2, phase)
+	if !wantV2 || len(p.recordsV2) >= 2 {
 		return
 	}
-	p.records = append(p.records, privateProviderProbeRecord{p.sequence, phase, class, cause})
 	boundary, err := privateProviderProbeBoundary(result.Messages, result.Bytes, configuredMaxMessages, configuredMaxBytes)
 	if err != nil {
 		p.incomplete = true
 		return
+	}
+	if boundary == "INVALID_OBSERVATION" {
+		p.incomplete = true
 	}
 	p.recordsV2 = append(p.recordsV2, privateProviderProbeRecordV2{
 		Sequence: p.sequence, Phase: phase, Class: class, Cause: cause,
@@ -405,11 +420,9 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 	if roundTripOnlyCount > a.Work-a.FileDenominator || supplyOnlyCount > a.FileDenominator {
 		return a, errors.New("invalid private provider probe")
 	}
-	if a.Status == "INCOMPLETE" && a.Work != math.MaxUint64 && causeCounts[string(session.ResourceExhausted)] == 0 {
-		return a, errors.New("invalid private provider probe")
-	}
 	retainedCounts := make(map[string]uint64, len(a.Records))
 	var previousSequence, retainedSymbolCount, retainedSupplyCount uint64
+	invalidExhaustionWitness := false
 	for i, record := range a.Records {
 		if record.Sequence == 0 || record.Sequence <= previousSequence || record.Sequence > a.Work || record.Cause == "" {
 			return a, errors.New("invalid private provider probe")
@@ -439,10 +452,16 @@ func parsePrivateProviderProbeV2(raw []byte) (privateProviderProbeArtifactV2, er
 			if err != nil || e.Boundary != boundary {
 				return a, errors.New("invalid private provider probe")
 			}
+			if boundary == "INVALID_OBSERVATION" {
+				invalidExhaustionWitness = true
+			}
 		}
 		previousSequence = record.Sequence
 	}
 	if retainedSymbolCount > a.Work-a.FileDenominator || retainedSupplyCount > a.FileDenominator {
+		return a, errors.New("invalid private provider probe")
+	}
+	if a.Work != math.MaxUint64 && (a.Status == "INCOMPLETE") != invalidExhaustionWitness {
 		return a, errors.New("invalid private provider probe")
 	}
 	return a, nil

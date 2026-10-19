@@ -97,8 +97,8 @@ func TestPrivateProviderProbeV2BoundaryDerivation(t *testing.T) {
 		want                  string
 		wantErr               bool
 	}{
-		{"negative-messages", -1, 64, 0, 100, "", true},
-		{"negative-bytes", 0, 64, -1, 100, "", true},
+		{"negative-messages", -1, 64, 0, 100, "INVALID_OBSERVATION", false},
+		{"negative-bytes", 0, 64, -1, 100, "INVALID_OBSERVATION", false},
 		{"unknown-messages", 1, 0, 1, 100, "UNKNOWN", false},
 		{"unknown-bytes", 1, 64, 1, 0, "UNKNOWN", false},
 		{"bytes-precede-messages", 64, 64, 101, 100, "BYTE_LIMIT_EXCEEDED", false},
@@ -213,14 +213,79 @@ func TestPrivateProviderProbeV2IncompleteProducerSchedules(t *testing.T) {
 		p.observe("DOCUMENT_SYMBOL", "DECODE_FAILURE", "DECODE_FAILURE", false)
 		parse(t, artifact(p), true)
 	})
+	t.Run("exact-low-work-supply-only-resource-exhausted-reviewer-reproducer", func(t *testing.T) {
+		parse(t, privateProviderProbeArtifactV2{
+			Schema: privateProviderProbeSchemaV2, Status: "INCOMPLETE", FileDenominator: 1,
+			CauseCounts: []privateProviderProbeCount{{Cause: string(session.ResourceExhausted), Count: 1}}, Work: 1,
+		}, false)
+	})
 	t.Run("invalid-exhaustion-observation", func(t *testing.T) {
 		p := &privateProviderProbe{counts: make(map[string]uint64), version: "v2"}
 		p.observeExhaustion("DOCUMENT_SYMBOL", "TYPED_SESSION_RUNTIME_FAILURE", string(session.ResourceExhausted), 64, 100, sessionruntime.RoundTripResult{Messages: -1})
 		got := p.artifactV2()
-		if got.Status != "INCOMPLETE" || got.Work != 1 || len(got.CauseCounts) != 1 || got.CauseCounts[0].Cause != string(session.ResourceExhausted) || len(got.Records) != 0 {
+		if got.Status != "INCOMPLETE" || got.Work != 1 || len(got.CauseCounts) != 1 || got.CauseCounts[0].Cause != string(session.ResourceExhausted) || len(got.Records) != 1 || got.Records[0].Exhaustion == nil || got.Records[0].Exhaustion.Boundary != "INVALID_OBSERVATION" {
 			t.Fatalf("unexpected exhaustion schedule: %+v", got)
 		}
 		parse(t, got, true)
+	})
+}
+
+func TestPrivateProviderProbeV2RetentionIsIndependentFromV1(t *testing.T) {
+	newProbe := func(t *testing.T) *privateProviderProbe {
+		t.Helper()
+		p, err := newPrivateProviderProbeVersion(probePath(t), "v2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	invalid := sessionruntime.RoundTripResult{Failure: session.ResourceExhausted, Messages: -1}
+	valid := sessionruntime.RoundTripResult{Failure: session.ResourceExhausted, Messages: 64, Bytes: 100}
+	assertRoundTrip := func(t *testing.T, artifact privateProviderProbeArtifactV2) {
+		t.Helper()
+		raw, err := json.Marshal(artifact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := parsePrivateProviderProbeV2(append(raw, '\n')); err != nil {
+			t.Fatalf("producer emitted parser-invalid v2 artifact: %v: %s", err, raw)
+		}
+	}
+
+	t.Run("invalid-first-exhaustion-then-supply", func(t *testing.T) {
+		p := newProbe(t)
+		p.observeExhaustion("DOCUMENT_SYMBOL", "TYPED_SESSION_RUNTIME_FAILURE", string(session.ResourceExhausted), 64, 100, invalid)
+		p.observe("DOCUMENT_SUPPLY", "DOCUMENT_FAILURE", string(sessionruntime.DocumentSourceUnavailable), true)
+		got := p.artifactV2()
+		if got.Status != "INCOMPLETE" || got.Work != 2 || got.FileDenominator != 1 || len(got.Records) != 2 || got.Records[0].Phase != "DOCUMENT_SYMBOL" || got.Records[0].Exhaustion == nil || got.Records[0].Exhaustion.Boundary != "INVALID_OBSERVATION" || got.Records[1].Phase != "DOCUMENT_SUPPLY" || got.Records[0].Sequence != 1 || got.Records[1].Sequence != 2 {
+			t.Fatalf("ASSERT_V2_INVALID_FIRST_EXHAUSTION_THEN_SUPPLY: %+v", got)
+		}
+		assertRoundTrip(t, got)
+	})
+
+	t.Run("valid-first-exhaustion-then-invalid-later", func(t *testing.T) {
+		p := newProbe(t)
+		p.observeExhaustion("DOCUMENT_SYMBOL", "TYPED_SESSION_RUNTIME_FAILURE", string(session.ResourceExhausted), 64, 100, valid)
+		p.observeExhaustion("DOCUMENT_SYMBOL", "TYPED_SESSION_RUNTIME_FAILURE", string(session.ResourceExhausted), 64, 100, invalid)
+		p.observe("DOCUMENT_SUPPLY", "DOCUMENT_FAILURE", string(sessionruntime.DocumentSourceUnavailable), true)
+		got := p.artifactV2()
+		if got.Status != "COMPLETE" || got.Work != 3 || got.FileDenominator != 1 || len(got.Records) != 2 || got.Records[0].Sequence != 1 || got.Records[0].Exhaustion == nil || got.Records[0].Exhaustion.Boundary != "MESSAGE_CEILING_OBSERVED" || got.Records[1].Phase != "DOCUMENT_SUPPLY" || got.Records[1].Sequence != 3 {
+			t.Fatalf("ASSERT_V2_VALID_FIRST_EXHAUSTION_THEN_INVALID_LATER: %+v", got)
+		}
+		assertRoundTrip(t, got)
+	})
+
+	t.Run("max-two-v2-chronology-ignores-legacy-only-record", func(t *testing.T) {
+		p := newProbe(t)
+		p.records = append(p.records, privateProviderProbeRecord{Sequence: 99, Phase: "DOCUMENT_SYMBOL", Class: "DECODE_FAILURE", Cause: "DECODE_FAILURE"})
+		p.observe("DOCUMENT_SYMBOL", "DECODE_FAILURE", "DECODE_FAILURE", false)
+		p.observe("DOCUMENT_SUPPLY", "DOCUMENT_FAILURE", string(sessionruntime.DocumentSourceUnavailable), true)
+		p.observe("DOCUMENT_SUPPLY", "DOCUMENT_FAILURE", string(sessionruntime.DocumentURIUnavailable), true)
+		got := p.artifactV2()
+		if got.Work != 3 || got.FileDenominator != 2 || len(got.Records) != 2 || got.Records[0].Phase != "DOCUMENT_SYMBOL" || got.Records[0].Sequence != 1 || got.Records[1].Phase != "DOCUMENT_SUPPLY" || got.Records[1].Sequence != 2 {
+			t.Fatalf("ASSERT_V2_INDEPENDENT_MAX_TWO_CHRONOLOGY: %+v", got)
+		}
+		assertRoundTrip(t, got)
 	})
 }
 
