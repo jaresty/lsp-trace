@@ -43,20 +43,40 @@ var syntheticSourceDirectories = map[string]bool{
 	"sessionruntime":                  true,
 }
 
-var syntheticSourceAdditionalPaths = []string{
+const syntheticSourceHistoricalAdditionalGoCount = 5
+
+var syntheticSourceAdditionalGoPaths = []string{
 	"cmd/lsp-trace/census_assembly.go",
 	"cmd/lsp-trace/census_core.go",
 	"cmd/lsp-trace/census_runner.go",
 	"cmd/lsp-trace/census_chunking.go",
 	"internal/censuschunking/chunking.go",
+	"cmd/lsp-trace-mcp/census_chunking.go",
+	"cmd/lsp-trace-mcp/census_completion.go",
+	"cmd/lsp-trace-mcp/census_mcp_binding.go",
+	"cmd/lsp-trace-mcp/census_runtime.go",
+	"cmd/lsp-trace-mcp/main.go",
+	"cmd/lsp-trace/census_chunking_adapters_private.go",
+	"internal/censuschunkingruntime/adapters.go",
+	"internal/censuschunkingruntime/translate.go",
+	"internal/mcpcontract/census_future.go",
+	"internal/operation/types.go",
 }
 
-var syntheticSourceAdditionalPathSet = map[string]bool{
-	"cmd/lsp-trace/census_assembly.go":    true,
-	"cmd/lsp-trace/census_core.go":        true,
-	"cmd/lsp-trace/census_runner.go":      true,
-	"cmd/lsp-trace/census_chunking.go":    true,
-	"internal/censuschunking/chunking.go": true,
+var syntheticSourceAdditionalSchemaPaths = []string{
+	"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
+}
+
+var syntheticSourceAdditionalGoPathSet = func() map[string]bool {
+	paths := make(map[string]bool, len(syntheticSourceAdditionalGoPaths))
+	for _, name := range syntheticSourceAdditionalGoPaths {
+		paths[name] = true
+	}
+	return paths
+}()
+
+var syntheticSourceAdditionalSchemaPathSet = map[string]bool{
+	"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json": true,
 }
 
 // VerifySyntheticSourcePin uses the source checkout containing this function.
@@ -81,23 +101,30 @@ func verifySyntheticSourcePinAt(root string, entries []SyntheticSourceEntry, exp
 	var total uint64
 	previous := ""
 	selected := make(map[string]bool, len(entries))
-	additionalSelected := 0
+	additionalGoSelected := 0
+	additionalSchemaSelected := 0
 	var word [8]byte
 	for _, entry := range entries {
 		name := entry.Path
 		inDirectory := syntheticSourceDirectories[path.Dir(name)]
-		isAdditional := syntheticSourceAdditionalPathSet[name]
+		isAdditionalGo := syntheticSourceAdditionalGoPathSet[name]
+		isAdditionalSchema := syntheticSourceAdditionalSchemaPathSet[name]
+		validDirectoryGo := inDirectory && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
+		validAdditionalGo := isAdditionalGo && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
+		validAdditionalSchema := isAdditionalSchema && strings.HasSuffix(name, ".json")
 		if !utf8.ValidString(name) || strings.ContainsRune(name, 0) || strings.ContainsRune(name, '\\') ||
 			path.Clean(name) != name || strings.HasPrefix(name, "/") ||
-			!strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
-			(!inDirectory && !isAdditional) ||
-			(inDirectory && (additionalSelected != 0 || name <= previous)) ||
-			(isAdditional && (additionalSelected >= len(syntheticSourceAdditionalPaths) || name != syntheticSourceAdditionalPaths[additionalSelected])) ||
+			(!validDirectoryGo && !validAdditionalGo && !validAdditionalSchema) ||
+			(validDirectoryGo && (additionalGoSelected != 0 || additionalSchemaSelected != 0 || name <= previous)) ||
+			(validAdditionalGo && (additionalSchemaSelected != 0 || additionalGoSelected >= len(syntheticSourceAdditionalGoPaths) || name != syntheticSourceAdditionalGoPaths[additionalGoSelected])) ||
+			(validAdditionalSchema && (additionalGoSelected != len(syntheticSourceAdditionalGoPaths) || additionalSchemaSelected >= len(syntheticSourceAdditionalSchemaPaths) || name != syntheticSourceAdditionalSchemaPaths[additionalSchemaSelected])) ||
 			entry.ByteLength > syntheticSourceFileLimit || total+entry.ByteLength > syntheticSourceTotalLimit {
 			return errSyntheticSourcePin
 		}
-		if isAdditional {
-			additionalSelected++
+		if validAdditionalGo {
+			additionalGoSelected++
+		} else if validAdditionalSchema {
+			additionalSchemaSelected++
 		} else {
 			previous = name
 		}
@@ -134,7 +161,9 @@ func verifySyntheticSourcePinAt(root string, entries []SyntheticSourceEntry, exp
 		_, _ = h.Write(word[:])
 		_, _ = h.Write(entry.SHA256[:])
 	}
-	if additionalSelected != 0 && additionalSelected != len(syntheticSourceAdditionalPaths) {
+	historicalProfile := additionalGoSelected == syntheticSourceHistoricalAdditionalGoCount && additionalSchemaSelected == 0
+	successorProfile := additionalGoSelected == len(syntheticSourceAdditionalGoPaths) && additionalSchemaSelected == len(syntheticSourceAdditionalSchemaPaths)
+	if additionalGoSelected != 0 && !historicalProfile && !successorProfile {
 		return errSyntheticSourcePin
 	}
 	// Reject omitted implementation files, not just mismatches among selected

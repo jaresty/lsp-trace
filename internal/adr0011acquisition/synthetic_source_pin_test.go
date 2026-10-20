@@ -147,8 +147,12 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	}
 	legacyEntry := SyntheticSourceEntry{Path: legacyName, ByteLength: uint64(len(legacyBody)), SHA256: sha256.Sum256(legacyBody)}
 	entries := []SyntheticSourceEntry{legacyEntry}
-	for i, name := range syntheticSourceAdditionalPaths {
+	allSuffixPaths := append(append([]string(nil), syntheticSourceAdditionalGoPaths...), syntheticSourceAdditionalSchemaPaths...)
+	for i, name := range allSuffixPaths {
 		body := []byte("package production\n// " + string(rune('a'+i)) + "\n")
+		if strings.HasSuffix(name, ".json") {
+			body = []byte("{}\n")
+		}
 		filename := filepath.Join(root, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(filename), 0700); err != nil {
 			t.Fatal(err)
@@ -158,11 +162,15 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		}
 		entries = append(entries, SyntheticSourceEntry{Path: name, ByteLength: uint64(len(body)), SHA256: sha256.Sum256(body)})
 	}
+	oldFiveEnd := 1 + syntheticSourceHistoricalAdditionalGoCount
 	if err := verifySyntheticSourcePinAt(root, entries, syntheticSourceTestDigest(entries)); err != nil {
-		t.Fatalf("complete extension: %v", err)
+		t.Fatalf("complete successor: %v", err)
 	}
 	if err := verifySyntheticSourcePinAt(root, entries[:1], syntheticSourceTestDigest(entries[:1])); err != nil {
-		t.Fatalf("legacy profile: %v", err)
+		t.Fatalf("directory-only profile: %v", err)
+	}
+	if err := verifySyntheticSourcePinAt(root, entries[:oldFiveEnd], syntheticSourceTestDigest(entries[:oldFiveEnd])); err != nil {
+		t.Fatalf("historical five-path profile: %v", err)
 	}
 	assertReject := func(label string, candidate []SyntheticSourceEntry) {
 		t.Helper()
@@ -170,27 +178,55 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 			t.Fatalf("%s: got %v", label, err)
 		}
 	}
-	for omitted := range syntheticSourceAdditionalPaths {
-		candidate := append([]SyntheticSourceEntry(nil), entries[:omitted+1]...)
-		candidate = append(candidate, entries[omitted+2:]...)
-		assertReject("omitted "+syntheticSourceAdditionalPaths[omitted], candidate)
+	for omitted := oldFiveEnd; omitted < len(entries); omitted++ {
+		candidate := append([]SyntheticSourceEntry(nil), entries[:omitted]...)
+		candidate = append(candidate, entries[omitted+1:]...)
+		assertReject("omitted successor "+entries[omitted].Path, candidate)
 	}
+	for omitted := 1; omitted < oldFiveEnd; omitted++ {
+		candidate := append([]SyntheticSourceEntry(nil), entries[:omitted]...)
+		candidate = append(candidate, entries[omitted+1:oldFiveEnd]...)
+		assertReject("omitted historical "+entries[omitted].Path, candidate)
+	}
+	partial := append([]SyntheticSourceEntry(nil), entries[:oldFiveEnd+1]...)
+	assertReject("partial successor", partial)
+	mixed := append([]SyntheticSourceEntry(nil), entries[:oldFiveEnd]...)
+	mixed = append(mixed, entries[oldFiveEnd+1:]...)
+	assertReject("mixed successor", mixed)
 	nearName := append([]SyntheticSourceEntry(nil), entries...)
-	nearName[1].Path = "cmd/lsp-trace/census_assembly_extra.go"
-	assertReject("near name", nearName)
-	unlisted := append([]SyntheticSourceEntry(nil), entries...)
-	unlisted[1].Path = "cmd/lsp-trace/unlisted.go"
-	assertReject("unlisted same directory", unlisted)
+	nearName[oldFiveEnd].Path += ".renamed"
+	assertReject("renamed go", nearName)
+	arbitraryJSON := append([]SyntheticSourceEntry(nil), entries...)
+	arbitraryJSON[len(arbitraryJSON)-1].Path = "internal/mcpcontract/testdata/schemas/arbitrary.json"
+	assertReject("arbitrary json", arbitraryJSON)
+	siblingJSON := append([]SyntheticSourceEntry(nil), entries...)
+	siblingJSON[len(siblingJSON)-1].Path = "internal/mcpcontract/testdata/schemas/envelope-census-chunk-result.v1.schema.json"
+	assertReject("sibling json", siblingJSON)
+	extensionSubstitution := append([]SyntheticSourceEntry(nil), entries...)
+	extensionSubstitution[oldFiveEnd].Path = strings.TrimSuffix(extensionSubstitution[oldFiveEnd].Path, ".go") + ".json"
+	assertReject("extension substitution", extensionSubstitution)
+	traversal := append([]SyntheticSourceEntry(nil), entries...)
+	traversal[len(traversal)-1].Path = "internal/mcpcontract/testdata/schemas/../schemas/envelope-census-chunk-terminal-result.v1.schema.json"
+	assertReject("schema traversal", traversal)
+	duplicate := append([]SyntheticSourceEntry(nil), entries...)
+	duplicate[len(duplicate)-1] = duplicate[len(duplicate)-2]
+	assertReject("successor duplicate", duplicate)
 	outOfOrder := append([]SyntheticSourceEntry(nil), entries...)
-	outOfOrder[1], outOfOrder[2] = outOfOrder[2], outOfOrder[1]
-	assertReject("additional order", outOfOrder)
+	outOfOrder[oldFiveEnd], outOfOrder[oldFiveEnd+1] = outOfOrder[oldFiveEnd+1], outOfOrder[oldFiveEnd]
+	assertReject("successor order", outOfOrder)
 
-	symlinkPath := filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalPaths[0]))
+	symlinkPath := filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalSchemaPaths[0]))
 	if err := os.Remove(symlinkPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalPaths[1])), symlinkPath); err != nil {
+	if err := os.Symlink(filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalGoPaths[len(syntheticSourceAdditionalGoPaths)-1])), symlinkPath); err != nil {
 		t.Fatal(err)
 	}
-	assertReject("additional symlink", entries)
+	assertReject("schema symlink", entries)
+}
+
+func TestSyntheticSourcePinCeilingsUnchanged(t *testing.T) {
+	if syntheticSourceFileLimit != 2<<20 || syntheticSourceTotalLimit != 16<<20 || syntheticSourceCountLimit != 256 {
+		t.Fatalf("source-pin ceilings changed: file=%d total=%d count=%d", syntheticSourceFileLimit, syntheticSourceTotalLimit, syntheticSourceCountLimit)
+	}
 }
