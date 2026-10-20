@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
+	"sync/atomic"
 
 	"lsp-trace/internal/censusacquisition"
 )
@@ -122,6 +124,9 @@ type coordinatorCheckpoint struct {
 	TargetStart                                     int    `json:"target_start"`
 	TargetCount                                     int    `json:"target_count"`
 	CommittedTargetCount                            int    `json:"committed_target_count"`
+	ClaimGeneration                                 uint64 `json:"claim_generation"`
+	ClaimSelector                                   string `json:"claim_selector"`
+	IdempotencyKey                                  string `json:"idempotency_key"`
 }
 
 type headState string
@@ -154,6 +159,22 @@ type coordinatorHead struct {
 	TerminalSelector   string    `json:"terminal_selector"`
 }
 
+const claimReceiptVersion = "lsp-trace.census-chunk-claim-receipt.private.v1"
+
+type claimReceipt struct {
+	SchemaVersion          string          `json:"schema_version"`
+	WorkflowKey            string          `json:"workflow_key"`
+	RootSelector           string          `json:"root_selector"`
+	IdempotencyKey         string          `json:"idempotency_key"`
+	ClaimedHeadGeneration  uint64          `json:"claimed_head_generation"`
+	ClaimedHeadSelector    string          `json:"claimed_head_selector"`
+	PredecessorSelector    string          `json:"predecessor_selector"`
+	ChunkOrdinal           int             `json:"chunk_ordinal"`
+	ChunkExecutionDigest   string          `json:"chunk_execution_digest"`
+	ChunkExecutionSelector string          `json:"chunk_execution_selector"`
+	ChunkExecution         json.RawMessage `json:"chunk_execution"`
+}
+
 type globalDisposition struct {
 	SchemaVersion string `json:"schema_version"`
 	PlanDigest    string `json:"plan_digest"`
@@ -173,6 +194,9 @@ type TerminalIndex struct {
 	GlobalDispositionSelector string   `json:"global_disposition_selector"`
 	GlobalDispositionDigest   string   `json:"global_disposition_digest"`
 	GlobalTargetCount         int      `json:"global_target_count"`
+	WorkflowKey               string   `json:"workflow_key"`
+	HeadGeneration            uint64   `json:"head_generation"`
+	HeadSelector              string   `json:"head_selector"`
 	Authority                 int      `json:"authority"`
 	Accepted                  bool     `json:"accepted"`
 	SourceGraphComplete       string   `json:"source_graph_complete"`
@@ -258,11 +282,11 @@ func Coordinate(ctx context.Context, r CoordinatorRequest) (out CoordinatorResul
 				return out, coordinatorError(CoordinatorStageIndeterminate, errors.New("claimed execution has no verified receipt; automatic retry forbidden"))
 			}
 			stage = CoordinatorStageReadback
-			receipt, manifest, e := readVerifiedReceipt(ctx, r, head.ClaimOrdinal, head.ReceiptSelector, head.ManifestSelector)
+			receipt, manifest, envelope, e := readVerifiedReceipt(ctx, r, head, head.ReceiptSelector, head.ManifestSelector)
 			if e != nil {
 				return out, coordinatorError(stage, e)
 			}
-			head, e = commitClaim(ctx, r, key, head, receipt, manifest)
+			head, e = commitClaim(ctx, r, key, head, receipt, manifest, envelope)
 			if e != nil {
 				return out, e
 			}
@@ -285,16 +309,32 @@ func Coordinate(ctx context.Context, r CoordinatorRequest) (out CoordinatorResul
 		}
 		head = claim
 		var receipt ChunkExecution
+		var callbackCalls atomic.Uint32
+		var duplicateCallback atomic.Bool
 		stage = CoordinatorStageSession
 		e = r.Sessions.WithReadySession(ctx, ExpectedSession{r.Plan.SessionID, r.Plan.Generation, r.Input.WorkspaceURI}, func(core censusacquisition.Core) error {
+			if !callbackCalls.CompareAndSwap(0, 1) {
+				duplicateCallback.Store(true)
+				return coordinatorError(CoordinatorStageConflict, errors.New("session lease callback invoked more than once"))
+			}
 			coreMayHaveBegun = true
 			stage = CoordinatorStageCore
 			var runErr error
 			receipt, runErr = ExecuteChunk(ctx, ExecutionRequest{Input: r.Input, Plan: r.Plan, Index: r.Index, Projections: r.Projections, Sidecars: r.Sidecars, ChunkOrdinal: ordinal, Core: core})
 			return runErr
 		})
+		calls := callbackCalls.Load()
+		if duplicateCallback.Load() {
+			return out, coordinatorError(CoordinatorStageConflict, errors.New("session lease callback invoked more than once"))
+		}
+		if calls == 0 {
+			if e == nil {
+				e = errors.New("session lease did not invoke callback")
+			}
+			return out, coordinatorError(CoordinatorStageSession, e)
+		}
 		if e != nil {
-			return out, coordinatorError(stage, e)
+			return out, coordinatorError(CoordinatorStageIndeterminate, e)
 		}
 		stage = CoordinatorStagePublication
 		manifestSelector, e := putVerified(ctx, r.Store, receipt.ManifestBytes)
@@ -302,7 +342,11 @@ func Coordinate(ctx context.Context, r CoordinatorRequest) (out CoordinatorResul
 			return out, coordinatorError(stage, e)
 		}
 		receiptRaw, _ := EncodeChunkExecution(receipt)
-		receiptSelector, e := putVerified(ctx, r.Store, receiptRaw)
+		envelopeRaw, e := encodeClaimReceipt(head, receiptRaw)
+		if e != nil {
+			return out, coordinatorError(stage, e)
+		}
+		receiptSelector, e := putVerified(ctx, r.Store, envelopeRaw)
 		if e != nil {
 			return out, coordinatorError(stage, e)
 		}
@@ -315,7 +359,7 @@ func Coordinate(ctx context.Context, r CoordinatorRequest) (out CoordinatorResul
 			return out, e
 		}
 		head = linked
-		head, e = commitClaim(ctx, r, key, head, receipt, receipt.ManifestBytes)
+		head, e = commitClaim(ctx, r, key, head, receipt, receipt.ManifestBytes, envelopeRaw)
 		if e != nil {
 			return out, e
 		}
@@ -406,10 +450,14 @@ func validateTransition(a, b coordinatorHead, chunks int) error {
 	}
 }
 
-func commitClaim(ctx context.Context, r CoordinatorRequest, key string, h coordinatorHead, receipt ChunkExecution, manifest []byte) (coordinatorHead, error) {
+func commitClaim(ctx context.Context, r CoordinatorRequest, key string, h coordinatorHead, receipt ChunkExecution, manifest, envelope []byte) (coordinatorHead, error) {
+	claim := claimedHeadIdentity(h)
+	if _, e := validateClaimReceipt(claim, envelope); e != nil || digestBytes(envelope) != h.ReceiptSelector {
+		return h, coordinatorError(CoordinatorStageReadback, errors.New("claim receipt binding mismatch"))
+	}
 	d := r.Plan.Chunks[h.ClaimOrdinal]
 	prior := h.CheckpointSelector
-	cp := coordinatorCheckpoint{SchemaVersion: CoordinatorCheckpointVersion, RootSelector: h.RootSelector, PriorSelector: prior, ChunkOrdinal: h.ClaimOrdinal, CommitSelector: h.ReceiptSelector, CommitDigest: digestBytes(mustEncodeReceipt(receipt)), ManifestSelector: h.ManifestSelector, ManifestDigest: digestBytes(manifest), TargetStart: d.TargetStart, TargetCount: d.TargetCount, CommittedTargetCount: d.TargetStart + d.TargetCount}
+	cp := coordinatorCheckpoint{SchemaVersion: CoordinatorCheckpointVersion, RootSelector: h.RootSelector, PriorSelector: prior, ChunkOrdinal: h.ClaimOrdinal, CommitSelector: h.ReceiptSelector, CommitDigest: digestBytes(envelope), ManifestSelector: h.ManifestSelector, ManifestDigest: digestBytes(manifest), TargetStart: d.TargetStart, TargetCount: d.TargetCount, CommittedTargetCount: d.TargetStart + d.TargetCount, ClaimGeneration: claim.Generation, ClaimSelector: claim.ImmutableSelector, IdempotencyKey: claim.IdempotencyKey}
 	setCoordinatorIdentity("lsp-trace:census-chunk-coordinator-checkpoint:private:v2", "census-chunk-checkpoints/v2/", &cp, func(v *coordinatorCheckpoint, d, s string) { v.LogicalDigest = d; v.ImmutableSelector = s })
 	raw, _ := encodeCoordinator(cp)
 	selector, e := putVerified(ctx, r.Store, raw)
@@ -432,23 +480,55 @@ func commitClaim(ctx context.Context, r CoordinatorRequest, key string, h coordi
 	return next, nil
 }
 func mustEncodeReceipt(v ChunkExecution) []byte { b, _ := EncodeChunkExecution(v); return b }
-func readVerifiedReceipt(ctx context.Context, r CoordinatorRequest, ordinal int, rs, ms string) (ChunkExecution, []byte, error) {
+
+func claimedHeadIdentity(h coordinatorHead) coordinatorHead {
+	if h.ReceiptSelector != "" {
+		h.Generation--
+		h.ReceiptSelector = ""
+		h.ManifestSelector = ""
+		setHeadIdentity(&h)
+	}
+	return h
+}
+
+func encodeClaimReceipt(h coordinatorHead, execution []byte) ([]byte, error) {
+	v, e := ParseChunkExecution(execution)
+	if e != nil {
+		return nil, e
+	}
+	envelope := claimReceipt{SchemaVersion: claimReceiptVersion, WorkflowKey: h.WorkflowKey, RootSelector: h.RootSelector, IdempotencyKey: h.IdempotencyKey, ClaimedHeadGeneration: h.Generation, ClaimedHeadSelector: h.ImmutableSelector, PredecessorSelector: h.CheckpointSelector, ChunkOrdinal: h.ClaimOrdinal, ChunkExecutionDigest: v.LogicalDigest, ChunkExecutionSelector: v.ImmutableSelector, ChunkExecution: append(json.RawMessage(nil), execution...)}
+	return encodeCoordinator(envelope)
+}
+
+func validateClaimReceipt(h coordinatorHead, raw []byte) (ChunkExecution, error) {
+	var envelope claimReceipt
+	if e := decodeCoordinator(raw, &envelope); e != nil {
+		return ChunkExecution{}, e
+	}
+	v, e := ParseChunkExecution(envelope.ChunkExecution)
+	if e != nil || envelope.SchemaVersion != claimReceiptVersion || envelope.WorkflowKey != h.WorkflowKey || envelope.RootSelector != h.RootSelector || envelope.IdempotencyKey != h.IdempotencyKey || envelope.ClaimedHeadGeneration != h.Generation || envelope.ClaimedHeadSelector != h.ImmutableSelector || envelope.PredecessorSelector != h.CheckpointSelector || envelope.ChunkOrdinal != h.ClaimOrdinal || envelope.ChunkExecutionDigest != v.LogicalDigest || envelope.ChunkExecutionSelector != v.ImmutableSelector || v.ChunkOrdinal != h.ClaimOrdinal {
+		return ChunkExecution{}, errors.New("claim receipt identity mismatch")
+	}
+	return v, nil
+}
+
+func readVerifiedReceipt(ctx context.Context, r CoordinatorRequest, h coordinatorHead, rs, ms string) (ChunkExecution, []byte, []byte, error) {
 	raw, e := safeGet(ctx, r.Store, rs)
 	if e != nil {
-		return ChunkExecution{}, nil, e
+		return ChunkExecution{}, nil, nil, e
 	}
 	if digestBytes(raw) != rs {
-		return ChunkExecution{}, nil, errors.New("receipt selector mismatch")
+		return ChunkExecution{}, nil, nil, errors.New("receipt selector mismatch")
 	}
-	v, e := ParseChunkExecution(raw)
-	if e != nil || v.ChunkOrdinal != ordinal || v.PlanDigest != r.Plan.LogicalDigest || v.IndexDigest != r.Index.LogicalDigest {
-		return ChunkExecution{}, nil, errors.New("receipt binding mismatch")
+	v, e := validateClaimReceipt(claimedHeadIdentity(h), raw)
+	if e != nil || v.PlanDigest != r.Plan.LogicalDigest || v.IndexDigest != r.Index.LogicalDigest {
+		return ChunkExecution{}, nil, nil, errors.New("receipt binding mismatch")
 	}
 	m, e := safeGet(ctx, r.Store, ms)
 	if e != nil || digestBytes(m) != ms || v.ManifestBytesDigest != digestBytes(m) {
-		return ChunkExecution{}, nil, errors.New("manifest binding mismatch")
+		return ChunkExecution{}, nil, nil, errors.New("manifest binding mismatch")
 	}
-	return v, m, nil
+	return v, m, raw, nil
 }
 
 func validateTerminalChain(ctx context.Context, r CoordinatorRequest, h coordinatorHead) error {
@@ -487,8 +567,9 @@ func readChain(ctx context.Context, r CoordinatorRequest, h coordinatorHead) ([]
 		if c.RootSelector != h.RootSelector || c.PriorSelector != prior || c.ChunkOrdinal != i || c.TargetStart != d.TargetStart || c.TargetCount != d.TargetCount || c.CommittedTargetCount != count+d.TargetCount {
 			return nil, "", 0, coordinatorError(CoordinatorStageCheckpoint, errors.New("ordered checkpoint range mismatch"))
 		}
-		v, m, e := readVerifiedReceipt(ctx, r, i, c.CommitSelector, c.ManifestSelector)
-		if e != nil || digestBytes(m) != c.ManifestDigest || digestBytes(mustEncodeReceipt(v)) != c.CommitDigest {
+		claim := coordinatorHead{WorkflowKey: h.WorkflowKey, RootSelector: h.RootSelector, IdempotencyKey: c.IdempotencyKey, Generation: c.ClaimGeneration, ImmutableSelector: c.ClaimSelector, CheckpointSelector: c.PriorSelector, ClaimOrdinal: i}
+		_, m, envelope, e := readVerifiedReceipt(ctx, r, claim, c.CommitSelector, c.ManifestSelector)
+		if e != nil || digestBytes(m) != c.ManifestDigest || digestBytes(envelope) != c.CommitDigest {
 			return nil, "", 0, coordinatorError(CoordinatorStageReadback, errors.New("commit relational mismatch"))
 		}
 		commits[i] = c.CommitSelector
@@ -515,7 +596,7 @@ func publishTerminal(ctx context.Context, r CoordinatorRequest, key string, h co
 	if e != nil || decodeCoordinator(read, &check) != nil || check != disp || digestBytes(read) != ds {
 		return CoordinatorResult{}, coordinatorError(CoordinatorStageTerminal, errors.New("global disposition substitution"))
 	}
-	term := TerminalIndex{SchemaVersion: TerminalIndexVersion, PlanDigest: r.Plan.LogicalDigest, IndexDigest: r.Index.LogicalDigest, CommitSelectors: commits, FinalCheckpoint: final, GlobalDispositionSelector: ds, GlobalDispositionDigest: digestBytes(dr), GlobalTargetCount: count, SourceGraphComplete: "UNKNOWN", CrossChunkCalls: "NOT_COMPUTED", AggregateCapture: "NOT_MATERIALIZED"}
+	term := TerminalIndex{SchemaVersion: TerminalIndexVersion, PlanDigest: r.Plan.LogicalDigest, IndexDigest: r.Index.LogicalDigest, CommitSelectors: commits, FinalCheckpoint: final, GlobalDispositionSelector: ds, GlobalDispositionDigest: digestBytes(dr), GlobalTargetCount: count, WorkflowKey: h.WorkflowKey, HeadGeneration: h.Generation, HeadSelector: h.ImmutableSelector, SourceGraphComplete: "UNKNOWN", CrossChunkCalls: "NOT_COMPUTED", AggregateCapture: "NOT_MATERIALIZED"}
 	setCoordinatorIdentity("lsp-trace:census-chunk-terminal-index:private:v2", "census-chunk-terminal-indexes/v2/", &term, func(v *TerminalIndex, d, s string) { v.LogicalDigest = d; v.ImmutableSelector = s })
 	tr, _ := encodeCoordinator(term)
 	ts, e := putVerified(ctx, r.Store, tr)
@@ -533,7 +614,7 @@ func publishTerminal(ctx context.Context, r CoordinatorRequest, key string, h co
 	return CoordinatorResult{h.RootSelector, final, commits, ts}, nil
 }
 func resultFromHead(ctx context.Context, r CoordinatorRequest, h coordinatorHead) (CoordinatorResult, error) {
-	commits, final, _, e := readChain(ctx, r, h)
+	commits, final, count, e := readChain(ctx, r, h)
 	if e != nil {
 		return CoordinatorResult{}, e
 	}
@@ -542,12 +623,17 @@ func resultFromHead(ctx context.Context, r CoordinatorRequest, h coordinatorHead
 		return CoordinatorResult{}, coordinatorError(CoordinatorStageTerminal, errors.New("terminal readback mismatch"))
 	}
 	term, e := ParseTerminalIndex(raw)
-	if e != nil || term.FinalCheckpoint != final {
+	preTerminal := h
+	preTerminal.Generation--
+	preTerminal.State = headCommitted
+	preTerminal.TerminalSelector = ""
+	setHeadIdentity(&preTerminal)
+	if e != nil || term.PlanDigest != r.Plan.LogicalDigest || term.IndexDigest != r.Index.LogicalDigest || !reflect.DeepEqual(term.CommitSelectors, commits) || term.GlobalTargetCount != count || term.FinalCheckpoint != final || term.WorkflowKey != h.WorkflowKey || term.HeadGeneration != preTerminal.Generation || term.HeadSelector != preTerminal.ImmutableSelector {
 		return CoordinatorResult{}, coordinatorError(CoordinatorStageTerminal, errors.New("terminal chain mismatch"))
 	}
 	dr, e := safeGet(ctx, r.Store, term.GlobalDispositionSelector)
 	var d globalDisposition
-	if e != nil || decodeCoordinator(dr, &d) != nil || digestBytes(dr) != term.GlobalDispositionDigest || d.SchemaVersion != GlobalDispositionVersion || d.PlanDigest != r.Plan.LogicalDigest || d.TargetCount != term.GlobalTargetCount || d.Disposition != "CHUNK_COMMITS_ONLY" || d.Authority != 0 || d.Accepted {
+	if e != nil || decodeCoordinator(dr, &d) != nil || digestBytes(dr) != term.GlobalDispositionDigest || d.SchemaVersion != GlobalDispositionVersion || d.PlanDigest != term.PlanDigest || d.TargetCount != term.GlobalTargetCount || d.Disposition != "CHUNK_COMMITS_ONLY" || d.Authority != term.Authority || d.Accepted != term.Accepted || term.GlobalDispositionSelector != digestBytes(dr) {
 		return CoordinatorResult{}, coordinatorError(CoordinatorStageTerminal, errors.New("terminal disposition mismatch"))
 	}
 	return CoordinatorResult{h.RootSelector, final, commits, h.TerminalSelector}, nil
@@ -638,7 +724,7 @@ func decodeCoordinator(raw []byte, out any) error {
 	return nil
 }
 func validateTerminal(v TerminalIndex) error {
-	if v.SchemaVersion != TerminalIndexVersion || v.Authority != 0 || v.Accepted || v.SourceGraphComplete != "UNKNOWN" || v.CrossChunkCalls != "NOT_COMPUTED" || v.AggregateCapture != "NOT_MATERIALIZED" || !validDigest(v.PlanDigest) || !validDigest(v.IndexDigest) || len(v.CommitSelectors) == 0 || v.FinalCheckpoint == "" || v.GlobalDispositionSelector == "" || !validDigest(v.GlobalDispositionDigest) {
+	if v.SchemaVersion != TerminalIndexVersion || v.Authority != 0 || v.Accepted || v.SourceGraphComplete != "UNKNOWN" || v.CrossChunkCalls != "NOT_COMPUTED" || v.AggregateCapture != "NOT_MATERIALIZED" || !validDigest(v.PlanDigest) || !validDigest(v.IndexDigest) || len(v.CommitSelectors) == 0 || v.FinalCheckpoint == "" || v.GlobalDispositionSelector == "" || !validDigest(v.GlobalDispositionDigest) || v.WorkflowKey == "" || v.HeadGeneration < 1 || v.HeadSelector == "" {
 		return errors.New("invalid terminal index")
 	}
 	x := v

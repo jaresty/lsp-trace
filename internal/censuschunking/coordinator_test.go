@@ -381,6 +381,155 @@ func TestHeadTransitionAndReceiptRecoveryRaceSmall(t *testing.T) {
 	}
 }
 
+func TestCoordinatorClaimReceiptRejectsForeignReplay(t *testing.T) {
+	cases := map[string]func(*claimReceipt){
+		"workflow":     func(v *claimReceipt) { v.WorkflowKey += "-foreign" },
+		"generation":   func(v *claimReceipt) { v.ClaimedHeadGeneration++ },
+		"idempotency":  func(v *claimReceipt) { v.IdempotencyKey += "-foreign" },
+		"predecessor":  func(v *claimReceipt) { v.PredecessorSelector += "-foreign" },
+		"execution_id": func(v *claimReceipt) { v.ChunkExecutionDigest = domainDigest("foreign", []byte("execution")) },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			r, _ := coordinatorFixture(t, ChunkSize+1)
+			hs := r.Heads.(*memoryHeadStore)
+			hs.failCAS = 4
+			if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageConflict) {
+				t.Fatalf("ASSERT_RECEIPT_SETUP err=%v", err)
+			}
+			key, h := hs.current()
+			raw, err := r.Store.Get(context.Background(), h.ReceiptSelector)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var envelope claimReceipt
+			if err = decodeCoordinator(raw, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			mutate(&envelope)
+			raw, _ = encodeCoordinator(envelope)
+			selector, err := r.Store.Put(context.Background(), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.ReceiptSelector = selector
+			hs.set(key, h)
+			hs.failCAS = 0
+			if _, err = Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageReadback) {
+				t.Fatalf("ASSERT_FOREIGN_RECEIPT_REJECTED err=%v", err)
+			}
+		})
+	}
+}
+
+func TestCoordinatorTerminalReplayRejectsIndependentSubstitution(t *testing.T) {
+	validDigest := func(label string) string { return domainDigest("terminal-substitution", []byte(label)) }
+	cases := map[string]func(*TerminalIndex){
+		"plan_digest":  func(v *TerminalIndex) { v.PlanDigest = validDigest("plan") },
+		"index_digest": func(v *TerminalIndex) { v.IndexDigest = validDigest("index") },
+		"ordered_commit_selectors": func(v *TerminalIndex) {
+			v.CommitSelectors[0], v.CommitSelectors[1] = v.CommitSelectors[1], v.CommitSelectors[0]
+		},
+		"global_target_count":   func(v *TerminalIndex) { v.GlobalTargetCount++ },
+		"final_checkpoint":      func(v *TerminalIndex) { v.FinalCheckpoint += "-foreign" },
+		"disposition_selector":  func(v *TerminalIndex) { v.GlobalDispositionSelector += "-foreign" },
+		"disposition_digest":    func(v *TerminalIndex) { v.GlobalDispositionDigest = validDigest("disposition") },
+		"source_graph_complete": func(v *TerminalIndex) { v.SourceGraphComplete = "COMPLETE" },
+		"cross_chunk_calls":     func(v *TerminalIndex) { v.CrossChunkCalls = "COMPUTED" },
+		"aggregate_capture":     func(v *TerminalIndex) { v.AggregateCapture = "MATERIALIZED" },
+		"workflow_key":          func(v *TerminalIndex) { v.WorkflowKey += "-foreign" },
+		"head_generation":       func(v *TerminalIndex) { v.HeadGeneration++ },
+		"head_selector":         func(v *TerminalIndex) { v.HeadSelector += "-foreign" },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			r, _ := coordinatorFixture(t, ChunkSize+1)
+			out, err := Coordinate(context.Background(), r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := r.Store.Get(context.Background(), out.TerminalSelector)
+			term, err := ParseTerminalIndex(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutate(&term)
+			setCoordinatorIdentity("lsp-trace:census-chunk-terminal-index:private:v2", "census-chunk-terminal-indexes/v2/", &term, func(v *TerminalIndex, d, s string) { v.LogicalDigest = d; v.ImmutableSelector = s })
+			raw, _ = encodeCoordinator(term)
+			selector, err := r.Store.Put(context.Background(), raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			key, h := r.Heads.(*memoryHeadStore).current()
+			h.TerminalSelector = selector
+			r.Heads.(*memoryHeadStore).set(key, h)
+			if _, err = Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageTerminal) {
+				t.Fatalf("ASSERT_TERMINAL_SUBSTITUTION_REJECTED err=%v", err)
+			}
+		})
+	}
+}
+
+func TestCoordinatorSessionLeaseCallbackCardinality(t *testing.T) {
+	t.Run("zero", func(t *testing.T) {
+		r, c := coordinatorFixture(t, ChunkSize+1)
+		r.Sessions = leaseFunc(func(context.Context, ExpectedSession, func(censusacquisition.Core) error) error { return nil })
+		if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageSession) || c.count() != 0 {
+			t.Fatalf("ASSERT_ZERO_CALLBACK_REFUSED err=%v calls=%d", err, c.count())
+		}
+	})
+	t.Run("double", func(t *testing.T) {
+		r, c := coordinatorFixture(t, ChunkSize+1)
+		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
+			if err := run(c.core()); err != nil {
+				return err
+			}
+			_ = run(c.core()) // malicious lease ignores the callback's conflict
+			return nil
+		})
+		if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageConflict) || c.count() != 159 {
+			t.Fatalf("ASSERT_DOUBLE_CALLBACK_CONFLICT err=%v calls=%d", err, c.count())
+		}
+	})
+	t.Run("concurrent", func(t *testing.T) {
+		r, c := coordinatorFixture(t, ChunkSize+1)
+		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
+			var wg sync.WaitGroup
+			wg.Add(2)
+			for i := 0; i < 2; i++ {
+				go func() { defer wg.Done(); _ = run(c.core()) }()
+			}
+			wg.Wait()
+			return nil
+		})
+		if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageConflict) || c.count() != 159 {
+			t.Fatalf("ASSERT_CONCURRENT_CALLBACK_CONFLICT err=%v calls=%d", err, c.count())
+		}
+	})
+	t.Run("success_then_error", func(t *testing.T) {
+		r, c := coordinatorFixture(t, ChunkSize+1)
+		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
+			if err := run(c.core()); err != nil {
+				return err
+			}
+			return errors.New("lease post-success sentinel")
+		})
+		if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageIndeterminate) || IsCoordinatorStage(err, CoordinatorStageCore) || c.count() != 159 {
+			t.Fatalf("ASSERT_SUCCESS_THEN_ERROR_INDETERMINATE err=%v calls=%d", err, c.count())
+		}
+	})
+	t.Run("failure_then_extra", func(t *testing.T) {
+		r, c := coordinatorFixture(t, ChunkSize+1)
+		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
+			_ = run(censusacquisition.Core{})
+			return run(c.core())
+		})
+		if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageConflict) || c.count() != 0 {
+			t.Fatalf("ASSERT_FAILURE_THEN_EXTRA_CONFLICT err=%v calls=%d", err, c.count())
+		}
+	})
+}
+
 func TestCoordinatorNormal10001And20001SemanticBoundary(t *testing.T) {
 	for _, n := range []int{10001, 20001} {
 		t.Run(string(rune(n)), func(t *testing.T) {
