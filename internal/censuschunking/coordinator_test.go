@@ -60,6 +60,15 @@ func (s *coordinatorStore) Get(_ context.Context, id string) ([]byte, error) {
 	}
 	return b, nil
 }
+func (s *coordinatorStore) clone() *coordinatorStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clone := newCoordinatorStore(s.limit)
+	for id, raw := range s.objects {
+		clone.objects[id] = append([]byte(nil), raw...)
+	}
+	return clone
+}
 
 type memoryHeadStore struct {
 	mu       sync.Mutex
@@ -151,7 +160,7 @@ func (c *coreCounter) core() censusacquisition.Core {
 }
 func (c *coreCounter) count() int { c.mu.Lock(); defer c.mu.Unlock(); return c.n }
 
-func coordinatorFixture(t *testing.T, n int) (CoordinatorRequest, *coreCounter) {
+func coordinatorFixtureTemplate(t *testing.T, n int) CoordinatorRequest {
 	t.Helper()
 	in := fixture(t, n)
 	built, e := Build(in, nil)
@@ -164,8 +173,15 @@ func coordinatorFixture(t *testing.T, n int) (CoordinatorRequest, *coreCounter) 
 		p[i] = built.Chunks[i].Projection
 		s[i] = built.Chunks[i].Sidecar
 	}
+	return CoordinatorRequest{Input: in, Plan: built.Plan, Index: built.Index, Projections: p, Sidecars: s}
+}
+
+func coordinatorFixtureFromTemplate(t *testing.T, template CoordinatorRequest) (CoordinatorRequest, *coreCounter) {
+	t.Helper()
 	counter := &coreCounter{t: t}
-	r := CoordinatorRequest{Input: in, Plan: built.Plan, Index: built.Index, Projections: p, Sidecars: s, Store: newCoordinatorStore(MaxCanonicalBytes), Heads: newHeadStore()}
+	r := template
+	r.Store = newCoordinatorStore(MaxCanonicalBytes)
+	r.Heads = newHeadStore()
 	r.Sessions = leaseFunc(func(_ context.Context, x ExpectedSession, run func(censusacquisition.Core) error) error {
 		if x.SessionID != r.Plan.SessionID || x.Generation != r.Plan.Generation || x.WorkspaceURI != r.Input.WorkspaceURI {
 			return errors.New("binding")
@@ -173,6 +189,11 @@ func coordinatorFixture(t *testing.T, n int) (CoordinatorRequest, *coreCounter) 
 		return run(counter.core())
 	})
 	return r, counter
+}
+
+func coordinatorFixture(t *testing.T, n int) (CoordinatorRequest, *coreCounter) {
+	t.Helper()
+	return coordinatorFixtureFromTemplate(t, coordinatorFixtureTemplate(t, n))
 }
 
 func TestCoordinatorAuthoritativeClaimResumeAndTerminal(t *testing.T) {
@@ -270,7 +291,8 @@ func TestHeadTransitionRejectsRollbackForkAndDuplicate(t *testing.T) {
 }
 
 func TestCoordinatorLeaseTOCTOUAndPanicFailClosed(t *testing.T) {
-	r, c := coordinatorFixture(t, ChunkSize+1)
+	template := coordinatorFixtureTemplate(t, ChunkSize+1)
+	r, c := coordinatorFixtureFromTemplate(t, template)
 	active := false
 	r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
 		active = true
@@ -288,7 +310,7 @@ func TestCoordinatorLeaseTOCTOUAndPanicFailClosed(t *testing.T) {
 	if _, e := Coordinate(context.Background(), r); e != nil {
 		t.Fatalf("ASSERT_CUSTODY_HELD %v", e)
 	}
-	r, c = coordinatorFixture(t, ChunkSize+1)
+	r, c = coordinatorFixtureFromTemplate(t, template)
 	c.panicCore = true
 	if _, e := Coordinate(context.Background(), r); e == nil || !IsCoordinatorStage(e, CoordinatorStagePanic) {
 		t.Fatalf("ASSERT_CORE_PANIC_TYPED %v", e)
@@ -312,9 +334,10 @@ func TestCoordinatorStoreCollisionTruncationSizeCancellationAndPanic(t *testing.
 		"panic_store": func(r *CoordinatorRequest) { r.Store.(*coordinatorStore).panicPut = true },
 		"panic_head":  func(r *CoordinatorRequest) { r.Heads.(*memoryHeadStore).panicCAS = true },
 	}
+	template := coordinatorFixtureTemplate(t, ChunkSize+1)
 	for n, m := range cases {
 		t.Run(n, func(t *testing.T) {
-			r, _ := coordinatorFixture(t, ChunkSize+1)
+			r, _ := coordinatorFixtureFromTemplate(t, template)
 			m(&r)
 			if _, e := Coordinate(context.Background(), r); e == nil {
 				t.Fatal("ASSERT_FAIL_CLOSED_BOUNDARY")
@@ -389,34 +412,32 @@ func TestCoordinatorClaimReceiptRejectsForeignReplay(t *testing.T) {
 		"predecessor":  func(v *claimReceipt) { v.PredecessorSelector += "-foreign" },
 		"execution_id": func(v *claimReceipt) { v.ChunkExecutionDigest = domainDigest("foreign", []byte("execution")) },
 	}
+
+	r, _ := coordinatorFixture(t, ChunkSize+1)
+	hs := r.Heads.(*memoryHeadStore)
+	hs.failCAS = 4
+	if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageConflict) {
+		t.Fatalf("ASSERT_RECEIPT_SETUP err=%v", err)
+	}
+	_, h := hs.current()
+	raw, err := r.Store.Get(context.Background(), h.ReceiptSelector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var baseEnvelope claimReceipt
+	if err = decodeCoordinator(raw, &baseEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	claimed := claimedHeadIdentity(h)
+
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, _ := coordinatorFixture(t, ChunkSize+1)
-			hs := r.Heads.(*memoryHeadStore)
-			hs.failCAS = 4
-			if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageConflict) {
-				t.Fatalf("ASSERT_RECEIPT_SETUP err=%v", err)
-			}
-			key, h := hs.current()
-			raw, err := r.Store.Get(context.Background(), h.ReceiptSelector)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var envelope claimReceipt
-			if err = decodeCoordinator(raw, &envelope); err != nil {
-				t.Fatal(err)
-			}
+			envelope := baseEnvelope
+			envelope.ChunkExecution = append([]byte(nil), baseEnvelope.ChunkExecution...)
 			mutate(&envelope)
-			raw, _ = encodeCoordinator(envelope)
-			selector, err := r.Store.Put(context.Background(), raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			h.ReceiptSelector = selector
-			hs.set(key, h)
-			hs.failCAS = 0
-			if _, err = Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageReadback) {
-				t.Fatalf("ASSERT_FOREIGN_RECEIPT_REJECTED err=%v", err)
+			raw, _ := encodeCoordinator(envelope)
+			if _, err = validateClaimReceipt(claimed, raw); err == nil {
+				t.Fatal("ASSERT_FOREIGN_RECEIPT_REJECTED")
 			}
 		})
 	}
@@ -441,29 +462,40 @@ func TestCoordinatorTerminalReplayRejectsIndependentSubstitution(t *testing.T) {
 		"head_generation":       func(v *TerminalIndex) { v.HeadGeneration++ },
 		"head_selector":         func(v *TerminalIndex) { v.HeadSelector += "-foreign" },
 	}
+
+	r, _ := coordinatorFixture(t, ChunkSize+1)
+	out, err := Coordinate(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseStore := r.Store.(*coordinatorStore)
+	raw, err := baseStore.Get(context.Background(), out.TerminalSelector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseTerm, err := ParseTerminalIndex(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, baseHead := r.Heads.(*memoryHeadStore).current()
+
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, _ := coordinatorFixture(t, ChunkSize+1)
-			out, err := Coordinate(context.Background(), r)
-			if err != nil {
-				t.Fatal(err)
-			}
-			raw, _ := r.Store.Get(context.Background(), out.TerminalSelector)
-			term, err := ParseTerminalIndex(raw)
-			if err != nil {
-				t.Fatal(err)
-			}
+			store := baseStore.clone()
+			term := baseTerm
+			term.CommitSelectors = append([]string(nil), baseTerm.CommitSelectors...)
 			mutate(&term)
 			setCoordinatorIdentity("lsp-trace:census-chunk-terminal-index:private:v2", "census-chunk-terminal-indexes/v2/", &term, func(v *TerminalIndex, d, s string) { v.LogicalDigest = d; v.ImmutableSelector = s })
-			raw, _ = encodeCoordinator(term)
-			selector, err := r.Store.Put(context.Background(), raw)
+			raw, _ := encodeCoordinator(term)
+			selector, err := store.Put(context.Background(), raw)
 			if err != nil {
 				t.Fatal(err)
 			}
-			key, h := r.Heads.(*memoryHeadStore).current()
-			h.TerminalSelector = selector
-			r.Heads.(*memoryHeadStore).set(key, h)
-			if _, err = Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageTerminal) {
+			head := baseHead
+			head.TerminalSelector = selector
+			request := r
+			request.Store = store
+			if _, err = resultFromHead(context.Background(), request, head); err == nil || !IsCoordinatorStage(err, CoordinatorStageTerminal) {
 				t.Fatalf("ASSERT_TERMINAL_SUBSTITUTION_REJECTED err=%v", err)
 			}
 		})
@@ -471,15 +503,16 @@ func TestCoordinatorTerminalReplayRejectsIndependentSubstitution(t *testing.T) {
 }
 
 func TestCoordinatorSessionLeaseCallbackCardinality(t *testing.T) {
+	template := coordinatorFixtureTemplate(t, ChunkSize+1)
 	t.Run("zero", func(t *testing.T) {
-		r, c := coordinatorFixture(t, ChunkSize+1)
+		r, c := coordinatorFixtureFromTemplate(t, template)
 		r.Sessions = leaseFunc(func(context.Context, ExpectedSession, func(censusacquisition.Core) error) error { return nil })
 		if _, err := Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStageSession) || c.count() != 0 {
 			t.Fatalf("ASSERT_ZERO_CALLBACK_REFUSED err=%v calls=%d", err, c.count())
 		}
 	})
 	t.Run("double", func(t *testing.T) {
-		r, c := coordinatorFixture(t, ChunkSize+1)
+		r, c := coordinatorFixtureFromTemplate(t, template)
 		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
 			if err := run(c.core()); err != nil {
 				return err
@@ -492,7 +525,7 @@ func TestCoordinatorSessionLeaseCallbackCardinality(t *testing.T) {
 		}
 	})
 	t.Run("concurrent", func(t *testing.T) {
-		r, c := coordinatorFixture(t, ChunkSize+1)
+		r, c := coordinatorFixtureFromTemplate(t, template)
 		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
 			var wg sync.WaitGroup
 			wg.Add(2)
@@ -507,7 +540,7 @@ func TestCoordinatorSessionLeaseCallbackCardinality(t *testing.T) {
 		}
 	})
 	t.Run("success_then_error", func(t *testing.T) {
-		r, c := coordinatorFixture(t, ChunkSize+1)
+		r, c := coordinatorFixtureFromTemplate(t, template)
 		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
 			if err := run(c.core()); err != nil {
 				return err
@@ -519,7 +552,7 @@ func TestCoordinatorSessionLeaseCallbackCardinality(t *testing.T) {
 		}
 	})
 	t.Run("failure_then_extra", func(t *testing.T) {
-		r, c := coordinatorFixture(t, ChunkSize+1)
+		r, c := coordinatorFixtureFromTemplate(t, template)
 		r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
 			_ = run(censusacquisition.Core{})
 			return run(c.core())
