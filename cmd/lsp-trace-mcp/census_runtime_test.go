@@ -22,6 +22,7 @@ import (
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/seedformat"
 	"lsp-trace/internal/source"
+	"lsp-trace/sessionruntime"
 )
 
 func censusRuntimeRequest(t *testing.T, root *publication.Root, raw []byte) operation.Request {
@@ -118,6 +119,35 @@ func TestCensusRuntimeIdentityOptionsDiscoveryAndDefensiveCopies(t *testing.T) {
 	again, againFailure, _ := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"a.go"}, "max_nodes": 2})))
 	if againFailure != nil || again.options.sources[0] != "a.go" || again.discovery.Accounting.Files[0].Disposition == census.FileUnreadable {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_DEFENSIVE_COPY: again=%+v failure=%+v", again, againFailure)
+	}
+}
+
+func TestPrivateCensusRuntimeActivatedDiscoveryUsesBroadLimitsOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		activated bool
+		wantNodes uint64
+	}{
+		{name: "disabled", wantNodes: 10},
+		{name: "activated", activated: true, wantNodes: 100000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+			shell := newCensusRuntime(runtime)
+			calls := 0
+			var observed censusRuntimeConfig
+			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig) (censusacquisition.Discovery, error) {
+				calls++
+				observed = options
+				return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true}, nil
+			}
+			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"max_nodes": 10}))
+			request.PrivateCensusChunking = tc.activated
+			_, failure, _ := shell.execute(context.Background(), request)
+			if failure != nil || calls != 1 || observed.maxNodes != tc.wantNodes {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_LIMITS: activated=%v calls=%d max_nodes=%d want=%d failure=%+v", tc.activated, calls, observed.maxNodes, tc.wantNodes, failure)
+			}
+		})
 	}
 }
 

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"os"
 
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusrequest"
@@ -43,14 +46,21 @@ type censusContinuationMCPResult struct {
 }
 
 type privateCensusMCPBinding struct {
-	runtime      censusMCPRunner
-	continuation censusContinuationMCPHost
+	runtime               censusMCPRunner
+	continuation          censusContinuationMCPHost
+	privateCensusChunking bool
 }
 
 type privateCensusMCPResult struct {
 	Text       []byte
 	Structured []byte
 	IsError    bool
+}
+
+type privateCensusChunkCustodyReceipt struct {
+	SchemaVersion       string `json:"schema_version"`
+	TerminalSelector    string `json:"terminal_selector"`
+	TerminalIndexBase64 string `json:"terminal_index_base64"`
 }
 
 type censusMCPEnvelope struct {
@@ -65,6 +75,7 @@ type censusMCPEnvelope struct {
 	Error            *censusresult.Diagnostic          `json:"error,omitempty"`
 	Diagnostic       *censusresult.DiscoveryDiagnostic `json:"diagnostic,omitempty"`
 	RequestReceipt   *censusrequest.Receipt            `json:"request_receipt,omitempty"`
+	CustodyReceipt   *privateCensusChunkCustodyReceipt `json:"custody_receipt,omitempty"`
 }
 
 func bindCensusDiagnosticRecorder(server *mcp.Server, recorder *censusdiagnostic.Recorder) error {
@@ -84,11 +95,22 @@ func bindCensusDiagnosticRecorder(server *mcp.Server, recorder *censusdiagnostic
 }
 
 func newPrivateCensusMCPBinding(runtime censusMCPRunner, continuation ...censusContinuationMCPHost) *privateCensusMCPBinding {
-	binding := &privateCensusMCPBinding{runtime: runtime}
+	return newPrivateCensusMCPBindingWithActivation(runtime, os.Getenv("LSP_TRACE_PRIVATE_CENSUS_CHUNKING") == "1", continuation...)
+}
+
+func newPrivateCensusMCPBindingWithActivation(runtime censusMCPRunner, privateCensusChunking bool, continuation ...censusContinuationMCPHost) *privateCensusMCPBinding {
+	binding := &privateCensusMCPBinding{runtime: runtime, privateCensusChunking: privateCensusChunking}
 	if len(continuation) != 0 {
 		binding.continuation = continuation[0]
 	}
 	return binding
+}
+
+func replacePrivateCensusMCPContinuation(binding *privateCensusMCPBinding, continuation censusContinuationMCPHost) *privateCensusMCPBinding {
+	if binding == nil {
+		return nil
+	}
+	return newPrivateCensusMCPBindingWithActivation(binding.runtime, binding.privateCensusChunking, continuation)
 }
 
 func (b *privateCensusMCPBinding) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
@@ -128,6 +150,7 @@ func (b *privateCensusMCPBinding) call(ctx context.Context, request operation.Re
 	if err != nil {
 		return privateCensusMCPResult{}, errors.New("invalid private census request")
 	}
+	request.PrivateCensusChunking = b.privateCensusChunking
 	return projectPrivateCensusMCP(request.RequestID, b.runtime.run(ctx, request))
 }
 
@@ -356,13 +379,25 @@ func projectPrivateCensusMCP(requestID string, completion censusCompletion) (pri
 	if completion.DiscoveryDiagnostic != nil && completion.RequestReceipt != nil {
 		branches++
 	}
+	if completion.privateChunk != nil {
+		branches++
+	}
 	if branches != 1 {
 		return privateCensusMCPResult{}, errors.New("invalid private census completion")
 	}
 	env := censusMCPEnvelope{
 		EnvelopeVersion: "1", Tool: mcpcontract.FutureCensusTool, RequestID: requestID,
 	}
-	if completion.DiscoveryDiagnostic != nil {
+	if completion.privateChunk != nil {
+		validated, err := clonePrivateCensusChunkCompletion(completion.privateChunk)
+		if err != nil {
+			return privateCensusMCPResult{}, errors.New("invalid private census chunk completion")
+		}
+		env.EnvelopeSchemaID = mcpcontract.CensusChunkTerminalSuccessID
+		env.Outcome = "COMPLETE"
+		env.OperationStatus = "SUCCEEDED"
+		env.CustodyReceipt = &privateCensusChunkCustodyReceipt{SchemaVersion: "lsp-trace.census-chunk-terminal-custody-receipt.private.v1", TerminalSelector: validated.terminalSelector, TerminalIndexBase64: base64.StdEncoding.EncodeToString(bytes.Clone(validated.terminalIndex))}
+	} else if completion.DiscoveryDiagnostic != nil {
 		if _, err := censusresult.MarshalDiscoveryDiagnostic(*completion.DiscoveryDiagnostic); err != nil {
 			return privateCensusMCPResult{}, errors.New("invalid census discovery diagnostic")
 		}

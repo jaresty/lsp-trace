@@ -3,12 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/captureset"
+	"lsp-trace/internal/censuschunking"
 	"lsp-trace/internal/censusresult"
+	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 )
@@ -29,6 +32,166 @@ func TestCensusMCPBindingRejectsMismatchedOperationBeforeDecodeRuntime(t *testin
 	_, failure := binding.Execute(context.Background(), operation.Request{Name: operation.Verify, RequestID: "r", Input: []byte(`{}`)})
 	if failure == nil || failure.Code != operation.FailureInvalidInput || len(fixture.calls) != 0 {
 		t.Fatalf("ASSERT_CENSUS_NAME_MISMATCH_REJECTED_BEFORE_DECODE_RUNTIME: failure=%v calls=%d", failure, len(fixture.calls))
+	}
+}
+
+func TestPrivateCensusMCPBootstrapActivationExactDefaultOffAndRebinding(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{
+		{value: "", want: false},
+		{value: "true", want: false},
+		{value: "01", want: false},
+		{value: "1", want: true},
+	} {
+		t.Run("value-"+tc.value, func(t *testing.T) {
+			t.Setenv("LSP_TRACE_PRIVATE_CENSUS_CHUNKING", tc.value)
+			server, _, err := newServerRuntime(false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			binding, ok := server.Executors[mcp.CensusExecutorFamily].(*privateCensusMCPBinding)
+			if !ok || binding.privateCensusChunking != tc.want {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_BOOTSTRAP_EXACT_VALUE: value=%q enabled=%v want=%v", tc.value, binding.privateCensusChunking, tc.want)
+			}
+		})
+	}
+
+	t.Setenv("LSP_TRACE_PRIVATE_CENSUS_CHUNKING", "")
+	server, _, err := newServerRuntime(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding, ok := server.Executors[mcp.CensusExecutorFamily].(*privateCensusMCPBinding)
+	if !ok || binding.privateCensusChunking {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_BOOTSTRAP_DEFAULT_OFF: binding=%+v", binding)
+	}
+
+	rebound := &privateCensusMCPBinding{runtime: &privateCensusRunnerFixture{}, privateCensusChunking: true}
+	rebound = replacePrivateCensusMCPContinuation(rebound, &continuationMCPHostFixture{})
+	if !rebound.privateCensusChunking {
+		t.Fatal("ASSERT_PRIVATE_CENSUS_BOOTSTRAP_REBIND_PRESERVES")
+	}
+}
+
+func TestPrivateCensusMCPBindingActivationCustody(t *testing.T) {
+	input := []byte(`{"session_id":"s","generation":1,"sources":["."]}`)
+	completion := censusCompletion{Result: ptrCensusResult(privateCensusSuccessFixture())}
+	ordinaryRunner := &privateCensusRunnerFixture{completion: completion}
+	enabledRunner := &privateCensusRunnerFixture{completion: completion}
+	ordinary := &privateCensusMCPBinding{runtime: ordinaryRunner}
+	enabled := &privateCensusMCPBinding{runtime: enabledRunner, privateCensusChunking: true}
+	request := operation.Request{Name: operation.Census, RequestID: "activation-custody", Input: input}
+
+	ordinaryResult, ordinaryErr := ordinary.callDirect(context.Background(), request)
+	enabledResult, enabledErr := enabled.callDirect(context.Background(), request)
+	if ordinaryErr != nil || enabledErr != nil {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_ACTIVATION_REQUEST_ACCEPTED: ordinary=%v enabled=%v", ordinaryErr, enabledErr)
+	}
+	if !bytes.Equal(ordinaryResult.Structured, enabledResult.Structured) || len(ordinaryRunner.calls) != 1 || len(enabledRunner.calls) != 1 {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_ACTIVATION_WIRE_INVARIANT: ordinary=%q enabled=%q calls=%d/%d", ordinaryResult.Structured, enabledResult.Structured, len(ordinaryRunner.calls), len(enabledRunner.calls))
+	}
+	ordinaryRequest, enabledRequest := ordinaryRunner.calls[0], enabledRunner.calls[0]
+	if !bytes.Equal(ordinaryRequest.Input, enabledRequest.Input) || ordinaryRequest.PrivateCensusChunking || !enabledRequest.PrivateCensusChunking {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_ACTIVATION_INTERNAL_ONLY: ordinary=%+v enabled=%+v", ordinaryRequest, enabledRequest)
+	}
+	var jsonRequest operation.Request
+	if err := json.Unmarshal([]byte(`{"PrivateCensusChunking":true}`), &jsonRequest); err != nil || jsonRequest.PrivateCensusChunking {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_ACTIVATION_JSON_CANNOT_ENABLE: request=%+v err=%v", jsonRequest, err)
+	}
+}
+
+func TestPrivateCensusChunkSuccessProjectsSuccessorCustodyOnly(t *testing.T) {
+	terminal := realCoordinatorTerminalFixture(t)
+	parsed, err := censuschunking.ParseTerminalIndex(terminal.terminalIndex)
+	if err != nil || parsed.ImmutableSelector != terminal.terminalSelector || parsed.Authority != 0 || parsed.Accepted || parsed.SourceGraphComplete != "UNKNOWN" || parsed.CrossChunkCalls != "NOT_COMPUTED" || parsed.AggregateCapture != "NOT_MATERIALIZED" {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_REAL_CANONICAL_TERMINAL: parsed=%+v err=%v", parsed, err)
+	}
+	completion := censusCompletion{privateChunk: terminal}
+	direct, err := projectPrivateCensusMCP("chunk-success", completion)
+	if err != nil {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_SUCCESSOR_PROJECTED: %v", err)
+	}
+	canonical, err := projectPrivateCensusMCP("chunk-success", completion)
+	if err != nil || !bytes.Equal(direct.Structured, canonical.Structured) {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_SUCCESSOR_DIRECT_CANONICAL_PARITY: err=%v direct=%q canonical=%q", err, direct.Structured, canonical.Structured)
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(direct.Structured, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	_, hasResult := envelope["result"]
+	custody, hasCustody := envelope["custody_receipt"].(map[string]any)
+	encoded, _ := custody["terminal_index_base64"].(string)
+	projectedBytes, decodeErr := base64.StdEncoding.DecodeString(encoded)
+	if envelope["envelope_schema_id"] != mcpcontract.CensusChunkTerminalSuccessID || !hasCustody || hasResult || custody["terminal_selector"] != terminal.terminalSelector || decodeErr != nil || !bytes.Equal(projectedBytes, terminal.terminalIndex) {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_SUCCESSOR_CUSTODY_ONLY: envelope=%v decode=%v", envelope, decodeErr)
+	}
+	terminal.terminalIndex[0] ^= 0xff
+	if bytes.Equal(projectedBytes, terminal.terminalIndex) || !bytes.Equal(direct.Text, direct.Structured) {
+		t.Fatal("ASSERT_PRIVATE_CENSUS_SUCCESSOR_DEEP_COPY_ALIAS_RESISTANCE")
+	}
+}
+
+func TestPrivateCensusChunkProjectionRejectsInvalidTerminal(t *testing.T) {
+	valid := realCoordinatorTerminalFixture(t)
+	var ceiling map[string]any
+	if err := json.Unmarshal(valid.terminalIndex, &ceiling); err != nil {
+		t.Fatal(err)
+	}
+	ceiling["authority"] = float64(1)
+	forbidden, err := json.Marshal(ceiling)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name       string
+		completion *privateCensusChunkCompletion
+	}{
+		{name: "empty-object", completion: &privateCensusChunkCompletion{terminalSelector: valid.terminalSelector, terminalIndex: []byte(`{}`)}},
+		{name: "wrong-selector", completion: &privateCensusChunkCompletion{terminalSelector: "sha256:" + strings.Repeat("f", 64), terminalIndex: append([]byte(nil), valid.terminalIndex...)}},
+		{name: "forbidden-ceiling", completion: &privateCensusChunkCompletion{terminalSelector: valid.terminalSelector, terminalIndex: forbidden}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := projectPrivateCensusMCP("invalid-terminal", censusCompletion{privateChunk: tc.completion}); err == nil {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_INVALID_TERMINAL_REJECTED: %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestPrivateCensusV1EnvelopeRejectsCustodyReceipt(t *testing.T) {
+	result := privateCensusSuccessFixture()
+	env := censusMCPEnvelope{
+		EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.FutureCensusSuccessID,
+		Tool: mcpcontract.FutureCensusTool, RequestID: "custody-rejection", Outcome: "COMPLETE",
+		OperationStatus: "SUCCEEDED", Result: result,
+	}
+	raw, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var object map[string]any
+	if err := json.Unmarshal(raw, &object); err != nil {
+		t.Fatal(err)
+	}
+	object["custody_receipt"] = map[string]any{"schema_version": "lsp-trace.census-chunk-terminal-custody-receipt.private.v1", "terminal_selector": "sha256:terminal", "terminal_index_base64": "e30="}
+	raw, err = json.Marshal(object)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw); err == nil {
+		t.Fatal("ASSERT_PRIVATE_CENSUS_V1_REJECTS_CUSTODY")
+	}
+}
+
+func TestPrivateCensusSuccessorSchemaAvailable(t *testing.T) {
+	const successorID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-chunk-terminal-result.v1.schema.json"
+	raw, err := mcpcontract.FutureCensusSchemaJSON(successorID)
+	if err != nil || len(raw) == 0 {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_SUCCESSOR_SCHEMA_AVAILABLE: bytes=%d err=%v", len(raw), err)
 	}
 }
 

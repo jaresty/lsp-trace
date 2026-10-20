@@ -292,7 +292,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "bootstrap continuation: census binding unavailable")
 			return 1
 		}
-		server.Executors[mcp.CensusExecutorFamily] = newPrivateCensusMCPBinding(binding.runtime, continuationHost)
+		server.Executors[mcp.CensusExecutorFamily] = replacePrivateCensusMCPContinuation(binding, continuationHost)
 	}
 	if err := bindCensusDiagnosticRecorder(server, acquisitionDiagnostic); err != nil {
 		fmt.Fprintln(stderr, "acquisition diagnostic:", err)

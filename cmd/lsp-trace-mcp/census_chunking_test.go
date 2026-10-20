@@ -1,0 +1,98 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censuschunking"
+	"lsp-trace/internal/operation"
+	"lsp-trace/internal/publication"
+	"lsp-trace/sessionruntime"
+)
+
+func TestPrivateCensusChunkRouteExactCompatibilityBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		activated bool
+		count     int
+		want      bool
+	}{
+		{name: "disabled-10001", count: 10001},
+		{name: "activated-10000", activated: true, count: 10000},
+		{name: "activated-10001", activated: true, count: 10001, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			discovery := censusacquisition.Discovery{Complete: true, Targets: make([]censusacquisition.PreparedTarget, tc.count)}
+			got, err := privateCensusChunkRoute(tc.activated, discovery)
+			if err != nil || got != tc.want {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_ROUTE_10000_10001: activated=%v count=%d got=%v want=%v err=%v", tc.activated, tc.count, got, tc.want, err)
+			}
+		})
+	}
+}
+
+func TestPrivateCensusChunkFailuresCollapseToAcquisitionWithoutCustody(t *testing.T) {
+	for _, source := range []string{"coordinator", "store", "terminal-read", "lease"} {
+		t.Run(source, func(t *testing.T) {
+			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+			shell := newCensusRuntime(runtime)
+			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig) (censusacquisition.Discovery, error) {
+				return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true, Targets: make([]censusacquisition.PreparedTarget, 10001)}, nil
+			}
+			shell.chunk = func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error) {
+				return nil, errors.New(source + " sentinel")
+			}
+			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+			request.PrivateCensusChunking = true
+			completion := shell.run(context.Background(), operation.Request(request))
+			if completion.Diagnostic == nil || completion.privateChunk != nil || completion.Result != nil {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_FAILURE_ACQUISITION_NO_CUSTODY: source=%s completion=%+v", source, completion)
+			}
+			projected, err := projectPrivateCensusMCP("chunk-failure", completion)
+			if err != nil || !projected.IsError {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_FAILURE_PUBLIC_BOUNDARY: source=%s projected=%+v err=%v", source, projected, err)
+			}
+		})
+	}
+}
+
+func TestPrivateCensusRuntimeRunRoutesOnlyAboveCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		count, wantChunkCalls, wantAcquireCalls int
+	}{{10000, 0, 1}, {10001, 1, 0}} {
+		runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+		shell := newCensusRuntime(runtime)
+		shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig) (censusacquisition.Discovery, error) {
+			return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true, Targets: make([]censusacquisition.PreparedTarget, tc.count)}, nil
+		}
+		chunkCalls, acquireCalls, leaseCalls, coordinateCalls, readCalls := 0, 0, 0, 0, 0
+		shell.chunk = func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error) {
+			chunkCalls++
+			return realCoordinatorTerminalFixture(t), nil
+		}
+		shell.acquireOverride = func(context.Context, censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure, censusFailureReason) {
+			acquireCalls++
+			return censusacquisition.Projection{}, censusAcquisitionFailure(), reasonAcquisitionFailed
+		}
+		shell.chunkLease = func(context.Context, sessionruntime.SessionLeaseRequest, func(context.Context) error) error {
+			leaseCalls++
+			return nil
+		}
+		shell.chunkCoordinate = func(context.Context, censuschunking.CoordinatorRequest) (censuschunking.CoordinatorResult, error) {
+			coordinateCalls++
+			return censuschunking.CoordinatorResult{}, nil
+		}
+		shell.chunkReadTerminal = func(*publication.Root, string, int64) ([]byte, error) { readCalls++; return nil, nil }
+		request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+		request.PrivateCensusChunking = true
+		_ = shell.run(context.Background(), operation.Request(request))
+		if chunkCalls != tc.wantChunkCalls || acquireCalls != tc.wantAcquireCalls {
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_POST_DISCOVERY_ROUTE: count=%d chunk=%d/%d acquire=%d/%d", tc.count, chunkCalls, tc.wantChunkCalls, acquireCalls, tc.wantAcquireCalls)
+		}
+		if tc.count <= 10000 && (leaseCalls != 0 || coordinateCalls != 0 || readCalls != 0) {
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_COMPATIBILITY_ZERO_CHUNK_EFFECTS: lease=%d coordinate=%d read=%d", leaseCalls, coordinateCalls, readCalls)
+		}
+	}
+}

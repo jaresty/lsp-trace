@@ -50,6 +50,9 @@ type Request struct {
 	// RetainedSeedSpec is an internal transport-neutral handoff used only by
 	// trusted CLI census orchestration; MCP input cannot populate it.
 	RetainedSeedSpec []byte
+	// PrivateCensusChunking is a bootstrap-owned private capability. It is not
+	// decoded from operation input and has no public schema or advertisement.
+	PrivateCensusChunking bool `json:"-"`
 }
 
 // Result is the transport-independent operation result. Artifact contains the

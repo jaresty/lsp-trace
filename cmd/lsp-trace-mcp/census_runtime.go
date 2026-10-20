@@ -13,10 +13,12 @@ import (
 	"lsp-trace/internal/acquisitionengine"
 	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censuschunking"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/publication"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -168,6 +170,11 @@ type censusRuntime struct {
 	admit                 func(context.Context, []byte) (censusAdmittedSession, *censusAdmissionFailure, censusFailureReason)
 	discover              func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig) (censusacquisition.Discovery, error)
 	batchExecute          func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure)
+	chunk                 func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error)
+	chunkLease            func(context.Context, sessionruntime.SessionLeaseRequest, func(context.Context) error) error
+	chunkCoordinate       func(context.Context, censuschunking.CoordinatorRequest) (censuschunking.CoordinatorResult, error)
+	chunkReadTerminal     func(*publication.Root, string, int64) ([]byte, error)
+	acquireOverride       func(context.Context, censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure, censusFailureReason)
 }
 
 func newCensusRuntime(runtime *hostSelectorRuntime) *censusRuntime {
@@ -203,7 +210,11 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 	if discover == nil {
 		discover = censusRuntimeDiscover
 	}
-	discovery, err := discover(ctx, r.runtime.Manager, admitted, options)
+	discoveryOptions := cloneCensusRuntimeConfig(options)
+	if request.PrivateCensusChunking {
+		discoveryOptions.maxNodes = censusRuntimeMaxEntries
+	}
+	discovery, err := discover(ctx, r.runtime.Manager, admitted, discoveryOptions)
 	if err != nil {
 		return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
 	}

@@ -60,6 +60,47 @@ func decodeMap(t *testing.T, raw string) map[string]any {
 	return v
 }
 
+func TestCensusChunkTerminalSuccessorSchemaClosedShape(t *testing.T) {
+	rawSchema, err := FutureCensusSchemaJSON(CensusChunkTerminalSuccessID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiler := jsonschema.NewCompiler()
+	compiler.DefaultDraft(jsonschema.Draft2020)
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(rawSchema))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := compiler.AddResource(CensusChunkTerminalSuccessID, doc); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := compiler.Compile(CensusChunkTerminalSuccessID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := []byte(`{"envelope_version":"1","envelope_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-chunk-terminal-result.v1.schema.json","tool":"lsp_trace_v1_census","request_id":"r","outcome":"COMPLETE","operation_status":"SUCCEEDED","isError":false,"custody_receipt":{"schema_version":"lsp-trace.census-chunk-terminal-custody-receipt.private.v1","terminal_selector":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","terminal_index_base64":"e30="}}`)
+	schemaAccepts(t, schema, valid, true)
+	if err := ValidateFutureCensusEnvelopeExclusive(valid); err != nil {
+		t.Fatalf("ASSERT_CENSUS_CHUNK_TERMINAL_SUCCESSOR_EXCLUSIVE_ADMISSION: %v", err)
+	}
+	for name, candidate := range map[string][]byte{
+		"extra_result":    bytes.Replace(valid, []byte(`,"custody_receipt"`), []byte(`,"result":{},"custody_receipt"`), 1),
+		"extra_top":       bytes.Replace(valid, []byte(`,"custody_receipt"`), []byte(`,"unknown":true,"custody_receipt"`), 1),
+		"extra_receipt":   bytes.Replace(valid, []byte(`"terminal_index_base64":"e30="`), []byte(`"terminal_index_base64":"e30=","unknown":true`), 1),
+		"missing_receipt": bytes.Replace(valid, []byte(`,"custody_receipt":{"schema_version":"lsp-trace.census-chunk-terminal-custody-receipt.private.v1","terminal_selector":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","terminal_index_base64":"e30="}`), nil, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			value, decodeErr := jsonschema.UnmarshalJSON(bytes.NewReader(candidate))
+			if decodeErr == nil {
+				decodeErr = schema.Validate(value)
+			}
+			if decodeErr == nil {
+				t.Fatalf("ASSERT_CENSUS_CHUNK_TERMINAL_SUCCESSOR_CLOSED_SHAPE: accepted %s", candidate)
+			}
+		})
+	}
+}
+
 func TestFutureCensusSchemaBytesAndIDMirrors(t *testing.T) {
 	files := map[string]string{FutureCensusInputID: "input-census.v1.schema.json", FutureCensusResultID: "lsp-trace.census-result.v1.schema.json", FutureCensusSuccessID: "envelope-census-result.v1.schema.json", FutureCensusDomainErrorID: "envelope-census-domain-error.v1.schema.json"}
 	futureCensusSchemas(t)

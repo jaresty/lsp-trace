@@ -59,6 +59,7 @@ type censusCompletion struct {
 	RequestReceipt      *censusrequest.Receipt
 	continuation        *censusCompletionCustody
 	continuationError   completionSubcause
+	privateChunk        *privateCensusChunkCompletion
 }
 
 func (c censusCompletion) BuildCommittedHandoff() (censuscontinuation.CommittedHandoff, error) {
@@ -94,7 +95,26 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 			return censusCompletion{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt}
 		}
 	}
-	projection, failure, reason := r.acquire(ctx, prepared)
+	chunked, chunkRouteErr := privateCensusChunkRoute(request.PrivateCensusChunking, prepared.discovery)
+	if chunkRouteErr != nil {
+		return censusFailureCompletion(censusAcquisitionFailure(), reasonAcquisitionFailed)
+	}
+	if chunked {
+		chunk := r.chunk
+		if chunk == nil {
+			chunk = r.runPrivateCensusChunking
+		}
+		terminal, err := chunk(ctx, prepared, request.PublicationRoot)
+		if err != nil {
+			return censusFailureCompletion(censusAcquisitionFailure(), reasonAcquisitionFailed)
+		}
+		return censusCompletion{privateChunk: terminal}
+	}
+	acquire := r.acquireOverride
+	if acquire == nil {
+		acquire = r.acquire
+	}
+	projection, failure, reason := acquire(ctx, prepared)
 	if failure != nil {
 		return censusFailureCompletion(failure, reason)
 	}
