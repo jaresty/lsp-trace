@@ -97,7 +97,10 @@ func TestHandoffPersistencePreflightReportsCanonicalBytesAndStoreCap(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	const capBytes = int64(1 << 20)
+	capBytes := int64(len(raw) - 1)
+	if capBytes < 1 {
+		t.Fatal("handoff fixture unexpectedly empty")
+	}
 	result := Run(context.Background(), Request{Handoff: h, Workspace: f.workspace, Worker: &countingWorker{}, Store: cappedStore{MemoryStore: NewMemoryStore(), max: capBytes}, Contract: testContract(t)})
 	if result.PrivateCode != "HANDOFF_PERSIST" || result.HandoffBytes != int64(len(raw)) || result.MaxObjectBytes != capBytes {
 		t.Fatalf("ASSERT_HANDOFF_PERSIST_PREFLIGHT bytes=%d want=%d cap=%d want_cap=%d code=%s", result.HandoffBytes, len(raw), result.MaxObjectBytes, capBytes, result.PrivateCode)

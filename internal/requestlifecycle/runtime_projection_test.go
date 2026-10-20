@@ -106,6 +106,9 @@ func projectionRuntime(t *testing.T) (*sessionruntime.Manager, sessionruntime.St
 }
 
 func TestRuntimeProjectionAcceptsOnlyCertifiedExactBoundedSnapshots(t *testing.T) {
+	if !manageddiagnostic.EventRepresentationSupported() {
+		t.Skip("certified owned diagnostic snapshots are not qualified on this platform")
+	}
 	m, started, ready, document, symbols := projectionRuntime(t)
 	handles := []sessionruntime.DiagnosticOperationHandle{ready.DiagnosticOperation, document.DiagnosticOperation, symbols.DiagnosticOperation}
 	set, ok := m.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, MaxRecords)

@@ -23,6 +23,12 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
+type providerProbeStarter struct{}
+
+func (providerProbeStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	return nil, managedprocess.StartObservation{Kind: managedprocess.StartUnavailable, Reason: "provider probe runner fixture does not start processes"}
+}
+
 type providerProbeRunnerResult struct {
 	code                       int
 	stdout, stderr             []byte
@@ -93,11 +99,7 @@ func providerProbeRunnerDeps(t *testing.T, runCore func(censusCLIOptions, census
 	deps.lookPath = func(string) (string, error) { return os.Args[0], nil }
 	deps.newStarter = func() (sessionruntime.Starter, error) {
 		starterCalls++
-		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
-		if err != nil {
-			return nil, err
-		}
-		return sessionruntime.ManagedStarter{Manager: supervisor}, nil
+		return providerProbeStarter{}, nil
 	}
 	originalManager := deps.newManager
 	deps.newManager = func(cfg sessionruntime.Config) (*sessionruntime.Manager, error) {
@@ -106,6 +108,20 @@ func providerProbeRunnerDeps(t *testing.T, runCore func(censusCLIOptions, census
 	}
 	deps.runCore = runCore
 	return deps, &starterCalls, &managerCalls
+}
+
+func providerProbeIntegrationRunnerDeps(t *testing.T, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) (censusRunnerDependencies, *int, *int) {
+	t.Helper()
+	deps, starterCalls, managerCalls := providerProbeRunnerDeps(t, runCore)
+	deps.newStarter = func() (sessionruntime.Starter, error) {
+		*starterCalls++
+		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
+		if err != nil {
+			return nil, err
+		}
+		return sessionruntime.ManagedStarter{Manager: supervisor}, nil
+	}
+	return deps, starterCalls, managerCalls
 }
 
 func runProviderProbeRunner(t *testing.T, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
@@ -123,7 +139,17 @@ func runProviderProbeRunnerInWorkspace(t *testing.T, workspace string, enablePro
 	return runProviderProbeRunnerInWorkspaceVersion(t, workspace, "v1", enableProbe, enumeration, runCore)
 }
 
+func runProviderProbeRunnerPortable(t *testing.T, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
+	t.Helper()
+	return runProviderProbeRunnerInWorkspaceVersionWithStarter(t, t.TempDir(), "v1", enableProbe, enumeration, true, runCore)
+}
+
 func runProviderProbeRunnerInWorkspaceVersion(t *testing.T, workspace, version string, enableProbe, enumeration bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
+	t.Helper()
+	return runProviderProbeRunnerInWorkspaceVersionWithStarter(t, workspace, version, enableProbe, enumeration, false, runCore)
+}
+
+func runProviderProbeRunnerInWorkspaceVersionWithStarter(t *testing.T, workspace, version string, enableProbe, enumeration, portableStarter bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -138,7 +164,10 @@ func runProviderProbeRunnerInWorkspaceVersion(t *testing.T, workspace, version s
 	if enableProbe {
 		probe = filepath.Join(root, "provider-probe.json")
 	}
-	deps, starters, managers := providerProbeRunnerDeps(t, runCore)
+	deps, starters, managers := providerProbeIntegrationRunnerDeps(t, runCore)
+	if portableStarter {
+		deps, starters, managers = providerProbeRunnerDeps(t, runCore)
+	}
 	var stdout, stderr bytes.Buffer
 	code := runCensusWithDependencies(providerProbeRunnerArgsVersion(workspace, root, probe, version, enumeration), &stdout, &stderr, deps)
 	result := providerProbeRunnerResult{code: code, stdout: append([]byte(nil), stdout.Bytes()...), stderr: append([]byte(nil), stderr.Bytes()...), publication: providerProbePublicationFiles(t, root), starterCalls: *starters, managerCalls: *managers}
@@ -310,7 +339,7 @@ func TestRunCensusProviderProbeSetupAndFinalizeFailuresArePrivate(t *testing.T) 
 		t.Fatalf("setup code=%d starts=%d/%d stdout=%q stderr=%q", code, *starters, *managers, stdout.Bytes(), stderr.Bytes())
 	}
 
-	baseline := runProviderProbeRunner(t, false, false, core)
+	baseline := runProviderProbeRunnerPortable(t, false, false, core)
 	probePath := probePath(t)
 	deps, starters, managers = providerProbeRunnerDeps(t, func(o censusCLIOptions, c censusCoreConfig, d censusCoreDependencies) censusPublicationOutcome {
 		if err := os.Chmod(filepath.Dir(probePath), 0755); err != nil {

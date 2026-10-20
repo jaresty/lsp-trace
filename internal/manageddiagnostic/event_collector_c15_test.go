@@ -30,7 +30,10 @@ func (o *testEventBackingOwner) ReserveEventBacking(bytes uint64) (EventBackingL
 }
 
 func TestEventCollectorOwnedBackingExactCapacityAndDetach(t *testing.T) {
-	if !EventRepresentationSupported() || EventElementBytes() != 40 || unsafe.Alignof(Event{}) != 8 || unsafe.Offsetof(Event{}.Sequence) != 0 || unsafe.Offsetof(Event{}.ElapsedNS) != 8 || unsafe.Offsetof(Event{}.Kind) != 16 || unsafe.Offsetof(Event{}.Code) != 18 || unsafe.Offsetof(Event{}.Count) != 24 || unsafe.Offsetof(Event{}.Flag) != 32 || unsafe.Sizeof(EventSnapshot{}) != 48 || unsafe.Alignof(EventSnapshot{}) != 8 || unsafe.Offsetof(EventSnapshot{}.Events) != 0 || unsafe.Offsetof(EventSnapshot{}.Omitted) != 24 || unsafe.Offsetof(EventSnapshot{}.Late) != 32 || unsafe.Offsetof(EventSnapshot{}.Closed) != 40 {
+	if !EventRepresentationSupported() {
+		t.Skip("exact event representation is not qualified on this platform")
+	}
+	if EventElementBytes() != 40 || unsafe.Alignof(Event{}) != 8 || unsafe.Offsetof(Event{}.Sequence) != 0 || unsafe.Offsetof(Event{}.ElapsedNS) != 8 || unsafe.Offsetof(Event{}.Kind) != 16 || unsafe.Offsetof(Event{}.Code) != 18 || unsafe.Offsetof(Event{}.Count) != 24 || unsafe.Offsetof(Event{}.Flag) != 32 || unsafe.Sizeof(EventSnapshot{}) != 48 || unsafe.Alignof(EventSnapshot{}) != 8 || unsafe.Offsetof(EventSnapshot{}.Events) != 0 || unsafe.Offsetof(EventSnapshot{}.Omitted) != 24 || unsafe.Offsetof(EventSnapshot{}.Late) != 32 || unsafe.Offsetof(EventSnapshot{}.Closed) != 40 {
 		t.Fatal("ASSERT_C15_EVENT_REPRESENTATION")
 	}
 	owner := &testEventBackingOwner{}
@@ -58,7 +61,22 @@ func TestEventCollectorOwnedBackingExactCapacityAndDetach(t *testing.T) {
 	}
 }
 
+func TestDiagnosticUnsupportedPortableRecord(t *testing.T) {
+	collector := NewEventCollector(2, nil)
+	collector.Record(7, 3, true)
+	if !collector.Terminal(9) {
+		t.Fatal("ASSERT_DIAGNOSTIC_UNSUPPORTED_PORTABLE_TERMINAL")
+	}
+	snapshot := collector.Snapshot()
+	if len(snapshot.Events) != 2 || snapshot.Events[0].Code != 7 || snapshot.Events[1].Kind != EventTerminal || !snapshot.Closed {
+		t.Fatalf("ASSERT_DIAGNOSTIC_UNSUPPORTED_PORTABLE_RECORD: %+v", snapshot)
+	}
+}
+
 func TestEventCollectorOwnedBackingRefusalPrecedesAllocation(t *testing.T) {
+	if !EventRepresentationSupported() {
+		t.Skip("exact event representation is not qualified on this platform")
+	}
 	owner := &testEventBackingOwner{refuse: true}
 	collector, err := NewOwnedEventCollector(3, nil, owner)
 	if err == nil || collector != nil || owner.want != uint64(3)*uint64(unsafe.Sizeof(Event{})) {

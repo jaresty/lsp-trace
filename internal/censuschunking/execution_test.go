@@ -51,6 +51,11 @@ func executionFixture(t *testing.T, chunkTargets int) (ExecutionRequest, *int) {
 		t.Fatalf("invalid fixture chunk cardinality %d", chunkTargets)
 	}
 	globalCount := ChunkSize + chunkTargets
+	chunkOrdinal := 1
+	if chunkTargets == ChunkSize {
+		globalCount = ChunkSize + 1
+		chunkOrdinal = 0
+	}
 	input := fixture(t, globalCount)
 	built, err := Build(input, nil)
 	if err != nil {
@@ -67,7 +72,7 @@ func executionFixture(t *testing.T, chunkTargets int) (ExecutionRequest, *int) {
 		calls++
 		return censusacquisition.AcquiredV5{Session: request.Session, Raw: exactChunkV5(t, request)}, nil
 	})}
-	return ExecutionRequest{Input: input, Plan: built.Plan, Index: built.Index, Projections: projections, Sidecars: sidecars, ChunkOrdinal: len(built.Chunks) - 1, Core: core}, &calls
+	return ExecutionRequest{Input: input, Plan: built.Plan, Index: built.Index, Projections: projections, Sidecars: sidecars, ChunkOrdinal: chunkOrdinal, Core: core}, &calls
 }
 
 func TestExecuteChunkCardinalityBatchBoundaryAndExactlyOnce(t *testing.T) {

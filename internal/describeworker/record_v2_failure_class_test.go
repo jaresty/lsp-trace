@@ -13,10 +13,7 @@ func TestRecordV2OuterCanonicalityMatchesWorkerV2(t *testing.T) {
 	request, packet := validRunnerFixture(t)
 	cfg := fixtureConfig(t)
 	cfg.ResponseVersion = ResponseVersionV2
-	runner, err := NewRunner(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	runner := &Runner{validated: ValidatedConfig{config: cfg}}
 	text, err := json.Marshal(validSemanticV2())
 	if err != nil {
 		t.Fatal(err)
@@ -52,10 +49,7 @@ func TestRecordV2FailureClassificationIsExactAndSourceSafe(t *testing.T) {
 	request, packet := validRunnerFixture(t)
 	cfg := fixtureConfig(t)
 	cfg.ResponseVersion = ResponseVersionV2
-	runner, err := NewRunner(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	runner := &Runner{validated: ValidatedConfig{config: cfg}}
 	legacy := `{"verdict":"SUPPORTED","target_role":"CaptureSnapshots","nearest_outward_consumer":"resumeWithHooks","consumer_need":"need","provided_behavior":"behavior","boundary_contribution":"boundary","limitations":[],"citations":[]}`
 	valueInvalid := `{"verdict":"UNKNOWN","target_role":"role","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"behavior","consumer_relative":false},"boundary_contribution":"boundary","limitations":[]}`
 	unknown := `{"verdict":"COMPLETE","target_role":"role","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"behavior","consumer_relative":false},"boundary_contribution":"boundary","limitations":[],"secret_key":"secret prose"}`

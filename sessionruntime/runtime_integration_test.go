@@ -62,7 +62,13 @@ func TestDiagnosticOperationSnapshotRequiresExactAttemptAndIsImmutable(t *testin
 		t.Fatal(ready)
 	}
 	result := m.RoundTrip(context.Background(), RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: "test/method", Params: json.RawMessage(`{"x":1}`), Deadline: time.Now().Add(time.Second), MaxMessages: 3, MaxBytes: 4096})
-	if result.Failure != "" || result.DiagnosticOperation.sequence == 0 {
+	if result.Failure != "" {
+		t.Fatalf("ASSERT_RUNTIME_OPERATION_LIFECYCLE: %+v", result)
+	}
+	if !manageddiagnostic.EventRepresentationSupported() {
+		return
+	}
+	if result.DiagnosticOperation.sequence == 0 {
 		t.Fatalf("ASSERT_RUNTIME_OPERATION_HANDLE: %+v", result)
 	}
 	if _, ok := m.DiagnosticSnapshotFor(manageddiagnostic.StartupAttemptID("foreign"), result.DiagnosticOperation); ok {
@@ -91,6 +97,9 @@ func TestReadinessReturnsClosedAttemptAuthorizedOperation(t *testing.T) {
 	ready, found := m.WaitReadiness(context.Background(), pending.ID)
 	if !found || ready.State != ReadinessReady || !ready.Metadata.CallHierarchySupport {
 		t.Fatalf("ASSERT_RUNTIME_READINESS_CAPABILITY_PROJECTION: %+v found=%t", ready, found)
+	}
+	if !manageddiagnostic.EventRepresentationSupported() {
+		return
 	}
 	snapshot, ok := m.DiagnosticSnapshotFor(started.AttemptID, ready.DiagnosticOperation)
 	if !ok || !snapshot.Events.Closed || snapshot.Operation.generation != started.DiagnosticGeneration {

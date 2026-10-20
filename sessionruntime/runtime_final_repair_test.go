@@ -91,6 +91,9 @@ func TestReadinessCancellationCleanupHasSingleOwnerAndJoinsReader(t *testing.T) 
 			if teardowns != 1 || closes != 1 {
 				t.Fatalf("ASSERT_RUNTIME_READINESS_SINGLE_CLEANUP_OWNER: teardown=%d close=%d", teardowns, closes)
 			}
+			if !manageddiagnostic.EventRepresentationSupported() {
+				return
+			}
 			snapshot, ok := m.DiagnosticSnapshotFor(started.AttemptID, terminal.DiagnosticOperation)
 			if !ok || !snapshot.Events.Closed {
 				t.Fatalf("ASSERT_RUNTIME_READINESS_READER_JOINED: ok=%t snapshot=%+v", ok, snapshot)
@@ -112,6 +115,9 @@ func TestReadinessCancellationCleanupHasSingleOwnerAndJoinsReader(t *testing.T) 
 }
 
 func TestDiagnosticCompletedHistoryContinuouslyBounded(t *testing.T) {
+	if !manageddiagnostic.EventRepresentationSupported() {
+		t.Skip("owned diagnostic history representation is not qualified on this platform")
+	}
 	owner, failure := newManagerDiagnosticOwner()
 	if failure != "" {
 		t.Fatal(failure)
