@@ -43,6 +43,22 @@ var syntheticSourceDirectories = map[string]bool{
 	"sessionruntime":                  true,
 }
 
+var syntheticSourceAdditionalPaths = []string{
+	"cmd/lsp-trace/census_assembly.go",
+	"cmd/lsp-trace/census_core.go",
+	"cmd/lsp-trace/census_runner.go",
+	"cmd/lsp-trace/census_chunking.go",
+	"internal/censuschunking/chunking.go",
+}
+
+var syntheticSourceAdditionalPathSet = map[string]bool{
+	"cmd/lsp-trace/census_assembly.go":    true,
+	"cmd/lsp-trace/census_core.go":        true,
+	"cmd/lsp-trace/census_runner.go":      true,
+	"cmd/lsp-trace/census_chunking.go":    true,
+	"internal/censuschunking/chunking.go": true,
+}
+
 // VerifySyntheticSourcePin uses the source checkout containing this function.
 // It verifies source bytes only: not the build, binary, runtime, dependency
 // closure, provider authentication, or live qualification.
@@ -65,17 +81,26 @@ func verifySyntheticSourcePinAt(root string, entries []SyntheticSourceEntry, exp
 	var total uint64
 	previous := ""
 	selected := make(map[string]bool, len(entries))
+	additionalSelected := 0
 	var word [8]byte
 	for _, entry := range entries {
 		name := entry.Path
+		inDirectory := syntheticSourceDirectories[path.Dir(name)]
+		isAdditional := syntheticSourceAdditionalPathSet[name]
 		if !utf8.ValidString(name) || strings.ContainsRune(name, 0) || strings.ContainsRune(name, '\\') ||
 			path.Clean(name) != name || strings.HasPrefix(name, "/") ||
 			!strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
-			!syntheticSourceDirectories[path.Dir(name)] || name <= previous ||
+			(!inDirectory && !isAdditional) ||
+			(inDirectory && (additionalSelected != 0 || name <= previous)) ||
+			(isAdditional && (additionalSelected >= len(syntheticSourceAdditionalPaths) || name != syntheticSourceAdditionalPaths[additionalSelected])) ||
 			entry.ByteLength > syntheticSourceFileLimit || total+entry.ByteLength > syntheticSourceTotalLimit {
 			return errSyntheticSourcePin
 		}
-		previous = name
+		if isAdditional {
+			additionalSelected++
+		} else {
+			previous = name
+		}
 		selected[name] = true
 		// Reject symlink ancestors as well as symlink leaves; lexical path checks
 		// alone do not constrain filesystem traversal.
@@ -108,6 +133,9 @@ func verifySyntheticSourcePinAt(root string, entries []SyntheticSourceEntry, exp
 		binary.BigEndian.PutUint64(word[:], uint64(len(data)))
 		_, _ = h.Write(word[:])
 		_, _ = h.Write(entry.SHA256[:])
+	}
+	if additionalSelected != 0 && additionalSelected != len(syntheticSourceAdditionalPaths) {
+		return errSyntheticSourcePin
 	}
 	// Reject omitted implementation files, not just mismatches among selected
 	// entries. Directory enumeration is independent of claimant proposals.

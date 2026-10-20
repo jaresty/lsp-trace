@@ -3,6 +3,7 @@ package adr0011acquisition
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"os"
 	"path/filepath"
@@ -14,6 +15,23 @@ import (
 // hashlib.sha256(b'ADR0011_SYNTHETIC_SOURCE_SET_V1\0' +
 // (len(p)).to_bytes(8,'big') + p + (len(b)).to_bytes(8,'big') + hashlib.sha256(b).digest()).hexdigest()
 // where p=b'internal/adr0011acquisition/a.go', b=b'package a\n'.
+func syntheticSourceTestDigest(entries []SyntheticSourceEntry) [32]byte {
+	h := sha256.New()
+	_, _ = h.Write([]byte(syntheticSourceHeader))
+	var word [8]byte
+	for _, entry := range entries {
+		binary.BigEndian.PutUint64(word[:], uint64(len(entry.Path)))
+		_, _ = h.Write(word[:])
+		_, _ = h.Write([]byte(entry.Path))
+		binary.BigEndian.PutUint64(word[:], entry.ByteLength)
+		_, _ = h.Write(word[:])
+		_, _ = h.Write(entry.SHA256[:])
+	}
+	var digest [32]byte
+	copy(digest[:], h.Sum(nil))
+	return digest
+}
+
 func TestSyntheticSourcePin(t *testing.T) {
 	root := t.TempDir()
 	for dir := range syntheticSourceDirectories {
@@ -112,4 +130,67 @@ func TestSyntheticSourcePin(t *testing.T) {
 	tooLarge := entry
 	tooLarge.ByteLength = syntheticSourceFileLimit + 1
 	assertReject("manifest overlimit", []SyntheticSourceEntry{tooLarge}, golden)
+}
+
+func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
+	root := t.TempDir()
+	for dir := range syntheticSourceDirectories {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	legacyName := "internal/adr0011acquisition/a.go"
+	legacyBody := []byte("package adr0011acquisition\n")
+	legacyFile := filepath.Join(root, filepath.FromSlash(legacyName))
+	if err := os.WriteFile(legacyFile, legacyBody, 0600); err != nil {
+		t.Fatal(err)
+	}
+	legacyEntry := SyntheticSourceEntry{Path: legacyName, ByteLength: uint64(len(legacyBody)), SHA256: sha256.Sum256(legacyBody)}
+	entries := []SyntheticSourceEntry{legacyEntry}
+	for i, name := range syntheticSourceAdditionalPaths {
+		body := []byte("package production\n// " + string(rune('a'+i)) + "\n")
+		filename := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(filename), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filename, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, SyntheticSourceEntry{Path: name, ByteLength: uint64(len(body)), SHA256: sha256.Sum256(body)})
+	}
+	if err := verifySyntheticSourcePinAt(root, entries, syntheticSourceTestDigest(entries)); err != nil {
+		t.Fatalf("complete extension: %v", err)
+	}
+	if err := verifySyntheticSourcePinAt(root, entries[:1], syntheticSourceTestDigest(entries[:1])); err != nil {
+		t.Fatalf("legacy profile: %v", err)
+	}
+	assertReject := func(label string, candidate []SyntheticSourceEntry) {
+		t.Helper()
+		if err := verifySyntheticSourcePinAt(root, candidate, syntheticSourceTestDigest(candidate)); err != errSyntheticSourcePin {
+			t.Fatalf("%s: got %v", label, err)
+		}
+	}
+	for omitted := range syntheticSourceAdditionalPaths {
+		candidate := append([]SyntheticSourceEntry(nil), entries[:omitted+1]...)
+		candidate = append(candidate, entries[omitted+2:]...)
+		assertReject("omitted "+syntheticSourceAdditionalPaths[omitted], candidate)
+	}
+	nearName := append([]SyntheticSourceEntry(nil), entries...)
+	nearName[1].Path = "cmd/lsp-trace/census_assembly_extra.go"
+	assertReject("near name", nearName)
+	unlisted := append([]SyntheticSourceEntry(nil), entries...)
+	unlisted[1].Path = "cmd/lsp-trace/unlisted.go"
+	assertReject("unlisted same directory", unlisted)
+	outOfOrder := append([]SyntheticSourceEntry(nil), entries...)
+	outOfOrder[1], outOfOrder[2] = outOfOrder[2], outOfOrder[1]
+	assertReject("additional order", outOfOrder)
+
+	symlinkPath := filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalPaths[0]))
+	if err := os.Remove(symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalPaths[1])), symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+	assertReject("additional symlink", entries)
 }
