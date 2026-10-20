@@ -143,13 +143,10 @@ func (m *Manager) newDiagnosticOperation(g DiagnosticGenerationHandle, identity 
 }
 
 func (m *Manager) newPrivateB4DiagnosticOperation(g DiagnosticGenerationHandle, identity managedprocess.Identity, account *privateB4ByteAccountV2) (DiagnosticOperationHandle, *manageddiagnostic.EventCollector) {
-	if m.diagnostics == nil || account == nil {
+	if m.diagnostics == nil || m.managerDiagnosticOwner == nil || m.privateDiagnosticHistory == nil || account == nil {
 		return DiagnosticOperationHandle{}, nil
 	}
 	m.mu.Lock()
-	if m.privateDiagnosticHistory == nil {
-		m.privateDiagnosticHistory = new(privateDiagnosticHistory)
-	}
 	if m.diagnosticSequence == ^uint64(0) {
 		if m.diagnosticOmissions != ^uint64(0) {
 			m.diagnosticOmissions++
@@ -185,7 +182,7 @@ func (m *Manager) newPrivateB4DiagnosticOperation(g DiagnosticGenerationHandle, 
 }
 
 func (m *Manager) newDiagnosticOperationWithOwner(g DiagnosticGenerationHandle, identity managedprocess.Identity, owner manageddiagnostic.EventBackingOwner) (DiagnosticOperationHandle, *manageddiagnostic.EventCollector) {
-	if m.diagnostics == nil {
+	if m.diagnostics == nil || m.managerDiagnosticOwner == nil || m.privateDiagnosticHistory == nil {
 		return DiagnosticOperationHandle{}, nil
 	}
 	m.mu.Lock()

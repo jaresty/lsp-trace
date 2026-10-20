@@ -439,6 +439,12 @@ func TestADR0011C17C15ObserverAccepted44RuntimeFixtureMatrix(t *testing.T) {
 			run: func(t *testing.T, observer privateB4C15Observer) {
 				f := newFullP1Fixture(t)
 				f.m.diagnostics = manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: 4, MaxBytes: 1 << 20})
+				diagnosticOwner, failure := newManagerDiagnosticOwner()
+				if failure != "" {
+					t.Fatalf("BLOCKED_NOT_RED manager diagnostic owner failure=%s", failure)
+				}
+				f.m.managerDiagnosticOwner = diagnosticOwner
+				f.m.privateDiagnosticHistory = new(privateDiagnosticHistory)
 				f.req.CaptureOwnedMethodPair = true
 				if failure := installPrivateB4C15BatchObserverForTest(f.m, f.req.SessionID, f.req.Generation, privateC15BatchObserverFromLegacy(observer)); failure != "" {
 					t.Fatalf("BLOCKED_NOT_RED manager observer install failure=%s", failure)

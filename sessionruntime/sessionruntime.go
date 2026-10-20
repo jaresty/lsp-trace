@@ -1862,11 +1862,16 @@ func New(c Config) (*Manager, error) {
 	if failure != "" {
 		return nil, errors.New("sessionruntime: private B4 source ingress unavailable")
 	}
-	diagnosticOwner, failure := newManagerDiagnosticOwner()
-	if failure != "" {
-		return nil, errors.New("sessionruntime: manager diagnostic owner unavailable")
+	var diagnosticOwner *managerDiagnosticOwner
+	var diagnosticHistory *privateDiagnosticHistory
+	if c.Diagnostics != nil && managerDiagnosticRepresentationSupported() && privateDiagnosticHistoryRepresentationSupported() {
+		diagnosticOwner, failure = newManagerDiagnosticOwner()
+		if failure != "" {
+			return nil, errors.New("sessionruntime: manager diagnostic owner unavailable")
+		}
+		diagnosticHistory = new(privateDiagnosticHistory)
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, readinessHistoryRandom: historyRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook, privateB4SourceIngress: sourceIngress, managerDiagnosticOwner: diagnosticOwner, privateDiagnosticHistory: new(privateDiagnosticHistory), cWireObserver: c.cWireObserver, cDecodeEntry: c.cDecodeEntry, cRetainEntry: c.cRetainEntry}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, readinessHistoryRandom: historyRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook, privateB4SourceIngress: sourceIngress, managerDiagnosticOwner: diagnosticOwner, privateDiagnosticHistory: diagnosticHistory, cWireObserver: c.cWireObserver, cDecodeEntry: c.cDecodeEntry, cRetainEntry: c.cRetainEntry}, nil
 }
 
 const (

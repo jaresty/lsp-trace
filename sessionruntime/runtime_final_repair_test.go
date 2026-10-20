@@ -112,10 +112,16 @@ func TestReadinessCancellationCleanupHasSingleOwnerAndJoinsReader(t *testing.T) 
 }
 
 func TestDiagnosticCompletedHistoryContinuouslyBounded(t *testing.T) {
+	owner, failure := newManagerDiagnosticOwner()
+	if failure != "" {
+		t.Fatal(failure)
+	}
 	m := &Manager{
-		limits:               Limits{MaxOperations: 3, MaxObservations: 4},
-		diagnostics:          manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: 1, MaxBytes: 1024}),
-		diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation),
+		limits:                   Limits{MaxOperations: 3, MaxObservations: 4},
+		diagnostics:              manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: 1, MaxBytes: 1024}),
+		diagnosticOperations:     make(map[DiagnosticOperationHandle]diagnosticOperation),
+		managerDiagnosticOwner:   owner,
+		privateDiagnosticHistory: new(privateDiagnosticHistory),
 	}
 	g := m.newDiagnosticGeneration("attempt", "session", 1)
 	type pending struct {
