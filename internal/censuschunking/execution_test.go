@@ -1,10 +1,12 @@
 package censuschunking
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/censusacquisition"
@@ -203,5 +205,132 @@ func TestExecutionReceiptOwnsExactCopies(t *testing.T) {
 	receipt.Projection.ManifestBytes[0] ^= 1
 	if !reflect.DeepEqual(before, receipt.ManifestBytes) {
 		t.Fatal("ASSERT_RECEIPT_BYTES_ALIAS_PROJECTION")
+	}
+}
+
+func maliciousCallerMutation(request *ExecutionRequest) {
+	request.Input.Files = request.Input.Files[:0]
+	request.Input.Targets = request.Input.Targets[:0]
+	request.Input.GlobalProviderFailures = append(request.Input.GlobalProviderFailures, "fabricated")
+	request.Plan.Chunks = request.Plan.Chunks[:0]
+	request.Index.Chunks = request.Index.Chunks[:0]
+	for i := range request.Projections {
+		request.Projections[i].Files = request.Projections[i].Files[:0]
+		request.Projections[i].Symbols = request.Projections[i].Symbols[:0]
+		request.Projections[i].Targets = request.Projections[i].Targets[:0]
+		request.Projections[i].ProviderFailures = append(request.Projections[i].ProviderFailures, "fabricated")
+		request.Sidecars[i].Mappings = request.Sidecars[i].Mappings[:0]
+	}
+	if len(request.Projections) > 1 {
+		request.Projections[0], request.Projections[1] = request.Projections[1], request.Projections[0]
+		request.Sidecars[0], request.Sidecars[1] = request.Sidecars[1], request.Sidecars[0]
+	}
+}
+
+func TestExecuteChunkFreezesCallerAliasesDuringCore(t *testing.T) {
+	request, calls := executionFixture(t, 64)
+	request.Core.Acquirer = chunkAcquirerFunc(func(_ context.Context, batch censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
+		*calls++
+		raw := exactChunkV5(t, batch)
+		maliciousCallerMutation(&request)
+		return censusacquisition.AcquiredV5{Session: batch.Session, Raw: raw}, nil
+	})
+	receipt, err := ExecuteChunk(context.Background(), request)
+	if err != nil || receipt.TargetCount != 64 || *calls != 2 {
+		t.Fatalf("ASSERT_FROZEN_CALLER_ALIASES err=%v calls=%d receipt=%+v", err, *calls, receipt)
+	}
+}
+
+func TestExecuteChunkFreezesCallerAliasesConcurrentSynchronized(t *testing.T) {
+	request, calls := executionFixture(t, 1)
+	mutate := make(chan struct{})
+	mutated := make(chan struct{})
+	go func() {
+		<-mutate
+		maliciousCallerMutation(&request)
+		close(mutated)
+	}()
+	request.Core.Acquirer = chunkAcquirerFunc(func(_ context.Context, batch censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
+		*calls++
+		raw := exactChunkV5(t, batch)
+		close(mutate)
+		<-mutated
+		return censusacquisition.AcquiredV5{Session: batch.Session, Raw: raw}, nil
+	})
+	receipt, err := ExecuteChunk(context.Background(), request)
+	if err != nil || receipt.TargetCount != 1 || *calls != 1 {
+		t.Fatalf("ASSERT_SYNCHRONIZED_FROZEN_CALLER_ALIASES err=%v calls=%d receipt=%+v", err, *calls, receipt)
+	}
+}
+
+func TestChunkExecutionReceiptV1StrictCanonicalIdentity(t *testing.T) {
+	request, _ := executionFixture(t, 1)
+	receipt, err := ExecuteChunk(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := EncodeChunkExecution(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := ParseChunkExecution(raw)
+	if err != nil || ValidateChunkExecution(parsed, request.Plan, request.Index, request.Plan.Chunks[request.ChunkOrdinal], request.Projections[request.ChunkOrdinal], request.Sidecars[request.ChunkOrdinal], receipt.Projection) != nil {
+		t.Fatalf("ASSERT_RECEIPT_V1_ROUND_TRIP err=%v parsed=%+v", err, parsed)
+	}
+	empty := receipt
+	empty.ConstituentDigests = []string{}
+	empty.LogicalDigest, empty.ImmutableSelector = "", ""
+	emptyRaw, err := EncodeChunkExecution(empty)
+	if err != nil || !bytes.Contains(emptyRaw, []byte(`"constituent_digests":[]`)) || bytes.Contains(emptyRaw, []byte(`"constituent_digests":null`)) {
+		t.Fatalf("ASSERT_RECEIPT_COLLECTION_ARRAY err=%v raw=%s", err, emptyRaw)
+	}
+	malformed := map[string][]byte{
+		"duplicate":    []byte(strings.Replace(string(raw), `"schema_version":`, `"schema_version":"`+ChunkExecutionVersion+`","schema_version":`, 1)),
+		"unknown":      []byte(strings.Replace(string(raw), `{`, `{"unknown":0,`, 1)),
+		"trailing":     append(append([]byte(nil), raw...), []byte(` {}`)...),
+		"reordered":    append([]byte(" "), raw...),
+		"stale_digest": []byte(strings.Replace(string(raw), receipt.PlanDigest, digest([]byte("stale")), 1)),
+	}
+	for name, candidate := range malformed {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseChunkExecution(candidate); err == nil {
+				t.Fatalf("ASSERT_RECEIPT_NONCANONICAL_REJECTED raw=%s", candidate)
+			}
+		})
+	}
+	mutations := map[string]func(*ChunkExecution){
+		"schema":              func(v *ChunkExecution) { v.SchemaVersion = "unknown" },
+		"plan":                func(v *ChunkExecution) { v.PlanDigest = digest([]byte("mutated")) },
+		"index":               func(v *ChunkExecution) { v.IndexDigest = digest([]byte("mutated")) },
+		"ordinal":             func(v *ChunkExecution) { v.ChunkOrdinal++ },
+		"range":               func(v *ChunkExecution) { v.TargetStart++ },
+		"count":               func(v *ChunkExecution) { v.TargetCount++ },
+		"projection_identity": func(v *ChunkExecution) { v.ProjectionIdentity = digest([]byte("mutated")) },
+		"projection_digest":   func(v *ChunkExecution) { v.ProjectionDigest = digest([]byte("mutated")) },
+		"sidecar_identity":    func(v *ChunkExecution) { v.SidecarIdentity = digest([]byte("mutated")) },
+		"sidecar_digest":      func(v *ChunkExecution) { v.SidecarDigest = digest([]byte("mutated")) },
+		"capture_set":         func(v *ChunkExecution) { v.CaptureSetIdentity = "mutated" },
+		"capture_set_digest":  func(v *ChunkExecution) { v.CaptureSetDigest = digest([]byte("mutated")) },
+		"manifest":            func(v *ChunkExecution) { v.ManifestDigest = digest([]byte("mutated")) },
+		"manifest_selector":   func(v *ChunkExecution) { v.ManifestSelector = "mutated" },
+		"manifest_bytes":      func(v *ChunkExecution) { v.ManifestBytesDigest = digest([]byte("mutated")) },
+		"constituents": func(v *ChunkExecution) {
+			v.ConstituentDigests = append(v.ConstituentDigests, digest([]byte("mutated")))
+		},
+		"authority":    func(v *ChunkExecution) { v.Authority = 1 },
+		"accepted":     func(v *ChunkExecution) { v.Accepted = true },
+		"completeness": func(v *ChunkExecution) { v.Completeness = "COMPLETE" },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			candidate := receipt
+			candidate.ConstituentDigests = append([]string(nil), receipt.ConstituentDigests...)
+			mutate(&candidate)
+			candidate.LogicalDigest, candidate.ImmutableSelector = "", ""
+			setChunkExecutionIdentity(&candidate)
+			if ValidateChunkExecution(candidate, request.Plan, request.Index, request.Plan.Chunks[request.ChunkOrdinal], request.Projections[request.ChunkOrdinal], request.Sidecars[request.ChunkOrdinal], receipt.Projection) == nil {
+				t.Fatalf("ASSERT_RECEIPT_SEMANTIC_MUTATION_REJECTED candidate=%+v", candidate)
+			}
+		})
 	}
 }

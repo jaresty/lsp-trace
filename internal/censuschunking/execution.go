@@ -1,12 +1,17 @@
 package censuschunking
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"path/filepath"
 	"reflect"
+
+	"lsp-trace/internal/strictjson"
 
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
@@ -52,16 +57,106 @@ type ExecutionRequest struct {
 // ChunkExecution is a private reconciliation receipt. Projection and manifest
 // are the unchanged censusacquisition outputs; this does not represent a global
 // census result or grant completion, acceptance, or publication authority.
+const (
+	ChunkExecutionVersion = "lsp-trace.census-chunk-execution.private.v1"
+	chunkExecutionDomain  = "lsp-trace:census-chunk-execution:private:v1"
+)
+
+// ChunkExecution is local execution evidence, not a global census result.
 type ChunkExecution struct {
-	Descriptor    ChunkDescriptor
-	PlanDigest    string
-	IndexDigest   string
-	Projection    censusacquisition.Projection
-	Manifest      captureset.Manifest
-	ManifestBytes []byte
-	Authority     int
-	Accepted      bool
-	Completeness  string
+	SchemaVersion       string          `json:"schema_version"`
+	LogicalDigest       string          `json:"logical_digest"`
+	ImmutableSelector   string          `json:"immutable_selector"`
+	Descriptor          ChunkDescriptor `json:"descriptor"`
+	PlanDigest          string          `json:"plan_digest"`
+	IndexDigest         string          `json:"index_digest"`
+	ChunkOrdinal        int             `json:"chunk_ordinal"`
+	TargetStart         int             `json:"target_start"`
+	TargetCount         int             `json:"target_count"`
+	ProjectionIdentity  string          `json:"projection_identity"`
+	ProjectionDigest    string          `json:"projection_digest"`
+	SidecarIdentity     string          `json:"sidecar_identity"`
+	SidecarDigest       string          `json:"sidecar_digest"`
+	CaptureSetIdentity  string          `json:"capture_set_identity"`
+	CaptureSetDigest    string          `json:"capture_set_digest"`
+	ManifestDigest      string          `json:"manifest_digest"`
+	ManifestSelector    string          `json:"manifest_selector"`
+	ManifestBytesDigest string          `json:"manifest_bytes_digest"`
+	ConstituentDigests  []string        `json:"constituent_digests"`
+	Authority           int             `json:"authority"`
+	Accepted            bool            `json:"accepted"`
+	Completeness        string          `json:"completeness"`
+
+	Projection    censusacquisition.Projection `json:"-"`
+	Manifest      captureset.Manifest          `json:"-"`
+	ManifestBytes []byte                       `json:"-"`
+}
+
+func EncodeChunkExecution(v ChunkExecution) ([]byte, error) {
+	if v.LogicalDigest == "" && v.ImmutableSelector == "" {
+		setChunkExecutionIdentity(&v)
+	}
+	if err := validateChunkExecution(v); err != nil {
+		return nil, err
+	}
+	return json.Marshal(v)
+}
+
+func ParseChunkExecution(raw []byte) (ChunkExecution, error) {
+	var zero ChunkExecution
+	if len(raw) == 0 || len(raw) > MaxCanonicalBytes || strictjson.RejectDuplicates(raw) != nil {
+		return zero, errors.New("invalid chunk execution JSON")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var v ChunkExecution
+	if decoder.Decode(&v) != nil {
+		return zero, errors.New("invalid chunk execution JSON")
+	}
+	var trailing any
+	if decoder.Decode(&trailing) != io.EOF {
+		return zero, errors.New("trailing chunk execution JSON")
+	}
+	if err := validateChunkExecution(v); err != nil {
+		return zero, err
+	}
+	canonical, _ := json.Marshal(v)
+	if !bytes.Equal(raw, canonical) {
+		return zero, errors.New("noncanonical chunk execution JSON")
+	}
+	return v, nil
+}
+
+func ValidateChunkExecution(v ChunkExecution, plan Plan, index Index, descriptor ChunkDescriptor, local Projection, sidecar Sidecar, projection censusacquisition.Projection) error {
+	if err := validateChunkExecution(v); err != nil {
+		return err
+	}
+	constituentDigests := make([]string, len(projection.Manifest.Constituents))
+	for i, constituent := range projection.Manifest.Constituents {
+		constituentDigests[i] = constituent.SHA256
+	}
+	if v.PlanDigest != plan.LogicalDigest || v.IndexDigest != index.LogicalDigest || v.Descriptor != descriptor || descriptor.Ordinal != v.ChunkOrdinal || descriptor.TargetStart != v.TargetStart || descriptor.TargetCount != v.TargetCount || v.ProjectionIdentity != local.LogicalDigest || v.SidecarIdentity != sidecar.LogicalDigest || v.CaptureSetIdentity != projection.CensusID || v.CaptureSetDigest != digestBytes(projection.ManifestBytes) || v.ManifestDigest != projection.Manifest.LogicalDigest || v.ManifestSelector != projection.Manifest.ImmutableSelector || v.ManifestBytesDigest != digestBytes(projection.ManifestBytes) || !reflect.DeepEqual(v.ConstituentDigests, constituentDigests) {
+		return errors.New("chunk execution aggregate binding mismatch")
+	}
+	return nil
+}
+
+func validateChunkExecution(v ChunkExecution) error {
+	if v.SchemaVersion != ChunkExecutionVersion || v.Accepted || v.Authority != 0 || v.Completeness != "UNKNOWN" || v.ChunkOrdinal < 0 || v.TargetStart < 0 || v.TargetCount < 1 || v.TargetCount > ChunkSize || v.Descriptor.Ordinal != v.ChunkOrdinal || v.Descriptor.TargetStart != v.TargetStart || v.Descriptor.TargetCount != v.TargetCount || !validRef(v.Descriptor.Projection) || !validRef(v.Descriptor.Sidecar) || !validDigest(v.PlanDigest) || !validDigest(v.IndexDigest) || !validDigest(v.ProjectionIdentity) || v.ProjectionDigest != v.Descriptor.Projection.SHA256 || !validDigest(v.SidecarIdentity) || v.SidecarDigest != v.Descriptor.Sidecar.SHA256 || v.CaptureSetIdentity == "" || !validDigest(v.CaptureSetDigest) || !validDigest(v.ManifestDigest) || v.ManifestSelector == "" || !validDigest(v.ManifestBytesDigest) || v.ConstituentDigests == nil {
+		return errors.New("invalid chunk execution receipt")
+	}
+	for _, digest := range v.ConstituentDigests {
+		if !validDigest(digest) {
+			return errors.New("invalid chunk execution constituent digest")
+		}
+	}
+	return validateIdentity(v.LogicalDigest, v.ImmutableSelector, "census-chunk-executions/v1/", chunkExecutionDomain, v, func(x *ChunkExecution) { x.LogicalDigest = ""; x.ImmutableSelector = "" })
+}
+
+func setChunkExecutionIdentity(v *ChunkExecution) {
+	setIdentity(chunkExecutionDomain, "census-chunk-executions/v1/", v, func(x *ChunkExecution, digest, selector string) {
+		x.LogicalDigest, x.ImmutableSelector = digest, selector
+	})
 }
 
 func executionError(stage ExecutionStage, err error) error {
@@ -71,6 +166,14 @@ func executionError(stage ExecutionStage, err error) error {
 // ExecuteChunk validates all supplied aggregate bindings before delegating one
 // selected local projection to the unchanged censusacquisition Core.Run.
 func ExecuteChunk(ctx context.Context, request ExecutionRequest) (ChunkExecution, error) {
+	if err := Reconcile(request.Input, request.Plan, request.Index, request.Projections, request.Sidecars); err != nil {
+		return ChunkExecution{}, executionError(StagePrecondition, err)
+	}
+	frozen, err := freezeExecutionRequest(request)
+	if err != nil {
+		return ChunkExecution{}, executionError(StagePrecondition, err)
+	}
+	request = frozen
 	if err := Reconcile(request.Input, request.Plan, request.Index, request.Projections, request.Sidecars); err != nil {
 		return ChunkExecution{}, executionError(StagePrecondition, err)
 	}
@@ -98,6 +201,25 @@ func ExecuteChunk(ctx context.Context, request ExecutionRequest) (ChunkExecution
 		return ChunkExecution{}, executionError(StageCore, err)
 	}
 	return reconcileExecutionProjection(request, result)
+}
+
+func freezeExecutionRequest(request ExecutionRequest) (ExecutionRequest, error) {
+	type frozenState struct {
+		Input       Input
+		Plan        Plan
+		Index       Index
+		Projections []Projection
+		Sidecars    []Sidecar
+	}
+	raw, err := json.Marshal(frozenState{request.Input, request.Plan, request.Index, request.Projections, request.Sidecars})
+	if err != nil {
+		return ExecutionRequest{}, err
+	}
+	var state frozenState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return ExecutionRequest{}, err
+	}
+	return ExecutionRequest{Input: state.Input, Plan: state.Plan, Index: state.Index, Projections: state.Projections, Sidecars: state.Sidecars, ChunkOrdinal: request.ChunkOrdinal, Core: request.Core}, nil
 }
 
 type staticChunkDiscoverer struct{ discovery censusacquisition.Discovery }
@@ -229,15 +351,39 @@ func reconcileExecutionProjection(request ExecutionRequest, projection censusacq
 			return ChunkExecution{}, executionError(StageMapping, errors.New("chunk result symbol ledger mismatch"))
 		}
 	}
-	return ChunkExecution{
-		Descriptor:    request.Plan.Chunks[request.ChunkOrdinal],
-		PlanDigest:    request.Plan.LogicalDigest,
-		IndexDigest:   request.Index.LogicalDigest,
-		Projection:    validated,
-		Manifest:      manifest,
-		ManifestBytes: append([]byte(nil), validated.ManifestBytes...),
-		Authority:     0,
-		Accepted:      false,
-		Completeness:  "UNKNOWN",
-	}, nil
+	descriptor := request.Plan.Chunks[request.ChunkOrdinal]
+	constituentDigests := make([]string, len(manifest.Constituents))
+	for i, constituent := range manifest.Constituents {
+		constituentDigests[i] = constituent.SHA256
+	}
+	receipt := ChunkExecution{
+		SchemaVersion:       ChunkExecutionVersion,
+		Descriptor:          descriptor,
+		PlanDigest:          request.Plan.LogicalDigest,
+		IndexDigest:         request.Index.LogicalDigest,
+		ChunkOrdinal:        descriptor.Ordinal,
+		TargetStart:         descriptor.TargetStart,
+		TargetCount:         descriptor.TargetCount,
+		ProjectionIdentity:  local.LogicalDigest,
+		ProjectionDigest:    descriptor.Projection.SHA256,
+		SidecarIdentity:     sidecar.LogicalDigest,
+		SidecarDigest:       descriptor.Sidecar.SHA256,
+		CaptureSetIdentity:  validated.CensusID,
+		CaptureSetDigest:    digestBytes(validated.ManifestBytes),
+		ManifestDigest:      manifest.LogicalDigest,
+		ManifestSelector:    manifest.ImmutableSelector,
+		ManifestBytesDigest: digestBytes(validated.ManifestBytes),
+		ConstituentDigests:  constituentDigests,
+		Projection:          validated,
+		Manifest:            manifest,
+		ManifestBytes:       append([]byte(nil), validated.ManifestBytes...),
+		Authority:           0,
+		Accepted:            false,
+		Completeness:        "UNKNOWN",
+	}
+	setChunkExecutionIdentity(&receipt)
+	if err := ValidateChunkExecution(receipt, request.Plan, request.Index, descriptor, local, sidecar, validated); err != nil {
+		return ChunkExecution{}, executionError(StageMapping, err)
+	}
+	return receipt, nil
 }
