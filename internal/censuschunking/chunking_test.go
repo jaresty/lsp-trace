@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -49,6 +50,16 @@ func fixture(t *testing.T, n int) Input {
 }
 
 func TestPlanBoundariesAndCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		count         int
+		compatibility bool
+		err           error
+	}{{0, false, ErrZeroTargets}, {1, true, nil}, {9999, true, nil}, {10000, true, nil}, {10001, false, nil}, {100000, false, nil}, {100001, false, ErrTooManyTargets}} {
+		got, err := CompatibilityForTargetCount(tc.count)
+		if got != tc.compatibility || !errors.Is(err, tc.err) {
+			t.Fatalf("ASSERT_CARDINALITY_ONLY_COMPATIBILITY count=%d compatibility=%v err=%v", tc.count, got, err)
+		}
+	}
 	compat := []byte("exact legacy bytes\n")
 	for _, n := range []int{1, 9999, 10000} {
 		got, err := Build(fixture(t, n), compat)

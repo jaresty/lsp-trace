@@ -196,16 +196,26 @@ type Result struct {
 	Chunks             []Chunk
 }
 
+// CompatibilityForTargetCount decides the routing branch from authoritative
+// discovered target cardinality without requiring global retained fields.
+func CompatibilityForTargetCount(targetCount int) (bool, error) {
+	if targetCount == 0 {
+		return false, ErrZeroTargets
+	}
+	if targetCount > MaxGlobalTargets {
+		return false, ErrTooManyTargets
+	}
+	return targetCount <= ChunkSize, nil
+}
+
 func Build(in Input, compatibilityBytes []byte) (Result, error) {
 	n := len(in.Targets)
-	if n == 0 {
-		return Result{}, ErrZeroTargets
+	compatibility, err := CompatibilityForTargetCount(n)
+	if err != nil {
+		return Result{}, err
 	}
-	if n <= ChunkSize {
+	if compatibility {
 		return Result{Compatibility: true, CompatibilityBytes: bytes.Clone(compatibilityBytes), Chunks: []Chunk{}}, nil
-	}
-	if n > MaxGlobalTargets {
-		return Result{}, ErrTooManyTargets
 	}
 	workspace, err := validateInput(in)
 	if err != nil {

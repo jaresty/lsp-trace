@@ -70,7 +70,7 @@ func productionCensusCoreDependencies() censusCoreDependencies {
 }
 
 func censusOutcomeTyped(outcome censusPublicationOutcome) bool {
-	return outcome.Diagnostic != nil || outcome.Result != nil || outcome.DiscoveryDiagnostic != nil && outcome.RequestReceipt != nil
+	return outcome.Diagnostic != nil || outcome.Result != nil || outcome.PrivateChunkTerminal != nil || outcome.DiscoveryDiagnostic != nil && outcome.RequestReceipt != nil
 }
 
 // runCensusCore coordinates one already-preflighted census through the existing
@@ -120,6 +120,14 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 		}
 		if len(discovery.Targets) == 0 {
 			return fail(censusStageDiscovery, nil)
+		}
+		handled, terminal, chunkErr := runPrivateCensusChunking(ctx, options, cfg, runtime, discovery, observer, productionPrivateCensusChunkDependencies())
+		if chunkErr != nil {
+			return fail(censusStageAcquisition, nil)
+		}
+		if handled {
+			outcome = censusPublicationOutcome{PrivateChunkTerminal: terminal}
+			return 0
 		}
 		var assembly censusAssembly
 		if deps.acquireDiagnostic != nil {

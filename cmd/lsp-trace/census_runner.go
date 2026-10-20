@@ -223,6 +223,17 @@ func writeCensusOutcome(stdout, stderr io.Writer, machine bool, outcome censusPu
 		fmt.Fprintln(stderr, "census failed: DISCOVERY_BOUNDED_INCOMPLETE")
 		return 1
 	}
+	if outcome.PrivateChunkTerminal != nil {
+		if !machine {
+			return writeCensusFailure(stderr, censusStageCommitted, false, fmt.Errorf("private census chunk terminal requires machine output"))
+		}
+		raw, err := marshalPrivateCensusChunkTerminal(*outcome.PrivateChunkTerminal)
+		if err != nil {
+			return writeCensusFailure(stderr, censusStageCommitted, true, err)
+		}
+		_, _ = stdout.Write(append(raw, '\n'))
+		return 0
+	}
 	if outcome.Result == nil {
 		if outcome.Diagnostic == nil {
 			return writeCensusFailure(stderr, censusStageAcquisition, machine, fmt.Errorf("census failed"))
