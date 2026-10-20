@@ -66,6 +66,24 @@ type HeadRevision struct {
 	Selector   string
 }
 
+// ParseCoordinatorHeadRevision strictly validates one private canonical coordinator
+// head and exposes only the revision needed by authoritative HeadStore adapters.
+func ParseCoordinatorHeadRevision(raw []byte) (HeadRevision, error) {
+	var h coordinatorHead
+	if err := decodeCoordinator(raw, &h); err != nil {
+		return HeadRevision{}, err
+	}
+	if h.SchemaVersion != CoordinatorHeadVersion || h.Generation < 1 || h.ImmutableSelector == "" {
+		return HeadRevision{}, errors.New("invalid coordinator head revision")
+	}
+	x := h
+	setHeadIdentity(&x)
+	if x.LogicalDigest != h.LogicalDigest || x.ImmutableSelector != h.ImmutableSelector {
+		return HeadRevision{}, errors.New("coordinator head identity mismatch")
+	}
+	return HeadRevision{Generation: h.Generation, Selector: h.ImmutableSelector}, nil
+}
+
 // HeadStore is the private authoritative mutable register. CompareAndSwap must atomically
 // compare both expected generation and selector and install replacement bytes under key.
 type HeadStore interface {
