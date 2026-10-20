@@ -1640,7 +1640,6 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 		if poison {
 			r.record.State = session.Poisoned
 			r.retired = owner
-			_ = m.algebra.ObservePoison(id, result.Key.Generation)
 			leaseCancel = m.invalidateSessionLeaseLocked(r)
 		}
 		terminalState = r.record.State

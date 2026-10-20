@@ -408,7 +408,7 @@ func TestTargetResourceFailureRecoveryLifecycle(t *testing.T) {
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_RESTART_COMPLETE: operation=%+v", operation)
 	}
 	records := manager.Records()
-	if len(records) != 1 || records[0].Generation <= started.Generation || records[0].State != session.Ready {
+	if len(records) != 1 || records[0].Generation != started.Generation+1 || records[0].State != session.Ready {
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_NEW_READY_GENERATION: records=%+v", records)
 	}
 	newGeneration := records[0].Generation
