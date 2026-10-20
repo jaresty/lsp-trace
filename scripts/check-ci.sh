@@ -17,8 +17,16 @@ require() {
 }
 
 require CI-FORMAT './scripts/check-go-format.sh'
-require CI-TEST 'go test ./...'
+require CI-TEST-HEAVY 'go test -p 1 ./internal/censuschunking ./internal/censuscontinuation'
+require CI-TEST-REMAINING "grep -v -E '^lsp-trace/internal/(censuschunking|censuscontinuation)\$'"
+require CI-TEST-BOUNDED 'xargs go test -p 2'
 require CI-TEST-UNIX-ONLY "if: runner.os != 'Windows'"
+if grep -F -- 'go test ./...' "$workflow" >/dev/null; then
+  printf 'FAIL CI-TEST-MONOLITHIC: monolithic package execution defeats heavy-package isolation\n'
+  failed=1
+else
+  printf 'PASS CI-TEST-MONOLITHIC\n'
+fi
 require CI-WINDOWS-BUILD 'windows-latest'
 require CI-VET 'go vet ./...'
 require CI-BUILD 'go build ./...'

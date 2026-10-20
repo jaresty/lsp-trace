@@ -84,7 +84,14 @@ jobs:
       - name: Install pinned gopls for Darwin qualification
         if: runner.os == 'macOS'
         run: go install golang.org/x/tools/gopls@v0.23.0
-      - run: go test ./...
+      - name: Run heavy Go packages in isolation
         if: runner.os != 'Windows'
+        run: go test -p 1 ./internal/censuschunking ./internal/censuscontinuation
+      - name: Run remaining Go packages with bounded parallelism
+        if: runner.os != 'Windows'
+        run: |
+          go list ./... \
+            | grep -v -E '^lsp-trace/internal/(censuschunking|censuscontinuation)$' \
+            | xargs go test -p 2
       - run: go vet ./...
       - run: go build ./...
