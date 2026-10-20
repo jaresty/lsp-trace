@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +40,147 @@ func TestCompareAndReplaceBoundFilePredecessorCAS(t *testing.T) {
 	got, err := root.ReadSelector("current.json", 4096)
 	if err != nil || !bytes.Equal(got, second) {
 		t.Fatalf("ASSERT_BOUND_CAS_FINAL_BYTES_REREAD: got=%q err=%v", got, err)
+	}
+}
+
+func TestCompareAndReplaceBoundFileAbsentFailsClosedOnExistingReadErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		assertion string
+		prepare   func(t *testing.T, path string)
+	}{
+		{
+			name:      "oversize",
+			assertion: "ASSERT_BOUND_CAS_ABSENT_REJECTS_OVERSIZE_EXISTING",
+			prepare: func(t *testing.T, path string) {
+				t.Helper()
+				if err := os.WriteFile(path, make([]byte, (1<<20)+1), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name:      "malformed",
+			assertion: "ASSERT_BOUND_CAS_ABSENT_REJECTS_MALFORMED_EXISTING",
+			prepare: func(t *testing.T, path string) {
+				t.Helper()
+				if err := os.Mkdir(path, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name:      "unreadable",
+			assertion: "ASSERT_BOUND_CAS_ABSENT_REJECTS_UNREADABLE_EXISTING",
+			prepare: func(t *testing.T, path string) {
+				t.Helper()
+				if err := os.WriteFile(path, []byte("present"), 0o000); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, root := boundRoot(t)
+			path := dir + "/current.json"
+			tc.prepare(t, path)
+			receipt, err := CompareAndReplaceBoundFile(context.Background(), root, "current.json", BoundFilePredecessor{Absent: true}, []byte("replacement\n"), func([]byte) error { return nil })
+			if !errors.Is(err, ErrStalePredecessor) || receipt == nil || receipt.Committed {
+				t.Fatalf("%s: receipt=%+v err=%v", tc.assertion, receipt, err)
+			}
+		})
+	}
+}
+
+func TestCompareAndReplaceBoundFileConcurrentAbsentHasOneWinner(t *testing.T) {
+	if os.Getenv("LSP_TRACE_BOUND_CAS_HELPER") == "1" {
+		root, err := OpenRoot(os.Getenv("LSP_TRACE_BOUND_CAS_ROOT"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer root.Close()
+		start := os.NewFile(3, "cas-start")
+		if start == nil {
+			t.Fatal("missing start pipe")
+		}
+		defer start.Close()
+		var signal [1]byte
+		if _, err := start.Read(signal[:]); err != nil {
+			t.Fatal(err)
+		}
+		receipt, err := CompareAndReplaceBoundFile(context.Background(), root, "current.json", BoundFilePredecessor{Absent: true}, []byte(os.Getenv("LSP_TRACE_BOUND_CAS_PAYLOAD")), func([]byte) error { return nil })
+		switch {
+		case err == nil && receipt != nil && receipt.Committed:
+			fmt.Println("COMMITTED")
+		case errors.Is(err, ErrStalePredecessor) && receipt != nil && !receipt.Committed:
+			fmt.Println("STALE")
+		default:
+			t.Fatalf("helper receipt=%+v err=%v", receipt, err)
+		}
+		return
+	}
+
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/.lsp-trace-candidate-publication.lock", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	type child struct {
+		cmd    *exec.Cmd
+		start  *os.File
+		output *bytes.Buffer
+	}
+	children := make([]child, 0, 2)
+	for _, payload := range []string{"first\n", "second\n"} {
+		readStart, writeStart, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(executable, "-test.run=^TestCompareAndReplaceBoundFileConcurrentAbsentHasOneWinner$", "-test.v")
+		cmd.Env = append(os.Environ(), "LSP_TRACE_BOUND_CAS_HELPER=1", "LSP_TRACE_BOUND_CAS_ROOT="+dir, "LSP_TRACE_BOUND_CAS_PAYLOAD="+payload)
+		cmd.ExtraFiles = []*os.File{readStart}
+		output := new(bytes.Buffer)
+		cmd.Stdout = output
+		cmd.Stderr = output
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		if err := readStart.Close(); err != nil {
+			t.Fatal(err)
+		}
+		children = append(children, child{cmd: cmd, start: writeStart, output: output})
+	}
+	for _, child := range children {
+		if _, err := child.start.Write([]byte{1}); err != nil {
+			t.Fatal(err)
+		}
+		if err := child.start.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var committed, stale int
+	for _, child := range children {
+		if err := child.cmd.Wait(); err != nil {
+			t.Fatalf("ASSERT_BOUND_CAS_CONCURRENT_ABSENT_ONE_WINNER: child failed: %v\n%s", err, child.output.Bytes())
+		}
+		switch {
+		case strings.Contains(child.output.String(), "COMMITTED"):
+			committed++
+		case strings.Contains(child.output.String(), "STALE"):
+			stale++
+		default:
+			t.Fatalf("ASSERT_BOUND_CAS_CONCURRENT_ABSENT_ONE_WINNER: unexpected output: %s", child.output.Bytes())
+		}
+	}
+	if committed != 1 || stale != 1 {
+		t.Fatalf("ASSERT_BOUND_CAS_CONCURRENT_ABSENT_ONE_WINNER: committed=%d stale=%d", committed, stale)
 	}
 }
 

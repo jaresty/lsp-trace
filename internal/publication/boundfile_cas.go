@@ -62,9 +62,9 @@ func CompareAndReplaceBoundFile(ctx context.Context, root *Root, selector string
 		return nil, err
 	}
 	defer unlock()
-	existing, err := root.ReadSelector(selector, 1<<20)
+	existing, err := root.ReadSelectorWithAbsence(selector, 1<<20)
 	if err != nil {
-		if !predecessor.Absent {
+		if !predecessor.Absent || !errors.Is(err, os.ErrNotExist) {
 			return &CompareAndReplaceReceipt{}, ErrStalePredecessor
 		}
 	} else {
