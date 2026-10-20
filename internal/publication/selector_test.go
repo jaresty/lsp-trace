@@ -35,6 +35,29 @@ func TestSelectorPathPartsArePlatformPortable(t *testing.T) {
 	}
 }
 
+func TestReadSelectorWithAbsenceDistinguishesOnlyConfirmedAbsence(t *testing.T) {
+	root, err := OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if _, err := root.ReadSelectorWithAbsence("missing.json", 16); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ASSERT_SELECTOR_FINAL_ABSENCE_DISTINGUISHED: %v", err)
+	}
+	if _, err := root.ReadSelectorWithAbsence("missing/child.json", 16); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ASSERT_SELECTOR_PARENT_ABSENCE_DISTINGUISHED: %v", err)
+	}
+	if _, err := root.ReadSelectorWithAbsence("../escape", 16); err == nil || errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ASSERT_SELECTOR_UNSAFE_NOT_ABSENCE: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root.Path(), "present.json"), []byte("present"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := root.ReadSelectorWithAbsence("present.json", 16); err != nil || string(got) != "present" {
+		t.Fatalf("ASSERT_SELECTOR_PRESENT_READ got=%q err=%v", got, err)
+	}
+}
+
 func TestOwnerOnlyModeVerificationIsPlatformAppropriate(t *testing.T) {
 	const assertion = "ASSERT_PLATFORM_APPROPRIATE_OWNER_ONLY_MODE_VERIFICATION"
 	for _, tc := range []struct {

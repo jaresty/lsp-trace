@@ -73,13 +73,8 @@ func ParseCoordinatorHeadRevision(raw []byte) (HeadRevision, error) {
 	if err := decodeCoordinator(raw, &h); err != nil {
 		return HeadRevision{}, err
 	}
-	if h.SchemaVersion != CoordinatorHeadVersion || h.Generation < 1 || h.ImmutableSelector == "" {
-		return HeadRevision{}, errors.New("invalid coordinator head revision")
-	}
-	x := h
-	setHeadIdentity(&x)
-	if x.LogicalDigest != h.LogicalDigest || x.ImmutableSelector != h.ImmutableSelector {
-		return HeadRevision{}, errors.New("coordinator head identity mismatch")
+	if err := validateHeadStructure(h); err != nil {
+		return HeadRevision{}, err
 	}
 	return HeadRevision{Generation: h.Generation, Selector: h.ImmutableSelector}, nil
 }
@@ -416,19 +411,49 @@ func loadOrCreateHead(ctx context.Context, r CoordinatorRequest, key, root strin
 	return h, nil
 }
 func validateHead(h coordinatorHead, r CoordinatorRequest, key, root string) error {
-	if h.SchemaVersion != CoordinatorHeadVersion || h.WorkflowKey != key || h.RootSelector != root || h.PlanDigest != r.Plan.LogicalDigest || h.IndexDigest != r.Index.LogicalDigest || h.SessionID != r.Plan.SessionID || h.SessionGeneration != r.Plan.Generation || h.WorkspaceDigest != r.Plan.WorkspaceDigest || h.Generation < 1 || h.CommittedPrefix < 0 || h.CommittedPrefix > len(r.Plan.Chunks) {
+	if err := validateHeadStructure(h); err != nil {
+		return err
+	}
+	if h.WorkflowKey != key || h.RootSelector != root || h.PlanDigest != r.Plan.LogicalDigest || h.IndexDigest != r.Index.LogicalDigest || h.SessionID != r.Plan.SessionID || h.SessionGeneration != r.Plan.Generation || h.WorkspaceDigest != r.Plan.WorkspaceDigest || h.CommittedPrefix > len(r.Plan.Chunks) {
 		return errors.New("head domain binding mismatch")
 	}
-	x := h
-	x.LogicalDigest = ""
-	x.ImmutableSelector = ""
-	b, _ := json.Marshal(x)
-	want := domainDigest("lsp-trace:census-chunk-coordinator-head:private:v1", b)
-	if h.LogicalDigest != want || h.ImmutableSelector != "census-chunk-heads/v1/"+want[7:] {
-		return errors.New("head identity mismatch")
-	}
-	if h.State == headClaimed && (h.ClaimOrdinal != h.CommittedPrefix || h.IdempotencyKey != claimKey(key, h.ClaimOrdinal)) {
+	if h.State == headClaimed && h.IdempotencyKey != claimKey(key, h.ClaimOrdinal) {
 		return errors.New("claim transition mismatch")
+	}
+	if h.State == headTerminal && h.CommittedPrefix != len(r.Plan.Chunks) {
+		return errors.New("terminal head incomplete")
+	}
+	return nil
+}
+
+// validateHeadStructure enforces every coordinator-head invariant representable
+// without a request. The plan chunk count is not carried by coordinatorHead, so
+// the upper bound on CommittedPrefix and terminal completeness remain in
+// validateHead, which has the request-bound plan.
+func validateHeadStructure(h coordinatorHead) error {
+	if h.SchemaVersion != CoordinatorHeadVersion || h.WorkflowKey == "" || h.RootSelector == "" || h.PlanDigest == "" || h.IndexDigest == "" || h.SessionID == "" || h.SessionGeneration == 0 || h.WorkspaceDigest == "" || h.Generation == 0 || h.CommittedPrefix < 0 {
+		return errors.New("invalid coordinator head structure")
+	}
+	x := h
+	setHeadIdentity(&x)
+	if x.LogicalDigest != h.LogicalDigest || x.ImmutableSelector != h.ImmutableSelector {
+		return errors.New("coordinator head identity mismatch")
+	}
+	switch h.State {
+	case headCommitted:
+		if h.ClaimOrdinal != -1 || h.IdempotencyKey != "" || h.ReceiptSelector != "" || h.ManifestSelector != "" || h.TerminalSelector != "" {
+			return errors.New("invalid committed head fields")
+		}
+	case headClaimed:
+		if h.ClaimOrdinal != h.CommittedPrefix || h.IdempotencyKey == "" || (h.ReceiptSelector == "") != (h.ManifestSelector == "") || h.TerminalSelector != "" {
+			return errors.New("invalid claimed head fields")
+		}
+	case headTerminal:
+		if h.ClaimOrdinal != -1 || h.IdempotencyKey != "" || h.ReceiptSelector != "" || h.ManifestSelector != "" || h.TerminalSelector == "" {
+			return errors.New("invalid terminal head fields")
+		}
+	default:
+		return errors.New("invalid coordinator head state")
 	}
 	return nil
 }

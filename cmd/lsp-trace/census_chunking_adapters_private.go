@@ -7,6 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
+	"path"
+	"strings"
 
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censuschunking"
@@ -147,7 +151,7 @@ func (s *privateCensusHeadStore) CompareAndSwap(ctx context.Context, key string,
 		return err
 	}
 	predecessor := publication.BoundFilePredecessor{Absent: true}
-	current, loadErr := s.root.ReadSelector(selector, censuschunking.MaxCanonicalBytes)
+	current, loadErr := s.root.ReadSelectorWithAbsence(selector, censuschunking.MaxCanonicalBytes)
 	if loadErr == nil {
 		revision, parseErr := censuschunking.ParseCoordinatorHeadRevision(current)
 		if parseErr != nil {
@@ -157,6 +161,8 @@ func (s *privateCensusHeadStore) CompareAndSwap(ctx context.Context, key string,
 			return publication.ErrStalePredecessor
 		}
 		predecessor = publication.BoundFilePredecessor{Selector: selector, Digest: publication.DigestForTest(current), ByteLength: uint64(len(current))}
+	} else if !errors.Is(loadErr, os.ErrNotExist) {
+		return fmt.Errorf("read current private census head: %w", loadErr)
 	} else if expected != (censuschunking.HeadRevision{}) {
 		return publication.ErrStalePredecessor
 	}
@@ -178,8 +184,23 @@ type privateHeldCensusSession struct {
 	core     censusacquisition.Core
 }
 
-func newPrivateHeldCensusSession(expected censuschunking.ExpectedSession, core censusacquisition.Core) *privateHeldCensusSession {
-	return &privateHeldCensusSession{expected: expected, core: core}
+func newPrivateHeldCensusSession(expected censuschunking.ExpectedSession, core censusacquisition.Core) (*privateHeldCensusSession, error) {
+	if strings.TrimSpace(expected.SessionID) == "" || expected.Generation == 0 || !canonicalPrivateWorkspaceURI(expected.WorkspaceURI) {
+		return nil, errors.New("invalid held census session identity")
+	}
+	if core.Discoverer == nil || core.Acquirer == nil {
+		return nil, errors.New("invalid held census session core")
+	}
+	return &privateHeldCensusSession{expected: expected, core: core}, nil
+}
+
+func canonicalPrivateWorkspaceURI(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "file" || u.Host != "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" || u.Path == "" || !strings.HasPrefix(u.Path, "/") || path.Clean(u.Path) != u.Path {
+		return false
+	}
+	canonical := (&url.URL{Scheme: "file", Path: u.Path}).String()
+	return canonical == raw
 }
 
 func (s *privateHeldCensusSession) WithReadySession(ctx context.Context, expected censuschunking.ExpectedSession, callback func(censusacquisition.Core) error) error {

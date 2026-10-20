@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -141,6 +142,41 @@ func TestPrivateCensusHeadStoreCASLoadRestartAndValidation(t *testing.T) {
 	}
 }
 
+func TestPrivateCensusHeadStoreZeroExpectedFailsClosedOnUnreadableCurrent(t *testing.T) {
+	root := privateAdapterRoot(t)
+	store, err := newPrivateCensusHeadStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "unreadable"
+	selector, err := privateCensusHeadSelector(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root.Path(), selector)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, current := range map[string][]byte{
+		"malformed": []byte(`{"bad":true}`),
+		"oversize":  make([]byte, censuschunking.MaxCanonicalBytes+1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(path, current, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			replacement := privateHeadBytes(t, 1, "-replacement")
+			if err := store.CompareAndSwap(context.Background(), key, censuschunking.HeadRevision{}, replacement); err == nil {
+				t.Fatal("ASSERT_HEAD_ZERO_EXPECTED_FAILS_CLOSED_ON_CURRENT_READ_ERROR")
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(got, current) {
+				t.Fatalf("ASSERT_HEAD_READ_ERROR_DOES_NOT_REPLACE got=%q err=%v", got, err)
+			}
+		})
+	}
+}
+
 func TestPrivateCensusHeadStoreConcurrentCASOneWinner(t *testing.T) {
 	root := privateAdapterRoot(t)
 	store, _ := newPrivateCensusHeadStore(root)
@@ -169,11 +205,26 @@ func TestPrivateCensusHeadStoreConcurrentCASOneWinner(t *testing.T) {
 	}
 }
 
+type privateAdapterDiscoverer struct{}
+
+func (privateAdapterDiscoverer) Discover(context.Context, censusacquisition.SessionIdentity) (censusacquisition.Discovery, error) {
+	return censusacquisition.Discovery{}, nil
+}
+
+type privateAdapterAcquirer struct{}
+
+func (privateAdapterAcquirer) AcquireV5(context.Context, censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
+	return censusacquisition.AcquiredV5{}, nil
+}
+
 func TestPrivateHeldCensusSessionExactMismatchCancellationAndCore(t *testing.T) {
 	expected := censuschunking.ExpectedSession{SessionID: "s", Generation: 7, WorkspaceURI: "file:///workspace"}
 	marker := func(censusacquisition.Phase) {}
-	core := censusacquisition.Core{OnErrorPhase: marker}
-	held := newPrivateHeldCensusSession(expected, core)
+	core := censusacquisition.Core{Discoverer: privateAdapterDiscoverer{}, Acquirer: privateAdapterAcquirer{}, OnErrorPhase: marker}
+	held, err := newPrivateHeldCensusSession(expected, core)
+	if err != nil {
+		t.Fatal(err)
+	}
 	calls := 0
 	if err := held.WithReadySession(context.Background(), expected, func(got censusacquisition.Core) error {
 		calls++
@@ -209,9 +260,47 @@ func (f *privateOuterLeaseCounter) with(run func() error) error {
 	return run()
 }
 
-func TestPrivateHeldCensusSessionOneOuterLeaseMultipleCalls(t *testing.T) {
+func TestPrivateHeldCensusSessionRejectsInvalidConstructionWithoutCallback(t *testing.T) {
+	validCore := censusacquisition.Core{Discoverer: privateAdapterDiscoverer{}, Acquirer: privateAdapterAcquirer{}}
+	cases := map[string]struct {
+		expected censuschunking.ExpectedSession
+		core     censusacquisition.Core
+	}{
+		"empty-session":      {expected: censuschunking.ExpectedSession{Generation: 1, WorkspaceURI: "file:///w"}, core: validCore},
+		"zero-generation":    {expected: censuschunking.ExpectedSession{SessionID: "s", WorkspaceURI: "file:///w"}, core: validCore},
+		"non-file-uri":       {expected: censuschunking.ExpectedSession{SessionID: "s", Generation: 1, WorkspaceURI: "https://example.test/w"}, core: validCore},
+		"hosted-file-uri":    {expected: censuschunking.ExpectedSession{SessionID: "s", Generation: 1, WorkspaceURI: "file://host/w"}, core: validCore},
+		"unclean-file-uri":   {expected: censuschunking.ExpectedSession{SessionID: "s", Generation: 1, WorkspaceURI: "file:///a/../w"}, core: validCore},
+		"escaped-round-trip": {expected: censuschunking.ExpectedSession{SessionID: "s", Generation: 1, WorkspaceURI: "file:///a%2fb"}, core: validCore},
+		"missing-discoverer": {expected: censuschunking.ExpectedSession{SessionID: "s", Generation: 1, WorkspaceURI: "file:///w"}, core: censusacquisition.Core{Acquirer: privateAdapterAcquirer{}}},
+		"missing-acquirer":   {expected: censuschunking.ExpectedSession{SessionID: "s", Generation: 1, WorkspaceURI: "file:///w"}, core: censusacquisition.Core{Discoverer: privateAdapterDiscoverer{}}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			held, err := newPrivateHeldCensusSession(tc.expected, tc.core)
+			if err == nil || held != nil {
+				t.Fatalf("ASSERT_HELD_CONSTRUCTOR_REJECTS_INVALID held=%v err=%v", held, err)
+			}
+		})
+	}
+	var zero *privateHeldCensusSession
+	calls := 0
+	if err := zero.WithReadySession(context.Background(), censuschunking.ExpectedSession{}, func(censusacquisition.Core) error { calls++; return nil }); err == nil || calls != 0 {
+		t.Fatalf("ASSERT_HELD_INVALID_ZERO_NEVER_CALLBACK calls=%d err=%v", calls, err)
+	}
+}
+
+// TestPrivateHeldCensusSessionCompositionShapeOneOuterLeaseMultipleCalls checks
+// only the adapter composition shape. A real Manager-held lease count is deferred.
+func TestPrivateHeldCensusSessionCompositionShapeOneOuterLeaseMultipleCalls(t *testing.T) {
 	expected := censuschunking.ExpectedSession{SessionID: "s", Generation: 1, WorkspaceURI: "file:///w"}
-	held := newPrivateHeldCensusSession(expected, censusacquisition.Core{})
+	held, err := newPrivateHeldCensusSession(expected, censusacquisition.Core{Discoverer: privateAdapterDiscoverer{}, Acquirer: privateAdapterAcquirer{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if typ := reflect.TypeOf(*held); typ.NumField() != 2 || typ.Field(0).Name != "expected" || typ.Field(1).Name != "core" {
+		t.Fatalf("ASSERT_HELD_ADAPTER_HAS_NO_MANAGER_DEPENDENCY fields=%v", typ)
+	}
 	outer := &privateOuterLeaseCounter{}
 	calls := 0
 	if err := outer.with(func() error {

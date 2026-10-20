@@ -22,7 +22,7 @@ func (r *Root) RemovePrivateFile(selector string) (PrivateRemoval, error) {
 	if err := r.ValidatePrivate(); err != nil {
 		return PrivateRemoval{}, err
 	}
-	t, err := existingTarget(r, selector)
+	t, err := existingTarget(r, selector, false)
 	if err != nil {
 		return PrivateRemoval{}, err
 	}

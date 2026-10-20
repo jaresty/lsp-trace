@@ -245,7 +245,7 @@ func PublishBoundFileWithTraceSink(root *Root, selector string, raw []byte, veri
 }
 
 func verifyPublishedExact(root *Root, selector string, raw []byte, verify func([]byte) error) (verifyErr error, closeFailed bool) {
-	t, err := existingTarget(root, selector)
+	t, err := existingTarget(root, selector, false)
 	if err != nil {
 		return err, false
 	}
@@ -304,7 +304,7 @@ func ReadVerifiedBoundFile(root *Root, selector string, limit int64) ([]byte, er
 	if err := root.ValidatePrivate(); err != nil {
 		return nil, errors.Join(ErrBoundFilePolicy, err)
 	}
-	t, err := existingTarget(root, selector)
+	t, err := existingTarget(root, selector, false)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, err

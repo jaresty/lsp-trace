@@ -127,10 +127,21 @@ func (r *Root) ValidatePrivate() error {
 // ReadSelector reads one bounded regular file beneath the pinned root without
 // following symlinks or creating selector components.
 func (r *Root) ReadSelector(selector string, limit int64) ([]byte, error) {
+	return r.readSelector(selector, limit, false)
+}
+
+// ReadSelectorWithAbsence is the narrow CAS-preflight variant of ReadSelector.
+// It preserves os.ErrNotExist when any selector component is confirmed absent;
+// every other unsafe, unreadable, or malformed path still fails closed.
+func (r *Root) ReadSelectorWithAbsence(selector string, limit int64) ([]byte, error) {
+	return r.readSelector(selector, limit, true)
+}
+
+func (r *Root) readSelector(selector string, limit int64, distinguishAbsent bool) ([]byte, error) {
 	if limit < 1 {
 		return nil, errors.New("positive selector byte limit required")
 	}
-	target, err := existingTarget(r, selector)
+	target, err := existingTarget(r, selector, distinguishAbsent)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +169,7 @@ func (r *Root) ReadSelector(selector string, limit int64) ([]byte, error) {
 	return raw, nil
 }
 
-func existingTarget(root *Root, selector string) (*target, error) {
+func existingTarget(root *Root, selector string, distinguishAbsent bool) (*target, error) {
 	if root == nil || root.file == nil || root.handle == nil || selector == "" || strings.IndexByte(selector, 0) >= 0 || filepath.IsAbs(selector) || !filepath.IsLocal(selector) {
 		return nil, errors.New("unsafe selector")
 	}
@@ -173,6 +184,9 @@ func existingTarget(root *Root, selector string) (*target, error) {
 		if err != nil || before.Mode()&os.ModeSymlink != 0 || !before.IsDir() {
 			if owned {
 				current.Close()
+			}
+			if err != nil && distinguishAbsent && errors.Is(err, os.ErrNotExist) {
+				return nil, err
 			}
 			return nil, errors.New("unsafe selector component")
 		}
