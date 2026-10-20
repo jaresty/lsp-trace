@@ -170,6 +170,24 @@ type Config struct {
 	cDecodeEntry  func()
 	cRetainEntry  func()
 }
+
+var errSessionLeaseConflict = errors.New("sessionruntime: session lease lifecycle conflict")
+
+type SessionLeaseRequest struct {
+	SessionID  string
+	Generation uint64
+	Workspace  string
+}
+
+type sessionLeaseContextKey struct{}
+
+type sessionLeaseToken struct {
+	manager    *Manager
+	session    *runtimeSession
+	generation uint64
+	nonce      uint64
+}
+
 type StartRequest struct {
 	Profile           runtimeprofile.Profile
 	SeedBinding       *seedbinding.Manifest
@@ -444,6 +462,10 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		m.mu.Unlock()
 		return DocumentResult{Failure: session.StaleGeneration}
 	}
+	if !m.validSessionLeaseLocked(ctx, r) {
+		m.mu.Unlock()
+		return DocumentResult{Failure: session.LifecycleConflict}
+	}
 	workspace := filepath.Clean(r.record.Profile.Workspace().String())
 	registeredWorkspace := r.record.Profile.Workspace().String()
 	configured := r.languageID
@@ -521,7 +543,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: session.StaleGeneration}, diagnosticEventTerminalFailure)
 	}
-	if m.closed || r.record.State != session.Ready || r.protocolOwned {
+	if m.closed || r.record.State != session.Ready || r.protocolOwned || !m.validSessionLeaseLocked(ctx, r) {
 		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
 	}
@@ -595,6 +617,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	if failure != "" {
 		r.record.State = session.Poisoned
 		r.retired = owner
+		leaseCancel := m.invalidateSessionLeaseLocked(r)
 		m.observe(req.SessionID, req.Generation, "document-failed", r.record.State, failure)
 		if m.diagnostics != nil {
 			diagnostic := manageddiagnostic.RecordDocumentSupply(manageddiagnostic.DocumentSupplyObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: m.sequence, Completed: false, Method: method})
@@ -603,6 +626,9 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 			m.diagnostics.Record(diagnostic)
 		}
 		m.mu.Unlock()
+		if leaseCancel != nil {
+			leaseCancel(errSessionLeaseConflict)
+		}
 		return finishDocument(DocumentResult{Failure: failure}, diagnosticEventTerminalFailure)
 	}
 	var retainedSupply *DocumentSupply
@@ -857,7 +883,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		m.mu.Unlock()
 		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.StaleGeneration}, callHierarchyLayer1GenericRefusalGeneration, session.StaleGeneration)
 	}
-	if r.record.State != session.Ready || r.protocolOwned {
+	if r.record.State != session.Ready || r.protocolOwned || !m.validSessionLeaseLocked(parent, r) {
 		m.mu.Unlock()
 		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.LifecycleConflict}, callHierarchyLayer1GenericRefusalLifecycle, session.LifecycleConflict)
 	}
@@ -1607,12 +1633,15 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 	}
 	m.mu.Lock()
 	terminalState := session.State("")
+	var leaseCancel context.CancelCauseFunc
 	if r := m.sessions[id]; r != nil && r.record.Generation == result.Key.Generation {
 		delete(r.requests, result.Key)
 		r.protocolOwned = false
 		if poison {
 			r.record.State = session.Poisoned
 			r.retired = owner
+			_ = m.algebra.ObservePoison(id, result.Key.Generation)
+			leaseCancel = m.invalidateSessionLeaseLocked(r)
 		}
 		terminalState = r.record.State
 		m.observe(id, result.Key.Generation, "response", r.record.State, failure)
@@ -1704,6 +1733,9 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 	default:
 	}
 	m.mu.Unlock()
+	if leaseCancel != nil {
+		leaseCancel(errSessionLeaseConflict)
+	}
 	if genericTerminal != nil {
 		genericTerminal.requestTerminal()
 		genericTerminal.waitReleased()
@@ -1751,6 +1783,11 @@ type runtimeSession struct {
 	identity               managedprocess.Identity
 	diagnosticGeneration   DiagnosticGenerationHandle
 	readinessHistory       *privateReadinessHistory
+	leaseCount             uint8
+	leaseToken             *sessionLeaseToken
+	leaseNonce             uint64
+	leaseClosing           bool
+	leaseCancel            context.CancelCauseFunc
 }
 
 type privateB4DecodedTestHooks struct {
@@ -2105,6 +2142,64 @@ func (m *Manager) SessionLanguageID(sessionID string, generation uint64) (string
 		return "", false
 	}
 	return r.languageID, true
+}
+
+func (m *Manager) WithReadySessionLease(ctx context.Context, req SessionLeaseRequest, callback func(context.Context) error) error {
+	if ctx == nil || callback == nil {
+		return errSessionLeaseConflict
+	}
+	m.mu.Lock()
+	r := m.sessions[req.SessionID]
+	if m.closed || r == nil || r.record.SessionID != req.SessionID || r.record.Generation != req.Generation ||
+		r.record.Profile.Workspace().String() != req.Workspace || r.record.State != session.Ready ||
+		r.protocolOwned || r.lifecycleOwned || r.leaseClosing || r.leaseCount != 0 || m.workers >= m.limits.MaxChildren {
+		m.mu.Unlock()
+		return errSessionLeaseConflict
+	}
+	r.leaseNonce++
+	token := &sessionLeaseToken{manager: m, session: r, generation: req.Generation, nonce: r.leaseNonce}
+	leaseCtx, cancel := context.WithCancelCause(ctx)
+	r.leaseCount, r.leaseToken, r.leaseCancel = 1, token, cancel
+	m.workers++
+	m.mu.Unlock()
+	leaseCtx = context.WithValue(leaseCtx, sessionLeaseContextKey{}, token)
+	defer func() {
+		m.mu.Lock()
+		if r.leaseCount == 1 && token.manager == m && token.session == r && token.generation == r.record.Generation {
+			r.leaseToken, r.leaseCancel = nil, nil
+			r.leaseNonce++
+			r.leaseClosing = false
+			r.leaseCount = 0
+			m.workers--
+			select {
+			case m.workerDone <- struct{}{}:
+			default:
+			}
+		}
+		m.mu.Unlock()
+	}()
+	return callback(leaseCtx)
+}
+
+func (m *Manager) validSessionLeaseLocked(ctx context.Context, r *runtimeSession) bool {
+	token, _ := ctx.Value(sessionLeaseContextKey{}).(*sessionLeaseToken)
+	if r.leaseCount == 0 {
+		return token == nil
+	}
+	return token != nil && token == r.leaseToken && token.manager == m && token.session == r &&
+		token.generation == r.record.Generation && token.nonce == r.leaseNonce && r.leaseCount == 1 &&
+		!r.leaseClosing && r.record.State == session.Ready && m.sessions[r.record.SessionID] == r
+}
+
+func (m *Manager) invalidateSessionLeaseLocked(r *runtimeSession) context.CancelCauseFunc {
+	if r == nil || r.leaseCount == 0 {
+		return nil
+	}
+	r.leaseClosing = true
+	cancel := r.leaseCancel
+	r.leaseToken, r.leaseCancel = nil, nil
+	r.leaseNonce++
+	return cancel
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
@@ -2823,14 +2918,19 @@ func (m *Manager) ObserveCrash(id string, generation uint64) session.Failure {
 
 func (m *Manager) Poison(id string, generation uint64) session.LifecycleResult {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	r := m.sessions[id]
 	if r == nil {
+		m.mu.Unlock()
 		return session.LifecycleResult{Failure: session.SessionNotFound}
 	}
 	result := m.algebra.ObservePoison(id, generation)
 	r.record.State = result.State
+	cancel := m.invalidateSessionLeaseLocked(r)
 	m.observe(id, generation, "poison", result.State, result.Failure)
+	m.mu.Unlock()
+	if cancel != nil {
+		cancel(errSessionLeaseConflict)
+	}
 	return result
 }
 
@@ -2920,7 +3020,7 @@ func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool
 		}
 		return session.LifecycleResult{Failure: session.SessionNotFound}
 	}
-	if m.closed || (r.protocolOwned && !r.lifecycleOwned) {
+	if m.closed || r.leaseCount != 0 || (r.protocolOwned && !r.lifecycleOwned) {
 		return session.LifecycleResult{State: r.record.State, Generation: r.record.Generation, Failure: session.LifecycleConflict}
 	}
 	if readinessID := m.readinessIDs[id+":"+strconv.FormatUint(r.record.Generation, 10)]; readinessID != "" {
@@ -3238,6 +3338,17 @@ func (m *Manager) Operation(id string) (OperationSnapshot, bool) {
 func (m *Manager) Shutdown(ctx context.Context) error {
 	m.mu.Lock()
 	m.closed = true
+	var leaseCancels []context.CancelCauseFunc
+	for _, r := range m.sessions {
+		if cancel := m.invalidateSessionLeaseLocked(r); cancel != nil {
+			leaseCancels = append(leaseCancels, cancel)
+		}
+	}
+	m.mu.Unlock()
+	for _, cancel := range leaseCancels {
+		cancel(errSessionLeaseConflict)
+	}
+	m.mu.Lock()
 	for m.workers > 0 {
 		m.mu.Unlock()
 		select {
