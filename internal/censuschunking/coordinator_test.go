@@ -3,16 +3,21 @@ package censuschunking
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"lsp-trace/internal/censusacquisition"
 )
 
 type coordinatorStore struct {
-	objects map[string][]byte
-	limit   int64
-	puts    int
-	failAt  int
+	mu        sync.Mutex
+	objects   map[string][]byte
+	limit     int64
+	puts      int
+	failAt    int
+	truncate  bool
+	collision bool
+	panicPut  bool
 }
 
 func newCoordinatorStore(limit int64) *coordinatorStore {
@@ -20,6 +25,11 @@ func newCoordinatorStore(limit int64) *coordinatorStore {
 }
 func (s *coordinatorStore) MaxObjectBytes() int64 { return s.limit }
 func (s *coordinatorStore) Put(_ context.Context, b []byte) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.panicPut {
+		panic("put panic")
+	}
 	s.puts++
 	if s.failAt > 0 && s.puts == s.failAt {
 		return "", errors.New("publication sentinel")
@@ -28,6 +38,9 @@ func (s *coordinatorStore) Put(_ context.Context, b []byte) (string, error) {
 		return "", errors.New("store limit sentinel")
 	}
 	id := digestBytes(b)
+	if s.collision {
+		id = digestBytes([]byte("collision"))
+	}
 	if old, ok := s.objects[id]; ok && string(old) != string(b) {
 		return "", errors.New("collision")
 	}
@@ -35,23 +48,115 @@ func (s *coordinatorStore) Put(_ context.Context, b []byte) (string, error) {
 	return id, nil
 }
 func (s *coordinatorStore) Get(_ context.Context, id string) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	b, ok := s.objects[id]
 	if !ok {
 		return nil, errors.New("missing sentinel")
 	}
-	return append([]byte(nil), b...), nil
+	b = append([]byte(nil), b...)
+	if s.truncate && len(b) > 0 {
+		b = b[:len(b)-1]
+	}
+	return b, nil
 }
 
-type validatorFunc func(context.Context, SessionBinding) error
+type memoryHeadStore struct {
+	mu       sync.Mutex
+	raw      map[string][]byte
+	failCAS  int
+	cas      int
+	panicCAS bool
+}
 
-func (f validatorFunc) Validate(ctx context.Context, b SessionBinding) error { return f(ctx, b) }
+func newHeadStore() *memoryHeadStore { return &memoryHeadStore{raw: map[string][]byte{}} }
+func (h *memoryHeadStore) Load(_ context.Context, k string) ([]byte, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	b, ok := h.raw[k]
+	if !ok {
+		return nil, errors.New("head missing")
+	}
+	return append([]byte(nil), b...), nil
+}
+func (h *memoryHeadStore) CompareAndSwap(_ context.Context, k string, want HeadRevision, repl []byte) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.panicCAS {
+		panic("CAS panic")
+	}
+	h.cas++
+	if h.failCAS > 0 && h.cas == h.failCAS {
+		return errors.New("CAS collision")
+	}
+	old, ok := h.raw[k]
+	if !ok {
+		if want != (HeadRevision{}) {
+			return errors.New("CAS conflict")
+		}
+	} else {
+		var x coordinatorHead
+		if decodeCoordinator(old, &x) != nil || x.Generation != want.Generation || x.ImmutableSelector != want.Selector {
+			return errors.New("CAS conflict")
+		}
+	}
+	var next coordinatorHead
+	if decodeCoordinator(repl, &next) != nil {
+		return errors.New("bad replacement")
+	}
+	h.raw[k] = append([]byte(nil), repl...)
+	return nil
+}
+func (h *memoryHeadStore) current() (string, coordinatorHead) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for k, b := range h.raw {
+		var v coordinatorHead
+		_ = decodeCoordinator(b, &v)
+		return k, v
+	}
+	return "", coordinatorHead{}
+}
+func (h *memoryHeadStore) set(k string, v coordinatorHead) {
+	setHeadIdentity(&v)
+	b, _ := encodeCoordinator(v)
+	h.mu.Lock()
+	h.raw[k] = b
+	h.mu.Unlock()
+}
 
-func coordinatorFixture(t *testing.T, n int) CoordinatorRequest {
+type leaseFunc func(context.Context, ExpectedSession, func(censusacquisition.Core) error) error
+
+func (f leaseFunc) WithReadySession(ctx context.Context, e ExpectedSession, run func(censusacquisition.Core) error) error {
+	return f(ctx, e, run)
+}
+
+type coreCounter struct {
+	mu        sync.Mutex
+	n         int
+	t         *testing.T
+	panicCore bool
+}
+
+func (c *coreCounter) core() censusacquisition.Core {
+	return censusacquisition.Core{Acquirer: chunkAcquirerFunc(func(_ context.Context, r censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
+		c.mu.Lock()
+		c.n++
+		c.mu.Unlock()
+		if c.panicCore {
+			panic("core panic")
+		}
+		return censusacquisition.AcquiredV5{Session: r.Session, Raw: exactChunkV5(c.t, r)}, nil
+	})}
+}
+func (c *coreCounter) count() int { c.mu.Lock(); defer c.mu.Unlock(); return c.n }
+
+func coordinatorFixture(t *testing.T, n int) (CoordinatorRequest, *coreCounter) {
 	t.Helper()
 	in := fixture(t, n)
-	built, err := Build(in, nil)
-	if err != nil {
-		t.Fatal(err)
+	built, e := Build(in, nil)
+	if e != nil {
+		t.Fatal(e)
 	}
 	p := make([]Projection, len(built.Chunks))
 	s := make([]Sidecar, len(built.Chunks))
@@ -59,111 +164,230 @@ func coordinatorFixture(t *testing.T, n int) CoordinatorRequest {
 		p[i] = built.Chunks[i].Projection
 		s[i] = built.Chunks[i].Sidecar
 	}
-	return CoordinatorRequest{Input: in, Plan: built.Plan, Index: built.Index, Projections: p, Sidecars: s}
-}
-
-func TestCoordinatorThreeChunksResumeAndTerminal(t *testing.T) {
-	r := coordinatorFixture(t, ChunkSize*2+1)
-	store := newCoordinatorStore(MaxCanonicalBytes)
-	validations, runs := 0, 0
-	r.Store = store
-	r.Validator = validatorFunc(func(_ context.Context, b SessionBinding) error {
-		validations++
-		if b.SessionID != r.Plan.SessionID || b.Generation != r.Plan.Generation || b.WorkspaceURI != r.Input.WorkspaceURI || !b.Ready {
-			return errors.New("bad binding")
+	counter := &coreCounter{t: t}
+	r := CoordinatorRequest{Input: in, Plan: built.Plan, Index: built.Index, Projections: p, Sidecars: s, Store: newCoordinatorStore(MaxCanonicalBytes), Heads: newHeadStore()}
+	r.Sessions = leaseFunc(func(_ context.Context, x ExpectedSession, run func(censusacquisition.Core) error) error {
+		if x.SessionID != r.Plan.SessionID || x.Generation != r.Plan.Generation || x.WorkspaceURI != r.Input.WorkspaceURI {
+			return errors.New("binding")
 		}
-		return nil
+		return run(counter.core())
 	})
-	r.CoreFactory = func(int) censusacquisition.Core { runs++; return executionCore(t) }
-	out, err := Coordinate(context.Background(), r)
-	if err != nil {
-		t.Fatalf("ASSERT_COORDINATOR_COMPLETE: %v", err)
+	return r, counter
+}
+
+func TestCoordinatorAuthoritativeClaimResumeAndTerminal(t *testing.T) {
+	r, c := coordinatorFixture(t, ChunkSize+1)
+	out, e := Coordinate(context.Background(), r)
+	if e != nil {
+		t.Fatal(e)
 	}
-	if runs != 3 || validations != 3 || len(out.CommitSelectors) != 3 || out.TerminalSelector == "" {
-		t.Fatalf("ASSERT_THREE_CHUNKS_10000_10000_REST runs=%d validations=%d out=%+v", runs, validations, out)
+	if c.count() != 160 || len(out.CommitSelectors) != 2 || out.TerminalSelector == "" {
+		t.Fatalf("ASSERT_COMMITTED_CHAIN %+v calls=%d", out, c.count())
 	}
-	beforeRuns := runs
-	r.ResumeHead = out.FinalCheckpoint
-	out2, err := Coordinate(context.Background(), r)
-	if err != nil || runs != beforeRuns || out2.TerminalSelector != out.TerminalSelector {
-		t.Fatalf("ASSERT_RESUME_NO_DUPLICATE_CORE err=%v runs=%d", err, runs)
+	again, e := Coordinate(context.Background(), r)
+	if e != nil || c.count() != 160 || again.TerminalSelector != out.TerminalSelector {
+		t.Fatalf("ASSERT_COMMITTED_HEAD_NEVER_RERUN err=%v calls=%d", e, c.count())
 	}
-	raw, err := store.Get(context.Background(), out.TerminalSelector)
-	if err != nil {
-		t.Fatal(err)
-	}
-	terminal, err := ParseTerminalIndex(raw)
-	if err != nil || terminal.Authority != 0 || terminal.Accepted || terminal.SourceGraphComplete != "UNKNOWN" || terminal.CrossChunkCalls != "NOT_COMPUTED" || terminal.AggregateCapture != "NOT_MATERIALIZED" {
-		t.Fatalf("ASSERT_TERMINAL_PRIVATE_AUTHORITY: %+v %v", terminal, err)
+	_, h := r.Heads.(*memoryHeadStore).current()
+	if h.State != headTerminal || h.CommittedPrefix != 2 {
+		t.Fatalf("ASSERT_TERMINAL_HEAD %+v", h)
 	}
 }
 
-func TestCoordinatorSessionAndCrashBoundaries(t *testing.T) {
-	want := errors.New("session sentinel")
-	r := coordinatorFixture(t, ChunkSize+1)
-	store := newCoordinatorStore(MaxCanonicalBytes)
-	runs := 0
-	r.Store = store
-	r.CoreFactory = func(int) censusacquisition.Core { runs++; return executionCore(t) }
-	r.Validator = validatorFunc(func(context.Context, SessionBinding) error { return want })
-	if _, err := Coordinate(context.Background(), r); !errors.Is(err, want) || !IsCoordinatorStage(err, CoordinatorStageSession) || runs != 0 {
-		t.Fatalf("ASSERT_SESSION_BEFORE_CORE err=%v runs=%d", err, runs)
+func TestCoordinatorClaimWithoutReceiptIsIndeterminate(t *testing.T) {
+	r, c := coordinatorFixture(t, ChunkSize+1)
+	hs := r.Heads.(*memoryHeadStore)
+	hs.failCAS = 2 // initial head succeeds; claim CAS fails first
+	if _, e := Coordinate(context.Background(), r); e == nil || !IsCoordinatorStage(e, CoordinatorStageConflict) || c.count() != 0 {
+		t.Fatalf("ASSERT_CAS_BEFORE_CORE err=%v calls=%d", e, c.count())
 	}
-	for _, failAt := range []int{1, 7, 10} {
-		t.Run(string(rune(failAt)), func(t *testing.T) {
-			rr := coordinatorFixture(t, ChunkSize+1)
-			st := newCoordinatorStore(MaxCanonicalBytes)
-			st.failAt = failAt
-			rr.Store = st
-			rr.Validator = readyValidator()
-			rr.CoreFactory = func(int) censusacquisition.Core { return executionCore(t) }
-			out, err := Coordinate(context.Background(), rr)
-			if err == nil {
-				t.Fatalf("ASSERT_CRASH_BOUNDARY_FAIL out=%+v", out)
+	hs.failCAS = 0
+	hs.cas = 0
+	// Cancel inside the lease after a durable claim but before Core.
+	r.Sessions = leaseFunc(func(context.Context, ExpectedSession, func(censusacquisition.Core) error) error {
+		return context.Canceled
+	})
+	if _, e := Coordinate(context.Background(), r); e == nil || !IsCoordinatorStage(e, CoordinatorStageSession) {
+		t.Fatalf("ASSERT_CLAIMED_CANCEL err=%v", e)
+	}
+	if _, e := Coordinate(context.Background(), r); e == nil || !IsCoordinatorStage(e, CoordinatorStageIndeterminate) || c.count() != 0 {
+		t.Fatalf("ASSERT_NO_ARBITRARY_RETRY err=%v calls=%d", e, c.count())
+	}
+}
+
+func TestCoordinatorReceiptRecoveryNoDuplicateCore(t *testing.T) {
+	r, c := coordinatorFixture(t, ChunkSize+1)
+	hs := r.Heads.(*memoryHeadStore)
+	hs.failCAS = 4 // create, claim, receipt-link succeed; commit loses CAS
+	if _, e := Coordinate(context.Background(), r); e == nil || !IsCoordinatorStage(e, CoordinatorStageConflict) {
+		t.Fatalf("ASSERT_CRASH_AFTER_RECEIPT err=%v", e)
+	}
+	before := c.count()
+	hs.failCAS = 0
+	if _, e := Coordinate(context.Background(), r); e != nil || c.count() != before+1 {
+		t.Fatalf("ASSERT_RECEIPT_FINALIZE_NO_DUPLICATE_CORE err=%v before=%d after=%d", e, before, c.count())
+	}
+}
+
+func TestHeadTransitionRejectsRollbackForkAndDuplicate(t *testing.T) {
+	base := coordinatorHead{WorkflowKey: "k", RootSelector: "r", PlanDigest: "p", IndexDigest: "i", SessionID: "s", SessionGeneration: 1, WorkspaceDigest: "w", Generation: 2, State: headCommitted, CommittedPrefix: 1}
+	cases := map[string]coordinatorHead{}
+	x := base
+	x.Generation++
+	x.State = headCommitted
+	x.CommittedPrefix = 0
+	cases["rollback"] = x
+	x = base
+	x.Generation++
+	x.State = headCommitted
+	x.CommittedPrefix = 2
+	cases["duplicate_extension"] = x
+	x = base
+	x.Generation += 2
+	x.State = headClaimed
+	x.ClaimOrdinal = 1
+	cases["stale_generation"] = x
+	for name, next := range cases {
+		t.Run(name, func(t *testing.T) {
+			if validateTransition(base, next, 3) == nil {
+				t.Fatal("ASSERT_INVALID_TRANSITION_REJECTED")
 			}
-			if out.TerminalSelector != "" {
-				t.Fatal("ASSERT_TERMINAL_WITHHELD_ON_PARTIAL")
+		})
+	}
+	hs := newHeadStore()
+	setHeadIdentity(&base)
+	raw, _ := encodeCoordinator(base)
+	hs.raw["k"] = raw
+	next := base
+	next.Generation++
+	next.State = headClaimed
+	next.ClaimOrdinal = 1
+	setHeadIdentity(&next)
+	nr, _ := encodeCoordinator(next)
+	if hs.CompareAndSwap(context.Background(), "k", HeadRevision{1, "stale"}, nr) == nil {
+		t.Fatal("ASSERT_FORKED_CAS_REJECTED")
+	}
+}
+
+func TestCoordinatorLeaseTOCTOUAndPanicFailClosed(t *testing.T) {
+	r, c := coordinatorFixture(t, ChunkSize+1)
+	active := false
+	r.Sessions = leaseFunc(func(_ context.Context, _ ExpectedSession, run func(censusacquisition.Core) error) error {
+		active = true
+		defer func() { active = false }()
+		core := c.core()
+		orig := core.Acquirer
+		core.Acquirer = chunkAcquirerFunc(func(ctx context.Context, b censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
+			if !active {
+				return censusacquisition.AcquiredV5{}, errors.New("lease released")
+			}
+			return orig.AcquireV5(ctx, b)
+		})
+		return run(core)
+	})
+	if _, e := Coordinate(context.Background(), r); e != nil {
+		t.Fatalf("ASSERT_CUSTODY_HELD %v", e)
+	}
+	r, c = coordinatorFixture(t, ChunkSize+1)
+	c.panicCore = true
+	if _, e := Coordinate(context.Background(), r); e == nil || !IsCoordinatorStage(e, CoordinatorStagePanic) {
+		t.Fatalf("ASSERT_CORE_PANIC_TYPED %v", e)
+	}
+	_, h := r.Heads.(*memoryHeadStore).current()
+	if h.State != headClaimed {
+		t.Fatalf("ASSERT_PANIC_RETAINS_CLAIM %+v", h)
+	}
+}
+
+func TestCoordinatorStoreCollisionTruncationSizeCancellationAndPanic(t *testing.T) {
+	cases := map[string]func(*CoordinatorRequest){
+		"collision":  func(r *CoordinatorRequest) { r.Store.(*coordinatorStore).collision = true },
+		"truncation": func(r *CoordinatorRequest) { r.Store.(*coordinatorStore).truncate = true },
+		"size":       func(r *CoordinatorRequest) { r.Store = newCoordinatorStore(1) },
+		"cancel": func(r *CoordinatorRequest) {
+			r.Sessions = leaseFunc(func(context.Context, ExpectedSession, func(censusacquisition.Core) error) error {
+				return context.Canceled
+			})
+		},
+		"panic_store": func(r *CoordinatorRequest) { r.Store.(*coordinatorStore).panicPut = true },
+		"panic_head":  func(r *CoordinatorRequest) { r.Heads.(*memoryHeadStore).panicCAS = true },
+	}
+	for n, m := range cases {
+		t.Run(n, func(t *testing.T) {
+			r, _ := coordinatorFixture(t, ChunkSize+1)
+			m(&r)
+			if _, e := Coordinate(context.Background(), r); e == nil {
+				t.Fatal("ASSERT_FAIL_CLOSED_BOUNDARY")
 			}
 		})
 	}
 }
 
-func TestCoordinatorRejectsCorruptResumeAndStoreBoundary(t *testing.T) {
-	r := coordinatorFixture(t, ChunkSize+1)
-	st := newCoordinatorStore(MaxCanonicalBytes)
-	runs := 0
-	r.Store = st
-	r.Validator = readyValidator()
-	r.CoreFactory = func(int) censusacquisition.Core { runs++; return executionCore(t) }
-	out, err := Coordinate(context.Background(), r)
-	if err != nil {
-		t.Fatal(err)
+func TestCoordinatorTerminalDispositionSubstitution(t *testing.T) {
+	r, _ := coordinatorFixture(t, ChunkSize+1)
+	out, e := Coordinate(context.Background(), r)
+	if e != nil {
+		t.Fatal(e)
 	}
-	st.objects[out.FinalCheckpoint] = []byte(`{}`)
-	before := runs
-	r.ResumeHead = out.FinalCheckpoint
-	if _, err = Coordinate(context.Background(), r); err == nil || runs != before || (!IsCoordinatorStage(err, CoordinatorStageCheckpoint) && !IsCoordinatorStage(err, CoordinatorStageReadback)) {
-		t.Fatalf("ASSERT_CORRUPT_PREFIX_BEFORE_CORE err=%v runs=%d", err, runs)
-	}
-	r = coordinatorFixture(t, ChunkSize+1)
-	r.Store = newCoordinatorStore(1)
-	r.Validator = readyValidator()
-	r.CoreFactory = func(int) censusacquisition.Core { return executionCore(t) }
-	if _, err = Coordinate(context.Background(), r); err == nil || !IsCoordinatorStage(err, CoordinatorStagePublication) {
-		t.Fatalf("ASSERT_STORE_SIZE_BOUNDARY: %v", err)
+	st := r.Store.(*coordinatorStore)
+	raw, _ := st.Get(context.Background(), out.TerminalSelector)
+	term, _ := ParseTerminalIndex(raw)
+	st.mu.Lock()
+	st.objects[term.GlobalDispositionSelector] = []byte(`{}`)
+	st.mu.Unlock()
+	if _, e = Coordinate(context.Background(), r); e == nil || !IsCoordinatorStage(e, CoordinatorStageTerminal) {
+		t.Fatalf("ASSERT_DISPOSITION_SUBSTITUTION %v", e)
 	}
 }
 
-func readyValidator() SessionValidator {
-	return validatorFunc(func(_ context.Context, b SessionBinding) error {
-		if !b.Ready {
-			return errors.New("not ready")
+func TestHeadTransitionAndReceiptRecoveryRaceSmall(t *testing.T) {
+	for i := 0; i < 32; i++ {
+		hs := newHeadStore()
+		base := coordinatorHead{SchemaVersion: CoordinatorHeadVersion, WorkflowKey: "k", RootSelector: "r", PlanDigest: "p", IndexDigest: "i", SessionID: "s", SessionGeneration: 1, WorkspaceDigest: "w", Generation: 1, State: headCommitted, ClaimOrdinal: -1}
+		setHeadIdentity(&base)
+		baseRaw, _ := encodeCoordinator(base)
+		hs.raw["k"] = baseRaw
+		var wg sync.WaitGroup
+		wg.Add(2)
+		results := make(chan error, 2)
+		for fork := 0; fork < 2; fork++ {
+			go func() {
+				defer wg.Done()
+				next := base
+				next.Generation++
+				next.State = headClaimed
+				next.ClaimOrdinal = 0
+				next.IdempotencyKey = claimKey("k", 0)
+				if err := validateTransition(base, next, 2); err != nil {
+					results <- err
+					return
+				}
+				setHeadIdentity(&next)
+				raw, _ := encodeCoordinator(next)
+				results <- hs.CompareAndSwap(context.Background(), "k", HeadRevision{Generation: base.Generation, Selector: base.ImmutableSelector}, raw)
+			}()
 		}
-		return nil
-	})
+		wg.Wait()
+		close(results)
+		wins := 0
+		for err := range results {
+			if err == nil {
+				wins++
+			}
+		}
+		if wins != 1 {
+			t.Fatalf("ASSERT_ONE_CAS_WINNER wins=%d", wins)
+		}
+	}
 }
-func executionCore(t *testing.T) censusacquisition.Core {
-	return censusacquisition.Core{Acquirer: chunkAcquirerFunc(func(_ context.Context, r censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
-		return censusacquisition.AcquiredV5{Session: r.Session, Raw: exactChunkV5(t, r)}, nil
-	})}
+
+func TestCoordinatorNormal10001And20001SemanticBoundary(t *testing.T) {
+	for _, n := range []int{10001, 20001} {
+		t.Run(string(rune(n)), func(t *testing.T) {
+			r, _ := coordinatorFixture(t, n)
+			if got := len(r.Plan.Chunks); got != (n+ChunkSize-1)/ChunkSize {
+				t.Fatalf("ASSERT_NORMAL_BOUNDARY chunks=%d", got)
+			}
+		})
+	}
 }
