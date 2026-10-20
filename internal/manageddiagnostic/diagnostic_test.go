@@ -79,6 +79,17 @@ func TestBoundedExactGenerationStore(t *testing.T) {
 	}
 }
 
+func TestRecordCapabilityCheckConstructsValidUnavailableIO(t *testing.T) {
+	record := RecordCapabilityCheck(CapabilityObservation{SessionID: "session-opaque", Generation: 7, Sequence: 3, Supported: false})
+	if err := Validate(record); err != nil {
+		t.Fatalf("ASSERT_DIAGNOSTIC_CAPABILITY_RECORD_VALID: %v", err)
+	}
+	want := IOFacts{State: IOUnavailable}
+	if record.Read != want || record.Write != want {
+		t.Fatalf("ASSERT_DIAGNOSTIC_CAPABILITY_IO_UNAVAILABLE: read=%+v write=%+v", record.Read, record.Write)
+	}
+}
+
 func TestTypedHooksAndFakeClock(t *testing.T) {
 	now := int64(100)
 	clock := func() int64 { now += 5; return now }

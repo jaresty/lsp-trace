@@ -444,7 +444,7 @@ type CapabilityObservation struct {
 }
 
 func RecordCapabilityCheck(o CapabilityObservation) Record {
-	return Record{SessionID: o.SessionID, Generation: o.Generation, Sequence: o.Sequence, Phase: PhaseCapabilityCheck, Terminal: TerminalResponseReceived, Reason: Fact[string]{Observed, "capability-checked"}, CallHierarchy: Fact[bool]{Observed, o.Supported}, DocumentSupplyCompleted: Fact[bool]{Status: Unavailable}, ProcessExit: ProcessExit{Status: Unavailable}, Stderr: Stderr{Status: Withheld}, Request: RequestFacts{Method: Fact[string]{Status: Unavailable}, TargetID: Fact[string]{Status: Unavailable}, CallerID: Fact[string]{Status: Unavailable}, OwnerSequence: Fact[uint64]{Observed, o.Sequence}, ProtocolID: Fact[uint64]{Status: Unavailable}}}
+	return Record{SessionID: o.SessionID, Generation: o.Generation, Sequence: o.Sequence, Phase: PhaseCapabilityCheck, Terminal: TerminalResponseReceived, Reason: Fact[string]{Observed, "capability-checked"}, Read: IOFacts{State: IOUnavailable}, Write: IOFacts{State: IOUnavailable}, CallHierarchy: Fact[bool]{Observed, o.Supported}, DocumentSupplyCompleted: Fact[bool]{Status: Unavailable}, ProcessExit: ProcessExit{Status: Unavailable}, Stderr: Stderr{Status: Withheld}, Request: RequestFacts{Method: Fact[string]{Status: Unavailable}, TargetID: Fact[string]{Status: Unavailable}, CallerID: Fact[string]{Status: Unavailable}, OwnerSequence: Fact[uint64]{Observed, o.Sequence}, ProtocolID: Fact[uint64]{Status: Unavailable}}}
 }
 
 type DocumentSupplyObservation struct {

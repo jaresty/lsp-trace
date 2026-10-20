@@ -196,6 +196,29 @@ func roundTripManager(t *testing.T, mode string) (*Manager, StartResult, *roundT
 	return m, s, child
 }
 
+func runRoundTripAssertions(supported bool, portableAssertions, privateAssertions func()) {
+	portableAssertions()
+	if supported {
+		privateAssertions()
+	}
+}
+
+func TestRoundTripPrivateAssertionsFollowRepresentationSupport(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		supported        bool
+		wantPrivateCalls int
+	}{{"supported", true, 1}, {"unsupported", false, 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			portableCalls, privateCalls := 0, 0
+			runRoundTripAssertions(tc.supported, func() { portableCalls++ }, func() { privateCalls++ })
+			if portableCalls != 1 || privateCalls != tc.wantPrivateCalls {
+				t.Fatalf("ASSERT_ROUNDTRIP_ASSERTION_POLICY: case=%s portable=%d private=%d want_private=%d", tc.name, portableCalls, privateCalls, tc.wantPrivateCalls)
+			}
+		})
+	}
+}
+
 func TestRoundTripRetainsProviderClassificationBeforeTerminal(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -211,26 +234,36 @@ func TestRoundTripRetainsProviderClassificationBeforeTerminal(t *testing.T) {
 			}
 			s := m.Start(context.Background(), StartRequest{Profile: profile(t)})
 			m.ObserveInitialization(s.SessionID, s.Generation, true)
-			got := m.roundTrip(context.Background(), RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "textDocument/documentSymbol", Params: json.RawMessage(`{"x":1}`), Deadline: time.Now().Add(time.Second), MaxMessages: 3, MaxBytes: 4096}, func(json.RawMessage, *lspwire.RPCError) bool { return tc.match })
-			snapshot, ok := m.DiagnosticSnapshotFor(s.AttemptID, got.DiagnosticOperation)
-			if !ok {
-				t.Fatal("ASSERT_DOCUMENT_SYMBOL_COLLECTOR_SNAPSHOT")
-			}
-			seen, terminal := false, false
-			for _, event := range snapshot.Events.Events {
-				if event.Code == tc.code {
-					seen = true
-					if terminal {
-						t.Fatal("ASSERT_DOCUMENT_SYMBOL_CLASSIFICATION_AFTER_TERMINAL")
+			classified := false
+			got := m.roundTrip(context.Background(), RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "textDocument/documentSymbol", Params: json.RawMessage(`{"x":1}`), Deadline: time.Now().Add(time.Second), MaxMessages: 3, MaxBytes: 4096}, func(json.RawMessage, *lspwire.RPCError) bool {
+				classified = true
+				return tc.match
+			})
+			runRoundTripAssertions(manageddiagnostic.EventRepresentationSupported(), func() {
+				if got.Failure != "" || string(got.Result) != `{"ok":true}` || !classified {
+					t.Fatalf("ASSERT_DOCUMENT_SYMBOL_PORTABLE_%s_CLASSIFICATION: got=%+v classified=%t", tc.name, got, classified)
+				}
+			}, func() {
+				snapshot, ok := m.DiagnosticSnapshotFor(s.AttemptID, got.DiagnosticOperation)
+				if !ok {
+					t.Fatal("ASSERT_DOCUMENT_SYMBOL_COLLECTOR_SNAPSHOT")
+				}
+				seen, terminal := false, false
+				for _, event := range snapshot.Events.Events {
+					if event.Code == tc.code {
+						seen = true
+						if terminal {
+							t.Fatal("ASSERT_DOCUMENT_SYMBOL_CLASSIFICATION_AFTER_TERMINAL")
+						}
+					}
+					if event.Kind == manageddiagnostic.EventTerminal {
+						terminal = true
 					}
 				}
-				if event.Kind == manageddiagnostic.EventTerminal {
-					terminal = true
+				if !seen {
+					t.Fatalf("ASSERT_DOCUMENT_SYMBOL_%s_CLASSIFICATION: %+v", tc.name, snapshot.Events)
 				}
-			}
-			if !seen {
-				t.Fatalf("ASSERT_DOCUMENT_SYMBOL_%s_CLASSIFICATION: %+v", tc.name, snapshot.Events)
-			}
+			})
 		})
 	}
 }
