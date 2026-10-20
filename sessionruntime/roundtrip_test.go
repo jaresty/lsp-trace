@@ -46,14 +46,16 @@ func TestRuntimeObservationSurfaceAccountsOwnedWireAndThermalPhase(t *testing.T)
 }
 
 type roundTripChild struct {
-	input     *io.PipeReader
-	stdin     *io.PipeWriter
-	output    *io.PipeWriter
-	stdout    *io.PipeReader
-	mode      string
-	mu        sync.Mutex
-	requests  []lspwire.Message
-	teardowns int
+	input           *io.PipeReader
+	stdin           *io.PipeWriter
+	output          *io.PipeWriter
+	stdout          *io.PipeReader
+	mode            string
+	mu              sync.Mutex
+	requests        []lspwire.Message
+	teardowns       int
+	requestSeen     chan struct{}
+	releaseResponse chan struct{}
 }
 
 func newRoundTripChild(mode string) *roundTripChild {
@@ -83,7 +85,16 @@ func (c *roundTripChild) serve() {
 		if msg.Method == "textDocument/didOpen" || msg.Method == "textDocument/didChange" {
 			continue
 		}
+		if c.requestSeen != nil && msg.Method != "$/cancelRequest" {
+			select {
+			case c.requestSeen <- struct{}{}:
+			default:
+			}
+		}
 		switch c.mode {
+		case "controlled-success":
+			<-c.releaseResponse
+			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`{"ok":true}`)})
 		case "success":
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "window/logMessage", Params: json.RawMessage(`{"type":3}`)})
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`999`), Result: json.RawMessage(`null`)})

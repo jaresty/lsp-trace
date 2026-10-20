@@ -2924,8 +2924,11 @@ func (m *Manager) Poison(id string, generation uint64) session.LifecycleResult {
 		return session.LifecycleResult{Failure: session.SessionNotFound}
 	}
 	result := m.algebra.ObservePoison(id, generation)
-	r.record.State = result.State
-	cancel := m.invalidateSessionLeaseLocked(r)
+	var cancel context.CancelCauseFunc
+	if result.Failure == session.SessionPoisoned && result.Generation == r.record.Generation && result.State == session.Poisoned {
+		r.record.State = result.State
+		cancel = m.invalidateSessionLeaseLocked(r)
+	}
 	m.observe(id, generation, "poison", result.State, result.Failure)
 	m.mu.Unlock()
 	if cancel != nil {

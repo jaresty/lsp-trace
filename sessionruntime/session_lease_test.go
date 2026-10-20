@@ -2,6 +2,7 @@ package sessionruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
 )
 
@@ -55,6 +57,44 @@ func TestSessionLeaseAdmissionAndExclusion(t *testing.T) {
 	}
 }
 
+func TestSessionLeaseStalePoisonPreservesCurrentLease(t *testing.T) {
+	m, started, child := roundTripManager(t, "success")
+	defer child.Close()
+	req := SessionLeaseRequest{SessionID: started.SessionID, Generation: started.Generation, Workspace: "/workspace"}
+	if err := m.WithReadySessionLease(context.Background(), req, func(ctx context.Context) error {
+		before := m.Census()
+		got := m.Poison(req.SessionID, req.Generation+1)
+		if got.Failure != session.StaleGeneration || got.Generation != req.Generation || got.State != session.Ready {
+			t.Fatalf("stale poison taxonomy: %+v", got)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("stale poison cancelled current lease: %v", context.Cause(ctx))
+		default:
+		}
+		if after := m.Census(); after.Workers != before.Workers {
+			t.Fatalf("stale poison changed worker count: before=%+v after=%+v", before, after)
+		}
+		m.mu.Lock()
+		r := m.sessions[req.SessionID]
+		unchanged := r != nil && r.leaseCount == 1 && r.leaseToken != nil && r.leaseCancel != nil && !r.leaseClosing
+		m.mu.Unlock()
+		if !unchanged {
+			t.Fatal("stale poison changed lease token, cancel, count, or closing state")
+		}
+		gotRoundTrip := m.RoundTrip(ctx, RoundTripRequest{SessionID: req.SessionID, Generation: req.Generation, Method: "textDocument/references", Params: json.RawMessage(`{}`), Deadline: time.Now().Add(time.Second), MaxMessages: 3, MaxBytes: 4096})
+		if gotRoundTrip.Failure != "" {
+			t.Fatalf("sequential leased operation after stale poison: %+v", gotRoundTrip)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c := m.Census(); c.Workers != 0 {
+		t.Fatalf("final worker count: %+v", c)
+	}
+}
+
 func TestSessionLeaseReleaseAndStaleContext(t *testing.T) {
 	m, started := readyLeaseManager(t, 4)
 	req := SessionLeaseRequest{SessionID: started.SessionID, Generation: started.Generation, Workspace: "/workspace"}
@@ -65,6 +105,39 @@ func TestSessionLeaseReleaseAndStaleContext(t *testing.T) {
 	got := m.PrepareDocument(copied, DocumentRequest{SessionID: req.SessionID, Generation: req.Generation, URI: "file:///workspace/a.go"})
 	if got.Failure != session.LifecycleConflict {
 		t.Fatalf("stale copied context: %+v", got)
+	}
+}
+
+func TestSessionLeaseRejectsCopiedContextForAnotherManagerAndCancelledInput(t *testing.T) {
+	m, started := readyLeaseManager(t, 4)
+	other, otherStarted := readyLeaseManager(t, 4)
+	req := SessionLeaseRequest{SessionID: started.SessionID, Generation: started.Generation, Workspace: "/workspace"}
+	var copied context.Context
+	if err := m.WithReadySessionLease(context.Background(), req, func(ctx context.Context) error {
+		copied = ctx
+		got := other.PrepareDocument(ctx, DocumentRequest{SessionID: otherStarted.SessionID, Generation: otherStarted.Generation, URI: "file:///workspace/a.go"})
+		if got.Failure != session.LifecycleConflict {
+			t.Fatalf("cross-manager copied lease: %+v", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if copied == nil {
+		t.Fatal("missing copied context")
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	called := false
+	err := m.WithReadySessionLease(cancelled, req, func(ctx context.Context) error {
+		called = true
+		return context.Cause(ctx)
+	})
+	if !called || !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled input callback: called=%t err=%v", called, err)
+	}
+	if c := m.Census(); c.Workers != 0 {
+		t.Fatalf("cancelled input exact release: %+v", c)
 	}
 }
 
@@ -141,6 +214,160 @@ func TestSessionLeaseConcurrentConflict(t *testing.T) {
 	close(release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func controlledLeaseManager(t *testing.T) (*Manager, StartResult, *roundTripChild) {
+	t.Helper()
+	child := newRoundTripChild("controlled-success")
+	child.requestSeen = make(chan struct{}, 1)
+	child.releaseResponse = make(chan struct{})
+	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 2, MaxChildren: 3, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+	if got := m.ObserveInitialization(started.SessionID, started.Generation, true); got.State != session.Ready {
+		t.Fatal(got)
+	}
+	return m, started, child
+}
+
+func leasedRoundTripRequest(started StartResult) RoundTripRequest {
+	return RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: "textDocument/references", Params: json.RawMessage(`{}`), Deadline: time.Now().Add(time.Second), MaxMessages: 1, MaxBytes: 4096}
+}
+
+func TestSessionLeaseCallbackReturnKeepsActiveRequestOwned(t *testing.T) {
+	m, started, child := controlledLeaseManager(t)
+	defer child.Close()
+	lease := SessionLeaseRequest{SessionID: started.SessionID, Generation: started.Generation, Workspace: "/workspace"}
+	result := make(chan RoundTripResult, 1)
+	if err := m.WithReadySessionLease(context.Background(), lease, func(ctx context.Context) error {
+		go func() { result <- m.RoundTrip(ctx, leasedRoundTripRequest(started)) }()
+		<-child.requestSeen
+		if c := m.Census(); c.Workers != 2 {
+			t.Fatalf("lease plus request workers: %+v", c)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Lock()
+	r := m.sessions[started.SessionID]
+	requests, owned, workers, leases := len(r.requests), r.protocolOwned, m.workers, r.leaseCount
+	m.mu.Unlock()
+	if requests != 1 || !owned || workers != 1 || leases != 0 {
+		t.Fatalf("callback return continuity requests=%d owned=%t workers=%d leases=%d", requests, owned, workers, leases)
+	}
+	if got := m.Stop(context.Background(), started.SessionID, "stop"); got.Failure != session.LifecycleConflict {
+		t.Fatalf("lifecycle replacement gap: %+v", got)
+	}
+	if err := m.WithReadySessionLease(context.Background(), lease, func(context.Context) error { return nil }); !errors.Is(err, errSessionLeaseConflict) {
+		t.Fatalf("replacement lease admitted during request: %v", err)
+	}
+	close(child.releaseResponse)
+	if got := <-result; got.Failure != "" {
+		t.Fatalf("active request terminal: %+v", got)
+	}
+	if c := m.Census(); c.Workers != 0 {
+		t.Fatalf("final workers: %+v", c)
+	}
+}
+
+func TestSessionLeaseConcurrentRoundTripRefusesProtocolOwned(t *testing.T) {
+	m, started, child := controlledLeaseManager(t)
+	defer child.Close()
+	lease := SessionLeaseRequest{SessionID: started.SessionID, Generation: started.Generation, Workspace: "/workspace"}
+	if err := m.WithReadySessionLease(context.Background(), lease, func(ctx context.Context) error {
+		result := make(chan RoundTripResult, 1)
+		go func() { result <- m.RoundTrip(ctx, leasedRoundTripRequest(started)) }()
+		<-child.requestSeen
+		if got := m.RoundTrip(ctx, leasedRoundTripRequest(started)); got.Failure != session.LifecycleConflict {
+			t.Fatalf("concurrent protocolOwned refusal: %+v", got)
+		}
+		close(child.releaseResponse)
+		if got := <-result; got.Failure != "" {
+			t.Fatalf("first request terminal: %+v", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c := m.Census(); c.Workers != 0 {
+		t.Fatalf("final workers: %+v", c)
+	}
+}
+
+func TestSessionLeaseSequentialPrepareAndRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "a.go")
+	if err := os.WriteFile(path, []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: root, Profile: "go", EnvironmentReference: "local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := newRoundTripChild("references-empty")
+	defer child.Close()
+	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 2, MaxChildren: 3, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := m.Start(context.Background(), StartRequest{Profile: runtimeprofile.Resolve(selector)})
+	if got := m.ObserveInitialization(started.SessionID, started.Generation, true); got.State != session.Ready {
+		t.Fatal(got)
+	}
+	lease := SessionLeaseRequest{SessionID: started.SessionID, Generation: started.Generation, Workspace: root}
+	if err := m.WithReadySessionLease(context.Background(), lease, func(ctx context.Context) error {
+		uri := "file://" + filepath.ToSlash(path)
+		prepared := m.PrepareDocument(ctx, DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: uri})
+		if prepared.Failure != "" || prepared.Version != 1 {
+			t.Fatalf("leased prepare: %+v", prepared)
+		}
+		got := m.RoundTrip(ctx, RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: "textDocument/references", Params: json.RawMessage(`{}`), Deadline: time.Now().Add(time.Second), MaxMessages: 1, MaxBytes: 4096})
+		if got.Failure != "" || got.Key.Generation != started.Generation || got.Key.ID == 0 || got.RequestMessages != 1 || got.Messages != 1 {
+			t.Fatalf("leased round trip keys/accounting: %+v", got)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c := m.Census(); c.Workers != 0 {
+		t.Fatalf("final workers: %+v", c)
+	}
+}
+
+func TestSessionLeaseExactPoisonCancelsActiveRoundTripOnce(t *testing.T) {
+	m, started, child := controlledLeaseManager(t)
+	defer child.Close()
+	lease := SessionLeaseRequest{SessionID: started.SessionID, Generation: started.Generation, Workspace: "/workspace"}
+	if err := m.WithReadySessionLease(context.Background(), lease, func(ctx context.Context) error {
+		result := make(chan RoundTripResult, 1)
+		go func() { result <- m.RoundTrip(ctx, leasedRoundTripRequest(started)) }()
+		<-child.requestSeen
+		poisoned := m.Poison(started.SessionID, started.Generation)
+		if poisoned.Failure != session.SessionPoisoned || poisoned.State != session.Poisoned {
+			t.Fatalf("exact poison: %+v", poisoned)
+		}
+		close(child.releaseResponse)
+		got := <-result
+		if got.Failure != session.RequestCancelled {
+			t.Fatalf("poisoned request terminal: %+v", got)
+		}
+		m.mu.Lock()
+		r := m.sessions[started.SessionID]
+		requests, owned := len(r.requests), r.protocolOwned
+		m.mu.Unlock()
+		if requests != 0 || owned {
+			t.Fatalf("request terminal not exact requests=%d owned=%t", requests, owned)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c := m.Census(); c.Workers != 0 {
+		t.Fatalf("final workers: %+v", c)
 	}
 }
 
