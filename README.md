@@ -76,9 +76,11 @@ lsp-trace census --workspace PATH \
   (--server COMMAND | --profile NAME [--config PATH]) \
   --publication-root ABSOLUTE_PATH \
   [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] \
-  [--server-arg VALUE...] [--down-depth N] [--up-depth N] \
+  [--prune-dir DIR...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] \
   [--max-nodes N] [--timeout DURATION] [--request-timeout DURATION] [--machine]
 ```
+
+Provider-free preflight syntax is `lsp-trace census --workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine`.
 
 The default source is `.`, `down-depth` is `1`, and `up-depth` is `0`. Sources are workspace-relative. Use repeatable `--prune-dir DIR` to reject canonical workspace-relative directory subtrees before admission and enumeration-work charging. Use `--enumeration-preflight` for provider-free, runtime-free bounded enumeration; it cannot be combined with server, profile, publication, or resume controls. See [Census enumeration preflight and pruning semantics](docs/census-enumeration-preflight.md).
 

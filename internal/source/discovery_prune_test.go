@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -36,6 +37,30 @@ func TestDiscoverContextPrunesGloballyAcrossOverlappingRoots(t *testing.T) {
 		}
 	}
 }
+func TestDiscoverContextPruneSymlinkInteraction(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation is not reliably available without privileges")
+	}
+	base := t.TempDir()
+	target := filepath.Join(base, "target")
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "secret.go"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("target", filepath.Join(base, "alias")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	got, err := DiscoverContext(context.Background(), Request{Base: base, Inputs: []string{"alias"}, AllowDot: true, PrunedDirectories: []string{"alias"}}, Limits{MaxEntries: 100, MaxAccepted: 100, MaxWork: 200, MaxPathBytes: 4096, MaxDepth: 64})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("ASSERT_DISCOVER_PRUNE_SYMLINK: %+v", got)
+	}
+}
+
 func containsPrefix(values []string, prefix string) bool {
 	for _, v := range values {
 		if v == prefix || len(v) > len(prefix) && v[:len(prefix)+1] == prefix+"/" {

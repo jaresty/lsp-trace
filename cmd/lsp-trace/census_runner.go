@@ -29,7 +29,7 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const censusInvocationUsage = "lsp-trace census ((--workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--catalog --catalog-config HOST_JSON] [--stop-after describe-requests] [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--batch-targets N] [--timeout DURATION] [--request-timeout DURATION]) | (--resume SELECTOR --catalog-config HOST_JSON --publication-root ABSOLUTE_PATH [--workspace PATH] [--stop-after describe-requests])) [--machine]"
+const censusInvocationUsage = "lsp-trace census (((--workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--catalog --catalog-config HOST_JSON] [--stop-after describe-requests] [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--batch-targets N] [--timeout DURATION] [--request-timeout DURATION]) | (--workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine)) | (--resume SELECTOR --catalog-config HOST_JSON --publication-root ABSOLUTE_PATH [--workspace PATH] [--stop-after describe-requests])) [--machine]"
 const censusUsage = "usage: " + censusInvocationUsage
 
 type censusRunnerDependencies struct {
@@ -256,7 +256,7 @@ func runCensusEnumerationPreflight(options censusCLIOptions, stdout, stderr io.W
 		}
 	}
 	sort.Strings(selected)
-	result := censuspreflight.Result{SchemaVersion: censuspreflight.SchemaVersion, Roots: roots, Includes: includes, Excludes: excludes, PrunedDirectories: append([]string(nil), options.PrunedDirectories...), Counts: censuspreflight.Counts{Entries: len(files), Selected: len(selected), Excluded: excluded}, SelectedPathsDigest: censuspreflight.DigestSelected(selected), Limits: censuspreflight.Limits{MaxEntries: censusMaxDiscoveredEntries, MaxAccepted: censusMaxDiscoveredEntries, MaxWork: censusMaxEnumerationWork, MaxPathBytes: censusMaxSourcePathBytes, MaxDepth: censusMaxSourceDepth}, Terminal: "COMPLETE", Authority: 0, Completeness: "COMPLETE", AbsenceInference: false}
+	result := censuspreflight.Result{SchemaVersion: censuspreflight.SchemaVersion, Roots: roots, Includes: includes, Excludes: excludes, PrunedDirectories: append([]string(nil), options.PrunedDirectories...), Counts: censuspreflight.Counts{Entries: len(files), Selected: len(selected), Excluded: excluded}, SelectedPathsDigest: censuspreflight.DigestSelected(selected), Limits: censuspreflight.Limits{MaxEntries: censusMaxDiscoveredEntries, MaxAccepted: censusMaxDiscoveredEntries, MaxWork: censusMaxEnumerationWork, MaxPathBytes: censusMaxSourcePathBytes, MaxDepth: censusMaxSourceDepth}, Terminal: "COMPLETE", Authority: 0, Completeness: "UNKNOWN", AbsenceInference: false}
 	raw, err := censuspreflight.MarshalResult(result)
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageAssembly, true, err)

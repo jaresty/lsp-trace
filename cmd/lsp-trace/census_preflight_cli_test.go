@@ -58,7 +58,7 @@ func TestCensusEnumerationPreflightHasZeroRuntimeDependencies(t *testing.T) {
 			}
 			if tc.err == nil {
 				var result censuspreflight.Result
-				if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &result); err != nil || result.Authority != 0 || result.Completeness != "COMPLETE" || result.AbsenceInference || result.Counts.Selected != 2 || result.Limits.MaxWork != 200000 {
+				if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &result); err != nil || result.Authority != 0 || result.Completeness != "UNKNOWN" || result.Terminal != "COMPLETE" || result.AbsenceInference || result.Counts.Selected != 2 || result.Limits.MaxWork != 200000 {
 					t.Fatalf("ASSERT_PREFLIGHT_RESULT: %+v err=%v", result, err)
 				}
 			} else {
@@ -68,6 +68,26 @@ func TestCensusEnumerationPreflightHasZeroRuntimeDependencies(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCensusPublicUsageMatchesPruneAndPreflightParserGrammar(t *testing.T) {
+	const grammar = "[--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...]"
+	const preflight = "(--workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine)"
+	for name, usage := range map[string]string{"command": censusUsage, "top-level": usageText} {
+		if !strings.Contains(usage, grammar) || !strings.Contains(usage, preflight) {
+			t.Fatalf("ASSERT_CENSUS_PUBLIC_USAGE_PARITY_%s: %s", name, usage)
+		}
+	}
+}
+
+func TestCensusSelectedPathsDigestFixedVectorAndOrdering(t *testing.T) {
+	const want = "sha256:5d08aff1569702b204f1eedd045ef0c62f6173adf0aa6204758bd44aec4a884e"
+	if got := censuspreflight.DigestSelected([]string{"z.go", "a.go"}); got != want {
+		t.Fatalf("ASSERT_CENSUS_SELECTED_DIGEST_VECTOR: got=%s want=%s", got, want)
+	}
+	if got := censuspreflight.DigestSelected([]string{"a.go", "z.go"}); got != want {
+		t.Fatalf("ASSERT_CENSUS_SELECTED_DIGEST_SORTED: got=%s want=%s", got, want)
 	}
 }
 
