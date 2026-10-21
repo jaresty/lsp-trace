@@ -4,58 +4,87 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	"lsp-trace/internal/census"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
-func TestRunCensusProviderProbeV6RealManagerNotificationBurstReachesTerminal(t *testing.T) {
+func TestRunCensusNotificationBurstAuthorizationUsesPrivateEnumerationOnly(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process test uses Darwin supervisor")
 	}
-	core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
-		wantRequests := 1000
-		if options.PrivateProviderProbeByteTimeNotifications {
-			wantRequests = 20191
+	core := func(wantPrivate bool) func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome {
+		return func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+			if options.PrivateEnumerationProjection != wantPrivate {
+				t.Fatalf("ASSERT_CLI_PRIVATE_ENUMERATION_OPTION_BINDING: got=%t want=%t", options.PrivateEnumerationProjection, wantPrivate)
+			}
+			cfg.runner.start.Process = managedprocess.Spec{
+				Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: cfg.runner.start.Process.Dir,
+				Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1", "LSP_TRACE_RUNTIME_HELPER_DOCUMENT_SYMBOL_NOTIFICATION_BURST=1"),
+			}
+			cfg.runner.timeout = 3 * time.Second
+			cfg.runner.requestTimeout = time.Second
+			code := runInitializedAcquisitionSession(cfg.runner, func(ctx context.Context, initialized initializedAcquisitionSession) int {
+				discovery, err := runInitializedCensusDiscovery(ctx, options, initialized.(*initializedAcquisitionRuntime), true)
+				if err != nil || discovery.Accounting.FileDenominator != 3 || len(discovery.Accounting.Files) != 3 {
+					t.Fatalf("ASSERT_CLI_CENSUS_NOTIFICATION_DISCOVERY_CLOSED: private=%t discovery=%+v err=%v", wantPrivate, discovery, err)
+				}
+				if wantPrivate {
+					for _, file := range discovery.Accounting.Files {
+						if file.Disposition != census.FileSelected {
+							t.Fatalf("ASSERT_CLI_PRIVATE_ENUMERATION_NOTIFICATION_ROUTE: files=%+v", discovery.Accounting.Files)
+						}
+					}
+					return 0
+				}
+				if discovery.Accounting.Files[0].Disposition != census.FileDocumentSymbolFailed || discovery.Accounting.Files[1].Disposition != census.FileIncomplete || discovery.Accounting.Files[2].Disposition != census.FileIncomplete {
+					t.Fatalf("ASSERT_CLI_ORDINARY_NOTIFICATION_POISON_TAXONOMY: files=%+v", discovery.Accounting.Files)
+				}
+				return 0
+			})
+			if code != 0 {
+				t.Fatalf("session code=%d", code)
+			}
+			return deterministicProviderProbeOutcome(t)
 		}
-		if cfg.limits.MaxRequests == nil || *cfg.limits.MaxRequests != wantRequests {
-			t.Fatalf("ASSERT_CLI_CENSUS_ACQUISITION_REQUEST_BUDGET: private=%t max_requests=%v want=%d", options.PrivateProviderProbeByteTimeNotifications, cfg.limits.MaxRequests, wantRequests)
-		}
-		cfg.runner.start.Process = managedprocess.Spec{
-			Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: cfg.runner.start.Process.Dir,
-			Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1", "LSP_TRACE_RUNTIME_HELPER_DOCUMENT_SYMBOL_NOTIFICATION_BURST=1"),
-		}
-		cfg.runner.timeout = 3 * time.Second
-		cfg.runner.requestTimeout = time.Second
-		code := runInitializedAcquisitionSession(cfg.runner, func(ctx context.Context, initialized initializedAcquisitionSession) int {
-			_, _ = runInitializedCensusDiscovery(ctx, options, initialized.(*initializedAcquisitionRuntime), true)
-			return 0
-		})
-		if code != 0 {
-			t.Fatalf("session code=%d", code)
-		}
-		return deterministicProviderProbeOutcome(t)
 	}
 
-	baseline := runProviderProbeRunnerVersion(t, "v5", false, false, core)
-	ordinary := runProviderProbeRunnerVersion(t, "v5", true, false, core)
-	got := runProviderProbeRunnerVersion(t, "v6", true, false, core)
-	if got.code != baseline.code || !bytes.Equal(got.stdout, baseline.stdout) || !bytes.Equal(got.stderr, baseline.stderr) {
-		t.Fatalf("ASSERT_PROVIDER_PROBE_V6_PUBLIC_PARITY baseline=%d/%q/%q got=%d/%q/%q", baseline.code, baseline.stdout, baseline.stderr, got.code, got.stdout, got.stderr)
+	ordinary := runProviderProbeRunnerVersion(t, "v5", false, false, core(false))
+	probeOnly := runProviderProbeRunnerVersion(t, "v6", true, false, core(false))
+	privateEnumeration := runPrivateEnumerationNotificationRunner(t, core(true))
+	if probeOnly.code != ordinary.code || !bytes.Equal(probeOnly.stdout, ordinary.stdout) || !bytes.Equal(probeOnly.stderr, ordinary.stderr) {
+		t.Fatalf("ASSERT_CLI_PROVIDER_PROBE_DOES_NOT_AUTHORIZE_NOTIFICATIONS ordinary=%d/%q/%q probe=%d/%q/%q", ordinary.code, ordinary.stdout, ordinary.stderr, probeOnly.code, probeOnly.stdout, probeOnly.stderr)
 	}
-	if !ordinary.probeExists || ordinary.probeErr == nil || ordinary.probeV5.Composition == nil || ordinary.probeV5.Composition.Outcome != string(sessionruntime.ProviderMessageOutcomeMessageCeiling) || len(ordinary.probeV5.CauseCounts) == 0 || ordinary.probeV5.CauseCounts[len(ordinary.probeV5.CauseCounts)-1].Cause != string(session.ResourceExhausted) {
-		t.Fatalf("ASSERT_PROVIDER_PROBE_V6_ORDINARY_COUNT_CEILING err=%v probe=%+v", ordinary.probeErr, ordinary.probeV5)
+	if !probeOnly.probeExists || probeOnly.probeErr == nil || probeOnly.probeV6.Composition == nil || probeOnly.probeV6.Composition.Outcome != string(sessionruntime.ProviderMessageOutcomeMessageCeiling) || len(probeOnly.probeV6.CauseCounts) == 0 || probeOnly.probeV6.CauseCounts[len(probeOnly.probeV6.CauseCounts)-1].Cause != string(session.ResourceExhausted) {
+		t.Fatalf("ASSERT_CLI_PROVIDER_PROBE_COUNT_CEILING err=%v probe=%+v", probeOnly.probeErr, probeOnly.probeV6)
 	}
-	if !got.probeExists || got.probeErr != nil || got.probeV6.Transaction == nil || got.probeV6.Composition == nil {
-		t.Fatalf("ASSERT_PROVIDER_PROBE_V6_PRODUCTION_MANAGER_ROUTING err=%v probe=%+v", got.probeErr, got.probeV6)
+	if privateEnumeration.code != 0 || privateEnumeration.probeExists {
+		t.Fatalf("ASSERT_CLI_PRIVATE_ENUMERATION_WITHOUT_PROBE: code=%d probe=%t stderr=%q", privateEnumeration.code, privateEnumeration.probeExists, privateEnumeration.stderr)
 	}
-	if got.probeV6.Composition.Outcome != string(sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse) || got.probeV6.Transaction.ObservedNotificationCount != 65 || got.probeV6.Transaction.ObservedControlCount != 1 || !got.probeV6.Transaction.TerminalResponseObserved || !got.probeV6.Transaction.ReadCompleted || got.probeV6.Transaction.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady {
-		t.Fatalf("ASSERT_PROVIDER_PROBE_V6_NOTIFICATION_BURST_TERMINAL composition=%+v transaction=%+v", got.probeV6.Composition, got.probeV6.Transaction)
+}
+
+func runPrivateEnumerationNotificationRunner(t *testing.T, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
+	t.Helper()
+	workspace, root := t.TempDir(), t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
 	}
+	for _, name := range []string{"a.go", "b.go", "c.go"} {
+		if err := os.WriteFile(filepath.Join(workspace, name), []byte("package "+strings.TrimSuffix(name, ".go")+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deps, starters, managers := providerProbeIntegrationRunnerDeps(t, runCore)
+	var stdout, stderr bytes.Buffer
+	code := runCensusWithDependencies(providerProbeRunnerArgsVersion(workspace, root, "", "v5", true), &stdout, &stderr, deps)
+	return providerProbeRunnerResult{code: code, stdout: stdout.Bytes(), stderr: stderr.Bytes(), starterCalls: *starters, managerCalls: *managers}
 }
 
 func TestRunCensusProviderProbeV5RealManagerMalformedDocumentSymbolPoisonTuple(t *testing.T) {

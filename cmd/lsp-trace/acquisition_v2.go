@@ -152,10 +152,11 @@ func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int 
 // executor contract. Its manager may retain private diagnostics, but those
 // records cannot enter or alter the frozen public V3 composition.
 type privateAcquisitionRuntime struct {
-	manager *sessionruntime.Manager
-	probe   *privateProviderProbe
-	mu      sync.Mutex
-	handles []sessionruntime.DiagnosticOperationHandle
+	manager                      *sessionruntime.Manager
+	probe                        *privateProviderProbe
+	privateEnumerationProjection bool
+	mu                           sync.Mutex
+	handles                      []sessionruntime.DiagnosticOperationHandle
 }
 
 func (r *privateAcquisitionRuntime) Metadata(id string, generation uint64) (sessionruntime.SessionMetadata, session.Failure) {
@@ -175,12 +176,12 @@ func (r *privateAcquisitionRuntime) diagnosticHandles() []sessionruntime.Diagnos
 	return append([]sessionruntime.DiagnosticOperationHandle(nil), r.handles...)
 }
 func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	if request.Method == "textDocument/documentSymbol" && r.privateEnumerationProjection {
+		request.PrivateNotificationMaxMessages = -1
+	}
 	if r.probe != nil && (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5" || r.probe.version == "v6") && request.Method == "textDocument/documentSymbol" {
 		request.CaptureProviderMessageComposition = true
 		request.CaptureProviderTransactionObservation = r.probe.version == "v5" || r.probe.version == "v6"
-		if r.probe.version == "v6" && r.probe.byteTimeNotifications {
-			request.PrivateNotificationMaxMessages = -1
-		}
 	}
 	result := r.manager.RoundTrip(ctx, request)
 	r.retainHandle(result.DiagnosticOperation)
@@ -304,17 +305,18 @@ func (r *initializedAcquisitionRuntime) Execute(ctx context.Context, request ope
 }
 
 type initializedAcquisitionRunnerConfig struct {
-	manager            *sessionruntime.Manager
-	start              sessionruntime.StartRequest
-	timeout            time.Duration
-	requestTimeout     time.Duration
-	readinessTimeout   time.Duration
-	diagnosticRoot     string
-	diagnosticSelector string
-	stderr             io.Writer
-	observeStart       func(sessionruntime.StartResult)
-	observeStop        func(session.LifecycleResult)
-	providerProbe      *privateProviderProbe
+	manager                      *sessionruntime.Manager
+	privateEnumerationProjection bool
+	start                        sessionruntime.StartRequest
+	timeout                      time.Duration
+	requestTimeout               time.Duration
+	readinessTimeout             time.Duration
+	diagnosticRoot               string
+	diagnosticSelector           string
+	stderr                       io.Writer
+	observeStart                 func(sessionruntime.StartResult)
+	observeStop                  func(session.LifecycleResult)
+	providerProbe                *privateProviderProbe
 }
 
 func productionInitializedAcquisitionRunnerConfig(timeout, requestTimeout time.Duration) initializedAcquisitionRunnerConfig {
@@ -369,7 +371,7 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 	if !ok || ready.State != sessionruntime.ReadinessReady {
 		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
 	}
-	privateRuntime := &privateAcquisitionRuntime{manager: cfg.manager, probe: cfg.providerProbe}
+	privateRuntime := &privateAcquisitionRuntime{manager: cfg.manager, probe: cfg.providerProbe, privateEnumerationProjection: cfg.privateEnumerationProjection}
 	privateRuntime.retainHandle(ready.DiagnosticOperation)
 	return callback(ctx, &initializedAcquisitionRuntime{privateAcquisitionRuntime: privateRuntime, ctx: ctx, sessionID: started.SessionID, generation: started.Generation, requestTimeout: cfg.requestTimeout, attemptID: started.AttemptID, diagnosticGeneration: started.DiagnosticGeneration})
 }

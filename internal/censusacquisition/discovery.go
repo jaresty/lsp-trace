@@ -60,6 +60,10 @@ type DiscoveryLimits struct {
 	MaxStringBytes int
 }
 
+// ErrSessionUnavailable marks document supply failure caused by the managed
+// session lifecycle rather than by source readability.
+var ErrSessionUnavailable = errors.New("census acquisition session unavailable")
+
 const (
 	// FileProcessed and SymbolPrepared are the successful terminal vocabulary
 	// written to capture-set ledgers. Other terminals retain census disposition values.
@@ -161,7 +165,12 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		if err := a.Supplier.Supply(ctx, file); err != nil {
 			code := "REQUEST_FAILED"
 			disposition := census.FileUnreadable
-			if ctx.Err() != nil {
+			if errors.Is(err, ErrSessionUnavailable) {
+				code = "SESSION_UNAVAILABLE"
+				disposition = census.FileIncomplete
+				appendFileIncompleteCause(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
+				sourceOmissions++
+			} else if ctx.Err() != nil {
 				code = "CANCELED"
 				disposition = census.FileIncomplete
 				appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)

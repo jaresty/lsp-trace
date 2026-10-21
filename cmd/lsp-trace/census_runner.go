@@ -171,7 +171,7 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		timeoutMS = 60000
 	}
 	limits := acquisitionops.Limits{MaxNodes: &options.MaxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
-	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, providerProbe: providerProbe, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic}
+	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, providerProbe: providerProbe, privateEnumerationProjection: options.PrivateEnumerationProjection, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic}
 	catalogCode := -1
 	if options.Catalog {
 		cfg.afterCommit = func(_ context.Context, runtime *initializedAcquisitionRuntime, outcome censusPublicationOutcome) int {

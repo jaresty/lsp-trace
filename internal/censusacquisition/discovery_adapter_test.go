@@ -233,6 +233,31 @@ func TestDiscoveryAdapterAccountedPreparationOmissionsRemainComplete(t *testing.
 	}
 }
 
+func TestDiscoveryClassifiesSessionUnavailableSupplyAsIncomplete(t *testing.T) {
+	workspace := t.TempDir()
+	first, second := testSource(workspace, "a.go"), testSource(workspace, "b.go")
+	client := &fakeDiscoveryClient{
+		documentSupported: true,
+		callSupported:     true,
+		symbols:           map[string][]lsp.DocumentSymbol{first.URI: {}, second.URI: {}},
+		prepare:           map[lsp.Position][]lsp.CallHierarchyItem{},
+	}
+	supplier := &fakeSupplier{errors: map[string]error{"b.go": ErrSessionUnavailable}}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{first, second}, Supplier: supplier, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []census.FileDisposition{census.FileSelected, census.FileIncomplete}
+	if len(got.Accounting.Files) != len(want) {
+		t.Fatalf("ASSERT_SESSION_UNAVAILABLE_NOT_SOURCE_UNREADABLE: files=%+v", got.Accounting.Files)
+	}
+	for i, entry := range got.Accounting.Files {
+		if entry.Disposition != want[i] {
+			t.Fatalf("ASSERT_SESSION_UNAVAILABLE_NOT_SOURCE_UNREADABLE: files=%+v", got.Accounting.Files)
+		}
+	}
+}
+
 func TestDiscoveryAdapterExplicitFailureDispositionsAndIncomplete(t *testing.T) {
 	workspace := t.TempDir()
 	names := []string{"bad-symbols.go", "missing.go", "noncallable.go", "prepare-error.go", "supply.go", "unsupported.go"}

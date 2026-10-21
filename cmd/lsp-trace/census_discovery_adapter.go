@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/session"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -67,6 +68,9 @@ func (s censusRuntimeDocumentSupplier) Supply(ctx context.Context, file censusac
 	result := s.runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{
 		URI: file.URI, LanguageID: file.LanguageID, CaptureSupply: true,
 	})
+	if result.Failure == session.SessionPoisoned || result.Failure == session.LifecycleConflict {
+		return censusacquisition.ErrSessionUnavailable
+	}
 	if result.Failure != "" || result.URI != file.URI || result.LanguageID != file.LanguageID {
 		return errors.New("document supply failed")
 	}
