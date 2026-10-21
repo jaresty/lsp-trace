@@ -337,9 +337,7 @@ func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
 		}
 		return nil, nil
 	}
-	done := make(chan workerCompletion, 1)
-	done <- workerCompletion{}
-	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, done); err != nil {
+	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}); err != nil {
 		t.Fatal(err)
 	}
 	if kills != 1 || observations != 3 {
@@ -365,7 +363,7 @@ func TestTerminateWorkerGroupTerminalAndFailureStates(t *testing.T) {
 			kills := 0
 			supervisorGroupKill = func(int, syscall.Signal) error { kills++; return nil }
 			supervisorGroupState = func(int) ([]processGroupMember, error) { return tc.members, tc.stateErr }
-			err := terminateWorkerGroup(identity, nil)
+			err := terminateWorkerGroup(identity)
 			if (tc.stateErr == nil && err != nil) || (tc.stateErr != nil && err == nil) || kills != 0 {
 				t.Fatalf("ASSERT_GROUP_TERMINAL_%s err=%v kills=%d", tc.name, err, kills)
 			}
@@ -391,7 +389,7 @@ func TestTerminateWorkerGroupPersistentLiveIsBounded(t *testing.T) {
 		kills++
 		return nil
 	}
-	err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, nil)
+	err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"})
 	if err == nil || kills == 0 || now.Sub(time.Unix(0, 0)) > time.Second+supervisorPoll {
 		t.Fatalf("ASSERT_GROUP_PERSISTENT_LIVE_BOUNDED err=%v kills=%d elapsed=%s", err, kills, now.Sub(time.Unix(0, 0)))
 	}
@@ -421,7 +419,7 @@ func TestFinishWorkerCleansDescendantsOrFailsCleanup(t *testing.T) {
 	}
 	kills := 0
 	supervisorGroupKill = func(int, syscall.Signal) error { kills++; return nil }
-	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, nil); err == nil || kills != 0 {
+	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}); err == nil || kills != 0 {
 		t.Fatalf("ASSERT_DESCENDANT_WITHOUT_LEADER_FAILS_SAFE err=%v kills=%d", err, kills)
 	}
 }
@@ -434,7 +432,7 @@ func TestTerminateWorkerGroupRejectsChangedIdentityWithoutSignal(t *testing.T) {
 	}
 	kills := 0
 	supervisorGroupKill = func(int, syscall.Signal) error { kills++; return nil }
-	err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "original"}, nil)
+	err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "original"})
 	if err == nil || kills != 0 {
 		t.Fatalf("ASSERT_GROUP_REUSED_IDENTITY_NOT_SIGNALED err=%v kills=%d", err, kills)
 	}
@@ -453,7 +451,7 @@ func TestTerminateWorkerGroupESRCHIsComplete(t *testing.T) {
 		return nil, nil
 	}
 	supervisorGroupKill = func(int, syscall.Signal) error { return syscall.ESRCH }
-	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, nil); err != nil {
+	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Log("ASSERT_GROUP_ESRCH_COMPLETE: PASS")
@@ -741,6 +739,37 @@ func TestIdentityTimeoutReapsDirectChildOnce(t *testing.T) {
 	t.Log("ASSERT_IDENTITY_TIMEOUT_DIRECT_CHILD_REAPED_ONCE: PASS")
 }
 
+func TestIdentityTimeoutKillFailureDoesNotWait(t *testing.T) {
+	withSupervisorDefaults(t)
+	t.Setenv("PROGRAMC_TEST_WORKER", "hang")
+	now := time.Unix(0, 0)
+	supervisorCleanupNow = func() time.Time { return now }
+	supervisorCleanupWait = func(d time.Duration) { now = now.Add(d) }
+	supervisorGroupState = func(int) ([]processGroupMember, error) { return nil, errors.New("identity unavailable") }
+	var waits atomic.Int32
+	supervisorCommandWait = func(*exec.Cmd) error {
+		waits.Add(1)
+		select {}
+	}
+	supervisorProcessKill = func(*os.Process) error { return errors.New("injected kill failure") }
+	returned := make(chan *SupervisionFailure, 1)
+	go func() {
+		_, _, failed := ComputeSupervised(context.Background(), nil, 1)
+		returned <- failed
+	}()
+	select {
+	case failed := <-returned:
+		requireCode(t, failed, CodeCleanupFailure)
+	case <-time.After(time.Second):
+		t.Fatal("ASSERT_DIRECT_KILL_FAILURE_BOUNDED_CLEANUP_FAILURE: return exceeded one second")
+	}
+	if waits.Load() != 0 {
+		t.Fatalf("ASSERT_DIRECT_KILL_FAILURE_DOES_NOT_START_WAIT_OR_CLAIM_REAP waits=%d", waits.Load())
+	}
+	t.Log("ASSERT_DIRECT_KILL_FAILURE_BOUNDED_CLEANUP_FAILURE: PASS")
+	t.Log("ASSERT_DIRECT_KILL_FAILURE_DOES_NOT_START_WAIT_OR_CLAIM_REAP: PASS")
+}
+
 func TestInitialRSSCleanExitCleansFastDescendant(t *testing.T) {
 	withSupervisorDefaults(t)
 	pidfile := filepath.Join(t.TempDir(), "pids")
@@ -757,7 +786,30 @@ func TestInitialRSSCleanExitCleansFastDescendant(t *testing.T) {
 		}
 		return 0, errors.New("fast descendant zombie readiness unavailable")
 	}
-	_, _, failed := ComputeSupervised(context.Background(), nil, 1)
+	cleanupEntered := make(chan struct{})
+	allowCleanup := make(chan struct{})
+	originalCleanupWait := supervisorCleanupWait
+	var blocked atomic.Bool
+	supervisorCleanupWait = func(d time.Duration) {
+		if blocked.CompareAndSwap(false, true) {
+			close(cleanupEntered)
+			<-allowCleanup
+		}
+		originalCleanupWait(d)
+	}
+	returned := make(chan *SupervisionFailure, 1)
+	go func() {
+		_, _, failed := ComputeSupervised(context.Background(), nil, 1)
+		returned <- failed
+	}()
+	<-cleanupEntered
+	select {
+	case failed := <-returned:
+		t.Fatalf("ASSERT_CLEANUP_JOINED_BEFORE_RETURN: returned before cleanup release: %v", failed)
+	default:
+	}
+	close(allowCleanup)
+	failed := <-returned
 	requireCode(t, failed, CodeMemoryUnsupported)
 	p, err := readWatchdogPIDs(pidfile, true)
 	if err != nil {
@@ -766,6 +818,10 @@ func TestInitialRSSCleanExitCleansFastDescendant(t *testing.T) {
 	if err := waitProcessesGone(p, time.Now().Add(2*time.Second)); err != nil {
 		t.Fatalf("ASSERT_INITIAL_RSS_CLEAN_EXIT_DESCENDANT_CLEANUP: %v", err)
 	}
+	t.Log("ASSERT_CLEANUP_JOINED_BEFORE_RETURN: PASS")
+	t.Log("ASSERT_NO_POST_RETURN_INJECTED_GLOBAL_READ: PASS")
+	t.Log("ASSERT_INITIAL_RSS_CLEAN_EXIT_CLEANUP_JOINED: PASS")
+	t.Log("ASSERT_INITIAL_RSS_CLEAN_EXIT_RETURNS_MEMORY_UNSUPPORTED: PASS")
 	t.Log("ASSERT_INITIAL_RSS_CLEAN_EXIT_DESCENDANT_CLEANUP: PASS")
 }
 
