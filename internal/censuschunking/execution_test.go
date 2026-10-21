@@ -152,30 +152,54 @@ func TestExecuteChunkPreservesCoreFailure(t *testing.T) {
 	}
 }
 
+func cloneProjectionForReconciliationTest(t *testing.T, p censusacquisition.Projection) censusacquisition.Projection {
+	t.Helper()
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var clone censusacquisition.Projection
+	if err := json.Unmarshal(raw, &clone); err != nil {
+		t.Fatal(err)
+	}
+	return clone
+}
+
 func TestReconcileExecutionProjectionRejectsMutations(t *testing.T) {
 	baselineRequest, _ := executionFixture(t, 64)
 	baselineReceipt, baselineErr := ExecuteChunk(context.Background(), baselineRequest)
 	if baselineErr != nil {
 		t.Fatal(baselineErr)
 	}
-	mutations := map[string]func(*censusacquisition.Projection){
-		"manifest_bytes": func(p *censusacquisition.Projection) { p.ManifestBytes[0] ^= 1 },
-		"reordered_result": func(p *censusacquisition.Projection) {
-			p.Batches[0].Targets[0], p.Batches[0].Targets[1] = p.Batches[0].Targets[1], p.Batches[0].Targets[0]
-		},
-		"missing_result": func(p *censusacquisition.Projection) { p.Batches[0].Targets = p.Batches[0].Targets[1:] },
-		"extra_result": func(p *censusacquisition.Projection) {
-			p.Batches[0].Targets = append(p.Batches[0].Targets, p.Batches[0].Targets[0])
-		},
-		"symbol_ledger": func(p *censusacquisition.Projection) { p.Manifest.SymbolLedger.Entries[0].Disposition = "failed" },
+	baselineBytes, err := json.Marshal(baselineReceipt.Projection)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for name, mutate := range mutations {
-		t.Run(name, func(t *testing.T) {
-			p, err := censusacquisition.CloneProjection(baselineReceipt.Projection)
+	mutations := []struct {
+		name   string
+		mutate func(*censusacquisition.Projection)
+	}{
+		{"manifest_bytes", func(p *censusacquisition.Projection) { p.ManifestBytes[0] ^= 1 }},
+		{"reordered_result", func(p *censusacquisition.Projection) {
+			p.Batches[0].Targets[0], p.Batches[0].Targets[1] = p.Batches[0].Targets[1], p.Batches[0].Targets[0]
+		}},
+		{"missing_result", func(p *censusacquisition.Projection) { p.Batches[0].Targets = p.Batches[0].Targets[1:] }},
+		{"extra_result", func(p *censusacquisition.Projection) {
+			p.Batches[0].Targets = append(p.Batches[0].Targets, p.Batches[0].Targets[0])
+		}},
+		{"symbol_ledger", func(p *censusacquisition.Projection) { p.Manifest.SymbolLedger.Entries[0].Disposition = "failed" }},
+	}
+	for _, mutation := range mutations {
+		t.Run(mutation.name, func(t *testing.T) {
+			p := cloneProjectionForReconciliationTest(t, baselineReceipt.Projection)
+			mutation.mutate(&p)
+			gotBaselineBytes, err := json.Marshal(baselineReceipt.Projection)
 			if err != nil {
 				t.Fatal(err)
 			}
-			mutate(&p)
+			if !bytes.Equal(gotBaselineBytes, baselineBytes) {
+				t.Fatal("ASSERT_PROJECTION_TEST_CLONE_DOES_NOT_ALIAS_BASELINE")
+			}
 			if _, err := reconcileExecutionProjection(baselineRequest, p); err == nil || !IsExecutionStage(err, StageProjection) {
 				t.Fatalf("ASSERT_PROJECTION_MAPPING_MUTATION_REJECTED: %v", err)
 			}
