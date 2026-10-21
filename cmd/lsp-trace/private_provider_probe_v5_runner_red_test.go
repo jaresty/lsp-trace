@@ -38,7 +38,9 @@ func TestRunCensusAcquisitionBudgetAuthorizationUsesPrivateEnumerationOnly(t *te
 			if tc.probe {
 				probePath = filepath.Join(root, "provider-probe.json")
 			}
+			coreCalls := 0
 			core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+				coreCalls++
 				if options.PrivateEnumerationProjection != tc.privateEnumeration || options.PrivateProviderProbeByteTimeNotifications != tc.probe {
 					t.Fatalf("ASSERT_CLI_CENSUS_BUDGET_OPTION_BINDING: options=%+v", options)
 				}
@@ -51,11 +53,14 @@ func TestRunCensusAcquisitionBudgetAuthorizationUsesPrivateEnumerationOnly(t *te
 				}
 				return deterministicProviderProbeOutcome(t)
 			}
-			deps, _, _ := providerProbeIntegrationRunnerDeps(t, core)
+			deps, starterCalls, managerCalls := providerProbeRunnerDeps(t, core)
 			args := append(providerProbeRunnerArgsVersion(workspace, root, probePath, "v6", tc.privateEnumeration), "--max-nodes", strconv.Itoa(tc.maxNodes))
 			var stdout, stderr bytes.Buffer
 			if code := runCensusWithDependencies(args, &stdout, &stderr, deps); code != 0 {
-				t.Fatalf("ASSERT_CLI_CENSUS_BUDGET_RUNNER_ACCEPTED: code=%d stderr=%q", code, stderr.Bytes())
+				t.Fatalf("ASSERT_CLI_CENSUS_BUDGET_RUNNER_ACCEPTED: code=%d core_calls=%d starter_calls=%d manager_calls=%d args=%q stderr=%q", code, coreCalls, *starterCalls, *managerCalls, args, stderr.Bytes())
+			}
+			if coreCalls != 1 {
+				t.Fatalf("ASSERT_CLI_CENSUS_BUDGET_RUNNER_CORE_INVOKED_ONCE: core_calls=%d starter_calls=%d manager_calls=%d args=%q", coreCalls, *starterCalls, *managerCalls, args)
 			}
 		})
 	}
