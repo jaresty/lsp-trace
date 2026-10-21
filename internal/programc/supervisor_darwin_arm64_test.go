@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -153,6 +154,26 @@ func writeTestWorkerPIDRecord(descendant processIdentity) error {
 }
 
 func testWorkerMode() {
+	if os.Getenv("PROGRAMC_TEST_WORKER") == "fast-child" {
+		cmd := exec.Command("/bin/sleep", "30")
+		if err := cmd.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "start fast descendant: %v\n", err)
+			os.Exit(10)
+		}
+		descendant, err := readProcessIdentity(cmd.Process.Pid)
+		if err != nil || descendant.PGID != os.Getpid() {
+			_ = cmd.Process.Kill()
+			fmt.Fprintf(os.Stderr, "invalid fast descendant identity: %+v err=%v\n", descendant, err)
+			os.Exit(11)
+		}
+		if err := writeTestWorkerPIDRecord(descendant); err != nil {
+			_ = cmd.Process.Kill()
+			fmt.Fprintf(os.Stderr, "record fast descendant readiness: %v\n", err)
+			os.Exit(12)
+		}
+		_ = cmd.Process.Release()
+		return
+	}
 	_, _ = io.Copy(io.Discard, os.Stdin)
 	switch os.Getenv("PROGRAMC_TEST_WORKER") {
 	case "hang":
@@ -202,9 +223,11 @@ func withSupervisorDefaults(t *testing.T) {
 	t.Setenv(testWorkerWatchdogEnvironment, "1")
 	oldWall, oldRSS, oldPoll, oldOutput, oldPS := supervisorWall, supervisorRSSBytes, supervisorPoll, supervisorOutputBytes, supervisorPSPath
 	oldKill, oldState, oldNow, oldWait, oldStart := supervisorGroupKill, supervisorGroupState, supervisorCleanupNow, supervisorCleanupWait, supervisorProcessStart
+	oldCommandWait, oldProcessKill, oldInitialRSS := supervisorCommandWait, supervisorProcessKill, supervisorInitialRSS
 	t.Cleanup(func() {
 		supervisorWall, supervisorRSSBytes, supervisorPoll, supervisorOutputBytes, supervisorPSPath = oldWall, oldRSS, oldPoll, oldOutput, oldPS
 		supervisorGroupKill, supervisorGroupState, supervisorCleanupNow, supervisorCleanupWait, supervisorProcessStart = oldKill, oldState, oldNow, oldWait, oldStart
+		supervisorCommandWait, supervisorProcessKill, supervisorInitialRSS = oldCommandWait, oldProcessKill, oldInitialRSS
 	})
 	supervisorWall = 2 * time.Second
 	supervisorRSSBytes = 1 << 40 // the linked test binary exceeds the production worker's RSS
@@ -314,8 +337,8 @@ func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
 		}
 		return nil, nil
 	}
-	done := make(chan error, 1)
-	done <- nil
+	done := make(chan workerCompletion, 1)
+	done <- workerCompletion{}
 	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, done); err != nil {
 		t.Fatal(err)
 	}
@@ -671,6 +694,79 @@ func TestWorkerParentWatchdogPreventsTimeoutOrphans(t *testing.T) {
 			t.Logf("ASSERT_TESTMAIN_PARENT_WATCHDOG_%s_ZERO_SENTINELS: PASS", strings.ToUpper(tc.mode))
 		})
 	}
+}
+
+func TestWaitStartsAfterExactGroupIdentity(t *testing.T) {
+	withSupervisorDefaults(t)
+	t.Setenv("PROGRAMC_TEST_WORKER", "hang")
+	var waits atomic.Int32
+	supervisorCommandWait = func(cmd *exec.Cmd) error {
+		waits.Add(1)
+		return cmd.Wait()
+	}
+	var observations atomic.Int32
+	supervisorGroupState = func(pgid int) ([]processGroupMember, error) {
+		observation := observations.Add(1)
+		if observation == 1 && waits.Load() != 0 {
+			t.Fatalf("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: waits=%d", waits.Load())
+		}
+		return processGroupState(pgid)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, _, failed := ComputeSupervised(ctx, nil, 1)
+	requireCode(t, failed, CodeCancelled)
+	if waits.Load() != 1 {
+		t.Fatalf("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: waits=%d", waits.Load())
+	}
+	t.Log("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: PASS")
+}
+
+func TestIdentityTimeoutReapsDirectChildOnce(t *testing.T) {
+	withSupervisorDefaults(t)
+	t.Setenv("PROGRAMC_TEST_WORKER", "hang")
+	now := time.Unix(0, 0)
+	supervisorCleanupNow = func() time.Time { return now }
+	supervisorCleanupWait = func(d time.Duration) { now = now.Add(d) }
+	supervisorGroupState = func(int) ([]processGroupMember, error) { return nil, errors.New("identity unavailable") }
+	var waits atomic.Int32
+	killedPID := 0
+	supervisorCommandWait = func(cmd *exec.Cmd) error { waits.Add(1); return cmd.Wait() }
+	supervisorProcessKill = func(process *os.Process) error { killedPID = process.Pid; return process.Kill() }
+	_, _, failed := ComputeSupervised(context.Background(), nil, 1)
+	requireCode(t, failed, CodeCleanupFailure)
+	if waits.Load() != 1 || killedPID <= 1 || syscall.Kill(killedPID, 0) != syscall.ESRCH {
+		t.Fatalf("ASSERT_IDENTITY_TIMEOUT_DIRECT_CHILD_REAPED_ONCE waits=%d pid=%d", waits.Load(), killedPID)
+	}
+	t.Log("ASSERT_IDENTITY_TIMEOUT_DIRECT_CHILD_REAPED_ONCE: PASS")
+}
+
+func TestInitialRSSCleanExitCleansFastDescendant(t *testing.T) {
+	withSupervisorDefaults(t)
+	pidfile := filepath.Join(t.TempDir(), "pids")
+	t.Setenv("PROGRAMC_TEST_WORKER", "fast-child")
+	t.Setenv("PROGRAMC_TEST_PIDFILE", pidfile)
+	supervisorInitialRSS = func(int) (int64, error) {
+		deadline := time.Now().Add(time.Second)
+		for time.Now().Before(deadline) {
+			p, err := readWatchdogPIDs(pidfile, true)
+			if err == nil && processIsZombie(p.Worker.PID) {
+				return 0, errors.New("rss unavailable")
+			}
+			time.Sleep(time.Millisecond)
+		}
+		return 0, errors.New("fast descendant zombie readiness unavailable")
+	}
+	_, _, failed := ComputeSupervised(context.Background(), nil, 1)
+	requireCode(t, failed, CodeMemoryUnsupported)
+	p, err := readWatchdogPIDs(pidfile, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := waitProcessesGone(p, time.Now().Add(2*time.Second)); err != nil {
+		t.Fatalf("ASSERT_INITIAL_RSS_CLEAN_EXIT_DESCENDANT_CLEANUP: %v", err)
+	}
+	t.Log("ASSERT_INITIAL_RSS_CLEAN_EXIT_DESCENDANT_CLEANUP: PASS")
 }
 
 func TestSampledAggregateRSSLimit(t *testing.T) {

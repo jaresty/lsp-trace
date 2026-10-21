@@ -28,6 +28,9 @@ var (
 	supervisorCleanupNow   = time.Now
 	supervisorCleanupWait  = time.Sleep
 	supervisorProcessStart = processStart
+	supervisorCommandWait  = func(cmd *exec.Cmd) error { return cmd.Wait() }
+	supervisorProcessKill  = func(process *os.Process) error { return process.Kill() }
+	supervisorInitialRSS   = initialTreeRSS
 )
 
 type processGroupIdentity struct {
@@ -41,6 +44,11 @@ type processGroupMember struct {
 	PGID  int
 	State string
 	Start string
+}
+
+type workerCompletion struct {
+	waitErr    error
+	cleanupErr error
 }
 
 type cappedBuffer struct {
@@ -106,8 +114,6 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 		return zero, observation, failure(CodeNonzeroExit, err)
 	}
 	pid := cmd.Process.Pid
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
 	decodeWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
 		if stdout.Exceeded() {
 			return zero, failure(CodeOutputLimit, errors.New("worker stdout limit exceeded"))
@@ -126,18 +132,27 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	}
 	group, groupErr := establishProcessGroupIdentity(pid)
 	if groupErr != nil {
-		select {
-		case waitErr := <-done:
-			out, terminalFailure := decodeWorker(waitErr)
-			return out, observation, terminalFailure
-		case <-time.After(time.Second):
-			return zero, observation, cleanupFailure(failure(CodeMemoryUnsupported, groupErr), groupErr)
+		killErr := supervisorProcessKill(cmd.Process)
+		waitErr := supervisorCommandWait(cmd)
+		if killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
+			return zero, observation, cleanupFailure(failure(CodeMemoryUnsupported, groupErr), killErr)
 		}
+		_ = waitErr // any return from the sole Wait owner reaps the known direct child
+		return zero, observation, cleanupFailure(failure(CodeMemoryUnsupported, groupErr), groupErr)
 	}
-	finishWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
-		out, terminalFailure := decodeWorker(waitErr)
-		if cleanupErr := terminateWorkerGroup(group, nil); cleanupErr != nil {
-			return zero, cleanupFailure(terminalFailure, cleanupErr)
+	done := make(chan workerCompletion, 1)
+	go func() {
+		cleanupErr := awaitLeaderExitAndCleanup(group)
+		done <- workerCompletion{waitErr: supervisorCommandWait(cmd), cleanupErr: cleanupErr}
+	}()
+	finishWorker := func(completed workerCompletion, nominal *SupervisionFailure) (Outcome, *SupervisionFailure) {
+		out, terminalFailure := decodeWorker(completed.waitErr)
+		if nominal != nil && completed.waitErr == nil {
+			terminalFailure = nominal
+			out = zero
+		}
+		if completed.cleanupErr != nil {
+			return zero, cleanupFailure(terminalFailure, completed.cleanupErr)
 		}
 		return out, terminalFailure
 	}
@@ -147,18 +162,22 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 		}
 		return nominal
 	}
-	peak, err := initialTreeRSS(pid)
+	peak, err := supervisorInitialRSS(pid)
 	if err != nil {
-		if waitErr, completed := awaitTerminatedWorker(done); completed {
-			observation.ElapsedNanos = time.Since(started).Nanoseconds()
-			if waitErr != nil {
-				out, terminalFailure := finishWorker(waitErr)
+		if processGroupLeaderZombie(group) {
+			if completed, ok := awaitWorkerCompletion(done, supervisorCleanupNow().Add(time.Second)); ok {
+				observation.ElapsedNanos = time.Since(started).Nanoseconds()
+				out, terminalFailure := finishWorker(completed, failure(CodeMemoryUnsupported, err))
 				return out, observation, terminalFailure
 			}
-		} else {
-			return zero, observation, stopWorker(failure(CodeMemoryUnsupported, err))
+			return zero, observation, cleanupFailure(failure(CodeMemoryUnsupported, err), errors.New("worker wait exceeded bounded cleanup"))
 		}
-		return zero, observation, failure(CodeMemoryUnsupported, err)
+		if completed, ok := awaitTerminatedWorker(done); ok {
+			observation.ElapsedNanos = time.Since(started).Nanoseconds()
+			out, terminalFailure := finishWorker(completed, failure(CodeMemoryUnsupported, err))
+			return out, observation, terminalFailure
+		}
+		return zero, observation, stopWorker(failure(CodeMemoryUnsupported, err))
 	}
 	observation.PeakTreeRSSBytes = peak
 	observation.Samples = 1
@@ -190,9 +209,9 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			}
 			rss, e := treeRSS(pid)
 			if e != nil {
-				if waitErr, completed := awaitTerminatedWorker(done); completed {
+				if completed, ok := awaitTerminatedWorker(done); ok {
 					observation.ElapsedNanos = time.Since(started).Nanoseconds()
-					out, terminalFailure := finishWorker(waitErr)
+					out, terminalFailure := finishWorker(completed, nil)
 					return out, observation, terminalFailure
 				}
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
@@ -206,9 +225,9 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
 				return zero, observation, stopWorker(failure(CodeMemoryLimit, fmt.Errorf("sampled tree RSS %d exceeds %d", rss, supervisorRSSBytes)))
 			}
-		case waitErr := <-done:
+		case completed := <-done:
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
-			out, terminalFailure := finishWorker(waitErr)
+			out, terminalFailure := finishWorker(completed, nil)
 			return out, observation, terminalFailure
 		}
 	}
@@ -250,22 +269,71 @@ func processStart(pid int) (string, error) {
 }
 
 func establishProcessGroupIdentity(pid int) (processGroupIdentity, error) {
-	members, err := supervisorGroupState(pid)
-	if err != nil {
-		return processGroupIdentity{}, err
+	deadline := supervisorCleanupNow().Add(time.Second)
+	var last error
+	for {
+		members, err := supervisorGroupState(pid)
+		if err == nil {
+			for _, member := range members {
+				if member.PID == pid && member.PGID == pid {
+					start, startErr := supervisorProcessStart(pid)
+					if startErr == nil {
+						return processGroupIdentity{PID: pid, PGID: pid, Start: start}, nil
+					}
+					last = startErr
+				}
+			}
+			if last == nil {
+				last = errors.New("worker process-group identity unavailable")
+			}
+		} else {
+			last = err
+		}
+		if !supervisorCleanupNow().Before(deadline) {
+			return processGroupIdentity{}, last
+		}
+		supervisorCleanupWait(supervisorPoll)
 	}
-	leader := false
+}
+
+func processGroupLeaderZombie(group processGroupIdentity) bool {
+	members, err := supervisorGroupState(group.PGID)
+	if err != nil {
+		return false
+	}
 	for _, member := range members {
-		leader = leader || member.PID == pid && member.PGID == pid
+		if member.PID == group.PID && member.PGID == group.PGID && strings.HasPrefix(member.State, "Z") {
+			start, startErr := supervisorProcessStart(group.PID)
+			return startErr == nil && start == group.Start
+		}
 	}
-	if !leader {
-		return processGroupIdentity{}, errors.New("worker process-group identity unavailable")
+	return false
+}
+
+func awaitLeaderExitAndCleanup(group processGroupIdentity) error {
+	for {
+		members, err := supervisorGroupState(group.PGID)
+		if err != nil {
+			return err
+		}
+		leaderFound := false
+		for _, member := range members {
+			if member.PID == group.PID && member.PGID == group.PGID {
+				leaderFound = true
+				start, startErr := supervisorProcessStart(group.PID)
+				if startErr != nil || start != group.Start {
+					return errors.New("worker process-group identity changed")
+				}
+				if strings.HasPrefix(member.State, "Z") {
+					return terminateWorkerGroup(group, nil)
+				}
+			}
+		}
+		if !leaderFound {
+			return errors.New("worker process-group leader identity unavailable before reap")
+		}
+		supervisorCleanupWait(supervisorPoll)
 	}
-	start, err := supervisorProcessStart(pid)
-	if err != nil {
-		return processGroupIdentity{}, err
-	}
-	return processGroupIdentity{PID: pid, PGID: pid, Start: start}, nil
 }
 
 func cleanupFailure(nominal *SupervisionFailure, _ error) *SupervisionFailure {
@@ -276,7 +344,7 @@ func cleanupFailure(nominal *SupervisionFailure, _ error) *SupervisionFailure {
 	return failure(CodeCleanupFailure, fmt.Errorf("worker group cleanup could not be verified; superseded=%s", cause))
 }
 
-func terminateWorkerGroup(group processGroupIdentity, done <-chan error) error {
+func terminateWorkerGroup(group processGroupIdentity, done <-chan workerCompletion) error {
 	deadline := supervisorCleanupNow().Add(time.Second)
 	for {
 		members, err := supervisorGroupState(group.PGID)
@@ -314,7 +382,7 @@ func terminateWorkerGroup(group processGroupIdentity, done <-chan error) error {
 		}
 		confirmed := false
 		for _, member := range confirm {
-			confirmed = confirmed || (member.PID == group.PID && member.PGID == group.PGID && !strings.HasPrefix(member.State, "Z"))
+			confirmed = confirmed || (member.PID == group.PID && member.PGID == group.PGID)
 		}
 		start, startErr := supervisorProcessStart(group.PID)
 		if !confirmed || startErr != nil || start != group.Start {
@@ -327,7 +395,7 @@ func terminateWorkerGroup(group processGroupIdentity, done <-chan error) error {
 	}
 }
 
-func awaitWorkerWithin(done <-chan error, deadline time.Time) error {
+func awaitWorkerWithin(done <-chan workerCompletion, deadline time.Time) error {
 	if done == nil {
 		return nil
 	}
@@ -345,15 +413,23 @@ func awaitWorkerWithin(done <-chan error, deadline time.Time) error {
 	}
 }
 
-func awaitTerminatedWorker(done <-chan error) (error, bool) {
-	timer := time.NewTimer(supervisorPoll)
+func awaitWorkerCompletion(done <-chan workerCompletion, deadline time.Time) (workerCompletion, bool) {
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return workerCompletion{}, false
+	}
+	timer := time.NewTimer(remaining)
 	defer timer.Stop()
 	select {
-	case waitErr := <-done:
-		return waitErr, true
+	case completed := <-done:
+		return completed, true
 	case <-timer.C:
-		return nil, false
+		return workerCompletion{}, false
 	}
+}
+
+func awaitTerminatedWorker(done <-chan workerCompletion) (workerCompletion, bool) {
+	return awaitWorkerCompletion(done, time.Now().Add(supervisorPoll))
 }
 
 func classifyTerminatedWorker(waitErr error, stderr string) *SupervisionFailure {
