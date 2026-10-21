@@ -18,12 +18,30 @@ import (
 )
 
 var (
-	supervisorPSPath      = "/bin/ps"
-	supervisorWall        = SupervisorWall
-	supervisorRSSBytes    = SupervisorRSSBytes
-	supervisorPoll        = SupervisorPoll
-	supervisorOutputBytes = MaxWorkerOutputBytes
+	supervisorPSPath       = "/bin/ps"
+	supervisorWall         = SupervisorWall
+	supervisorRSSBytes     = SupervisorRSSBytes
+	supervisorPoll         = SupervisorPoll
+	supervisorOutputBytes  = MaxWorkerOutputBytes
+	supervisorGroupKill    = syscall.Kill
+	supervisorGroupState   = processGroupState
+	supervisorCleanupNow   = time.Now
+	supervisorCleanupWait  = time.Sleep
+	supervisorProcessStart = processStart
 )
+
+type processGroupIdentity struct {
+	PID   int
+	PGID  int
+	Start string
+}
+
+type processGroupMember struct {
+	PID   int
+	PGID  int
+	State string
+	Start string
+}
 
 type cappedBuffer struct {
 	mu       sync.Mutex
@@ -90,27 +108,28 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	pid := cmd.Process.Pid
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
-	kill := func() {
-		_ = syscall.Kill(-pid, syscall.SIGKILL)
+	group, groupErr := establishProcessGroupIdentity(pid)
+	if groupErr != nil {
+		_ = supervisorGroupKill(-pid, syscall.SIGKILL)
 		select {
 		case <-done:
-			return
 		case <-time.After(time.Second):
-			return
 		}
+		return zero, observation, failure(CodeMemoryUnsupported, groupErr)
 	}
+	kill := func() { _ = terminateWorkerGroup(group, done) }
 	finishWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
 		if stdout.Exceeded() {
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			_ = terminateWorkerGroup(group, nil)
 			return zero, failure(CodeOutputLimit, errors.New("worker stdout limit exceeded"))
 		}
 		if waitErr != nil {
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			_ = terminateWorkerGroup(group, nil)
 			return zero, classifyTerminatedWorker(waitErr, stderr.String())
 		}
 		var response workerResponse
 		if decodeErr := strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &response); decodeErr != nil || response.Version != workerVersion || (response.Outcome == nil) == (response.Failure == nil) {
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			_ = terminateWorkerGroup(group, nil)
 			return zero, failure(CodeMalformedOutput, errors.New("invalid worker response"))
 		}
 		if response.Failure != nil {
@@ -190,6 +209,112 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			out, terminalFailure := finishWorker(waitErr)
 			return out, observation, terminalFailure
 		}
+	}
+}
+
+func processGroupState(pgid int) ([]processGroupMember, error) {
+	out, err := exec.Command(supervisorPSPath, "-axo", "pid=,pgid=,state=").Output()
+	if err != nil {
+		return nil, err
+	}
+	var members []processGroupMember
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if len(fields) != 3 {
+			return nil, errors.New("malformed /bin/ps process-group output")
+		}
+		pid, pidErr := strconv.Atoi(fields[0])
+		group, groupErr := strconv.Atoi(fields[1])
+		if pidErr != nil || groupErr != nil || pid <= 0 || group <= 0 || fields[2] == "" {
+			return nil, errors.New("malformed /bin/ps process-group output")
+		}
+		if group == pgid {
+			members = append(members, processGroupMember{PID: pid, PGID: group, State: fields[2]})
+		}
+	}
+	return members, nil
+}
+
+func processStart(pid int) (string, error) {
+	out, err := exec.Command(supervisorPSPath, "-o", "lstart=", "-p", strconv.Itoa(pid)).Output()
+	start := strings.TrimSpace(string(out))
+	if err != nil || start == "" {
+		return "", errors.New("worker process-group start identity unavailable")
+	}
+	return start, nil
+}
+
+func establishProcessGroupIdentity(pid int) (processGroupIdentity, error) {
+	members, err := supervisorGroupState(pid)
+	if err != nil {
+		return processGroupIdentity{}, err
+	}
+	leader := false
+	for _, member := range members {
+		leader = leader || member.PID == pid && member.PGID == pid
+	}
+	if !leader {
+		return processGroupIdentity{}, errors.New("worker process-group identity unavailable")
+	}
+	start, err := supervisorProcessStart(pid)
+	if err != nil {
+		return processGroupIdentity{}, err
+	}
+	return processGroupIdentity{PID: pid, PGID: pid, Start: start}, nil
+}
+
+func terminateWorkerGroup(group processGroupIdentity, done <-chan error) error {
+	deadline := supervisorCleanupNow().Add(time.Second)
+	for {
+		members, err := supervisorGroupState(group.PGID)
+		if err != nil {
+			return err
+		}
+		live := false
+		for _, member := range members {
+			if member.PID == group.PID {
+				start, startErr := supervisorProcessStart(group.PID)
+				if startErr != nil || start != group.Start {
+					return errors.New("worker process-group identity changed")
+				}
+			}
+			if !strings.HasPrefix(member.State, "Z") {
+				live = true
+			}
+		}
+		if !live {
+			return awaitWorkerWithin(done, deadline)
+		}
+		if supervisorCleanupNow().After(deadline) {
+			return errors.New("process group remained live after bounded cleanup")
+		}
+		if err = supervisorGroupKill(-group.PGID, syscall.SIGKILL); err == syscall.ESRCH {
+			return awaitWorkerWithin(done, deadline)
+		} else if err != nil {
+			return err
+		}
+		supervisorCleanupWait(supervisorPoll)
+	}
+}
+
+func awaitWorkerWithin(done <-chan error, deadline time.Time) error {
+	if done == nil {
+		return nil
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return errors.New("worker wait exceeded bounded cleanup")
+	}
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return errors.New("worker wait exceeded bounded cleanup")
 	}
 }
 

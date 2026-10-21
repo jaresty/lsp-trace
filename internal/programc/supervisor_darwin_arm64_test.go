@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -200,8 +201,10 @@ func withSupervisorDefaults(t *testing.T) {
 	t.Helper()
 	t.Setenv(testWorkerWatchdogEnvironment, "1")
 	oldWall, oldRSS, oldPoll, oldOutput, oldPS := supervisorWall, supervisorRSSBytes, supervisorPoll, supervisorOutputBytes, supervisorPSPath
+	oldKill, oldState, oldNow, oldWait, oldStart := supervisorGroupKill, supervisorGroupState, supervisorCleanupNow, supervisorCleanupWait, supervisorProcessStart
 	t.Cleanup(func() {
 		supervisorWall, supervisorRSSBytes, supervisorPoll, supervisorOutputBytes, supervisorPSPath = oldWall, oldRSS, oldPoll, oldOutput, oldPS
+		supervisorGroupKill, supervisorGroupState, supervisorCleanupNow, supervisorCleanupWait, supervisorProcessStart = oldKill, oldState, oldNow, oldWait, oldStart
 	})
 	supervisorWall = 2 * time.Second
 	supervisorRSSBytes = 1 << 40 // the linked test binary exceeds the production worker's RSS
@@ -290,6 +293,113 @@ func TestProcessGroupCleanup(t *testing.T) {
 func processIsZombie(pid int) bool {
 	out, err := exec.Command("/bin/ps", "-o", "state=", "-p", strconv.Itoa(pid)).Output()
 	return err == nil && strings.HasPrefix(strings.TrimSpace(string(out)), "Z")
+}
+
+func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
+	withSupervisorDefaults(t)
+	kills := 0
+	supervisorGroupKill = func(pid int, signal syscall.Signal) error {
+		if pid != -42 || signal != syscall.SIGKILL {
+			t.Fatalf("unrelated signal target pid=%d signal=%v", pid, signal)
+		}
+		kills++
+		return nil
+	}
+	observations := 0
+	supervisorGroupState = func(int) ([]processGroupMember, error) {
+		observations++
+		if observations == 1 {
+			return []processGroupMember{{PID: 43, PGID: 42, State: "S"}}, nil
+		}
+		return nil, nil
+	}
+	done := make(chan error, 1)
+	done <- nil
+	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, done); err != nil {
+		t.Fatal(err)
+	}
+	if kills != 1 || observations != 2 {
+		t.Fatalf("ASSERT_GROUP_LIVE_THEN_GONE kills=%d observations=%d", kills, observations)
+	}
+	t.Log("ASSERT_GROUP_LIVE_THEN_GONE: PASS")
+}
+
+func TestTerminateWorkerGroupTerminalAndFailureStates(t *testing.T) {
+	identity := processGroupIdentity{PID: 42, PGID: 42, Start: "start"}
+	for _, tc := range []struct {
+		name     string
+		members  []processGroupMember
+		stateErr error
+	}{
+		{name: "group-gone"},
+		{name: "zombie-only", members: []processGroupMember{{PID: 43, PGID: 42, State: "Z"}}},
+		{name: "ps-malformed", stateErr: errors.New("malformed /bin/ps process-group output")},
+		{name: "ps-unavailable", stateErr: errors.New("ps unavailable")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withSupervisorDefaults(t)
+			kills := 0
+			supervisorGroupKill = func(int, syscall.Signal) error { kills++; return nil }
+			supervisorGroupState = func(int) ([]processGroupMember, error) { return tc.members, tc.stateErr }
+			err := terminateWorkerGroup(identity, nil)
+			if (tc.stateErr == nil && err != nil) || (tc.stateErr != nil && err == nil) || kills != 0 {
+				t.Fatalf("ASSERT_GROUP_TERMINAL_%s err=%v kills=%d", tc.name, err, kills)
+			}
+			t.Logf("ASSERT_GROUP_TERMINAL_%s: PASS", tc.name)
+		})
+	}
+}
+
+func TestTerminateWorkerGroupPersistentLiveIsBounded(t *testing.T) {
+	withSupervisorDefaults(t)
+	supervisorProcessStart = func(int) (string, error) { return "start", nil }
+	now := time.Unix(0, 0)
+	supervisorCleanupNow = func() time.Time { return now }
+	supervisorCleanupWait = func(d time.Duration) { now = now.Add(d) }
+	supervisorGroupState = func(int) ([]processGroupMember, error) {
+		return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "start"}}, nil
+	}
+	kills := 0
+	supervisorGroupKill = func(pid int, _ syscall.Signal) error {
+		if pid != -42 {
+			t.Fatalf("unrelated pid %d", pid)
+		}
+		kills++
+		return nil
+	}
+	err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, nil)
+	if err == nil || kills == 0 || now.Sub(time.Unix(0, 0)) > time.Second+supervisorPoll {
+		t.Fatalf("ASSERT_GROUP_PERSISTENT_LIVE_BOUNDED err=%v kills=%d elapsed=%s", err, kills, now.Sub(time.Unix(0, 0)))
+	}
+	t.Log("ASSERT_GROUP_PERSISTENT_LIVE_BOUNDED: PASS")
+}
+
+func TestTerminateWorkerGroupRejectsChangedIdentityWithoutSignal(t *testing.T) {
+	withSupervisorDefaults(t)
+	supervisorProcessStart = func(int) (string, error) { return "reused", nil }
+	supervisorGroupState = func(int) ([]processGroupMember, error) {
+		return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "reused"}}, nil
+	}
+	kills := 0
+	supervisorGroupKill = func(int, syscall.Signal) error { kills++; return nil }
+	err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "original"}, nil)
+	if err == nil || kills != 0 {
+		t.Fatalf("ASSERT_GROUP_REUSED_IDENTITY_NOT_SIGNALED err=%v kills=%d", err, kills)
+	}
+	t.Log("ASSERT_GROUP_REUSED_IDENTITY_NOT_SIGNALED: PASS")
+}
+
+func TestTerminateWorkerGroupESRCHIsComplete(t *testing.T) {
+	withSupervisorDefaults(t)
+	supervisorProcessStart = func(int) (string, error) { return "start", nil }
+	supervisorGroupState = func(int) ([]processGroupMember, error) {
+		return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "start"}}, nil
+	}
+	supervisorGroupKill = func(int, syscall.Signal) error { return syscall.ESRCH }
+	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("ASSERT_GROUP_ESRCH_COMPLETE: PASS")
 }
 
 func readWatchdogPIDs(path string, requireDescendant bool) (watchdogPIDs, error) {
