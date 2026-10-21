@@ -22,7 +22,7 @@ jobs:
       - name: Check Python syntax
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python3 -m py_compile scripts/*.py
+        run: python3 -m py_compile scripts/retain-qualification.py scripts/check-program-c-profiles.py scripts/test-program-c-profiles.py scripts/check-program-c-gate-ii.py scripts/test-program-c-gate-ii.py scripts/check-program-c-gate-ii-v4.py scripts/test-program-c-gate-ii-v4.py scripts/check-ci-shards.py scripts/generate-ci-shards.py scripts/map-ci-affected-packages.py scripts/summarize-go-test-json.py scripts/check-ci-topology.py scripts/test-ci-shards.py scripts/test-ci-affected-packages.py scripts/test-summarize-go-test-json.py scripts/test-ci-topology.py
       - name: Check Program C profiles
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -108,9 +108,13 @@ jobs:
           set +e
           set -o pipefail
           go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee go-test.json
-          status=${PIPESTATUS[0]}
-          python3 scripts/summarize-go-test-json.py --input go-test.json --output go-test-summary.json --os "$PLATFORM" --commit "$GITHUB_SHA" --job "$GITHUB_JOB" --shard "${{ matrix.shard.id }}" --exit-code "$status"
-          exit "$status"
+          test_status=${PIPESTATUS[0]}
+          tee_status=${PIPESTATUS[1]}
+          python3 scripts/summarize-go-test-json.py --input go-test.json --output go-test-summary.json --os "$PLATFORM" --commit "$GITHUB_SHA" --job "$GITHUB_JOB" --shard "${{ matrix.shard.id }}" --exit-code "$test_status"
+          summary_status=$?
+          if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi
+          if [ "$tee_status" -ne 0 ]; then exit "$tee_status"; fi
+          exit "$summary_status"
       - name: Upload shard timing
         if: always()
         uses: actions/upload-artifact@v4

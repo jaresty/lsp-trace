@@ -23,9 +23,19 @@ def main():
     parser.add_argument("--exit-code", required=True, type=int)
     args = parser.parse_args()
     events = []
-    for line in Path(args.input).read_text().splitlines():
-        if line.strip():
-            events.append(json.loads(line))
+    malformed_lines = 0
+    for line in Path(args.input).read_text(errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            malformed_lines += 1
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+        else:
+            malformed_lines += 1
     cached = set()
     timed_out = set()
     for event in events:
@@ -61,6 +71,8 @@ def main():
         "shard_total_seconds": total,
         "setup_seconds": None,
         "cached": bool(cached),
+        "malformed_lines": malformed_lines,
+        "partial": malformed_lines > 0,
     }
     Path(args.output).write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
 
