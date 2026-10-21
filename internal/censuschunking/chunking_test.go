@@ -264,12 +264,95 @@ func phase1Baseline(t *testing.T) (Input, Result) {
 	return in, got
 }
 
+func newPhase1BaselineFixture() (func(*testing.T) (Input, Result), func() int) {
+	var (
+		once       sync.Once
+		mu         sync.Mutex
+		buildCount int
+		data       phase1BaselineSnapshot
+	)
+	baseline := func(t *testing.T) (Input, Result) {
+		t.Helper()
+		once.Do(func() {
+			in := fixture(t, 10001)
+			got, err := Build(in, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var snapshot phase1BaselineSnapshot
+			snapshot.input, err = json.Marshal(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot.plan, err = EncodePlan(got.Plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot.index, err = EncodeIndex(got.Index)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot.projections = make([][]byte, len(got.Chunks))
+			snapshot.sidecars = make([][]byte, len(got.Chunks))
+			for i := range got.Chunks {
+				snapshot.projections[i] = bytes.Clone(got.Chunks[i].ProjectionBytes)
+				snapshot.sidecars[i] = bytes.Clone(got.Chunks[i].SidecarBytes)
+			}
+			mu.Lock()
+			data = snapshot
+			buildCount++
+			mu.Unlock()
+		})
+
+		mu.Lock()
+		snapshot := data
+		mu.Unlock()
+		var in Input
+		if err := json.Unmarshal(snapshot.input, &in); err != nil {
+			t.Fatal(err)
+		}
+		plan, err := DecodePlan(snapshot.plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		index, err := DecodeIndex(snapshot.index)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := Result{Plan: plan, Index: index, Chunks: make([]Chunk, len(plan.Chunks))}
+		for i := range got.Chunks {
+			projection, err := DecodeProjection(snapshot.projections[i])
+			if err != nil {
+				t.Fatal(err)
+			}
+			sidecar, err := DecodeSidecar(snapshot.sidecars[i])
+			if err != nil {
+				t.Fatal(err)
+			}
+			got.Chunks[i] = Chunk{
+				Descriptor:      plan.Chunks[i],
+				Projection:      projection,
+				Sidecar:         sidecar,
+				ProjectionBytes: bytes.Clone(snapshot.projections[i]),
+				SidecarBytes:    bytes.Clone(snapshot.sidecars[i]),
+			}
+		}
+		return in, got
+	}
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return buildCount
+	}
+	return baseline, count
+}
+
 func TestPhase1BaselineReuseAndIsolation(t *testing.T) {
-	phase1BaselineBuildCount = 0
-	firstInput, firstResult := phase1Baseline(t)
-	secondInput, secondResult := phase1Baseline(t)
-	if phase1BaselineBuildCount != 1 {
-		t.Fatalf("ASSERT_PHASE1_BASELINE_BUILD_COUNT got=%d want=1", phase1BaselineBuildCount)
+	baseline, buildCount := newPhase1BaselineFixture()
+	firstInput, firstResult := baseline(t)
+	secondInput, secondResult := baseline(t)
+	if got := buildCount(); got != 1 {
+		t.Fatalf("ASSERT_PHASE1_BASELINE_BUILD_COUNT got=%d want=1", got)
 	}
 	firstInput.Targets[0].Name = "mutated"
 	firstResult.Plan.Chunks[0].TargetCount++
