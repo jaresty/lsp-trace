@@ -67,6 +67,7 @@ type targetWire struct {
 	notices           int
 	responseAttempted bool
 	responseWritten   bool
+	responseFinished  chan struct{}
 	closed            int
 	teardowns         int
 }
@@ -74,7 +75,7 @@ type targetWire struct {
 func newTargetWire(plan targetWirePlan) *targetWire {
 	serverIn, hostStdin := io.Pipe()
 	hostStdout, serverOut := io.Pipe()
-	return &targetWire{serverIn: serverIn, hostStdin: hostStdin, serverOut: serverOut, hostStdout: hostStdout, plan: plan}
+	return &targetWire{serverIn: serverIn, hostStdin: hostStdin, serverOut: serverOut, hostStdout: hostStdout, plan: plan, responseFinished: make(chan struct{})}
 }
 
 func (w *targetWire) serve(uri string) {
@@ -117,6 +118,7 @@ func (w *targetWire) serve(uri string) {
 				w.responseWritten = true
 				w.mu.Unlock()
 			}
+			close(w.responseFinished)
 			if err != nil {
 				return
 			}
@@ -371,6 +373,7 @@ func TestTargetResourceFailureByteBudget(t *testing.T) {
 	_, failure := Execute(ctx, manager, targetResourceRequest(started.Generation, uri, 8, 1))
 	assertPoisonedResourceWireBeforeClassification(t, ctx, manager, started, child)
 	assertTargetFailure(t, failure, TargetActionFailDocument)
+	<-child.responseFinished
 	_, notices, _, _, responseAttempted, responseWritten := child.snapshot()
 	if notices != 0 || !responseAttempted || !responseWritten {
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_BYTE_WIRE_SHAPE: notices=%d responseAttempted=%t responseWritten=%t", notices, responseAttempted, responseWritten)
