@@ -635,6 +635,9 @@ func TestStage7COnlyAuthorizedTestFileAndExactOwners(t *testing.T) {
 			"internal/programc/stage7c_artifacts_red_test.go":            true,
 			"internal/programc/stage7c_coupling.go":                      true,
 			"internal/programc/stage7c_instability.go":                   true,
+			"internal/programc/supervisor.go":                            true,
+			"internal/programc/supervisor_darwin_arm64.go":               true,
+			"internal/programc/supervisor_darwin_arm64_test.go":          true,
 			"internal/programcrepresentative/source_context_red_test.go": true,
 			"internal/programcrepresentative/stage7b_causal_red_test.go": true,
 		}

@@ -108,34 +108,44 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	pid := cmd.Process.Pid
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
-	group, groupErr := establishProcessGroupIdentity(pid)
-	if groupErr != nil {
-		_ = supervisorGroupKill(-pid, syscall.SIGKILL)
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-		}
-		return zero, observation, failure(CodeMemoryUnsupported, groupErr)
-	}
-	kill := func() { _ = terminateWorkerGroup(group, done) }
-	finishWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
+	decodeWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
 		if stdout.Exceeded() {
-			_ = terminateWorkerGroup(group, nil)
 			return zero, failure(CodeOutputLimit, errors.New("worker stdout limit exceeded"))
 		}
 		if waitErr != nil {
-			_ = terminateWorkerGroup(group, nil)
 			return zero, classifyTerminatedWorker(waitErr, stderr.String())
 		}
 		var response workerResponse
 		if decodeErr := strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &response); decodeErr != nil || response.Version != workerVersion || (response.Outcome == nil) == (response.Failure == nil) {
-			_ = terminateWorkerGroup(group, nil)
 			return zero, failure(CodeMalformedOutput, errors.New("invalid worker response"))
 		}
 		if response.Failure != nil {
 			return zero, response.Failure
 		}
 		return reconstruct(input, seed, response.Outcome)
+	}
+	group, groupErr := establishProcessGroupIdentity(pid)
+	if groupErr != nil {
+		select {
+		case waitErr := <-done:
+			out, terminalFailure := decodeWorker(waitErr)
+			return out, observation, terminalFailure
+		case <-time.After(time.Second):
+			return zero, observation, cleanupFailure(failure(CodeMemoryUnsupported, groupErr), groupErr)
+		}
+	}
+	finishWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
+		out, terminalFailure := decodeWorker(waitErr)
+		if cleanupErr := terminateWorkerGroup(group, nil); cleanupErr != nil {
+			return zero, cleanupFailure(terminalFailure, cleanupErr)
+		}
+		return out, terminalFailure
+	}
+	stopWorker := func(nominal *SupervisionFailure) *SupervisionFailure {
+		if cleanupErr := terminateWorkerGroup(group, done); cleanupErr != nil {
+			return cleanupFailure(nominal, cleanupErr)
+		}
+		return nominal
 	}
 	peak, err := initialTreeRSS(pid)
 	if err != nil {
@@ -146,23 +156,20 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 				return out, observation, terminalFailure
 			}
 		} else {
-			kill()
+			return zero, observation, stopWorker(failure(CodeMemoryUnsupported, err))
 		}
 		return zero, observation, failure(CodeMemoryUnsupported, err)
 	}
 	observation.PeakTreeRSSBytes = peak
 	observation.Samples = 1
 	if peak > supervisorRSSBytes {
-		kill()
-		return zero, observation, failure(CodeMemoryLimit, fmt.Errorf("sampled tree RSS %d exceeds %d", peak, supervisorRSSBytes))
+		return zero, observation, stopWorker(failure(CodeMemoryLimit, fmt.Errorf("sampled tree RSS %d exceeds %d", peak, supervisorRSSBytes)))
 	}
 	if _, err = stdin.Write(request); err != nil {
-		kill()
-		return zero, observation, failure(CodeNonzeroExit, err)
+		return zero, observation, stopWorker(failure(CodeNonzeroExit, err))
 	}
 	if err = stdin.Close(); err != nil {
-		kill()
-		return zero, observation, failure(CodeNonzeroExit, err)
+		return zero, observation, stopWorker(failure(CodeNonzeroExit, err))
 	}
 	ticker := time.NewTicker(supervisorPoll)
 	defer ticker.Stop()
@@ -171,18 +178,15 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	for {
 		select {
 		case <-ctx.Done():
-			kill()
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
-			return zero, observation, failure(CodeCancelled, ctx.Err())
+			return zero, observation, stopWorker(failure(CodeCancelled, ctx.Err()))
 		case <-timer.C:
-			kill()
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
-			return zero, observation, failure(CodeTimeout, errors.New("60s wall limit exceeded"))
+			return zero, observation, stopWorker(failure(CodeTimeout, errors.New("60s wall limit exceeded")))
 		case <-ticker.C:
 			if stdout.Exceeded() {
-				kill()
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
-				return zero, observation, failure(CodeOutputLimit, errors.New("worker stdout limit exceeded"))
+				return zero, observation, stopWorker(failure(CodeOutputLimit, errors.New("worker stdout limit exceeded")))
 			}
 			rss, e := treeRSS(pid)
 			if e != nil {
@@ -191,18 +195,16 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 					out, terminalFailure := finishWorker(waitErr)
 					return out, observation, terminalFailure
 				}
-				kill()
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
-				return zero, observation, failure(CodeMemoryUnsupported, e)
+				return zero, observation, stopWorker(failure(CodeMemoryUnsupported, e))
 			}
 			observation.Samples++
 			if rss > observation.PeakTreeRSSBytes {
 				observation.PeakTreeRSSBytes = rss
 			}
 			if rss > supervisorRSSBytes {
-				kill()
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
-				return zero, observation, failure(CodeMemoryLimit, fmt.Errorf("sampled tree RSS %d exceeds %d", rss, supervisorRSSBytes))
+				return zero, observation, stopWorker(failure(CodeMemoryLimit, fmt.Errorf("sampled tree RSS %d exceeds %d", rss, supervisorRSSBytes)))
 			}
 		case waitErr := <-done:
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
@@ -266,6 +268,14 @@ func establishProcessGroupIdentity(pid int) (processGroupIdentity, error) {
 	return processGroupIdentity{PID: pid, PGID: pid, Start: start}, nil
 }
 
+func cleanupFailure(nominal *SupervisionFailure, _ error) *SupervisionFailure {
+	cause := "unknown"
+	if nominal != nil {
+		cause = string(nominal.Code)
+	}
+	return failure(CodeCleanupFailure, fmt.Errorf("worker group cleanup could not be verified; superseded=%s", cause))
+}
+
 func terminateWorkerGroup(group processGroupIdentity, done <-chan error) error {
 	deadline := supervisorCleanupNow().Add(time.Second)
 	for {
@@ -273,13 +283,14 @@ func terminateWorkerGroup(group processGroupIdentity, done <-chan error) error {
 		if err != nil {
 			return err
 		}
-		live := false
+		live, leader := false, false
 		for _, member := range members {
-			if member.PID == group.PID {
+			if member.PID == group.PID && member.PGID == group.PGID {
 				start, startErr := supervisorProcessStart(group.PID)
 				if startErr != nil || start != group.Start {
 					return errors.New("worker process-group identity changed")
 				}
+				leader = true
 			}
 			if !strings.HasPrefix(member.State, "Z") {
 				live = true
@@ -288,12 +299,28 @@ func terminateWorkerGroup(group processGroupIdentity, done <-chan error) error {
 		if !live {
 			return awaitWorkerWithin(done, deadline)
 		}
+		if !leader {
+			return errors.New("worker process-group leader identity unavailable")
+		}
 		if supervisorCleanupNow().After(deadline) {
 			return errors.New("process group remained live after bounded cleanup")
 		}
-		if err = supervisorGroupKill(-group.PGID, syscall.SIGKILL); err == syscall.ESRCH {
-			return awaitWorkerWithin(done, deadline)
-		} else if err != nil {
+		// Re-observe the exact leader identity immediately before the group signal.
+		// Darwin exposes no atomic identity-and-signal primitive, so failure to
+		// retain custody here fails closed without signaling.
+		confirm, confirmErr := supervisorGroupState(group.PGID)
+		if confirmErr != nil {
+			return confirmErr
+		}
+		confirmed := false
+		for _, member := range confirm {
+			confirmed = confirmed || (member.PID == group.PID && member.PGID == group.PGID && !strings.HasPrefix(member.State, "Z"))
+		}
+		start, startErr := supervisorProcessStart(group.PID)
+		if !confirmed || startErr != nil || start != group.Start {
+			return errors.New("worker process-group signal custody unavailable")
+		}
+		if err = supervisorGroupKill(-group.PGID, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
 			return err
 		}
 		supervisorCleanupWait(supervisorPoll)

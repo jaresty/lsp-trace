@@ -297,6 +297,7 @@ func processIsZombie(pid int) bool {
 
 func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
 	withSupervisorDefaults(t)
+	supervisorProcessStart = func(int) (string, error) { return "start", nil }
 	kills := 0
 	supervisorGroupKill = func(pid int, signal syscall.Signal) error {
 		if pid != -42 || signal != syscall.SIGKILL {
@@ -308,8 +309,8 @@ func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
 	observations := 0
 	supervisorGroupState = func(int) ([]processGroupMember, error) {
 		observations++
-		if observations == 1 {
-			return []processGroupMember{{PID: 43, PGID: 42, State: "S"}}, nil
+		if observations <= 2 {
+			return []processGroupMember{{PID: 42, PGID: 42, State: "S"}, {PID: 43, PGID: 42, State: "S"}}, nil
 		}
 		return nil, nil
 	}
@@ -318,7 +319,7 @@ func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
 	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, done); err != nil {
 		t.Fatal(err)
 	}
-	if kills != 1 || observations != 2 {
+	if kills != 1 || observations != 3 {
 		t.Fatalf("ASSERT_GROUP_LIVE_THEN_GONE kills=%d observations=%d", kills, observations)
 	}
 	t.Log("ASSERT_GROUP_LIVE_THEN_GONE: PASS")
@@ -374,6 +375,34 @@ func TestTerminateWorkerGroupPersistentLiveIsBounded(t *testing.T) {
 	t.Log("ASSERT_GROUP_PERSISTENT_LIVE_BOUNDED: PASS")
 }
 
+func TestCleanupFailureSupersedesNominalOutcome(t *testing.T) {
+	withSupervisorDefaults(t)
+	supervisorProcessStart = func(int) (string, error) { return "start", nil }
+	supervisorGroupState = func(int) ([]processGroupMember, error) { return nil, errors.New("ps unavailable") }
+	failed := cleanupFailure(failure(CodeTimeout, errors.New("60s wall limit exceeded")), errors.New("ps unavailable"))
+	requireCode(t, failed, CodeCleanupFailure)
+	if strings.Contains(failed.Message, "ps unavailable") {
+		t.Fatalf("ASSERT_CLEANUP_FAILURE_DETAIL_BOUNDED message=%q", failed.Message)
+	}
+}
+
+func TestFinishWorkerCleansDescendantsOrFailsCleanup(t *testing.T) {
+	withSupervisorDefaults(t)
+	calls := 0
+	supervisorGroupState = func(int) ([]processGroupMember, error) {
+		calls++
+		if calls == 1 {
+			return []processGroupMember{{PID: 43, PGID: 42, State: "S"}}, nil
+		}
+		return nil, nil
+	}
+	kills := 0
+	supervisorGroupKill = func(int, syscall.Signal) error { kills++; return nil }
+	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, nil); err == nil || kills != 0 {
+		t.Fatalf("ASSERT_DESCENDANT_WITHOUT_LEADER_FAILS_SAFE err=%v kills=%d", err, kills)
+	}
+}
+
 func TestTerminateWorkerGroupRejectsChangedIdentityWithoutSignal(t *testing.T) {
 	withSupervisorDefaults(t)
 	supervisorProcessStart = func(int) (string, error) { return "reused", nil }
@@ -392,8 +421,13 @@ func TestTerminateWorkerGroupRejectsChangedIdentityWithoutSignal(t *testing.T) {
 func TestTerminateWorkerGroupESRCHIsComplete(t *testing.T) {
 	withSupervisorDefaults(t)
 	supervisorProcessStart = func(int) (string, error) { return "start", nil }
+	observations := 0
 	supervisorGroupState = func(int) ([]processGroupMember, error) {
-		return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "start"}}, nil
+		observations++
+		if observations <= 2 {
+			return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "start"}}, nil
+		}
+		return nil, nil
 	}
 	supervisorGroupKill = func(int, syscall.Signal) error { return syscall.ESRCH }
 	if err := terminateWorkerGroup(processGroupIdentity{PID: 42, PGID: 42, Start: "start"}, nil); err != nil {
@@ -657,7 +691,7 @@ func TestMemoryObservationFailsClosed(t *testing.T) {
 			supervisorPSPath = path
 			t.Setenv("PROGRAMC_TEST_WORKER", "hang")
 			_, _, failed := ComputeSupervised(context.Background(), nil, 1)
-			requireCode(t, failed, CodeMemoryUnsupported)
+			requireCode(t, failed, CodeCleanupFailure)
 		})
 	}
 }

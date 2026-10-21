@@ -44,6 +44,7 @@ const (
 	CodeMemoryLimit         SupervisionCode = "MEMORY_LIMIT"
 	CodeMemoryUnsupported   SupervisionCode = "MEMORY_UNSUPPORTED"
 	CodeCancelled           SupervisionCode = "CANCELLED"
+	CodeCleanupFailure      SupervisionCode = "CLEANUP_FAILURE"
 	CodeNonzeroExit         SupervisionCode = "NONZERO_EXIT"
 	CodePanic               SupervisionCode = "PANIC"
 	CodeMalformedOutput     SupervisionCode = "MALFORMED_OUTPUT"
