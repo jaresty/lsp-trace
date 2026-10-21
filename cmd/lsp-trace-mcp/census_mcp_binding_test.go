@@ -23,6 +23,16 @@ type privateCensusRunnerFixture struct {
 	calls      []operation.Request
 }
 
+type countingCensusMCPExecutor struct {
+	delegate mcp.Executor
+	calls    int
+}
+
+func (e *countingCensusMCPExecutor) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+	e.calls++
+	return e.delegate.Execute(ctx, request)
+}
+
 func (f *privateCensusRunnerFixture) run(_ context.Context, request operation.Request) censusCompletion {
 	f.calls = append(f.calls, request)
 	return f.completion
@@ -115,6 +125,11 @@ func TestPrivateCensusMCPGatewayComposesBootstrapActivationThroughDocumentSymbol
 				t.Fatalf("ASSERT_COMPOSED_CENSUS_BOOTSTRAP_BINDING: binding=%T enabled=%v env=%q", server.Executors[mcp.CensusExecutorFamily], binding.privateCensusChunking, tc.env)
 			}
 			binding.runtime = newCensusRuntime(runtime)
+			var executor *countingCensusMCPExecutor
+			if tc.requestActivation {
+				executor = &countingCensusMCPExecutor{delegate: binding}
+				server.Executors[mcp.CensusExecutorFamily] = executor
+			}
 
 			arguments := map[string]any{"session_id": "project", "generation": started.Generation, "sources": []string{"."}, "max_nodes": 2, "timeout_ms": 1000, "request_timeout_ms": 500}
 			if tc.requestActivation {
@@ -132,8 +147,24 @@ func TestPrivateCensusMCPGatewayComposesBootstrapActivationThroughDocumentSymbol
 			if err := server.Serve(bytes.NewReader(append(raw, '\n')), &output); err != nil {
 				t.Fatal(err)
 			}
-			if tc.wantGatewayReject != strings.Contains(output.String(), `"code":-32602`) {
-				t.Fatalf("ASSERT_COMPOSED_CENSUS_REQUEST_ACTIVATION_STRICTLY_REJECTED: reject=%t output=%s", tc.wantGatewayReject, output.String())
+			var response struct {
+				ID    json.RawMessage `json:"id"`
+				Error *struct {
+					Code int `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &response); err != nil {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_GATEWAY_RESPONSE_DECODES: output=%q err=%v", output.String(), err)
+			}
+			if string(response.ID) != "1" {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_GATEWAY_RESPONSE_REQUEST_ID: id=%s output=%s", response.ID, output.String())
+			}
+			gotGatewayReject := response.Error != nil && response.Error.Code == -32602
+			if gotGatewayReject != tc.wantGatewayReject {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_REQUEST_ACTIVATION_STRICTLY_REJECTED: reject=%t code=%v output=%s", gotGatewayReject, response.Error, output.String())
+			}
+			if tc.requestActivation && executor.calls != 0 {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_GATEWAY_REJECTS_BEFORE_EXECUTOR: calls=%d output=%s", executor.calls, output.String())
 			}
 
 			_, methods, _, _ := starter.snapshot()
