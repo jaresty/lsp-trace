@@ -158,6 +158,10 @@ func runInitializedCensusDiscovery(ctx context.Context, options censusCLIOptions
 	}
 	discovery, err := discoverer.Discover(ctx, censusacquisition.SessionIdentity{SessionID: runtime.SessionID(), Generation: runtime.Generation()})
 	if err != nil {
+		var limit *source.LimitError
+		if errors.As(err, &limit) {
+			return discovery, limit
+		}
 		return discovery, censusDiscoveryFailure{Stage: censusStageDiscovery, Code: censusCodeDiscoveryFailed}
 	}
 	return discovery, nil

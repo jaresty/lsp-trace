@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusenumerationprojection"
+	"lsp-trace/internal/censuspreflight"
 	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
@@ -61,14 +62,16 @@ type censusContinuationCustody struct {
 }
 
 type censusPublicationOutcome struct {
-	Result               *censusCLIResult
-	Diagnostic           *censusCLIDiagnostic
-	DiscoveryDiagnostic  *censusresult.DiscoveryDiagnostic
-	RequestReceipt       *censusrequest.Receipt
-	EnumerationReceipt   *censusenumerationprojection.Receipt
-	PrivateChunkTerminal *privateCensusChunkTerminal
-	continuation         *censusContinuationCustody
-	controlFlow          *censuscontrolflow.Record
+	Result                *censusCLIResult
+	Diagnostic            *censusCLIDiagnostic
+	DiscoveryDiagnostic   *censusresult.DiscoveryDiagnostic
+	RequestReceipt        *censusrequest.Receipt
+	RequestReceiptV2      *censusrequest.ReceiptV2
+	EnumerationDiagnostic *censuspreflight.Diagnostic
+	EnumerationReceipt    *censusenumerationprojection.Receipt
+	PrivateChunkTerminal  *privateCensusChunkTerminal
+	continuation          *censusContinuationCustody
+	controlFlow           *censuscontrolflow.Record
 }
 
 func (o censusPublicationOutcome) BuildCommittedHandoff() (censuscontinuation.CommittedHandoff, error) {

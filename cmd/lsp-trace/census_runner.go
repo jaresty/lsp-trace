@@ -277,6 +277,28 @@ func writeCensusFailure(stderr io.Writer, stage censusFailureStage, machine bool
 }
 
 func writeCensusOutcome(stdout, stderr io.Writer, machine bool, outcome censusPublicationOutcome) int {
+	if outcome.EnumerationDiagnostic != nil {
+		raw, err := censuspreflight.MarshalDiagnostic(*outcome.EnumerationDiagnostic)
+		if err == nil {
+			_, _ = stderr.Write(append(raw, '\n'))
+			return 1
+		}
+		return writeCensusFailure(stderr, censusStageDiscovery, machine, err)
+	}
+	if outcome.DiscoveryDiagnostic != nil && outcome.RequestReceiptV2 != nil {
+		if machine {
+			raw, err := json.Marshal(struct {
+				Diagnostic     *censusresult.DiscoveryDiagnostic `json:"diagnostic"`
+				RequestReceipt *censusrequest.ReceiptV2          `json:"request_receipt"`
+			}{outcome.DiscoveryDiagnostic, outcome.RequestReceiptV2})
+			if err == nil {
+				_, _ = stderr.Write(append(raw, '\n'))
+				return 1
+			}
+		}
+		fmt.Fprintln(stderr, "census failed: DISCOVERY_BOUNDED_INCOMPLETE")
+		return 1
+	}
 	if outcome.DiscoveryDiagnostic != nil && outcome.RequestReceipt != nil {
 		if machine {
 			raw, err := json.Marshal(struct {
