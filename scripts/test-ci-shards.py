@@ -96,6 +96,15 @@ class CIShardsTest(unittest.TestCase):
         chunk["weight"] += 1200
         continuation["weight"] -= 1200
         mutations["heavy packages together"] = heavy_together
+        noncanonical = copy.deepcopy(base)
+        candidates = [s for s in noncanonical["platforms"]["linux"]["shards"] if s["id"] not in {"linux-1", "linux-2"} and s["packages"]]
+        left, right = candidates[:2]
+        left_package, right_package = left["packages"][0], right["packages"][0]
+        left["packages"][0], right["packages"][0] = right_package, left_package
+        weights = noncanonical["weights"]["packages"]
+        left["weight"] += weights[right_package] - weights[left_package]
+        right["weight"] += weights[left_package] - weights[right_package]
+        mutations["accounting-valid noncanonical LPT"] = noncanonical
         for name, manifest in mutations.items():
             with self.subTest(name=name):
                 self.check(manifest, expected=False)

@@ -24,6 +24,24 @@ def fail(errors, message):
     errors.append(message)
 
 
+def expected_assignment(goos, packages, weights, fallback):
+    count = EXPECTED_COUNTS[goos]
+    shards = {f"{goos}-{i}": {"packages": [], "weight": 0} for i in range(1, count + 1)}
+    pins = dict(zip(HEAVY, ("linux-1", "linux-2"))) if goos == "linux" else {p: "darwin-1" for p in EXPECTED_GOPLS if p in packages}
+    for package, shard_id in sorted(pins.items()):
+        if package in packages:
+            shards[shard_id]["packages"].append(package)
+            shards[shard_id]["weight"] += weights.get(package, fallback)
+    for package in sorted((p for p in packages if p not in pins), key=lambda p: (-weights.get(p, fallback), p)):
+        eligible = list(shards)
+        if goos == "darwin":
+            eligible.remove("darwin-1")
+        shard_id = min(eligible, key=lambda sid: (shards[sid]["weight"], sid))
+        shards[shard_id]["packages"].append(package)
+        shards[shard_id]["weight"] += weights.get(package, fallback)
+    return {sid: sorted(value["packages"]) for sid, value in shards.items()}
+
+
 def validate(manifest, packages_by_os):
     errors = []
     if manifest.get("algorithm") != "deterministic-lpt-v1":
@@ -75,6 +93,10 @@ def validate(manifest, packages_by_os):
             calculated = sum(weights.get(p, fallback) for p in shard.get("packages", []))
             if shard.get("weight") != calculated:
                 fail(errors, f"{goos}: incorrect weight for {shard.get('id')}")
+        expected_assignment_by_id = expected_assignment(goos, packages_by_os[goos], weights, fallback)
+        actual_assignment_by_id = {s.get("id"): sorted(s.get("packages", [])) for s in shards}
+        if actual_assignment_by_id != expected_assignment_by_id:
+            fail(errors, f"{goos}: assignment is not canonical deterministic LPT")
     return errors
 
 
