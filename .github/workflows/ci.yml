@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: jaresty/elixir-call-hierarchy
-          ref: aab27746f1ab03a3ce24fa3e636bbc252c0236ff
+          ref: 7e97dc18a6d6d414b3bd4801eb0096031c49488a
           path: elixir-call-hierarchy
       - uses: erlef/setup-beam@v1
         with:
