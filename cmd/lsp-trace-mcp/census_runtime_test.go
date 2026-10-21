@@ -144,9 +144,9 @@ func TestPrivateCensusRuntimeActivatedDiscoveryUsesBroadLimitsOnce(t *testing.T)
 			}
 			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"max_nodes": 10}))
 			request.PrivateCensusChunking = tc.activated
-			_, failure, _ := shell.execute(context.Background(), request)
-			if failure != nil || calls != 1 || observed.maxNodes != tc.wantNodes {
-				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_LIMITS: activated=%v calls=%d max_nodes=%d want=%d failure=%+v", tc.activated, calls, observed.maxNodes, tc.wantNodes, failure)
+			result, failure, _ := shell.execute(context.Background(), request)
+			if failure != nil || calls != 1 || observed.maxNodes != tc.wantNodes || result.privateAcquisition != tc.activated {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_LIMITS: activated=%v retained=%v calls=%d max_nodes=%d want=%d failure=%+v", tc.activated, result.privateAcquisition, calls, observed.maxNodes, tc.wantNodes, failure)
 			}
 		})
 	}
@@ -317,9 +317,22 @@ func TestPlannedBatchUsesAdmittedHostManagerWithoutLifecycleDelta(t *testing.T) 
 }
 
 func TestCensusRuntimeAcquisitionLimitsAreFixed(t *testing.T) {
-	limits := censusRuntimeAcquisitionLimits(censusRuntimeConfig{maxNodes: 321, timeoutMS: 987, requestTimeoutMS: 654})
+	limits, err := censusRuntimeAcquisitionLimits(censusRuntimeConfig{maxNodes: 321, timeoutMS: 987, requestTimeoutMS: 654}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if limits.MaxNodes == nil || *limits.MaxNodes != 321 || limits.MaxRequests == nil || *limits.MaxRequests != 1000 || limits.MaxEvidenceBytes == nil || *limits.MaxEvidenceBytes != 4<<20 || limits.MaxPathWork == nil || *limits.MaxPathWork != 100000 || limits.TimeoutMS == nil || *limits.TimeoutMS != 987 || limits.RequestTimeoutMS == nil || *limits.RequestTimeoutMS != 654 || limits.MaxResponseBytes == nil || *limits.MaxResponseBytes != 4<<20 || limits.MaxMessages == nil || *limits.MaxMessages != 64 {
 		t.Fatalf("ASSERT_MCP_CENSUS_FIXED_ACQUISITION_LIMITS: %+v", limits)
+	}
+}
+
+func TestPrivateCensusAcquisitionRequestBudgetExceedsLegacy1000(t *testing.T) {
+	limits, err := censusRuntimeAcquisitionLimits(censusRuntimeConfig{maxNodes: 10000, maxBatchTargets: 63, timeoutMS: 987, requestTimeoutMS: 654}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if limits.MaxRequests == nil || *limits.MaxRequests != 20191 {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_ACQUISITION_REQUEST_BUDGET: max_requests=%v want=20191", limits.MaxRequests)
 	}
 }
 

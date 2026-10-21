@@ -93,7 +93,10 @@ func (r *censusRuntime) runPrivateCensusChunking(ctx context.Context, prepared c
 		if headsErr != nil {
 			return headsErr
 		}
-		limits := censusRuntimeAcquisitionLimits(prepared.options)
+		limits, limitsErr := censusRuntimeAcquisitionLimits(prepared.options, prepared.privateAcquisition)
+		if limitsErr != nil {
+			return limitsErr
+		}
 		core := censusacquisition.Core{Discoverer: fixedCensusRuntimeDiscovery{discovery: prepared.discovery}, Acquirer: censusRuntimeBatchAcquirer{runtime: r.runtime, admitted: prepared.admitted, limits: limits, execute: r.batchExecute}, Planning: &censusacquisition.PlanningConfig{DownDepth: int(prepared.options.downDepth), UpDepth: int(prepared.options.upDepth), MaxBatchTargets: int(prepared.options.maxBatchTargets)}}
 		held, heldErr := censuschunkingruntime.NewHeldSession(censuschunking.ExpectedSession{SessionID: prepared.admitted.sessionID, Generation: prepared.admitted.generation, WorkspaceURI: input.WorkspaceURI}, core)
 		if heldErr != nil {

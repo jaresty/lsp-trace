@@ -18,6 +18,13 @@ func TestRunCensusProviderProbeV6RealManagerNotificationBurstReachesTerminal(t *
 		t.Skip("managed process test uses Darwin supervisor")
 	}
 	core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+		wantRequests := 1000
+		if options.PrivateProviderProbeByteTimeNotifications {
+			wantRequests = 20191
+		}
+		if cfg.limits.MaxRequests == nil || *cfg.limits.MaxRequests != wantRequests {
+			t.Fatalf("ASSERT_CLI_CENSUS_ACQUISITION_REQUEST_BUDGET: private=%t max_requests=%v want=%d", options.PrivateProviderProbeByteTimeNotifications, cfg.limits.MaxRequests, wantRequests)
+		}
 		cfg.runner.start.Process = managedprocess.Spec{
 			Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: cfg.runner.start.Process.Dir,
 			Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1", "LSP_TRACE_RUNTIME_HELPER_DOCUMENT_SYMBOL_NOTIFICATION_BURST=1"),

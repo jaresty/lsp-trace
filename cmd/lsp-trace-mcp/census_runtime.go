@@ -71,10 +71,11 @@ func cloneCensusRuntimeConfig(in censusRuntimeConfig) censusRuntimeConfig {
 }
 
 type censusRuntimeResult struct {
-	admitted  censusAdmittedSession
-	options   censusRuntimeConfig
-	discovery censusacquisition.Discovery
-	deadline  time.Time
+	admitted           censusAdmittedSession
+	options            censusRuntimeConfig
+	discovery          censusacquisition.Discovery
+	deadline           time.Time
+	privateAcquisition bool
 }
 
 type fixedCensusRuntimeDiscovery struct{ discovery censusacquisition.Discovery }
@@ -218,7 +219,7 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 	if err != nil {
 		return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
 	}
-	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline}, nil, reasonNone
+	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline, privateAcquisition: request.PrivateCensusChunking}, nil, reasonNone
 }
 
 func effectiveCensusDeadline(parent context.Context, configured time.Time) time.Time {
@@ -228,11 +229,16 @@ func effectiveCensusDeadline(parent context.Context, configured time.Time) time.
 	return configured
 }
 
-func censusRuntimeAcquisitionLimits(options censusRuntimeConfig) acquisitionops.Limits {
-	maxNodes, maxRequests, maxEvidenceBytes, maxPathWork := int(options.maxNodes), 1000, 4<<20, 100000
+func censusRuntimeAcquisitionLimits(options censusRuntimeConfig, private bool) (acquisitionops.Limits, error) {
+	maxNodes := int(options.maxNodes)
+	maxRequests, err := censusacquisition.AcquisitionMaxRequests(private, maxNodes, int(options.maxBatchTargets))
+	if err != nil {
+		return acquisitionops.Limits{}, err
+	}
+	maxEvidenceBytes, maxPathWork := 4<<20, 100000
 	timeoutMS, requestTimeoutMS := int(options.timeoutMS), int(options.requestTimeoutMS)
 	maxResponseBytes, maxMessages := 4<<20, 64
-	return acquisitionops.Limits{MaxNodes: &maxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
+	return acquisitionops.Limits{MaxNodes: &maxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}, nil
 }
 
 func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure, censusFailureReason) {
@@ -242,7 +248,10 @@ func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResu
 	options := cloneCensusRuntimeConfig(result.options)
 	ctx, cancel := context.WithDeadline(parent, result.deadline)
 	defer cancel()
-	limits := censusRuntimeAcquisitionLimits(options)
+	limits, err := censusRuntimeAcquisitionLimits(options, result.privateAcquisition)
+	if err != nil {
+		return censusacquisition.Projection{}, censusConfigFailure(), reasonRuntimeUnprovisioned
+	}
 	core := censusacquisition.Core{
 		Discoverer: fixedCensusRuntimeDiscovery{discovery: result.discovery},
 		Acquirer:   censusRuntimeBatchAcquirer{runtime: r.runtime, admitted: result.admitted, limits: limits, execute: r.batchExecute},

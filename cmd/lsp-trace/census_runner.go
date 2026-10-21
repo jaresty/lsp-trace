@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censuscontinuation"
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
@@ -151,6 +152,10 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		providerProbe.byteTimeNotifications = options.PrivateProviderProbeByteTimeNotifications
 		defer func() { _ = providerProbe.finalize() }()
 	}
+	maxRequests, err := censusacquisition.AcquisitionMaxRequests(options.PrivateProviderProbeByteTimeNotifications, options.MaxNodes, options.MaxBatchTargets)
+	if err != nil {
+		return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
+	}
 	starter, err := deps.newStarter()
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
@@ -159,7 +164,7 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
 	}
-	maxRequests, maxEvidenceBytes, maxPathWork := 1000, 4<<20, 100000
+	maxEvidenceBytes, maxPathWork := 4<<20, 100000
 	maxResponseBytes, maxMessages := 4<<20, 64
 	timeoutMS, requestTimeoutMS := int(options.Timeout.Milliseconds()), int(options.RequestTimeout.Milliseconds())
 	if timeoutMS > 60000 {
