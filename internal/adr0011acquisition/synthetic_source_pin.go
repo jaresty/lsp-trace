@@ -48,6 +48,7 @@ const syntheticSourceHistoricalAdditionalGoCount = 5
 var syntheticSourceAdditionalGoPaths = []string{
 	"cmd/lsp-trace/census_assembly.go",
 	"cmd/lsp-trace/census_core.go",
+	"cmd/lsp-trace/census_private_discovery_causes.go",
 	"cmd/lsp-trace/census_runner.go",
 	"cmd/lsp-trace/census_chunking.go",
 	"internal/censuschunking/chunking.go",

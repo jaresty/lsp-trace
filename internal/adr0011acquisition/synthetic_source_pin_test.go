@@ -138,6 +138,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	expectedAdditionalGoPaths := []string{
 		"cmd/lsp-trace/census_assembly.go",
 		"cmd/lsp-trace/census_core.go",
+		"cmd/lsp-trace/census_private_discovery_causes.go",
 		"cmd/lsp-trace/census_runner.go",
 		"cmd/lsp-trace/census_chunking.go",
 		"internal/censuschunking/chunking.go",
@@ -168,7 +169,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/schema/schemas/lsp-trace.census-request-receipt.v2.schema.json",
 	}
 	if strings.Join(syntheticSourceAdditionalGoPaths, "\n") != strings.Join(expectedAdditionalGoPaths, "\n") {
-		t.Fatalf("additional Go paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalGoPaths, expectedAdditionalGoPaths)
+		t.Fatalf("ASSERT_PRIVATE_DISCOVERY_CAUSE_SOURCE_REQUIRED additional Go paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalGoPaths, expectedAdditionalGoPaths)
 	}
 	if strings.Join(syntheticSourceAdditionalSchemaPaths, "\n") != strings.Join(expectedAdditionalSchemaPaths, "\n") {
 		t.Fatalf("additional schema paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalSchemaPaths, expectedAdditionalSchemaPaths)
@@ -297,13 +298,13 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 }
 
 func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
-	const manifestHash = "450cebe06c081c5db73f7c94978902480e0d198ea4c1c28a99a79efb024d603d"
-	const aggregate = "sha256:53d91cc911f7e53e5d16a5bba7ff27277e75f4265bf9baf8583573a4033da981"
+	const manifestHash = "278b9e64d953acc58952bdc9e61489db4df04efa971ef061d3b1df7cb51de8cc"
+	const aggregate = "sha256:5e6f604fcc3f3de948c9ded11b54735ec1a6962b811e1a2c1c8bfe05b1cb9561"
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("producer candidate source location unavailable")
 	}
-	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.450cebe06c081c5d.manifest.json")
+	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.278b9e64d953acc5.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
@@ -321,7 +322,7 @@ func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
 			SHA256     string `json:"sha256"`
 		} `json:"files"`
 	}
-	if err := json.Unmarshal(b, &manifest); err != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != aggregate || len(manifest.Files) != 156 {
+	if err := json.Unmarshal(b, &manifest); err != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != aggregate || len(manifest.Files) != 157 {
 		t.Fatalf("producer manifest identity: files=%d digest=%q schema=%q err=%v", len(manifest.Files), manifest.Digest, manifest.SchemaVersion, err)
 	}
 	entries := make([]SyntheticSourceEntry, 0, len(manifest.Files))
