@@ -9,6 +9,10 @@ import sys
 from pathlib import Path
 
 EXPECTED_COUNTS = {"linux": 5, "darwin": 4}
+TOP_LEVEL_KEYS = {"algorithm", "gopls_packages", "platforms", "version", "weights"}
+WEIGHTS_KEYS = {"fallback", "packages"}
+PLATFORM_KEYS = {"goos", "shards"}
+SHARD_KEYS = {"id", "needs_gopls", "packages", "weight"}
 POLICY = json.loads(Path(__file__).with_name("ci-shard-policy.json").read_text())
 CANONICAL_FALLBACK = POLICY["fallback_weight"]
 CANONICAL_DEFAULT = POLICY["default_weight"]
@@ -27,6 +31,13 @@ def current_packages(goos):
 
 def fail(errors, message):
     errors.append(message)
+
+
+def reject_unsupported_keys(errors, value, allowed, path):
+    if isinstance(value, dict):
+        unsupported = sorted(set(value) - allowed)
+        if unsupported:
+            fail(errors, f"{path}: unsupported keys: {unsupported}")
 
 
 def expected_assignment(goos, packages, weights, fallback):
@@ -51,6 +62,8 @@ def expected_assignment(goos, packages, weights, fallback):
 
 def validate(manifest, packages_by_os):
     errors = []
+    reject_unsupported_keys(errors, manifest, TOP_LEVEL_KEYS, "manifest")
+    reject_unsupported_keys(errors, manifest.get("weights"), WEIGHTS_KEYS, "manifest.weights")
     platform_keys = set(manifest.get("platforms", {}))
     if platform_keys != set(EXPECTED_COUNTS):
         fail(errors, f"platform keys must be exactly {sorted(EXPECTED_COUNTS)}")
@@ -61,16 +74,29 @@ def validate(manifest, packages_by_os):
     all_packages = sorted(set().union(*(set(value) for value in packages_by_os.values())))
     weights = {package: CANONICAL_OVERRIDES.get(package, CANONICAL_DEFAULT) for package in all_packages}
     expected_weights = {"fallback": CANONICAL_FALLBACK, "packages": weights}
-    if manifest.get("weights") != expected_weights:
+    supported_weights = {
+        key: value
+        for key, value in manifest.get("weights", {}).items()
+        if key in WEIGHTS_KEYS
+    }
+    if supported_weights != expected_weights:
         fail(errors, "manifest weights differ from canonical policy")
     fallback = CANONICAL_FALLBACK
     if set(manifest.get("gopls_packages", [])) != EXPECTED_GOPLS:
         fail(errors, "gopls classification mismatch")
     for goos, count in EXPECTED_COUNTS.items():
         platform = manifest.get("platforms", {}).get(goos, {})
+        reject_unsupported_keys(errors, platform, PLATFORM_KEYS, f"manifest.platforms.{goos}")
         if platform.get("goos") != goos:
             fail(errors, f"{goos}: platform mismatch")
         shards = platform.get("shards", [])
+        for index, shard in enumerate(shards):
+            reject_unsupported_keys(
+                errors,
+                shard,
+                SHARD_KEYS,
+                f"manifest.platforms.{goos}.shards[{index}]",
+            )
         if len(shards) != count:
             fail(errors, f"{goos}: expected {count} shards")
         ids = [s.get("id") for s in shards]

@@ -111,7 +111,10 @@ class CIShardsTest(unittest.TestCase):
 
         comment_only = copy.deepcopy(base)
         comment_only["comment"] = "exclusive Linux shard policy"
-        self.assertEqual(self.check(comment_only), "PASS CI shard manifest accounting\n")
+        self.assertEqual(
+            self.check(comment_only, expected=False),
+            "FAIL manifest: unsupported keys: ['comment']\n",
+        )
 
     def test_mutations_are_rejected_with_exact_diagnostics(self):
         base = self.generate()
@@ -142,6 +145,15 @@ class CIShardsTest(unittest.TestCase):
         weight_tamper = copy.deepcopy(base)
         weight_tamper["weights"]["packages"]["lsp-trace/internal/example"] = 999
         cases.append(("weight tamper", weight_tamper, "FAIL manifest weights differ from canonical policy\n"))
+        weights_metadata = copy.deepcopy(base)
+        weights_metadata["weights"]["manual"] = True
+        cases.append(("weights metadata", weights_metadata, "FAIL manifest.weights: unsupported keys: ['manual']\n"))
+        platform_metadata = copy.deepcopy(base)
+        platform_metadata["platforms"]["linux"]["manual"] = True
+        cases.append(("platform metadata", platform_metadata, "FAIL manifest.platforms.linux: unsupported keys: ['manual']\n"))
+        shard_metadata = copy.deepcopy(base)
+        shard_metadata["platforms"]["darwin"]["shards"][0]["manual"] = True
+        cases.append(("shard metadata", shard_metadata, "FAIL manifest.platforms.darwin.shards[0]: unsupported keys: ['manual']\n"))
         noncanonical = copy.deepcopy(base)
         candidates = [s for s in noncanonical["platforms"]["linux"]["shards"] if s["id"] not in {"linux-1", "linux-2"} and s["packages"]]
         left, right = candidates[:2]
