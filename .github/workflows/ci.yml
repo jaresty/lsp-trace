@@ -2,6 +2,8 @@ name: CI
 on:
   push:
   pull_request:
+  merge_group:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -20,7 +22,7 @@ jobs:
       - name: Check Python syntax
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python3 -m py_compile scripts/retain-qualification.py scripts/check-program-c-profiles.py scripts/test-program-c-profiles.py scripts/check-program-c-gate-ii.py scripts/test-program-c-gate-ii.py scripts/check-program-c-gate-ii-v4.py scripts/test-program-c-gate-ii-v4.py
+        run: python3 -m py_compile scripts/*.py
       - name: Check Program C profiles
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -71,27 +73,105 @@ jobs:
       - run: MIX_ENV=prod mix escript.build
       - run: python3 test/escript_integration.py
 
-  verify:
+  test-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - {id: linux-1, needs_gopls: false}
+          - {id: linux-2, needs_gopls: false}
+          - {id: linux-3, needs_gopls: false}
+          - {id: linux-4, needs_gopls: false}
+          - {id: linux-5, needs_gopls: false}
+    runs-on: ubuntu-latest
+    env:
+      PLATFORM: linux
+    steps: &shard-steps
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Validate manifest and resolve packages
+        id: packages
+        shell: bash
+        run: |
+          python3 scripts/check-ci-shards.py
+          packages=$(python3 scripts/check-ci-shards.py --platform "$PLATFORM" --shard "${{ matrix.shard.id }}" | tail -1)
+          test -n "$packages"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+      - name: Install pinned gopls
+        if: matrix.shard.needs_gopls
+        run: go install golang.org/x/tools/gopls@v0.23.0
+      - name: Run shard once and summarize
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee go-test.json
+          status=${PIPESTATUS[0]}
+          python3 scripts/summarize-go-test-json.py --input go-test.json --output go-test-summary.json --os "$PLATFORM" --commit "$GITHUB_SHA" --job "$GITHUB_JOB" --shard "${{ matrix.shard.id }}" --exit-code "$status"
+          exit "$status"
+      - name: Upload shard timing
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-test-${{ matrix.shard.id }}
+          path: |
+            go-test.json
+            go-test-summary.json
+
+  test-darwin:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - {id: darwin-1, needs_gopls: true}
+          - {id: darwin-2, needs_gopls: false}
+          - {id: darwin-3, needs_gopls: false}
+          - {id: darwin-4, needs_gopls: false}
+    runs-on: macos-latest
+    env:
+      PLATFORM: darwin
+    steps: *shard-steps
+
+  unix-vet-build:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Install pinned gopls for Darwin qualification
-        if: runner.os == 'macOS'
-        run: go install golang.org/x/tools/gopls@v0.23.0
-      - name: Run heavy Go packages in isolation
-        if: runner.os != 'Windows'
-        run: go test -p 1 ./internal/censuschunking ./internal/censuscontinuation
-      - name: Run remaining Go packages with bounded parallelism
-        if: runner.os != 'Windows'
-        run: |
-          go list ./... \
-            | grep -v -E '^lsp-trace/internal/(censuschunking|censuscontinuation)$' \
-            | xargs go test -p 2
       - run: go vet ./...
       - run: go build ./...
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go build ./...
+
+  repository-qualified:
+    if: always()
+    needs: [quality, elixir-companion, test-linux, test-darwin, unix-vet-build, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every qualification job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          results = json.loads(os.environ["RESULTS"])
+          bad = {name: value["result"] for name, value in results.items() if value["result"] != "success"}
+          if bad:
+              print(f"required jobs did not succeed: {bad}", file=sys.stderr)
+              raise SystemExit(1)
+          print("repository qualified")
+          PY
