@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"lsp-trace/internal/censusenumerationprojection"
@@ -153,6 +154,101 @@ func TestAggregateWorkExactBoundaryPlusOneAndOverflow(t *testing.T) {
 	}
 }
 
+type phase1BaselineSnapshot struct {
+	input       []byte
+	plan        []byte
+	index       []byte
+	projections [][]byte
+	sidecars    [][]byte
+}
+
+var (
+	phase1BaselineOnce       sync.Once
+	phase1BaselineBuildCount int
+	phase1BaselineData       phase1BaselineSnapshot
+)
+
+func phase1Baseline(t *testing.T) (Input, Result) {
+	t.Helper()
+	phase1BaselineOnce.Do(func() {
+		phase1BaselineBuildCount++
+		in := fixture(t, 10001)
+		got, err := Build(in, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		phase1BaselineData.input, err = json.Marshal(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		phase1BaselineData.plan, err = EncodePlan(got.Plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		phase1BaselineData.index, err = EncodeIndex(got.Index)
+		if err != nil {
+			t.Fatal(err)
+		}
+		phase1BaselineData.projections = make([][]byte, len(got.Chunks))
+		phase1BaselineData.sidecars = make([][]byte, len(got.Chunks))
+		for i := range got.Chunks {
+			phase1BaselineData.projections[i] = bytes.Clone(got.Chunks[i].ProjectionBytes)
+			phase1BaselineData.sidecars[i] = bytes.Clone(got.Chunks[i].SidecarBytes)
+		}
+	})
+
+	var in Input
+	if err := json.Unmarshal(phase1BaselineData.input, &in); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := DecodePlan(phase1BaselineData.plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index, err := DecodeIndex(phase1BaselineData.index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := Result{Plan: plan, Index: index, Chunks: make([]Chunk, len(plan.Chunks))}
+	for i := range got.Chunks {
+		projection, err := DecodeProjection(phase1BaselineData.projections[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		sidecar, err := DecodeSidecar(phase1BaselineData.sidecars[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		got.Chunks[i] = Chunk{
+			Descriptor:      plan.Chunks[i],
+			Projection:      projection,
+			Sidecar:         sidecar,
+			ProjectionBytes: bytes.Clone(phase1BaselineData.projections[i]),
+			SidecarBytes:    bytes.Clone(phase1BaselineData.sidecars[i]),
+		}
+	}
+	return in, got
+}
+
+func TestPhase1BaselineReuseAndIsolation(t *testing.T) {
+	phase1BaselineBuildCount = 0
+	firstInput, firstResult := phase1Baseline(t)
+	secondInput, secondResult := phase1Baseline(t)
+	if phase1BaselineBuildCount != 1 {
+		t.Fatalf("ASSERT_PHASE1_BASELINE_BUILD_COUNT got=%d want=1", phase1BaselineBuildCount)
+	}
+	firstInput.Targets[0].Name = "mutated"
+	firstResult.Plan.Chunks[0].TargetCount++
+	firstResult.Chunks[0].Projection.Targets[0].CanonicalSeedV2 = "mutated"
+	firstResult.Chunks[0].Sidecar.Mappings[0].GlobalOrdinal++
+	if secondInput.Targets[0].Name == "mutated" ||
+		secondResult.Plan.Chunks[0].TargetCount == firstResult.Plan.Chunks[0].TargetCount ||
+		secondResult.Chunks[0].Projection.Targets[0].CanonicalSeedV2 == "mutated" ||
+		secondResult.Chunks[0].Sidecar.Mappings[0].GlobalOrdinal == firstResult.Chunks[0].Sidecar.Mappings[0].GlobalOrdinal {
+		t.Fatal("ASSERT_PHASE1_BASELINE_MUTATION_ISOLATION")
+	}
+}
+
 func decodedAggregate(t *testing.T, in Input, got Result) (Input, Plan, Index, []Projection, []Sidecar) {
 	t.Helper()
 	inputRaw, err := json.Marshal(in)
@@ -195,11 +291,7 @@ func decodedAggregate(t *testing.T, in Input, got Result) (Input, Plan, Index, [
 }
 
 func TestIndependentAggregateReconciliation(t *testing.T) {
-	original := fixture(t, 10001)
-	got, err := Build(original, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	original, got := phase1Baseline(t)
 	in, plan, index, projections, sidecars := decodedAggregate(t, original, got)
 	if err := Reconcile(in, plan, index, projections, sidecars); err != nil {
 		t.Fatalf("ASSERT_AGGREGATE_RECONCILIATION_VALID_REJECTED: %v", err)
@@ -289,11 +381,7 @@ func TestIndependentAggregateReconciliation(t *testing.T) {
 }
 
 func TestPermutationProjectionAndIdentity(t *testing.T) {
-	in := fixture(t, 10001)
-	a, err := Build(in, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	in, a := phase1Baseline(t)
 	for i, j := 0, len(in.Targets)-1; i < j; i, j = i+1, j-1 {
 		in.Targets[i], in.Targets[j] = in.Targets[j], in.Targets[i]
 	}
@@ -331,10 +419,7 @@ func TestPermutationProjectionAndIdentity(t *testing.T) {
 }
 
 func TestValidationAndCanonicalJSON(t *testing.T) {
-	got, err := Build(fixture(t, 10001), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, got := phase1Baseline(t)
 	raw, err := EncodePlan(got.Plan)
 	if err != nil {
 		t.Fatal(err)
@@ -420,10 +505,7 @@ func TestValidationAndCanonicalJSON(t *testing.T) {
 }
 
 func TestDigestSensitivityAndNilLists(t *testing.T) {
-	got, err := Build(fixture(t, 10001), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, got := phase1Baseline(t)
 	a, _ := EncodePlan(got.Plan)
 	got.Plan.RequestFingerprint = digest([]byte("changed"))
 	got.Plan.LogicalDigest = ""
