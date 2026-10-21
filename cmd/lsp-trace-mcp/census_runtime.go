@@ -168,7 +168,7 @@ type censusRuntime struct {
 	runtime               *hostSelectorRuntime
 	acquisitionDiagnostic *censusdiagnostic.Recorder
 	admit                 func(context.Context, []byte) (censusAdmittedSession, *censusAdmissionFailure, censusFailureReason)
-	discover              func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig) (censusacquisition.Discovery, error)
+	discover              func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool) (censusacquisition.Discovery, error)
 	batchExecute          func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure)
 	chunk                 func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error)
 	chunkLease            func(context.Context, sessionruntime.SessionLeaseRequest, func(context.Context) error) error
@@ -214,7 +214,7 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 	if request.PrivateCensusChunking {
 		discoveryOptions.maxNodes = censusRuntimeMaxEntries
 	}
-	discovery, err := discover(ctx, r.runtime.Manager, admitted, discoveryOptions)
+	discovery, err := discover(ctx, r.runtime.Manager, admitted, discoveryOptions, request.PrivateCensusChunking)
 	if err != nil {
 		return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
 	}
@@ -312,10 +312,11 @@ func (s censusRuntimeSupplier) Supply(ctx context.Context, file censusacquisitio
 }
 
 type censusRuntimeDiscoveryClient struct {
-	manager        *sessionruntime.Manager
-	sessionID      string
-	generation     uint64
-	requestTimeout time.Duration
+	manager                    *sessionruntime.Manager
+	sessionID                  string
+	generation                 uint64
+	requestTimeout             time.Duration
+	byteTimeBoundNotifications bool
 }
 
 func (c censusRuntimeDiscoveryClient) SupportsDocumentSymbols() bool { return true }
@@ -329,7 +330,11 @@ func (c censusRuntimeDiscoveryClient) call(ctx context.Context, method string, p
 	if parentDeadline, ok := ctx.Deadline(); ok && parentDeadline.Before(deadline) {
 		deadline = parentDeadline
 	}
-	result := c.manager.RoundTrip(ctx, sessionruntime.RoundTripRequest{SessionID: c.sessionID, Generation: c.generation, Method: method, Params: raw, Deadline: deadline, MaxMessages: 64, MaxBytes: 4 << 20})
+	request := sessionruntime.RoundTripRequest{SessionID: c.sessionID, Generation: c.generation, Method: method, Params: raw, Deadline: deadline, MaxMessages: 64, MaxBytes: 4 << 20}
+	if c.byteTimeBoundNotifications && method == "textDocument/documentSymbol" {
+		request.PrivateNotificationMaxMessages = -1
+	}
+	result := c.manager.RoundTrip(ctx, request)
 	if result.Failure != "" || result.ServerError != nil {
 		return errors.New("census discovery request failed")
 	}
@@ -347,14 +352,14 @@ func (c censusRuntimeDiscoveryClient) PrepareCallHierarchy(ctx context.Context, 
 	return out, c.call(ctx, "textDocument/prepareCallHierarchy", params, &out)
 }
 
-func censusRuntimeDiscover(ctx context.Context, manager *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig) (censusacquisition.Discovery, error) {
+func censusRuntimeDiscover(ctx context.Context, manager *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig, byteTimeBoundNotifications bool) (censusacquisition.Discovery, error) {
 	filters := censusacquisition.Filters{Includes: append([]string(nil), options.includes...), Excludes: append([]string(nil), options.excludes...)}
 	adapter := censusacquisition.DiscoveryAdapter{
 		Workspace: admitted.workspace,
 		Filters:   filters,
 		Files:     censusRuntimeEnumerator{workspace: admitted.workspace, roots: append([]string(nil), options.sources...), filters: filters, maxFiles: int(options.maxNodes)},
 		Supplier:  censusRuntimeSupplier{manager: manager, sessionID: admitted.sessionID, generation: admitted.generation},
-		Client:    censusRuntimeDiscoveryClient{manager: manager, sessionID: admitted.sessionID, generation: admitted.generation, requestTimeout: time.Duration(options.requestTimeoutMS) * time.Millisecond},
+		Client:    censusRuntimeDiscoveryClient{manager: manager, sessionID: admitted.sessionID, generation: admitted.generation, requestTimeout: time.Duration(options.requestTimeoutMS) * time.Millisecond, byteTimeBoundNotifications: byteTimeBoundNotifications},
 		Limits:    censusacquisition.DiscoveryLimits{MaxFiles: int(options.maxNodes), MaxSymbols: int(options.maxNodes)},
 	}
 	return adapter.Discover(ctx, censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation})

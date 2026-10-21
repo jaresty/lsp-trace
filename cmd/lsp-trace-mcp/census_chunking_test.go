@@ -38,7 +38,7 @@ func TestPrivateCensusChunkFailuresCollapseToAcquisitionWithoutCustody(t *testin
 		t.Run(source, func(t *testing.T) {
 			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 			shell := newCensusRuntime(runtime)
-			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig) (censusacquisition.Discovery, error) {
+			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
 				return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true, Targets: make([]censusacquisition.PreparedTarget, 10001)}, nil
 			}
 			shell.chunk = func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error) {
@@ -64,7 +64,7 @@ func TestPrivateCensusRuntimeRunRoutesOnlyAboveCompatibility(t *testing.T) {
 	}{{10000, 0, 1}, {10001, 1, 0}} {
 		runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 		shell := newCensusRuntime(runtime)
-		shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig) (censusacquisition.Discovery, error) {
+		shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
 			return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true, Targets: make([]censusacquisition.PreparedTarget, tc.count)}, nil
 		}
 		chunkCalls, acquireCalls, leaseCalls, coordinateCalls, readCalls := 0, 0, 0, 0, 0

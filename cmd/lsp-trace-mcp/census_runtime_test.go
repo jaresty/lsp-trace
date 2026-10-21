@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/seedformat"
+	"lsp-trace/internal/session"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -136,7 +137,7 @@ func TestPrivateCensusRuntimeActivatedDiscoveryUsesBroadLimitsOnce(t *testing.T)
 			shell := newCensusRuntime(runtime)
 			calls := 0
 			var observed censusRuntimeConfig
-			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig) (censusacquisition.Discovery, error) {
+			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
 				calls++
 				observed = options
 				return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true}, nil
@@ -146,6 +147,53 @@ func TestPrivateCensusRuntimeActivatedDiscoveryUsesBroadLimitsOnce(t *testing.T)
 			_, failure, _ := shell.execute(context.Background(), request)
 			if failure != nil || calls != 1 || observed.maxNodes != tc.wantNodes {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_LIMITS: activated=%v calls=%d max_nodes=%d want=%d failure=%+v", tc.activated, calls, observed.maxNodes, tc.wantNodes, failure)
+			}
+		})
+	}
+}
+
+func TestPrivateCensusRuntimeDocumentSymbolNotificationPolicyAndDefaultPoisoning(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		private    bool
+		wantSymbol int
+		wantDocs   int
+		wantState  session.Failure
+	}{
+		{name: "private-chunking", private: true, wantSymbol: 2, wantDocs: 2},
+		{name: "default", wantSymbol: 1, wantDocs: 1, wantState: session.LifecycleConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			writeRuntimeSource(t, workspace, "a.go")
+			writeRuntimeSource(t, workspace, "b.go")
+			runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{
+				workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true,
+				notifications: 65, results: map[string]json.RawMessage{"textDocument/documentSymbol": json.RawMessage(`[]`)},
+			})
+			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"."}, "max_nodes": 2}))
+			request.PrivateCensusChunking = tc.private
+			result, failure, _ := newCensusRuntime(runtime).execute(context.Background(), request)
+			_, methods, _, _ := starter.snapshot()
+			joined := strings.Join(methods, ",")
+			if got := strings.Count(joined, "textDocument/documentSymbol"); got != tc.wantSymbol {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_DOCUMENT_SYMBOL_NOTIFICATION_ROUTE: private=%t symbols=%d want=%d methods=%v failure=%+v discovery=%+v", tc.private, got, tc.wantSymbol, methods, failure, result.discovery)
+			}
+			if got := strings.Count(joined, "textDocument/didOpen"); got != tc.wantDocs {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_NEXT_FILE_PREPARATION: private=%t documents=%d want=%d methods=%v failure=%+v", tc.private, got, tc.wantDocs, methods, failure)
+			}
+			_, stateFailure := runtime.Manager.Metadata(started.SessionID, started.Generation)
+			if stateFailure != tc.wantState {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_SESSION_STATE: private=%t got=%s want=%s failure=%+v discovery=%+v", tc.private, stateFailure, tc.wantState, failure, result.discovery)
+			}
+			if tc.private && failure != nil {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_65_NOTIFICATIONS_READY: failure=%+v discovery=%+v", failure, result.discovery)
+			}
+			if !tc.private {
+				failures := result.discovery.ProviderFailures
+				if len(failures) != 2 || failures[0].Stage != "DOCUMENT_SYMBOL" || failures[0].Code != "REQUEST_FAILED" || failures[1].Stage != "DOCUMENT_SUPPLY" || failures[1].Code != "REQUEST_FAILED" || failures[0].FileOrdinal == nil || *failures[0].FileOrdinal != 0 || failures[1].FileOrdinal == nil || *failures[1].FileOrdinal != 1 {
+					t.Fatalf("ASSERT_PRIVATE_CENSUS_POISON_CASCADE_NOT_SOURCE_UNREADABLE: failures=%+v accounting=%+v", failures, result.discovery.Accounting)
+				}
 			}
 		})
 	}

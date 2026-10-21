@@ -74,7 +74,7 @@ func TestCensusGatewayAcquisitionFailureNeedsPrivateDiagnosticRED(t *testing.T) 
 	runtime.admit = func(context.Context, []byte) (censusAdmittedSession, *censusAdmissionFailure, censusFailureReason) {
 		return censusAdmittedSession{sessionID: session.SessionID, generation: session.Generation, workspace: workspace, positionEncoding: "utf-16", options: censusRuntimeConfig{sources: []string{"fixture.go"}, downDepth: 1, maxNodes: 1, maxBatchTargets: 1, timeoutMS: 1000, requestTimeoutMS: 1000}, requestReceipt: receipt}, nil, reasonNone
 	}
-	runtime.discover = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig) (censusacquisition.Discovery, error) {
+	runtime.discover = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool) (censusacquisition.Discovery, error) {
 		return gatewayCompleteDiscovery(t, workspace, session), nil
 	}
 	calls := 0
