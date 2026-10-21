@@ -4,9 +4,12 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censusrequest"
@@ -55,7 +58,7 @@ func marshalCensusCLIDiagnostic(d censusCLIDiagnostic) ([]byte, error) {
 }
 
 type censusCLIOptions struct {
-	Sources, Includes, Excludes                                                []string
+	Sources, Includes, Excludes, PrunedDirectories                             []string
 	Workspace, Server, Profile, ConfigPath, CatalogConfigPath, PublicationRoot string
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
 	PrivateProviderProbePath, PrivateProviderProbeVersion                      string
@@ -64,7 +67,7 @@ type censusCLIOptions struct {
 	DownDepth, UpDepth, MaxNodes, MaxBatchTargets                              int
 	Timeout, RequestTimeout                                                    time.Duration
 	Resume, StopAfter                                                          string
-	Machine, Help, Catalog, PrivateEnumerationProjection                       bool
+	Machine, Help, Catalog, PrivateEnumerationProjection, EnumerationPreflight bool
 }
 type censusStringFlags []string
 
@@ -82,10 +85,11 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	o := censusCLIOptions{Sources: censusrequest.DefaultSources(), DownDepth: int(censusrequest.DefaultDownDepth), UpDepth: int(censusrequest.DefaultUpDepth), MaxNodes: int(censusrequest.DefaultMaxNodes), MaxBatchTargets: int(censusrequest.DefaultBatchTargets), Timeout: time.Duration(censusrequest.DefaultTimeoutMS) * time.Millisecond, RequestTimeout: time.Duration(censusrequest.DefaultRequestTimeoutMS) * time.Millisecond, PrivateProviderProbeVersion: "v1"}
 	fs := flag.NewFlagSet("census", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	var src, inc, exc, serverArgs censusStringFlags
+	var src, inc, exc, prune, serverArgs censusStringFlags
 	fs.Var(&src, "source", "workspace-relative source root")
 	fs.Var(&inc, "include", "include pattern")
 	fs.Var(&exc, "exclude", "exclude pattern")
+	fs.Var(&prune, "prune-dir", "canonical workspace-relative slash directory path to skip during enumeration")
 	fs.StringVar(&o.Workspace, "workspace", "", "workspace")
 	fs.StringVar(&o.Server, "server", "", "server")
 	fs.Var(&serverArgs, "server-arg", "server argument")
@@ -108,6 +112,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.DurationVar(&o.Timeout, "timeout", o.Timeout, "")
 	fs.DurationVar(&o.RequestTimeout, "request-timeout", o.RequestTimeout, "")
 	fs.BoolVar(&o.Machine, "machine", false, "emit machine-readable JSON")
+	fs.BoolVar(&o.EnumerationPreflight, "enumeration-preflight", false, "enumerate bounded source paths without starting a language server")
 	fs.BoolVar(&o.PrivateEnumerationProjection, "private-enumeration-projection", false, "")
 	fs.BoolVar(&o.Help, "help", false, "show census help")
 	fs.BoolVar(&o.Help, "h", false, "show census help")
@@ -144,6 +149,11 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 		o.Sources = []string(src)
 	}
 	o.Includes, o.Excludes, o.ServerArgs = []string(inc), []string(exc), []string(serverArgs)
+	var err error
+	o.PrunedDirectories, err = canonicalCensusPrunedDirectories([]string(prune))
+	if err != nil {
+		return o, err
+	}
 	if fs.NArg() != 0 {
 		return o, errors.New("census accepts no positional arguments")
 	}
@@ -198,6 +208,26 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 	if o.Help {
 		return nil
 	}
+	if o.EnumerationPreflight {
+		if !o.Machine || o.Resume != "" {
+			return errors.New("enumeration preflight requires fresh machine census")
+		}
+		allowed := map[string]bool{"workspace": true, "source": true, "include": true, "exclude": true, "prune-dir": true, "enumeration-preflight": true, "machine": true}
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "--") && !allowed[strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--")] {
+				return errors.New("enumeration preflight rejects provider, publication, catalog, and acquisition controls")
+			}
+		}
+		if o.Workspace == "" || len(o.Sources) == 0 {
+			return errors.New("enumeration preflight requires workspace and source")
+		}
+		for _, s := range o.Sources {
+			if s == "" || filepath.IsAbs(s) || !filepath.IsLocal(s) || filepath.Clean(s) != s {
+				return errors.New("source must be a canonical workspace-relative path")
+			}
+		}
+		return nil
+	}
 	if o.PrivateEnumerationProjection && (!o.Machine || o.Resume != "" || o.Catalog) {
 		return errors.New("private enumeration projection requires fresh machine census")
 	}
@@ -219,7 +249,7 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 		if o.CatalogConfigPath == "" || o.PublicationRoot == "" {
 			return errors.New("resume requires catalog config and publication root")
 		}
-		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true, "private-enumeration-projection": true, "private-provider-probe-path": true, "private-provider-probe-version": true, "private-provider-probe-byte-time-notifications": true}
+		forbidden := map[string]bool{"source": true, "include": true, "exclude": true, "prune-dir": true, "enumeration-preflight": true, "server": true, "server-arg": true, "profile": true, "config": true, "down-depth": true, "up-depth": true, "max-nodes": true, "batch-targets": true, "timeout": true, "request-timeout": true, "private-acquisition-diagnostic-path": true, "private-control-flow-diagnostic-path": true, "private-enumeration-projection": true, "private-provider-probe-path": true, "private-provider-probe-version": true, "private-provider-probe-byte-time-notifications": true}
 		for _, arg := range args {
 			name := strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--")
 			if forbidden[name] {
@@ -261,4 +291,28 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 		}
 	}
 	return nil
+}
+
+func canonicalCensusPrunedDirectories(values []string) ([]string, error) {
+	out := append([]string(nil), values...)
+	for _, value := range out {
+		if value == "" || !utf8.ValidString(value) || strings.ContainsRune(value, 0) || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") || path.IsAbs(value) || path.Clean(value) != value {
+			return nil, errors.New("prune directory must be a canonical workspace-relative slash path")
+		}
+		parts := strings.Split(value, "/")
+		for i, part := range parts {
+			if part == "" || part == "." || part == ".." || i == 0 && strings.Contains(part, ":") {
+				return nil, errors.New("prune directory must be a canonical workspace-relative slash path")
+			}
+		}
+	}
+	sort.Strings(out)
+	minimal := out[:0]
+	for _, value := range out {
+		if len(minimal) > 0 && (value == minimal[len(minimal)-1] || strings.HasPrefix(value, minimal[len(minimal)-1]+"/")) {
+			continue
+		}
+		minimal = append(minimal, value)
+	}
+	return minimal, nil
 }

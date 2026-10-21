@@ -65,10 +65,18 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"cmd/lsp-trace/census_discovery_adapter.go",
 	"internal/censusacquisition/discovery.go",
 	"internal/censusacquisition/request_budget.go",
+	"cmd/lsp-trace/census_command.go",
+	"internal/censuspreflight/result.go",
+	"internal/censusrequest/receipt_v2.go",
+	"internal/schema/schema.go",
+	"internal/source/discovery.go",
 }
 
 var syntheticSourceAdditionalSchemaPaths = []string{
 	"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
+	"internal/schema/schemas/lsp-trace.census-enumeration-diagnostic.v1.schema.json",
+	"internal/schema/schemas/lsp-trace.census-enumeration-preflight-result.v1.schema.json",
+	"internal/schema/schemas/lsp-trace.census-request-receipt.v2.schema.json",
 }
 
 var syntheticSourceAdditionalGoPathSet = func() map[string]bool {
@@ -79,9 +87,13 @@ var syntheticSourceAdditionalGoPathSet = func() map[string]bool {
 	return paths
 }()
 
-var syntheticSourceAdditionalSchemaPathSet = map[string]bool{
-	"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json": true,
-}
+var syntheticSourceAdditionalSchemaPathSet = func() map[string]bool {
+	paths := make(map[string]bool, len(syntheticSourceAdditionalSchemaPaths))
+	for _, name := range syntheticSourceAdditionalSchemaPaths {
+		paths[name] = true
+	}
+	return paths
+}()
 
 // VerifySyntheticSourcePin uses the source checkout containing this function.
 // It verifies source bytes only: not the build, binary, runtime, dependency

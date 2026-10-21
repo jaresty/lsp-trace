@@ -135,6 +135,45 @@ func TestSyntheticSourcePin(t *testing.T) {
 }
 
 func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
+	expectedAdditionalGoPaths := []string{
+		"cmd/lsp-trace/census_assembly.go",
+		"cmd/lsp-trace/census_core.go",
+		"cmd/lsp-trace/census_runner.go",
+		"cmd/lsp-trace/census_chunking.go",
+		"internal/censuschunking/chunking.go",
+		"cmd/lsp-trace-mcp/census_chunking.go",
+		"cmd/lsp-trace-mcp/census_completion.go",
+		"cmd/lsp-trace-mcp/census_mcp_binding.go",
+		"cmd/lsp-trace-mcp/census_runtime.go",
+		"cmd/lsp-trace-mcp/main.go",
+		"cmd/lsp-trace/census_chunking_adapters_private.go",
+		"internal/censuschunkingruntime/adapters.go",
+		"internal/censuschunkingruntime/translate.go",
+		"internal/mcpcontract/census_future.go",
+		"internal/operation/types.go",
+		"cmd/lsp-trace/acquisition_v2.go",
+		"cmd/lsp-trace/census_discovery_adapter.go",
+		"internal/censusacquisition/discovery.go",
+		"internal/censusacquisition/request_budget.go",
+		"cmd/lsp-trace/census_command.go",
+		"internal/censuspreflight/result.go",
+		"internal/censusrequest/receipt_v2.go",
+		"internal/schema/schema.go",
+		"internal/source/discovery.go",
+	}
+	expectedAdditionalSchemaPaths := []string{
+		"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
+		"internal/schema/schemas/lsp-trace.census-enumeration-diagnostic.v1.schema.json",
+		"internal/schema/schemas/lsp-trace.census-enumeration-preflight-result.v1.schema.json",
+		"internal/schema/schemas/lsp-trace.census-request-receipt.v2.schema.json",
+	}
+	if strings.Join(syntheticSourceAdditionalGoPaths, "\n") != strings.Join(expectedAdditionalGoPaths, "\n") {
+		t.Fatalf("additional Go paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalGoPaths, expectedAdditionalGoPaths)
+	}
+	if strings.Join(syntheticSourceAdditionalSchemaPaths, "\n") != strings.Join(expectedAdditionalSchemaPaths, "\n") {
+		t.Fatalf("additional schema paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalSchemaPaths, expectedAdditionalSchemaPaths)
+	}
+
 	root := t.TempDir()
 	for dir := range syntheticSourceDirectories {
 		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0700); err != nil {
@@ -195,9 +234,33 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	mixed := append([]SyntheticSourceEntry(nil), entries[:oldFiveEnd]...)
 	mixed = append(mixed, entries[oldFiveEnd+1:]...)
 	assertReject("mixed successor", mixed)
-	nearName := append([]SyntheticSourceEntry(nil), entries...)
-	nearName[oldFiveEnd].Path += ".renamed"
-	assertReject("renamed go", nearName)
+	for i, name := range expectedAdditionalGoPaths {
+		nearName := append([]SyntheticSourceEntry(nil), entries...)
+		nearName[1+i].Path = name + ".renamed"
+		assertReject("renamed go "+name, nearName)
+	}
+	for i, name := range expectedAdditionalSchemaPaths {
+		nearName := append([]SyntheticSourceEntry(nil), entries...)
+		nearName[1+len(expectedAdditionalGoPaths)+i].Path = strings.TrimSuffix(name, ".schema.json") + ".sibling.schema.json"
+		assertReject("renamed schema "+name, nearName)
+	}
+	goNamespaceSubstitutions := map[string]string{
+		"cmd/lsp-trace/census_command.go":      "cmd/lsp-trace/census_commands.go",
+		"internal/censuspreflight/result.go":   "internal/censuspreflight/results.go",
+		"internal/censusrequest/receipt_v2.go": "internal/censusrequest/receipt.go",
+		"internal/schema/schema.go":            "internal/schema/schemas.go",
+		"internal/source/discovery.go":         "internal/source/discover.go",
+	}
+	for name, substitute := range goNamespaceSubstitutions {
+		candidate := append([]SyntheticSourceEntry(nil), entries...)
+		for i := range candidate {
+			if candidate[i].Path == name {
+				candidate[i].Path = substitute
+				break
+			}
+		}
+		assertReject("namespace substitution "+name, candidate)
+	}
 	arbitraryJSON := append([]SyntheticSourceEntry(nil), entries...)
 	arbitraryJSON[len(arbitraryJSON)-1].Path = "internal/mcpcontract/testdata/schemas/arbitrary.json"
 	assertReject("arbitrary json", arbitraryJSON)

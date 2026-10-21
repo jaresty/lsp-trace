@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"lsp-trace/acquisitionops"
@@ -17,16 +18,18 @@ import (
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusenumerationprojection"
+	"lsp-trace/internal/censuspreflight"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/continuationhost"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
 
-const censusInvocationUsage = "lsp-trace census ((--workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--catalog --catalog-config HOST_JSON] [--stop-after describe-requests] [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--batch-targets N] [--timeout DURATION] [--request-timeout DURATION]) | (--resume SELECTOR --catalog-config HOST_JSON --publication-root ABSOLUTE_PATH [--workspace PATH] [--stop-after describe-requests])) [--machine]"
+const censusInvocationUsage = "lsp-trace census (((--workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--catalog --catalog-config HOST_JSON] [--stop-after describe-requests] [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--batch-targets N] [--timeout DURATION] [--request-timeout DURATION]) | (--workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine)) | (--resume SELECTOR --catalog-config HOST_JSON --publication-root ABSOLUTE_PATH [--workspace PATH] [--stop-after describe-requests])) [--machine]"
 const censusUsage = "usage: " + censusInvocationUsage
 
 type censusRunnerDependencies struct {
@@ -43,6 +46,7 @@ type censusRunnerDependencies struct {
 	resolveCatalogDescriptor func(context.Context, *continuationhost.Bundle, string) (continuationhost.DescriptorInput, error)
 	buildCatalogContract     func(string) (censuscontinuation.ContinuationContract, error)
 	newCatalogWorker         func(string, string) censuscontinuation.WorkerV2
+	enumeratePreflight       func(censusCLIOptions) ([]censusacquisition.SourceFile, error)
 }
 
 func productionCensusRunnerDependencies() censusRunnerDependencies {
@@ -68,6 +72,7 @@ func productionCensusRunnerDependencies() censusRunnerDependencies {
 		resolveCatalogDescriptor: resolveCensusCatalogDescriptor,
 		buildCatalogContract:     censusCatalogContract,
 		newCatalogWorker:         newLazyCensusCatalogWorker,
+		enumeratePreflight:       enumerateCensusPreflight,
 	}
 }
 
@@ -83,6 +88,9 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	if options.Help {
 		fmt.Fprintln(stdout, censusUsage)
 		return 0
+	}
+	if options.EnumerationPreflight {
+		return runCensusEnumerationPreflight(options, stdout, stderr, deps.enumeratePreflight)
 	}
 	if options.Resume != "" {
 		return runCensusCatalogResume(options, stdout, stderr, deps)
@@ -196,6 +204,67 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	return finish()
 }
 
+func enumerateCensusPreflight(options censusCLIOptions) ([]censusacquisition.SourceFile, error) {
+	workspace, err := filepath.Abs(options.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	workspace = filepath.Clean(workspace)
+	roots := append([]string(nil), options.Sources...)
+	sort.Strings(roots)
+	includes := append([]string(nil), options.Includes...)
+	sort.Strings(includes)
+	excludes := append([]string(nil), options.Excludes...)
+	sort.Strings(excludes)
+	return (censusWorkspaceEnumerator{workspace: workspace, roots: roots, filters: censusacquisition.Filters{Includes: includes, Excludes: excludes}, maxFiles: censusMaxDiscoveredEntries, prunedDirectories: options.PrunedDirectories}).Enumerate(context.Background())
+}
+
+func runCensusEnumerationPreflight(options censusCLIOptions, stdout, stderr io.Writer, enumerate func(censusCLIOptions) ([]censusacquisition.SourceFile, error)) int {
+	workspace, err := filepath.Abs(options.Workspace)
+	if err != nil {
+		return writeCensusFailure(stderr, censusStageConfig, true, err)
+	}
+	workspace = filepath.Clean(workspace)
+	roots := append([]string(nil), options.Sources...)
+	sort.Strings(roots)
+	includes := append([]string(nil), options.Includes...)
+	sort.Strings(includes)
+	excludes := append([]string(nil), options.Excludes...)
+	sort.Strings(excludes)
+	if enumerate == nil {
+		return writeCensusFailure(stderr, censusStageConfig, true, errors.New("enumeration preflight unavailable"))
+	}
+	files, err := enumerate(options)
+	if err != nil {
+		var limit *source.LimitError
+		if errors.As(err, &limit) {
+			raw, marshalErr := censuspreflight.MarshalDiagnostic(censuspreflight.Diagnostic{SchemaVersion: censuspreflight.DiagnosticSchemaVersion, Category: limit.Category, Observed: limit.Observed, Limit: limit.Limit})
+			if marshalErr == nil {
+				_, _ = stderr.Write(append(raw, '\n'))
+				return 1
+			}
+		}
+		return writeCensusFailure(stderr, censusStageDiscovery, true, err)
+	}
+	selected := make([]string, 0, len(files))
+	excluded := 0
+	for _, file := range files {
+		if !matchesAnyDiscoveryPattern(excludes, file.Path) && (len(includes) == 0 || matchesAnyDiscoveryPattern(includes, file.Path)) {
+			selected = append(selected, file.Path)
+		} else {
+			excluded++
+		}
+	}
+	sort.Strings(selected)
+	result := censuspreflight.Result{SchemaVersion: censuspreflight.SchemaVersion, Roots: roots, Includes: includes, Excludes: excludes, PrunedDirectories: append([]string(nil), options.PrunedDirectories...), Counts: censuspreflight.Counts{Entries: len(files), Selected: len(selected), Excluded: excluded}, SelectedPathsDigest: censuspreflight.DigestSelected(selected), Limits: censuspreflight.Limits{MaxEntries: censusMaxDiscoveredEntries, MaxAccepted: censusMaxDiscoveredEntries, MaxWork: censusMaxEnumerationWork, MaxPathBytes: censusMaxSourcePathBytes, MaxDepth: censusMaxSourceDepth}, Terminal: "COMPLETE", Authority: 0, Completeness: "UNKNOWN", AbsenceInference: false}
+	raw, err := censuspreflight.MarshalResult(result)
+	if err != nil {
+		return writeCensusFailure(stderr, censusStageAssembly, true, err)
+	}
+	_, _ = stdout.Write(append(raw, '\n'))
+	return 0
+}
+
 func writeCensusFailure(stderr io.Writer, stage censusFailureStage, machine bool, err error) int {
 	if machine {
 		diagnostic, _ := buildCensusCLIDiagnostic(stage, nil)
@@ -208,6 +277,28 @@ func writeCensusFailure(stderr io.Writer, stage censusFailureStage, machine bool
 }
 
 func writeCensusOutcome(stdout, stderr io.Writer, machine bool, outcome censusPublicationOutcome) int {
+	if outcome.EnumerationDiagnostic != nil {
+		raw, err := censuspreflight.MarshalDiagnostic(*outcome.EnumerationDiagnostic)
+		if err == nil {
+			_, _ = stderr.Write(append(raw, '\n'))
+			return 1
+		}
+		return writeCensusFailure(stderr, censusStageDiscovery, machine, err)
+	}
+	if outcome.DiscoveryDiagnostic != nil && outcome.RequestReceiptV2 != nil {
+		if machine {
+			raw, err := json.Marshal(struct {
+				Diagnostic     *censusresult.DiscoveryDiagnostic `json:"diagnostic"`
+				RequestReceipt *censusrequest.ReceiptV2          `json:"request_receipt"`
+			}{outcome.DiscoveryDiagnostic, outcome.RequestReceiptV2})
+			if err == nil {
+				_, _ = stderr.Write(append(raw, '\n'))
+				return 1
+			}
+		}
+		fmt.Fprintln(stderr, "census failed: DISCOVERY_BOUNDED_INCOMPLETE")
+		return 1
+	}
 	if outcome.DiscoveryDiagnostic != nil && outcome.RequestReceipt != nil {
 		if machine {
 			raw, err := json.Marshal(struct {

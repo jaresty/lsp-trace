@@ -35,9 +35,10 @@ var (
 )
 
 type Request struct {
-	Base     string
-	Inputs   []string
-	AllowDot bool
+	Base              string
+	Inputs            []string
+	AllowDot          bool
+	PrunedDirectories []string
 	// Accept identifies denominator members for MaxAccepted. It is evaluated
 	// only for unique records and must not retain the supplied record.
 	Accept func(Record) bool
@@ -52,6 +53,17 @@ type Limits struct {
 	MaxWork      int
 	MaxPathBytes int
 	MaxDepth     int
+}
+
+type LimitError struct {
+	Category        string
+	Observed, Limit int
+}
+
+func (e *LimitError) Error() string        { return "source discovery limit exceeded" }
+func (e *LimitError) Is(target error) bool { return target == ErrDiscoveryLimit }
+func limitError(category string, observed, limit int) error {
+	return &LimitError{category, observed, limit}
 }
 
 type Record struct {
@@ -116,11 +128,11 @@ func discoverContext(ctx context.Context, request Request, limits Limits, walk w
 			return nil
 		}
 		if bounded && len(records) >= limits.MaxEntries {
-			return ErrDiscoveryLimit
+			return limitError("MAX_ENTRIES", len(records)+1, limits.MaxEntries)
 		}
 		if limits.MaxAccepted > 0 && request.Accept != nil && request.Accept(record) {
 			if accepted >= limits.MaxAccepted {
-				return ErrDiscoveryLimit
+				return limitError("MAX_ACCEPTED", accepted+1, limits.MaxAccepted)
 			}
 			accepted++
 		}
@@ -151,8 +163,14 @@ func discoverContext(ctx context.Context, request Request, limits Limits, walk w
 			}
 			continue
 		}
-		if bounded && (len(rel) > limits.MaxPathBytes || pathDepth(rel) > limits.MaxDepth) {
-			return nil, ErrDiscoveryLimit
+		if bounded && len(rel) > limits.MaxPathBytes {
+			return nil, limitError("MAX_PATH_BYTES", len(rel), limits.MaxPathBytes)
+		}
+		if bounded && pathDepth(rel) > limits.MaxDepth {
+			return nil, limitError("MAX_DEPTH", pathDepth(rel), limits.MaxDepth)
+		}
+		if prunedDirectory(request.PrunedDirectories, rel) {
+			continue
 		}
 		if _, exists := records[path]; exists {
 			continue
@@ -166,19 +184,25 @@ func discoverContext(ctx context.Context, request Request, limits Limits, walk w
 		}
 		if entry.IsDir() {
 			err = walk(path, func(child string, dirEntry fs.DirEntry, walkErr error) error {
-				work++
 				if err := ctx.Err(); err != nil {
 					return err
-				}
-				if bounded && work > limits.MaxWork {
-					return ErrDiscoveryLimit
 				}
 				childRel, childInside := relativeToBase(base, child)
 				if !childInside {
 					return filepath.SkipDir
 				}
-				if bounded && (len(childRel) > limits.MaxPathBytes || pathDepth(childRel) > limits.MaxDepth) {
-					return ErrDiscoveryLimit
+				if bounded && len(childRel) > limits.MaxPathBytes {
+					return limitError("MAX_PATH_BYTES", len(childRel), limits.MaxPathBytes)
+				}
+				if bounded && pathDepth(childRel) > limits.MaxDepth {
+					return limitError("MAX_DEPTH", pathDepth(childRel), limits.MaxDepth)
+				}
+				if walkErr == nil && dirEntry != nil && dirEntry.IsDir() && prunedDirectory(request.PrunedDirectories, childRel) {
+					return filepath.SkipDir
+				}
+				work++
+				if bounded && work > limits.MaxWork {
+					return limitError("MAX_WORK", work, limits.MaxWork)
 				}
 				if walkErr != nil {
 					if err := add(child, Record{Name: childRel, Kind: SourceOther, Inclusion: Unavailable, Reason: unavailableReason(walkErr)}); err != nil {
@@ -219,6 +243,16 @@ func discoverContext(ctx context.Context, request Request, limits Limits, walk w
 	}
 	sort.Slice(result, func(i, j int) bool { return recordSortKey(result[i]) < recordSortKey(result[j]) })
 	return result, nil
+}
+
+func prunedDirectory(prunes []string, rel string) bool {
+	rel = filepath.ToSlash(rel)
+	for _, prune := range prunes {
+		if rel == prune || strings.HasPrefix(rel, prune+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func pathDepth(rel string) int {

@@ -9,9 +9,11 @@ import (
 	"lsp-trace/internal/censuscontrolflow"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusenumerationprojection"
+	"lsp-trace/internal/censuspreflight"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/programccompose"
+	"lsp-trace/internal/source"
 )
 
 // censusCoreDependencies is a package-main-only test seam. Production callers
@@ -70,7 +72,7 @@ func productionCensusCoreDependencies() censusCoreDependencies {
 }
 
 func censusOutcomeTyped(outcome censusPublicationOutcome) bool {
-	return outcome.Diagnostic != nil || outcome.Result != nil || outcome.PrivateChunkTerminal != nil || outcome.DiscoveryDiagnostic != nil && outcome.RequestReceipt != nil
+	return outcome.Diagnostic != nil || outcome.EnumerationDiagnostic != nil || outcome.Result != nil || outcome.PrivateChunkTerminal != nil || outcome.DiscoveryDiagnostic != nil && (outcome.RequestReceipt != nil || outcome.RequestReceiptV2 != nil)
 }
 
 // runCensusCore coordinates one already-preflighted census through the existing
@@ -92,7 +94,16 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 			return fail(censusStageAcquisition, nil)
 		}
 		discovery, err := deps.discover(ctx, options, runtime, cfg.callHierarchy)
-		if err != nil || discovery.Session.SessionID != runtime.SessionID() || discovery.Session.Generation != runtime.Generation() {
+		if err != nil {
+			var limit *source.LimitError
+			if errors.As(err, &limit) {
+				diagnostic := censuspreflight.Diagnostic{SchemaVersion: censuspreflight.DiagnosticSchemaVersion, Category: limit.Category, Observed: limit.Observed, Limit: limit.Limit}
+				outcome = censusPublicationOutcome{EnumerationDiagnostic: &diagnostic}
+				return 1
+			}
+			return fail(censusStageDiscovery, nil)
+		}
+		if discovery.Session.SessionID != runtime.SessionID() || discovery.Session.Generation != runtime.Generation() {
 			return fail(censusStageDiscovery, nil)
 		}
 		if !discovery.Complete {
@@ -104,7 +115,15 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 			if diagnosticErr != nil {
 				return fail(censusStageDiscovery, nil)
 			}
-			outcome = censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt}
+			if len(options.PrunedDirectories) == 0 {
+				outcome = censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt}
+			} else {
+				receiptV2, v2Err := censusrequest.NewV2(censusrequest.RefreshCoordinate{SessionID: runtime.SessionID(), Generation: runtime.Generation()}, censusrequest.SemanticFieldsV2{Sources: options.Sources, Includes: options.Includes, Excludes: options.Excludes, PrunedDirectories: options.PrunedDirectories, DownDepth: uint64(options.DownDepth), UpDepth: uint64(options.UpDepth), MaxNodes: uint64(options.MaxNodes), BatchTargets: uint64(options.MaxBatchTargets), TimeoutMS: uint64(options.Timeout.Milliseconds()), RequestTimeoutMS: uint64(options.RequestTimeout.Milliseconds()), StopAfter: options.StopAfter})
+				if v2Err != nil {
+					return fail(censusStageDiscovery, nil)
+				}
+				outcome = censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceiptV2: &receiptV2}
+			}
 			if options.PrivateEnumerationProjection {
 				privateReceipt := censusenumerationprojection.Unavailable("CANCELED_PRE_RECONCILIATION")
 				if ctx.Err() == nil {
