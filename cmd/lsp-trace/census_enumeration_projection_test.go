@@ -208,6 +208,152 @@ func TestEnumerationPublicationLinearizationPreEntryAndPostEntryCancellation(t *
 	}
 }
 
+func TestPrivateEnumerationProjectionEmitsScalarCauseSummary(t *testing.T) {
+	root := t.TempDir()
+	discovery := incompleteEnumerationDiscovery(t)
+	deps := censusCoreDependencies{runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
+		return cb(context.Background(), &initializedAcquisitionRuntime{sessionID: "s", generation: 1})
+	}, discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+		return discovery, nil
+	}, publishEnumeration: func(context.Context, censusacquisition.Discovery, censusrequest.Receipt, string) censusenumerationprojection.Receipt {
+		return censusenumerationprojection.Unavailable("PUBLICATION_FAILED")
+	}}
+	out := runCensusCore(censusCLIOptions{PrivateEnumerationProjection: true, Machine: true, PublicationRoot: root, Sources: []string{"."}, DownDepth: 1, MaxNodes: 631, MaxBatchTargets: 63, Timeout: 60000000000, RequestTimeout: 30000000000}, censusCoreConfig{}, deps)
+
+	var publicOut, publicErr, privateOut, privateErr bytes.Buffer
+	public := out
+	public.EnumerationReceipt = nil
+	public.PrivateDiscoveryCauses = nil
+	if writeCensusOutcome(&publicOut, &publicErr, true, public) != 1 || writeCensusOutcome(&privateOut, &privateErr, true, out) != 1 {
+		t.Fatal("unexpected exit")
+	}
+	lines := bytes.Split(bytes.TrimSuffix(privateErr.Bytes(), []byte{'\n'}), []byte{'\n'})
+	if len(lines) != 3 || !bytes.Equal(lines[0], bytes.TrimSuffix(publicErr.Bytes(), []byte{'\n'})) {
+		t.Fatalf("ASSERT_PRIVATE_CAUSE_SUMMARY_ADDITIVE public=%q private=%q", publicErr.Bytes(), privateErr.Bytes())
+	}
+	var summary struct {
+		SchemaVersion string `json:"schema_version"`
+		Authority     int    `json:"authority"`
+		Causes        []struct {
+			Scope        string `json:"scope"`
+			Stage        string `json:"stage"`
+			Code         string `json:"code"`
+			Count        uint64 `json:"count"`
+			FirstOrdinal uint64 `json:"first_ordinal"`
+		} `json:"causes"`
+	}
+	if err := json.Unmarshal(lines[2], &summary); err != nil {
+		t.Fatalf("ASSERT_PRIVATE_CAUSE_SUMMARY_JSON: %v: %q", err, lines[2])
+	}
+	if summary.SchemaVersion != "lsp-trace.private-census-discovery-causes.v1" || summary.Authority != 0 || !reflect.DeepEqual(summary.Causes, []struct {
+		Scope        string `json:"scope"`
+		Stage        string `json:"stage"`
+		Code         string `json:"code"`
+		Count        uint64 `json:"count"`
+		FirstOrdinal uint64 `json:"first_ordinal"`
+	}{{Scope: "FILE", Stage: "DISCOVERY", Code: "CHILD_INCOMPLETE", Count: 1, FirstOrdinal: 0}, {Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", Count: 1, FirstOrdinal: 0}}) {
+		t.Fatalf("ASSERT_PRIVATE_CAUSE_SUMMARY_VALUES: %+v", summary)
+	}
+	for _, forbidden := range [][]byte{[]byte(discovery.Workspace), []byte("a.go"), []byte("secret"), []byte(`"private"`)} {
+		if bytes.Contains(lines[2], forbidden) {
+			t.Fatalf("ASSERT_PRIVATE_CAUSE_SUMMARY_SCALAR_ONLY %q in %q", forbidden, lines[2])
+		}
+	}
+	if publicOut.Len() != 0 || privateOut.Len() != 0 {
+		t.Fatal("stdout mutated")
+	}
+}
+
+func TestPrivateDiscoveryCauseSummaryDistinguishesEqualTotals(t *testing.T) {
+	file0, file4, symbol2, symbol9 := 0, 4, 2, 9
+	fileSummary, err := newPrivateCensusDiscoveryCauses([]censusacquisition.IncompleteCause{
+		{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_UNAVAILABLE", FileOrdinal: &file4},
+		{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_UNAVAILABLE", FileOrdinal: &file0},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	symbolSummary, err := newPrivateCensusDiscoveryCauses([]censusacquisition.IncompleteCause{
+		{Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: &symbol9},
+		{Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: &symbol2},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileRaw, _ := marshalPrivateCensusDiscoveryCauses(fileSummary)
+	symbolRaw, _ := marshalPrivateCensusDiscoveryCauses(symbolSummary)
+	if bytes.Equal(fileRaw, symbolRaw) || len(fileSummary.Causes) != 1 || fileSummary.Causes[0].Count != 2 || fileSummary.Causes[0].FirstOrdinal != 0 || len(symbolSummary.Causes) != 1 || symbolSummary.Causes[0].Count != 2 || symbolSummary.Causes[0].FirstOrdinal != 2 {
+		t.Fatalf("ASSERT_EQUAL_TOTAL_SCOPE_DISTINCTION file=%s symbol=%s", fileRaw, symbolRaw)
+	}
+}
+
+func TestPrivateDiscoveryCauseSummaryRejectsMalformedVocabulary(t *testing.T) {
+	fileOrdinal := 0
+	for name, causes := range map[string][]censusacquisition.IncompleteCause{
+		"unknown-stage": {{Scope: "FILE", Stage: "/private/source/path", Code: "SESSION_UNAVAILABLE", FileOrdinal: &fileOrdinal}},
+		"unknown-code":  {{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "provider prose", FileOrdinal: &fileOrdinal}},
+		"control-code":  {{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_UNAVAILABLE\x00suffix", FileOrdinal: &fileOrdinal}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, err := newPrivateCensusDiscoveryCauses(causes); err == nil {
+				t.Fatalf("ASSERT_PRIVATE_CAUSE_REJECTS_MALFORMED got=%+v", got)
+			}
+		})
+	}
+	malformed := privateCensusDiscoveryCauses{SchemaVersion: privateCensusDiscoveryCausesSchemaVersion, Authority: 0, Causes: []privateCensusDiscoveryCause{{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "provider prose", Count: 1}}}
+	if raw, err := marshalPrivateCensusDiscoveryCauses(malformed); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_CAUSE_MARSHAL_REJECTS_MALFORMED raw=%q", raw)
+	}
+}
+
+func TestPrivateDiscoveryCauseSummaryRejectsInvalidOrdinals(t *testing.T) {
+	file0, file1, symbol0, symbol1 := 0, 1, 0, 1
+	for name, discovery := range map[string]censusacquisition.Discovery{
+		"file-out-of-range":   {Accounting: census.Accounting{FileDenominator: 1}, IncompleteCauses: []censusacquisition.IncompleteCause{{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_UNAVAILABLE", FileOrdinal: &file1}}},
+		"symbol-out-of-range": {Accounting: census.Accounting{SymbolDenominator: 1}, IncompleteCauses: []censusacquisition.IncompleteCause{{Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: &symbol1}}},
+		"wrong-file-kind":     {Accounting: census.Accounting{FileDenominator: 1, SymbolDenominator: 1}, IncompleteCauses: []censusacquisition.IncompleteCause{{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_UNAVAILABLE", SymbolOrdinal: &symbol0}}},
+		"both-kinds":          {Accounting: census.Accounting{FileDenominator: 1, SymbolDenominator: 1}, IncompleteCauses: []censusacquisition.IncompleteCause{{Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", FileOrdinal: &file0, SymbolOrdinal: &symbol0}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, err := newPrivateCensusDiscoveryCausesForDiscovery(discovery); err == nil {
+				t.Fatalf("ASSERT_PRIVATE_CAUSE_REJECTS_INVALID_ORDINAL got=%+v", got)
+			}
+		})
+	}
+}
+
+func TestPrivateDiscoveryCauseSummaryV2AndZeroCauseOrdering(t *testing.T) {
+	diagnostic, err := censusresult.NewDiscoveryDiagnostic([]censusresult.DiscoveryObservation{{Dimension: censusresult.DimensionProviderCompleteness, State: censusresult.ObservationKnown, Omitted: ptrU64(1)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := censusrequest.NewV2(censusrequest.RefreshCoordinate{SessionID: "s", Generation: 1}, censusrequest.SemanticFieldsV2{Sources: []string{"."}, PrunedDirectories: []string{"vendor"}, DownDepth: 1, MaxNodes: 10000, BatchTargets: 63, TimeoutMS: 60000, RequestTimeoutMS: 30000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	zero := censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceiptV2: &receipt}
+	var zeroOut, zeroErr bytes.Buffer
+	if code := writeCensusOutcome(&zeroOut, &zeroErr, true, zero); code != 1 || zeroOut.Len() != 0 || bytes.Count(zeroErr.Bytes(), []byte{'\n'}) != 1 {
+		t.Fatalf("ASSERT_PRIVATE_CAUSE_V2_ZERO_COMPAT code=%d stdout=%q stderr=%q", code, zeroOut.Bytes(), zeroErr.Bytes())
+	}
+	fileOrdinal := 3
+	summary, err := newPrivateCensusDiscoveryCauses([]censusacquisition.IncompleteCause{{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_UNAVAILABLE", FileOrdinal: &fileOrdinal}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withCauses := zero
+	withCauses.PrivateDiscoveryCauses = &summary
+	var privateOut, privateErr bytes.Buffer
+	if code := writeCensusOutcome(&privateOut, &privateErr, true, withCauses); code != 1 || privateOut.Len() != 0 {
+		t.Fatalf("ASSERT_PRIVATE_CAUSE_V2_EXIT code=%d stdout=%q", code, privateOut.Bytes())
+	}
+	lines := bytes.Split(bytes.TrimSuffix(privateErr.Bytes(), []byte{'\n'}), []byte{'\n'})
+	canonical, _ := marshalPrivateCensusDiscoveryCauses(summary)
+	if len(lines) != 2 || !bytes.Equal(lines[0], bytes.TrimSuffix(zeroErr.Bytes(), []byte{'\n'})) || !bytes.Equal(lines[1], canonical) {
+		t.Fatalf("ASSERT_PRIVATE_CAUSE_V2_ORDER zero=%q private=%q", zeroErr.Bytes(), privateErr.Bytes())
+	}
+}
+
 func TestEnumerationFlagAbsentRunnerOutputCallsAndFilesFrozen(t *testing.T) {
 	root := t.TempDir()
 	discovery := incompleteEnumerationDiscovery(t)

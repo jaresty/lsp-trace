@@ -30,22 +30,22 @@ func (providerProbeStarter) Start(context.Context, managedprocess.Spec) (session
 }
 
 type providerProbeRunnerResult struct {
-	code                       int
-	stdout, stderr             []byte
-	discoveryLine, receiptLine []byte
-	enumerationArtifact        []byte
-	enumerationReceipt         censusenumerationprojection.Receipt
-	publication                map[string][]byte
-	starterCalls, managerCalls int
-	starts, stops              int
-	probe                      privateProviderProbeArtifact
-	probeV2                    privateProviderProbeArtifactV2
-	probeV3                    privateProviderProbeArtifactV3
-	probeV4                    privateProviderProbeArtifactV4
-	probeV5                    privateProviderProbeArtifactV5
-	probeV6                    privateProviderProbeArtifactV6
-	probeErr                   error
-	probeExists                bool
+	code                                  int
+	stdout, stderr                        []byte
+	discoveryLine, receiptLine, causeLine []byte
+	enumerationArtifact                   []byte
+	enumerationReceipt                    censusenumerationprojection.Receipt
+	publication                           map[string][]byte
+	starterCalls, managerCalls            int
+	starts, stops                         int
+	probe                                 privateProviderProbeArtifact
+	probeV2                               privateProviderProbeArtifactV2
+	probeV3                               privateProviderProbeArtifactV3
+	probeV4                               privateProviderProbeArtifactV4
+	probeV5                               privateProviderProbeArtifactV5
+	probeV6                               privateProviderProbeArtifactV6
+	probeErr                              error
+	probeExists                           bool
 }
 
 func providerProbeRunnerArgs(workspace, root, probe string, enumeration bool) []string {
@@ -173,7 +173,7 @@ func runProviderProbeRunnerInWorkspaceVersionWithStarter(t *testing.T, workspace
 	result := providerProbeRunnerResult{code: code, stdout: append([]byte(nil), stdout.Bytes()...), stderr: append([]byte(nil), stderr.Bytes()...), publication: providerProbePublicationFiles(t, root), starterCalls: *starters, managerCalls: *managers}
 	if enumeration {
 		lines := bytes.Split(bytes.TrimSuffix(result.stderr, []byte{'\n'}), []byte{'\n'})
-		if len(lines) != 2 {
+		if len(lines) < 2 || len(lines) > 3 {
 			t.Fatalf("enumeration stderr lines=%d stderr=%q", len(lines), result.stderr)
 		}
 		result.discoveryLine = append([]byte(nil), lines[0]...)
@@ -186,6 +186,17 @@ func runProviderProbeRunnerInWorkspaceVersionWithStarter(t *testing.T, workspace
 		canonicalReceipt, err := censusenumerationprojection.MarshalReceipt(result.enumerationReceipt)
 		if err != nil || !bytes.Equal(canonicalReceipt, append(append([]byte(nil), lines[1]...), '\n')) {
 			t.Fatalf("noncanonical enumeration receipt=%q err=%v", lines[1], err)
+		}
+		if len(lines) == 3 {
+			result.causeLine = append([]byte(nil), lines[2]...)
+			var causes privateCensusDiscoveryCauses
+			if err := json.Unmarshal(lines[2], &causes); err != nil {
+				t.Fatalf("private discovery causes=%q err=%v", lines[2], err)
+			}
+			canonicalCauses, err := marshalPrivateCensusDiscoveryCauses(causes)
+			if err != nil || !bytes.Equal(canonicalCauses, lines[2]) {
+				t.Fatalf("noncanonical private discovery causes=%q err=%v", lines[2], err)
+			}
 		}
 		if result.enumerationReceipt.Status != "PUBLISHED" || result.enumerationReceipt.Selector == "" {
 			t.Fatalf("enumeration not published: %+v", result.enumerationReceipt)
@@ -271,7 +282,7 @@ func TestRunCensusProviderProbeAbsentAndEnabledPreserveEnumerationPublication(t 
 	if baseline.code != 1 || enabled.code != baseline.code || len(baseline.stdout) != 0 || !bytes.Equal(baseline.stdout, enabled.stdout) {
 		t.Fatalf("exit/stdout drift baseline=%d/%q enabled=%d/%q", baseline.code, baseline.stdout, enabled.code, enabled.stdout)
 	}
-	if !bytes.Equal(baseline.discoveryLine, enabled.discoveryLine) || !bytes.Equal(baseline.receiptLine, enabled.receiptLine) || !bytes.Equal(baseline.stderr, enabled.stderr) {
+	if !bytes.Equal(baseline.discoveryLine, enabled.discoveryLine) || !bytes.Equal(baseline.receiptLine, enabled.receiptLine) || !bytes.Equal(baseline.causeLine, enabled.causeLine) || !bytes.Equal(baseline.stderr, enabled.stderr) {
 		t.Fatalf("diagnostic/receipt drift baseline=%q enabled=%q", baseline.stderr, enabled.stderr)
 	}
 	if baseline.enumerationReceipt.Status != "PUBLISHED" || enabled.enumerationReceipt.Status != "PUBLISHED" || !reflect.DeepEqual(baseline.enumerationReceipt, enabled.enumerationReceipt) || len(baseline.enumerationArtifact) == 0 || !bytes.Equal(baseline.enumerationArtifact, enabled.enumerationArtifact) {

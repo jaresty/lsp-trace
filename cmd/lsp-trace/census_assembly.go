@@ -62,16 +62,17 @@ type censusContinuationCustody struct {
 }
 
 type censusPublicationOutcome struct {
-	Result                *censusCLIResult
-	Diagnostic            *censusCLIDiagnostic
-	DiscoveryDiagnostic   *censusresult.DiscoveryDiagnostic
-	RequestReceipt        *censusrequest.Receipt
-	RequestReceiptV2      *censusrequest.ReceiptV2
-	EnumerationDiagnostic *censuspreflight.Diagnostic
-	EnumerationReceipt    *censusenumerationprojection.Receipt
-	PrivateChunkTerminal  *privateCensusChunkTerminal
-	continuation          *censusContinuationCustody
-	controlFlow           *censuscontrolflow.Record
+	Result                 *censusCLIResult
+	Diagnostic             *censusCLIDiagnostic
+	DiscoveryDiagnostic    *censusresult.DiscoveryDiagnostic
+	RequestReceipt         *censusrequest.Receipt
+	RequestReceiptV2       *censusrequest.ReceiptV2
+	EnumerationDiagnostic  *censuspreflight.Diagnostic
+	EnumerationReceipt     *censusenumerationprojection.Receipt
+	PrivateDiscoveryCauses *privateCensusDiscoveryCauses
+	PrivateChunkTerminal   *privateCensusChunkTerminal
+	continuation           *censusContinuationCustody
+	controlFlow            *censuscontrolflow.Record
 }
 
 func (o censusPublicationOutcome) BuildCommittedHandoff() (censuscontinuation.CommittedHandoff, error) {

@@ -293,6 +293,13 @@ func writeCensusOutcome(stdout, stderr io.Writer, machine bool, outcome censusPu
 			}{outcome.DiscoveryDiagnostic, outcome.RequestReceiptV2})
 			if err == nil {
 				_, _ = stderr.Write(append(raw, '\n'))
+				if outcome.PrivateDiscoveryCauses != nil {
+					privateRaw, privateErr := marshalPrivateCensusDiscoveryCauses(*outcome.PrivateDiscoveryCauses)
+					if privateErr != nil {
+						return writeCensusFailure(stderr, censusStageDiscovery, true, privateErr)
+					}
+					_, _ = stderr.Write(append(privateRaw, '\n'))
+				}
 				return 1
 			}
 		}
@@ -312,6 +319,13 @@ func writeCensusOutcome(stdout, stderr io.Writer, machine bool, outcome censusPu
 					if privateErr == nil {
 						_, _ = stderr.Write(privateRaw)
 					}
+				}
+				if outcome.PrivateDiscoveryCauses != nil {
+					privateRaw, privateErr := marshalPrivateCensusDiscoveryCauses(*outcome.PrivateDiscoveryCauses)
+					if privateErr != nil {
+						return writeCensusFailure(stderr, censusStageDiscovery, true, privateErr)
+					}
+					_, _ = stderr.Write(append(privateRaw, '\n'))
 				}
 				return 1
 			}

@@ -125,6 +125,13 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 				outcome = censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceiptV2: &receiptV2}
 			}
 			if options.PrivateEnumerationProjection {
+				if len(discovery.IncompleteCauses) > 0 {
+					privateCauses, privateCausesErr := newPrivateCensusDiscoveryCausesForDiscovery(discovery)
+					if privateCausesErr != nil {
+						return fail(censusStageDiscovery, nil)
+					}
+					outcome.PrivateDiscoveryCauses = &privateCauses
+				}
 				privateReceipt := censusenumerationprojection.Unavailable("CANCELED_PRE_RECONCILIATION")
 				if ctx.Err() == nil {
 					publisher := deps.publishEnumeration
