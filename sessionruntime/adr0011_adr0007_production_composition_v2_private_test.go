@@ -114,23 +114,140 @@ func callItemPrivate() []byte {
 	return []byte(`{"name":"Target","kind":12,"uri":"file:///tmp/adr0011-fixed-workspace/calls.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}}}`)
 }
 
+type sizedDirectionalResponseStatsPrivate struct {
+	DigitCandidates int
+	FinalFrames     int
+}
+
 func sizedDirectionalResponsePrivate(id uint64, direction string, total int) []byte {
+	frame, _ := sizedDirectionalResponseWithStatsPrivate(id, direction, total)
+	return frame
+}
+
+func sizedDirectionalResponseWithStatsPrivate(id uint64, direction string, total int) ([]byte, sizedDirectionalResponseStatsPrivate) {
 	endpoint := "from"
 	if direction == "outgoing" {
 		endpoint = "to"
 	}
-	for padding := total; padding >= 0; padding-- {
-		item := bytes.Replace(callItemPrivate(), []byte(`"kind":12,`), []byte(`"kind":12,"detail":"`+string(bytes.Repeat([]byte{'x'}, padding))+`",`), 1)
-		result := []byte(`[{"` + endpoint + `":` + string(item) + `,"fromRanges":[]}]`)
-		frame := resultFramePrivate(id, result)
-		if len(frame) == total {
-			return frame
-		}
-		if len(frame) < total {
-			padding += total - len(frame) + 1
+
+	const kindMarker = `"kind":12,`
+	item := callItemPrivate()
+	kindAt := bytes.Index(item, []byte(kindMarker))
+	if kindAt < 0 {
+		panic("directional response item is missing kind marker")
+	}
+	bodyPrefix := append([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"result":[{"%s":`, id, endpoint)), item[:kindAt]...)
+	bodyPrefix = append(bodyPrefix, []byte(`"kind":12,"detail":"`)...)
+	bodySuffix := append([]byte(`",`), item[kindAt+len(kindMarker):]...)
+	bodySuffix = append(bodySuffix, []byte(`,"fromRanges":[]}]}`)...)
+	fixedBodyBytes := len(bodyPrefix) + len(bodySuffix)
+
+	stats := sizedDirectionalResponseStatsPrivate{}
+	padding := -1
+	bodyBytes := 0
+	for contentLengthDigits := 1; contentLengthDigits <= 20; contentLengthDigits++ {
+		stats.DigitCandidates++
+		candidatePadding := total - len("Content-Length: \r\n\r\n") - contentLengthDigits - fixedBodyBytes
+		candidateBodyBytes := fixedBodyBytes + candidatePadding
+		if candidatePadding >= 0 && len(strconv.Itoa(candidateBodyBytes)) == contentLengthDigits {
+			padding = candidatePadding
+			bodyBytes = candidateBodyBytes
+			break
 		}
 	}
-	panic("unable to size directional response")
+	if padding < 0 {
+		panic("unable to size directional response")
+	}
+
+	frame := make([]byte, 0, total)
+	frame = append(frame, fmt.Sprintf("Content-Length: %d\r\n\r\n", bodyBytes)...)
+	frame = append(frame, bodyPrefix...)
+	paddingAt := len(frame)
+	frame = frame[:paddingAt+padding]
+	for i := paddingAt; i < len(frame); i++ {
+		frame[i] = 'x'
+	}
+	frame = append(frame, bodySuffix...)
+	stats.FinalFrames++
+	if len(frame) != total {
+		panic(fmt.Sprintf("unable to size directional response: got %d want %d", len(frame), total))
+	}
+	return frame, stats
+}
+
+func TestSizedDirectionalResponsePrivate(t *testing.T) {
+	zeroPaddingItem := bytes.Replace(callItemPrivate(), []byte(`"kind":12,`), []byte(`"kind":12,"detail":"",`), 1)
+	minimumIncoming := len(resultFramePrivate(4, []byte(`[{"from":`+string(zeroPaddingItem)+`,"fromRanges":[]}]`)))
+	minimumOutgoing := len(resultFramePrivate(7, []byte(`[{"to":`+string(zeroPaddingItem)+`,"fromRanges":[]}]`)))
+	cases := []struct {
+		name      string
+		id        uint64
+		direction string
+		total     int
+	}{
+		{name: "incoming-boundary", id: 4, direction: "incoming", total: minimumIncoming},
+		{name: "outgoing-boundary", id: 7, direction: "outgoing", total: minimumOutgoing},
+		{name: "incoming-small", id: 4, direction: "incoming", total: minimumIncoming + 17},
+		{name: "outgoing-small", id: 7, direction: "outgoing", total: minimumOutgoing + 17},
+		{name: "incoming-32MiB", id: 4, direction: "incoming", total: expectedIncomingResponseBytesPrivate},
+		{name: "outgoing-32MiB", id: 7, direction: "outgoing", total: expectedOutgoingResponseBytesPrivate},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			first, firstStats := sizedDirectionalResponseWithStatsPrivate(tc.id, tc.direction, tc.total)
+			second, secondStats := sizedDirectionalResponseWithStatsPrivate(tc.id, tc.direction, tc.total)
+			if len(first) != tc.total {
+				t.Fatalf("ASSERT_SIZED_DIRECTIONAL_EXACT_BYTES: got=%d want=%d", len(first), tc.total)
+			}
+			if !bytes.Equal(first, second) {
+				t.Fatal("ASSERT_SIZED_DIRECTIONAL_DETERMINISTIC_BYTES")
+			}
+			for _, stats := range []sizedDirectionalResponseStatsPrivate{firstStats, secondStats} {
+				if stats.DigitCandidates > 20 || stats.FinalFrames != 1 {
+					t.Fatalf("ASSERT_SIZED_DIRECTIONAL_BOUNDED_CONSTRUCTION: stats=%+v", stats)
+				}
+			}
+			bodyAt := bytes.Index(first, []byte("\r\n\r\n"))
+			if bodyAt < 0 {
+				t.Fatal("ASSERT_SIZED_DIRECTIONAL_FRAME_HEADER")
+			}
+			var response struct {
+				ID     uint64 `json:"id"`
+				Result []struct {
+					From json.RawMessage `json:"from"`
+					To   json.RawMessage `json:"to"`
+				} `json:"result"`
+			}
+			if err := json.Unmarshal(first[bodyAt+4:], &response); err != nil {
+				t.Fatalf("ASSERT_SIZED_DIRECTIONAL_VALID_JSON: %v", err)
+			}
+			if response.ID != tc.id || len(response.Result) != 1 {
+				t.Fatalf("ASSERT_SIZED_DIRECTIONAL_RESPONSE_IDENTITY: id=%d results=%d", response.ID, len(response.Result))
+			}
+			if tc.direction == "incoming" {
+				if len(response.Result[0].From) == 0 || len(response.Result[0].To) != 0 {
+					t.Fatal("ASSERT_SIZED_DIRECTIONAL_INCOMING_ENDPOINT")
+				}
+			} else if len(response.Result[0].To) == 0 || len(response.Result[0].From) != 0 {
+				t.Fatal("ASSERT_SIZED_DIRECTIONAL_OUTGOING_ENDPOINT")
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		id        uint64
+		direction string
+		total     int
+	}{{id: 4, direction: "incoming", total: minimumIncoming - 1}, {id: 7, direction: "outgoing", total: minimumOutgoing - 1}} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("ASSERT_SIZED_DIRECTIONAL_IMPOSSIBLE_SIZE_PANICS")
+				}
+			}()
+			_, _ = sizedDirectionalResponseWithStatsPrivate(tc.id, tc.direction, tc.total)
+		}()
+	}
 }
 
 func (c *scriptedTransportPrivate) serve() {
