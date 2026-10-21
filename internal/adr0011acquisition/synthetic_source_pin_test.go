@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -199,6 +201,12 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	arbitraryJSON := append([]SyntheticSourceEntry(nil), entries...)
 	arbitraryJSON[len(arbitraryJSON)-1].Path = "internal/mcpcontract/testdata/schemas/arbitrary.json"
 	assertReject("arbitrary json", arbitraryJSON)
+	testSource := append([]SyntheticSourceEntry(nil), entries...)
+	testSource[oldFiveEnd].Path = "cmd/lsp-trace/acquisition_v2_test.go"
+	assertReject("test source", testSource)
+	docSource := append([]SyntheticSourceEntry(nil), entries...)
+	docSource[oldFiveEnd].Path = "docs/qualification/source-pin.go"
+	assertReject("docs source", docSource)
 	siblingJSON := append([]SyntheticSourceEntry(nil), entries...)
 	siblingJSON[len(siblingJSON)-1].Path = "internal/mcpcontract/testdata/schemas/envelope-census-chunk-result.v1.schema.json"
 	assertReject("sibling json", siblingJSON)
@@ -223,6 +231,55 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertReject("schema symlink", entries)
+}
+
+func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
+	const manifestHash = "6054423fc7d6c991d7343b036ebec90b0d74f007801459ad58f96a0e666f68b6"
+	const aggregate = "sha256:6f475e674272e18d6b5fee5a2a23803225788e999ae1de84c050fb12c491e339"
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("producer candidate source location unavailable")
+	}
+	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.6054423fc7d6c991.manifest.json")
+	b, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestSum := sha256.Sum256(b)
+	if got := hex.EncodeToString(manifestSum[:]); got != manifestHash {
+		t.Fatalf("producer manifest hash: %s", got)
+	}
+	var manifest struct {
+		SchemaVersion string `json:"schema_version"`
+		Digest        string `json:"digest"`
+		Files         []struct {
+			Path       string `json:"path"`
+			ByteLength uint64 `json:"byte_length"`
+			SHA256     string `json:"sha256"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(b, &manifest); err != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != aggregate || len(manifest.Files) != 148 {
+		t.Fatalf("producer manifest identity: files=%d digest=%q schema=%q err=%v", len(manifest.Files), manifest.Digest, manifest.SchemaVersion, err)
+	}
+	entries := make([]SyntheticSourceEntry, 0, len(manifest.Files))
+	for _, f := range manifest.Files {
+		raw, err := hex.DecodeString(strings.TrimPrefix(f.SHA256, "sha256:"))
+		if err != nil || len(raw) != sha256.Size || !strings.HasPrefix(f.SHA256, "sha256:") {
+			t.Fatalf("producer entry hash %q: %v", f.Path, err)
+		}
+		var sum [sha256.Size]byte
+		copy(sum[:], raw)
+		entries = append(entries, SyntheticSourceEntry{Path: f.Path, ByteLength: f.ByteLength, SHA256: sum})
+	}
+	rawAggregate, err := hex.DecodeString(strings.TrimPrefix(aggregate, "sha256:"))
+	if err != nil || len(rawAggregate) != sha256.Size {
+		t.Fatal("producer aggregate encoding")
+	}
+	var expected [sha256.Size]byte
+	copy(expected[:], rawAggregate)
+	if err := VerifySyntheticSourcePin(entries, expected); err != nil {
+		t.Fatalf("producer candidate: %v", err)
+	}
 }
 
 func TestSyntheticSourcePinCeilingsUnchanged(t *testing.T) {

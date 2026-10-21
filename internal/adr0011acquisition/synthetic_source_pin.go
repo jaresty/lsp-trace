@@ -61,6 +61,10 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"internal/censuschunkingruntime/translate.go",
 	"internal/mcpcontract/census_future.go",
 	"internal/operation/types.go",
+	"cmd/lsp-trace/acquisition_v2.go",
+	"cmd/lsp-trace/census_discovery_adapter.go",
+	"internal/censusacquisition/discovery.go",
+	"internal/censusacquisition/request_budget.go",
 }
 
 var syntheticSourceAdditionalSchemaPaths = []string{
