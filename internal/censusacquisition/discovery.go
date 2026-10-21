@@ -635,8 +635,8 @@ func EnumerateWorkspace(workspace string, roots []string, language func(string) 
 
 // EnumerateWorkspaceContext performs context-aware, traversal-bounded discovery.
 // MaxAccepted counts only readable regular files surviving exclusion-first filters.
-func EnumerateWorkspaceContext(ctx context.Context, workspace string, roots []string, language func(string) string, filters Filters, limits source.Limits) ([]SourceFile, error) {
-	request := source.Request{Base: workspace, Inputs: append([]string(nil), roots...), AllowDot: true}
+func EnumerateWorkspaceContext(ctx context.Context, workspace string, roots []string, language func(string) string, filters Filters, limits source.Limits, prunedDirectories ...string) ([]SourceFile, error) {
+	request := source.Request{Base: workspace, Inputs: append([]string(nil), roots...), AllowDot: true, PrunedDirectories: append([]string(nil), prunedDirectories...)}
 	request.Accept = func(record source.Record) bool {
 		return record.Kind == source.SourceRegularFile && record.Inclusion == source.Included && selectPath(filters.Includes, filters.Excludes, record.Name)
 	}

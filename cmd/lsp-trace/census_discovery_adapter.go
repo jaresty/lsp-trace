@@ -39,10 +39,11 @@ const (
 )
 
 type censusWorkspaceEnumerator struct {
-	workspace string
-	roots     []string
-	filters   censusacquisition.Filters
-	maxFiles  int
+	workspace         string
+	roots             []string
+	filters           censusacquisition.Filters
+	maxFiles          int
+	prunedDirectories []string
 }
 
 func (e censusWorkspaceEnumerator) Enumerate(ctx context.Context) ([]censusacquisition.SourceFile, error) {
@@ -54,7 +55,7 @@ func (e censusWorkspaceEnumerator) Enumerate(ctx context.Context) ([]censusacqui
 	return censusacquisition.EnumerateWorkspaceContext(ctx, e.workspace, roots, source.LanguageID, e.filters, source.Limits{
 		MaxEntries: censusMaxDiscoveredEntries, MaxAccepted: e.maxFiles,
 		MaxWork: censusMaxEnumerationWork, MaxPathBytes: censusMaxSourcePathBytes, MaxDepth: censusMaxSourceDepth,
-	})
+	}, e.prunedDirectories...)
 }
 
 type censusRuntimeDocumentSupplier struct {
@@ -118,7 +119,7 @@ func newCensusDiscoveryAdapter(options censusCLIOptions, session initializedCens
 		Files: censusWorkspaceEnumerator{
 			workspace: workspace, roots: roots,
 			filters:  censusacquisition.Filters{Includes: append([]string(nil), options.Includes...), Excludes: append([]string(nil), options.Excludes...)},
-			maxFiles: censusMaxDiscoveredEntries,
+			maxFiles: censusMaxDiscoveredEntries, prunedDirectories: append([]string(nil), options.PrunedDirectories...),
 		},
 		Supplier: censusRuntimeDocumentSupplier{runtime: session},
 		Client:   client,
