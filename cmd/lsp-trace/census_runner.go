@@ -152,7 +152,7 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		providerProbe.byteTimeNotifications = options.PrivateProviderProbeByteTimeNotifications
 		defer func() { _ = providerProbe.finalize() }()
 	}
-	maxRequests, err := censusacquisition.AcquisitionMaxRequests(options.PrivateProviderProbeByteTimeNotifications, options.MaxNodes, options.MaxBatchTargets)
+	maxRequests, err := censusacquisition.AcquisitionMaxRequests(options.PrivateEnumerationProjection, options.MaxNodes, options.MaxBatchTargets)
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
 	}

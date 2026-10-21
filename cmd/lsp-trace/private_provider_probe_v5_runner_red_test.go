@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,50 @@ import (
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
+
+func TestRunCensusAcquisitionBudgetAuthorizationUsesPrivateEnumerationOnly(t *testing.T) {
+	tests := []struct {
+		name                      string
+		privateEnumeration, probe bool
+		maxNodes, want            int
+	}{
+		{name: "ordinary-default", maxNodes: 405, want: 1000},
+		{name: "probe-only-does-not-authorize", probe: true, maxNodes: 405, want: 1000},
+		{name: "private-crosses-legacy-1000", privateEnumeration: true, maxNodes: 405, want: 1001},
+		{name: "private-maximum", privateEnumeration: true, maxNodes: 10000, want: 20191},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workspace, root := t.TempDir(), t.TempDir()
+			if err := os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			probePath := ""
+			if tc.probe {
+				probePath = filepath.Join(root, "provider-probe.json")
+			}
+			core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+				if options.PrivateEnumerationProjection != tc.privateEnumeration || options.PrivateProviderProbeByteTimeNotifications != tc.probe {
+					t.Fatalf("ASSERT_CLI_CENSUS_BUDGET_OPTION_BINDING: options=%+v", options)
+				}
+				got := -1
+				if cfg.limits.MaxRequests != nil {
+					got = *cfg.limits.MaxRequests
+				}
+				if got != tc.want {
+					t.Fatalf("ASSERT_CLI_CENSUS_ACQUISITION_REQUEST_BUDGET: private=%t probe=%t max_nodes=%d max_requests=%d want=%d", tc.privateEnumeration, tc.probe, tc.maxNodes, got, tc.want)
+				}
+				return deterministicProviderProbeOutcome(t)
+			}
+			deps, _, _ := providerProbeIntegrationRunnerDeps(t, core)
+			args := append(providerProbeRunnerArgsVersion(workspace, root, probePath, "v6", tc.privateEnumeration), "--max-nodes", strconv.Itoa(tc.maxNodes))
+			var stdout, stderr bytes.Buffer
+			if code := runCensusWithDependencies(args, &stdout, &stderr, deps); code != 0 {
+				t.Fatalf("ASSERT_CLI_CENSUS_BUDGET_RUNNER_ACCEPTED: code=%d stderr=%q", code, stderr.Bytes())
+			}
+		})
+	}
+}
 
 func TestRunCensusNotificationBurstAuthorizationUsesPrivateEnumerationOnly(t *testing.T) {
 	if runtime.GOOS != "darwin" {
