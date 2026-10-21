@@ -153,6 +153,11 @@ func TestExecuteChunkPreservesCoreFailure(t *testing.T) {
 }
 
 func TestReconcileExecutionProjectionRejectsMutations(t *testing.T) {
+	baselineRequest, _ := executionFixture(t, 64)
+	baselineReceipt, baselineErr := ExecuteChunk(context.Background(), baselineRequest)
+	if baselineErr != nil {
+		t.Fatal(baselineErr)
+	}
 	mutations := map[string]func(*censusacquisition.Projection){
 		"manifest_bytes": func(p *censusacquisition.Projection) { p.ManifestBytes[0] ^= 1 },
 		"reordered_result": func(p *censusacquisition.Projection) {
@@ -166,17 +171,12 @@ func TestReconcileExecutionProjectionRejectsMutations(t *testing.T) {
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
-			request, _ := executionFixture(t, 64)
-			receipt, err := ExecuteChunk(context.Background(), request)
-			if err != nil {
-				t.Fatal(err)
-			}
-			p, err := censusacquisition.CloneProjection(receipt.Projection)
+			p, err := censusacquisition.CloneProjection(baselineReceipt.Projection)
 			if err != nil {
 				t.Fatal(err)
 			}
 			mutate(&p)
-			if _, err := reconcileExecutionProjection(request, p); err == nil || !IsExecutionStage(err, StageProjection) {
+			if _, err := reconcileExecutionProjection(baselineRequest, p); err == nil || !IsExecutionStage(err, StageProjection) {
 				t.Fatalf("ASSERT_PROJECTION_MAPPING_MUTATION_REJECTED: %v", err)
 			}
 		})
