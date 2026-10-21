@@ -79,33 +79,39 @@ def validate(manifest, packages_by_os):
         counts = collections.Counter(flattened)
         expected = set(packages_by_os[goos])
         actual = set(flattened)
-        if expected - actual:
-            fail(errors, f"{goos}: omitted packages: {sorted(expected - actual)}")
-        if actual - expected:
-            fail(errors, f"{goos}: unknown packages: {sorted(actual - expected)}")
+        missing = expected - actual
+        unknown = actual - expected
         duplicates = sorted(p for p, n in counts.items() if n != 1)
+        if missing:
+            fail(errors, f"{goos}: omitted packages: {sorted(missing)}")
+        if unknown:
+            fail(errors, f"{goos}: unknown packages: {sorted(unknown)}")
         if duplicates:
             fail(errors, f"{goos}: duplicate packages: {duplicates}")
+        accounting_valid = not missing and not unknown and not duplicates
         if goos == "linux" and all(p in expected for p in HEAVY):
             owners = {p: next((s.get("id") for s in shards if p in s.get("packages", [])), None) for p in HEAVY}
             if owners[HEAVY[0]] == owners[HEAVY[1]]:
                 fail(errors, "linux: heavy packages must be in distinct shards")
+        gopls_valid = True
         if goos == "darwin":
             marked = [s for s in shards if s.get("needs_gopls") is True]
             if len(marked) != 1:
                 fail(errors, "darwin: exactly one needs_gopls shard required")
+                gopls_valid = False
             elif not EXPECTED_GOPLS.issubset(set(marked[0].get("packages", []))):
                 fail(errors, "darwin: gopls package misplaced")
-            for shard in shards:
-                if not shard.get("needs_gopls") and EXPECTED_GOPLS.intersection(shard.get("packages", [])):
-                    fail(errors, "darwin: gopls package in unmarked shard")
+                gopls_valid = False
+            elif any(not shard.get("needs_gopls") and EXPECTED_GOPLS.intersection(shard.get("packages", [])) for shard in shards):
+                fail(errors, "darwin: gopls package in unmarked shard")
+                gopls_valid = False
         for shard in shards:
             calculated = sum(weights.get(p, fallback) for p in shard.get("packages", []))
             if shard.get("weight") != calculated:
                 fail(errors, f"{goos}: incorrect weight for {shard.get('id')}")
         expected_assignment_by_id = expected_assignment(goos, packages_by_os[goos], weights, fallback)
         actual_assignment_by_id = {s.get("id"): sorted(s.get("packages", [])) for s in shards}
-        if actual_assignment_by_id != expected_assignment_by_id:
+        if accounting_valid and gopls_valid and actual_assignment_by_id != expected_assignment_by_id:
             fail(errors, f"{goos}: assignment is not canonical deterministic LPT")
     return errors
 
