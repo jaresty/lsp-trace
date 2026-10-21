@@ -7,12 +7,10 @@ import subprocess
 from pathlib import Path
 
 SHARD_COUNTS = {"linux": 5, "darwin": 4}
-FALLBACK_WEIGHT = 300
-OVERRIDES = {
-    "lsp-trace/internal/censuschunking": 1200,
-    "lsp-trace/internal/censuscontinuation": 1200,
-    "lsp-trace/cmd/lsp-trace-mcp": 600,
-}
+POLICY = json.loads((Path(__file__).with_name("ci-shard-policy.json")).read_text())
+FALLBACK_WEIGHT = POLICY["fallback_weight"]
+DEFAULT_WEIGHT = POLICY["default_weight"]
+OVERRIDES = POLICY["overrides"]
 LINUX_PINS = {
     "lsp-trace/internal/censuschunking": "linux-1",
     "lsp-trace/internal/censuscontinuation": "linux-2",
@@ -58,7 +56,7 @@ def assign(goos, packages, weights):
 
 def build(packages_by_os):
     all_packages = sorted(set().union(*map(set, packages_by_os.values())))
-    weights = {package: OVERRIDES.get(package, 100) for package in all_packages}
+    weights = {package: OVERRIDES.get(package, DEFAULT_WEIGHT) for package in all_packages}
     return {
         "version": 1,
         "algorithm": "deterministic-lpt-v1",

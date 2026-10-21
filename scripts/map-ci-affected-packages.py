@@ -19,11 +19,22 @@ def go_metadata(goos):
    packages.append({"ImportPath":obj["ImportPath"],"Dir":obj["Dir"],"Deps":obj.get("Deps",[])})
  return packages
 
+def base_import_path(import_path):
+ marker = " ["
+ return import_path.split(marker, 1)[0] if marker in import_path and import_path.endswith(".test]") else import_path
+
 def decide(meta,root,changed,event):
  if event in FORCE_EVENTS: return {"mode":"full","reason":"forced event"}
  if not changed: return {"mode":"full","reason":"uncertain empty change set"}
  if any(p in FORCE_FILES or p.startswith(FORCE_PREFIXES) for p in changed): return {"mode":"full","reason":"forced path"}
  package_records=meta["packages"]
+ normalized_records=[]
+ for package in package_records:
+  record=dict(package)
+  record["ImportPath"]=base_import_path(record["ImportPath"])
+  record["Deps"]=[base_import_path(dep) for dep in record.get("Deps",[])]
+  normalized_records.append(record)
+ package_records=normalized_records
  owners=set()
  for path in changed:
   if not path.endswith(".go"): return {"mode":"full","reason":f"uncertain non-Go path: {path}"}

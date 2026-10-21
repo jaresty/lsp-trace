@@ -9,6 +9,10 @@ import sys
 from pathlib import Path
 
 EXPECTED_COUNTS = {"linux": 5, "darwin": 4}
+POLICY = json.loads(Path(__file__).with_name("ci-shard-policy.json").read_text())
+CANONICAL_FALLBACK = POLICY["fallback_weight"]
+CANONICAL_DEFAULT = POLICY["default_weight"]
+CANONICAL_OVERRIDES = POLICY["overrides"]
 HEAVY = ("lsp-trace/internal/censuschunking", "lsp-trace/internal/censuscontinuation")
 EXPECTED_GOPLS = {"lsp-trace/cmd/lsp-trace-mcp"}
 
@@ -44,13 +48,19 @@ def expected_assignment(goos, packages, weights, fallback):
 
 def validate(manifest, packages_by_os):
     errors = []
+    platform_keys = set(manifest.get("platforms", {}))
+    if platform_keys != set(EXPECTED_COUNTS):
+        fail(errors, f"platform keys must be exactly {sorted(EXPECTED_COUNTS)}")
     if manifest.get("algorithm") != "deterministic-lpt-v1":
         fail(errors, "unknown algorithm")
-    weights = manifest.get("weights", {}).get("packages", {})
+    manifest_weights = manifest.get("weights", {}).get("packages", {})
     fallback = manifest.get("weights", {}).get("fallback")
-    if not isinstance(fallback, int) or fallback <= 0:
-        fail(errors, "fallback weight must be positive")
-        fallback = 1
+    all_packages = sorted(set().union(*(set(value) for value in packages_by_os.values())))
+    weights = {package: CANONICAL_OVERRIDES.get(package, CANONICAL_DEFAULT) for package in all_packages}
+    expected_weights = {"fallback": CANONICAL_FALLBACK, "packages": weights}
+    if manifest.get("weights") != expected_weights:
+        fail(errors, "manifest weights differ from canonical policy")
+    fallback = CANONICAL_FALLBACK
     if set(manifest.get("gopls_packages", [])) != EXPECTED_GOPLS:
         fail(errors, "gopls classification mismatch")
     for goos, count in EXPECTED_COUNTS.items():
