@@ -14,6 +14,8 @@ import (
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/publication"
+	"lsp-trace/internal/session"
 )
 
 type privateCensusRunnerFixture struct {
@@ -72,6 +74,84 @@ func TestPrivateCensusMCPBootstrapActivationExactDefaultOffAndRebinding(t *testi
 	rebound = replacePrivateCensusMCPContinuation(rebound, &continuationMCPHostFixture{})
 	if !rebound.privateCensusChunking {
 		t.Fatal("ASSERT_PRIVATE_CENSUS_BOOTSTRAP_REBIND_PRESERVES")
+	}
+}
+
+func TestPrivateCensusMCPGatewayComposesBootstrapActivationThroughDocumentSymbolPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		env               string
+		requestActivation bool
+		wantSymbols       int
+		wantDocuments     int
+		wantState         session.Failure
+		wantGatewayReject bool
+	}{
+		{name: "exact-env-enabled", env: "1", wantSymbols: 2, wantDocuments: 2},
+		{name: "default-off", wantSymbols: 1, wantDocuments: 1, wantState: session.LifecycleConflict},
+		{name: "request-input-cannot-enable", requestActivation: true, wantGatewayReject: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("LSP_TRACE_PRIVATE_CENSUS_CHUNKING", tc.env)
+			workspace := t.TempDir()
+			writeRuntimeSource(t, workspace, "a.go")
+			writeRuntimeSource(t, workspace, "b.go")
+			runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{
+				workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true,
+				notifications: 65, results: map[string]json.RawMessage{"textDocument/documentSymbol": json.RawMessage(`[]`)},
+			})
+			root, err := publication.OpenRoot(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = root.Close() })
+			server, bootstrapManager, err := newServerRuntime(false, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = bootstrapManager.Shutdown(context.Background()) })
+			binding, ok := server.Executors[mcp.CensusExecutorFamily].(*privateCensusMCPBinding)
+			if !ok || binding.privateCensusChunking != (tc.env == "1") {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_BOOTSTRAP_BINDING: binding=%T enabled=%v env=%q", server.Executors[mcp.CensusExecutorFamily], binding.privateCensusChunking, tc.env)
+			}
+			binding.runtime = newCensusRuntime(runtime)
+
+			arguments := map[string]any{"session_id": "project", "generation": started.Generation, "sources": []string{"."}, "max_nodes": 2, "timeout_ms": 1000, "request_timeout_ms": 500}
+			if tc.requestActivation {
+				arguments["private_census_chunking"] = true
+			}
+			request := map[string]any{
+				"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+				"params": map[string]any{"name": "lsp_trace_v1_execute", "arguments": map[string]any{"request": map[string]any{"operation": mcpcontract.CensusTool, "arguments": arguments}}},
+			}
+			raw, err := json.Marshal(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			if err := server.Serve(bytes.NewReader(append(raw, '\n')), &output); err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantGatewayReject != strings.Contains(output.String(), `"code":-32602`) {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_REQUEST_ACTIVATION_STRICTLY_REJECTED: reject=%t output=%s", tc.wantGatewayReject, output.String())
+			}
+
+			_, methods, _, _ := starter.snapshot()
+			joined := strings.Join(methods, ",")
+			if got := strings.Count(joined, "textDocument/documentSymbol"); got != tc.wantSymbols {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_DOCUMENT_SYMBOL_POLICY: symbols=%d want=%d methods=%v output=%s", got, tc.wantSymbols, methods, output.String())
+			}
+			if got := strings.Count(joined, "textDocument/didOpen"); got != tc.wantDocuments {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_LATER_FILE_POLICY: documents=%d want=%d methods=%v", got, tc.wantDocuments, methods)
+			}
+			_, stateFailure := runtime.Manager.Metadata(started.SessionID, started.Generation)
+			if stateFailure != tc.wantState {
+				t.Fatalf("ASSERT_COMPOSED_CENSUS_SESSION_STATE: got=%s want=%s methods=%v", stateFailure, tc.wantState, methods)
+			}
+			if tc.requestActivation && binding.privateCensusChunking {
+				t.Fatal("ASSERT_COMPOSED_CENSUS_REQUEST_CANNOT_AUTHORIZE_PROVIDER_OR_RUNTIME")
+			}
+		})
 	}
 }
 
