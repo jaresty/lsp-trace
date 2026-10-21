@@ -73,38 +73,66 @@ def validate_shard_script(script):
     lines = executable_shell_lines(script)
     go_test_lines = [line for line in lines if re.search(r"(?:^|(?:&&|\|\||;|\|)\s*)go\s+test(?:\s|$)", line)]
     if len(go_test_lines) != 1:
-        return False, False
+        return False, False, False
 
     pipeline = go_test_lines[0]
     segments = [segment.strip() for segment in re.split(r"(?<!\|)\|(?!\|)", pipeline)]
+    try:
+        tee_tokens = shlex.split(segments[1]) if len(segments) == 2 else []
+    except ValueError:
+        tee_tokens = []
     exact_pipeline = (
         len(segments) == 2
         and re.match(r"^go\s+test(?:\s|$)", segments[0]) is not None
-        and re.match(r"^tee\s+go-test\.json$", segments[1]) is not None
+        and tee_tokens == ["tee", "$go_test_json"]
     )
     if not exact_pipeline:
-        return False, False
+        return False, False, False
     try:
         go_tokens = shlex.split(segments[0])
     except ValueError:
-        return True, False
+        return True, False, False
     flags_ok = "-json" in go_tokens and "-timeout=10m" in go_tokens
 
+    telemetry = [
+        'telemetry_dir=$(mktemp -d "$RUNNER_TEMP/go-test-${{ matrix.shard.id }}-XXXXXX")',
+        'go_test_json="$telemetry_dir/go-test.json"',
+        'go_test_summary="$telemetry_dir/go-test-summary.json"',
+    ]
     required = [
-        "test_status=${PIPESTATUS[0]}",
-        "tee_status=${PIPESTATUS[1]}",
+        'statuses=("${PIPESTATUS[@]}")',
+        "test_status=${statuses[0]}",
+        "tee_status=${statuses[1]}",
         "summary_status=$?",
         'if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi',
         'if [ "$tee_status" -ne 0 ]; then exit "$tee_status"; fi',
         'exit "$summary_status"',
     ]
+    pipeline_position = lines.index(pipeline)
+    summarizers = [line for line in lines if line.startswith("python3 scripts/summarize-go-test-json.py ")]
+    try:
+        telemetry_positions = [lines.index(fragment) for fragment in telemetry]
+    except ValueError:
+        telemetry_positions = []
+    telemetry_ok = (
+        len(telemetry_positions) == len(telemetry)
+        and telemetry_positions == sorted(telemetry_positions)
+        and telemetry_positions[-1] < pipeline_position
+        and len(summarizers) == 1
+        and '--input "$go_test_json"' in summarizers[0]
+        and '--output "$go_test_summary"' in summarizers[0]
+    )
     try:
         positions = [lines.index(fragment) for fragment in required]
-        pipeline_position = lines.index(pipeline)
     except ValueError:
-        return True, False
-    statuses_ok = pipeline_position < positions[0] and positions == sorted(positions) and len(set(positions)) == len(positions)
-    return True, flags_ok and statuses_ok
+        positions = []
+    statuses_ok = (
+        len(positions) == len(required)
+        and positions[0] == pipeline_position + 1
+        and positions == sorted(positions)
+        and len(set(positions)) == len(positions)
+    )
+    return True, flags_ok and statuses_ok, telemetry_ok
 
 
 def validate(data):
@@ -127,9 +155,11 @@ def validate(data):
         if platform == "darwin" and [entry.get("id") for entry in marked] != ["darwin-1"]:
             fail(errors, "test-darwin: only darwin-1 may own gopls")
         run_step = step_by_name(job, "Run shard once and summarize") or {}
-        pipeline_ok, script_ok = validate_shard_script(run_step.get("run", ""))
+        pipeline_ok, script_ok, telemetry_ok = validate_shard_script(run_step.get("run", ""))
         if not pipeline_ok:
             fail(errors, f"{name}: test invocation must be exactly one effective pipeline")
+        elif not telemetry_ok:
+            fail(errors, f"{name}: test telemetry must use unique absolute paths under RUNNER_TEMP")
         elif not script_ok:
             lines = executable_shell_lines(run_step.get("run", ""))
             go_line = next(line for line in lines if re.match(r"^go\s+test(?:\s|$)", line))
@@ -141,6 +171,8 @@ def validate(data):
         upload = step_by_name(job, "Upload shard timing") or {}
         if upload.get("if") != "always()":
             fail(errors, f"{name}: upload step must use if: always()")
+        if upload.get("with", {}).get("path") != "${{ runner.temp }}/go-test-*/go-test.json\n${{ runner.temp }}/go-test-*/go-test-summary.json\n":
+            fail(errors, f"{name}: uploaded telemetry must use absolute runner.temp paths")
         install = step_by_name(job, "Install pinned gopls") or {}
         if install.get("if") != "matrix.shard.needs_gopls" or install.get("run") != "go install golang.org/x/tools/gopls@v0.23.0":
             fail(errors, f"{name}: gopls step mismatch")

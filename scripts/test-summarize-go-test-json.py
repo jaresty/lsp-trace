@@ -33,6 +33,16 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(timeout["status"], "timeout")
         self.assertEqual(timeout["packages"][0]["status"], "timeout")
 
+    def test_passing_timeout_named_subtest_is_not_a_timeout(self):
+        result = self.summarize([
+            {"Action":"run","Package":"p/a","Test":"TestExactTuplePrerequisitesAndNoPanic/timeout-unknown"},
+            {"Action":"output","Package":"p/a","Test":"TestExactTuplePrerequisitesAndNoPanic/timeout-unknown","Output":"=== RUN   TestExactTuplePrerequisitesAndNoPanic/timeout-unknown\n"},
+            {"Action":"pass","Package":"p/a","Test":"TestExactTuplePrerequisitesAndNoPanic/timeout-unknown","Elapsed":0.01},
+            {"Action":"pass","Package":"p/a","Elapsed":0.02},
+        ])
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["packages"], [{"package":"p/a","status":"pass","elapsed":0.02,"cached":False}])
+
     def test_malformed_or_truncated_stream_emits_bounded_partial_summary(self):
         raw = '{"Action":"pass","Package":"p/a"}\n{"Action":'
         result = self.summarize([], exit_code=1, raw_text=raw)

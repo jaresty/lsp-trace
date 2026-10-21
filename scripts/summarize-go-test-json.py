@@ -3,6 +3,7 @@
 import argparse
 import datetime as dt
 import json
+import re
 from pathlib import Path
 
 
@@ -37,25 +38,35 @@ def main():
         else:
             malformed_lines += 1
     cached = set()
-    timed_out = set()
+    timeout_diagnostics = set()
+    timeout_pattern = re.compile(r"^panic: test timed out after\s+\S+", re.IGNORECASE)
     for event in events:
         package = event.get("Package")
         output = event.get("Output", "")
         if package and "(cached)" in output:
             cached.add(package)
-        if package and ("test timed out" in output.lower() or "timeout" in output.lower() and "panic" in output.lower()):
-            timed_out.add(package)
-    terminal = {}
+        if package and any(timeout_pattern.match(line.strip()) for line in output.splitlines()):
+            timeout_diagnostics.add(package)
+    terminal_events = {}
     for event in events:
         package = event.get("Package")
         action = event.get("Action")
         if package and action in {"pass", "fail", "skip"} and "Test" not in event:
-            terminal[package] = {
-                "package": package,
-                "status": "timeout" if package in timed_out else action,
-                "elapsed": event.get("Elapsed"),
-                "cached": package in cached,
-            }
+            terminal_events[package] = event
+    timed_out = {
+        package
+        for package in timeout_diagnostics
+        if args.exit_code != 0 and terminal_events.get(package, {}).get("Action") == "fail"
+    }
+    terminal = {}
+    for package, event in terminal_events.items():
+        action = event["Action"]
+        terminal[package] = {
+            "package": package,
+            "status": "timeout" if package in timed_out else action,
+            "elapsed": event.get("Elapsed"),
+            "cached": package in cached,
+        }
     times = [parse_time(e.get("Time")) for e in events]
     times = [value for value in times if value is not None]
     total = (max(times) - min(times)).total_seconds() if len(times) >= 2 else None

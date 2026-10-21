@@ -107,10 +107,14 @@ jobs:
         run: |
           set +e
           set -o pipefail
-          go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee go-test.json
-          test_status=${PIPESTATUS[0]}
-          tee_status=${PIPESTATUS[1]}
-          python3 scripts/summarize-go-test-json.py --input go-test.json --output go-test-summary.json --os "$PLATFORM" --commit "$GITHUB_SHA" --job "$GITHUB_JOB" --shard "${{ matrix.shard.id }}" --exit-code "$test_status"
+          telemetry_dir=$(mktemp -d "$RUNNER_TEMP/go-test-${{ matrix.shard.id }}-XXXXXX")
+          go_test_json="$telemetry_dir/go-test.json"
+          go_test_summary="$telemetry_dir/go-test-summary.json"
+          go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee "$go_test_json"
+          statuses=("${PIPESTATUS[@]}")
+          test_status=${statuses[0]}
+          tee_status=${statuses[1]}
+          python3 scripts/summarize-go-test-json.py --input "$go_test_json" --output "$go_test_summary" --os "$PLATFORM" --commit "$GITHUB_SHA" --job "$GITHUB_JOB" --shard "${{ matrix.shard.id }}" --exit-code "$test_status"
           summary_status=$?
           if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi
           if [ "$tee_status" -ne 0 ]; then exit "$tee_status"; fi
@@ -121,8 +125,8 @@ jobs:
         with:
           name: go-test-${{ matrix.shard.id }}
           path: |
-            go-test.json
-            go-test-summary.json
+            ${{ runner.temp }}/go-test-*/go-test.json
+            ${{ runner.temp }}/go-test-*/go-test-summary.json
 
   test-darwin:
     strategy:

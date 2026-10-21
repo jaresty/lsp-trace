@@ -23,19 +23,63 @@ class TopologyTest(unittest.TestCase):
             expected = "".join(f"FAIL {diagnostic}\n" for diagnostic in diagnostics)
             self.assertEqual(result.stdout, expected)
 
-    def mutate_shard_run(self, old, new):
-        text = WORKFLOW.read_text()
+    def mutate_shard_run(self, old, new, text=None):
+        text = WORKFLOW.read_text() if text is None else text
         self.assertEqual(text.count(old), 1)
         return text.replace(old, new)
 
     def test_repository_workflow(self):
         self.check(WORKFLOW.read_text())
 
+    def test_sequential_pipestatus_capture_is_rejected(self):
+        text = self.mutate_shard_run(
+            '          statuses=("${PIPESTATUS[@]}")\n'
+            '          test_status=${statuses[0]}\n'
+            '          tee_status=${statuses[1]}\n',
+            '          test_status=${PIPESTATUS[0]}\n'
+            '          tee_status=${PIPESTATUS[1]}\n',
+            WORKFLOW.read_text(),
+        )
+        self.check(text, [
+            "test-linux: test and telemetry statuses must remain separate with test status primary",
+            "test-darwin: test and telemetry statuses must remain separate with test status primary",
+        ])
+
+    def test_repository_relative_telemetry_is_rejected(self):
+        text = WORKFLOW.read_text().replace('"$telemetry_dir/go-test.json"', '"go-test.json"')
+        self.check(text, [
+            "test-linux: test telemetry must use unique absolute paths under RUNNER_TEMP",
+            "test-darwin: test telemetry must use unique absolute paths under RUNNER_TEMP",
+        ])
+
+    def test_comment_only_telemetry_fragments_are_rejected(self):
+        text = WORKFLOW.read_text().replace(
+            '          telemetry_dir=$(mktemp -d "$RUNNER_TEMP/go-test-${{ matrix.shard.id }}-XXXXXX")\n',
+            '          # telemetry_dir=$(mktemp -d "$RUNNER_TEMP/go-test-${{ matrix.shard.id }}-XXXXXX")\n'
+            '          telemetry_dir=.\n',
+        )
+        self.check(text, [
+            "test-linux: test telemetry must use unique absolute paths under RUNNER_TEMP",
+            "test-darwin: test telemetry must use unique absolute paths under RUNNER_TEMP",
+        ])
+
+    def test_repository_relative_upload_paths_are_rejected(self):
+        text = WORKFLOW.read_text().replace(
+            "            ${{ runner.temp }}/go-test-*/go-test.json\n"
+            "            ${{ runner.temp }}/go-test-*/go-test-summary.json\n",
+            "            go-test.json\n"
+            "            go-test-summary.json\n",
+        )
+        self.check(text, [
+            "test-linux: uploaded telemetry must use absolute runner.temp paths",
+            "test-darwin: uploaded telemetry must use absolute runner.temp paths",
+        ])
+
     def test_in_block_comment_cannot_satisfy_test_invocation_flags(self):
         text = self.mutate_shard_run(
-            "          go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee go-test.json\n",
+            '          go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee "$go_test_json"\n',
             "          # go test -json -timeout=10m\n"
-            "          go test ${{ steps.packages.outputs.packages }} 2>&1 | tee go-test.json\n",
+            '          go test ${{ steps.packages.outputs.packages }} 2>&1 | tee "$go_test_json"\n',
         )
         self.check(text, [
             "test-linux: test invocation must include -json and -timeout=10m",
@@ -44,8 +88,9 @@ class TopologyTest(unittest.TestCase):
 
     def test_in_block_comments_cannot_satisfy_status_fragments(self):
         replacements = {
-            "          test_status=${PIPESTATUS[0]}\n": "          # test_status=${PIPESTATUS[0]}\n",
-            "          tee_status=${PIPESTATUS[1]}\n": "          # tee_status=${PIPESTATUS[1]}\n",
+            '          statuses=("${PIPESTATUS[@]}")\n': '          # statuses=("${PIPESTATUS[@]}")\n',
+            "          test_status=${statuses[0]}\n": "          # test_status=${statuses[0]}\n",
+            "          tee_status=${statuses[1]}\n": "          # tee_status=${statuses[1]}\n",
             "          summary_status=$?\n": "          # summary_status=$?\n",
             '          if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi\n': '          # if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi\n',
         }
@@ -72,7 +117,7 @@ class TopologyTest(unittest.TestCase):
         ])
 
     def test_duplicate_and_dead_go_test_commands_are_rejected(self):
-        valid = "          go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee go-test.json\n"
+        valid = '          go test -json -timeout=10m ${{ steps.packages.outputs.packages }} 2>&1 | tee "$go_test_json"\n'
         for extra in (
             valid,
             "          false && go test -json -timeout=10m ./...\n",
