@@ -50,7 +50,32 @@ func fixture(t *testing.T, n int) Input {
 	return in
 }
 
+func boundaryBuild(t *testing.T, in Input, compatibilityBytes []byte, calls *int) (Result, error) {
+	t.Helper()
+	*calls++
+	return Build(in, compatibilityBytes)
+}
+
+var (
+	boundaryFixtureOnce sync.Once
+	boundaryFixtureData Input
+)
+
+func boundaryFixture(t *testing.T, n int) Input {
+	t.Helper()
+	boundaryFixtureOnce.Do(func() {
+		boundaryFixtureData = fixture(t, MaxGlobalTargets+1)
+	})
+	in := boundaryFixtureData
+	in.Files = append([]GlobalFile(nil), boundaryFixtureData.Files...)
+	in.Targets = append([]GlobalTarget(nil), boundaryFixtureData.Targets[:n]...)
+	in.GlobalProviderFailures = make([]string, len(boundaryFixtureData.GlobalProviderFailures))
+	copy(in.GlobalProviderFailures, boundaryFixtureData.GlobalProviderFailures)
+	return in
+}
+
 func TestPlanBoundariesAndCompatibility(t *testing.T) {
+	buildCalls := 0
 	for _, tc := range []struct {
 		count         int
 		compatibility bool
@@ -63,7 +88,7 @@ func TestPlanBoundariesAndCompatibility(t *testing.T) {
 	}
 	compat := []byte("exact legacy bytes\n")
 	for _, n := range []int{1, 9999, 10000} {
-		got, err := Build(fixture(t, n), compat)
+		got, err := boundaryBuild(t, boundaryFixture(t, n), compat, &buildCalls)
 		if err != nil || !got.Compatibility || !bytes.Equal(got.CompatibilityBytes, compat) || len(got.Chunks) != 0 {
 			t.Fatalf("ASSERT_PLAN_BOUNDARIES_AND_COMPATIBILITY n=%d got=%+v err=%v", n, got, err)
 		}
@@ -72,7 +97,7 @@ func TestPlanBoundariesAndCompatibility(t *testing.T) {
 		n      int
 		counts []int
 	}{{10001, []int{10000, 1}}, {20000, []int{10000, 10000}}, {20001, []int{10000, 10000, 1}}, {28069, []int{10000, 10000, 8069}}, {100000, []int{10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000}}} {
-		got, err := Build(fixture(t, tc.n), nil)
+		got, err := boundaryBuild(t, boundaryFixture(t, tc.n), nil, &buildCalls)
 		if err != nil {
 			t.Fatalf("n=%d: %v", tc.n, err)
 		}
@@ -84,11 +109,20 @@ func TestPlanBoundariesAndCompatibility(t *testing.T) {
 			t.Fatalf("ASSERT_PLAN_BOUNDARIES_AND_COMPATIBILITY n=%d counts=%v", tc.n, counts)
 		}
 	}
-	if _, err := Build(fixture(t, 0), nil); err == nil {
+	if _, err := boundaryBuild(t, boundaryFixture(t, 0), nil, &buildCalls); err == nil {
 		t.Fatal("ASSERT_PLAN_BOUNDARIES_AND_COMPATIBILITY zero accepted")
 	}
-	if _, err := Build(fixture(t, 100001), nil); err == nil {
+	if _, err := boundaryBuild(t, boundaryFixture(t, 100001), nil, &buildCalls); err == nil {
 		t.Fatal("ASSERT_PLAN_BOUNDARIES_AND_COMPATIBILITY over max accepted")
+	}
+	if buildCalls != 10 {
+		t.Fatalf("ASSERT_BOUNDARY_REAL_BUILD_COUNT got=%d want=10", buildCalls)
+	}
+	first, second := boundaryFixture(t, 10001), boundaryFixture(t, 10001)
+	first.Targets[0].Name = "mutated"
+	first.Files[0].Path = "mutated.go"
+	if second.Targets[0].Name == "mutated" || second.Files[0].Path == "mutated.go" {
+		t.Fatal("ASSERT_BOUNDARY_FIXTURE_ISOLATION")
 	}
 }
 
