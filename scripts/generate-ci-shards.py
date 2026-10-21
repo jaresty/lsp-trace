@@ -11,6 +11,7 @@ POLICY = json.loads((Path(__file__).with_name("ci-shard-policy.json")).read_text
 FALLBACK_WEIGHT = POLICY["fallback_weight"]
 DEFAULT_WEIGHT = POLICY["default_weight"]
 OVERRIDES = POLICY["overrides"]
+EXCLUSIVE_SHARDS = POLICY["exclusive_shards"]
 LINUX_PINS = {
     "lsp-trace/internal/censuschunking": "linux-1",
     "lsp-trace/internal/censuscontinuation": "linux-2",
@@ -35,17 +36,19 @@ def assign(goos, packages, weights):
     shards = [{"id": f"{goos}-{i}", "needs_gopls": False, "packages": [], "weight": 0} for i in range(1, SHARD_COUNTS[goos] + 1)]
     by_id = {shard["id"]: shard for shard in shards}
     pins = dict(LINUX_PINS) if goos == "linux" else {p: "darwin-1" for p in GOPLS_PACKAGES if p in packages}
+    exclusive = {package: shard_id for shard_id, package in EXCLUSIVE_SHARDS.items() if shard_id.startswith(f"{goos}-")}
     if goos == "darwin":
         by_id["darwin-1"]["needs_gopls"] = True
-    for package, shard_id in sorted(pins.items()):
+    for package, shard_id in sorted({**pins, **exclusive}.items()):
         if package in packages:
             shard = by_id[shard_id]
             shard["packages"].append(package)
             shard["weight"] += weights.get(package, FALLBACK_WEIGHT)
-    for package in sorted((p for p in packages if p not in pins), key=lambda p: (-weights.get(p, FALLBACK_WEIGHT), p)):
-        eligible = shards
+    fixed = set(pins) | set(exclusive)
+    for package in sorted((p for p in packages if p not in fixed), key=lambda p: (-weights.get(p, FALLBACK_WEIGHT), p)):
+        eligible = [s for s in shards if s["id"] not in EXCLUSIVE_SHARDS]
         if goos == "darwin":
-            eligible = [s for s in shards if not s["needs_gopls"]]
+            eligible = [s for s in eligible if not s["needs_gopls"]]
         shard = min(eligible, key=lambda s: (s["weight"], s["id"]))
         shard["packages"].append(package)
         shard["weight"] += weights.get(package, FALLBACK_WEIGHT)

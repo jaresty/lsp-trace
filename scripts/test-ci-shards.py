@@ -16,12 +16,14 @@ PACKAGES = {
         "lsp-trace/internal/censuschunking",
         "lsp-trace/internal/censuscontinuation",
         "lsp-trace/internal/example",
+        "lsp-trace/sessionruntime",
     ],
     "darwin": [
         "lsp-trace/cmd/lsp-trace-mcp",
         "lsp-trace/internal/censuschunking",
         "lsp-trace/internal/censuscontinuation",
         "lsp-trace/internal/example",
+        "lsp-trace/sessionruntime",
     ],
 }
 
@@ -70,6 +72,46 @@ class CIShardsTest(unittest.TestCase):
         self.assertEqual(self.check(first), "PASS CI shard manifest accounting\n")
         self.assertEqual(len(first["platforms"]["linux"]["shards"]), 5)
         self.assertEqual(len(first["platforms"]["darwin"]["shards"]), 4)
+        reserved = next(shard for shard in first["platforms"]["linux"]["shards"] if shard["id"] == "linux-5")
+        self.assertEqual(reserved["packages"], ["lsp-trace/sessionruntime"])
+
+    def test_exclusive_package_mutations(self):
+        base = self.generate()
+        package = "lsp-trace/sessionruntime"
+        reserved_id = "linux-5"
+
+        co_located = copy.deepcopy(base)
+        reserved = next(shard for shard in co_located["platforms"]["linux"]["shards"] if shard["id"] == reserved_id)
+        reserved["packages"].append("lsp-trace/internal/example")
+        source = next(shard for shard in co_located["platforms"]["linux"]["shards"] if shard["id"] != reserved_id and "lsp-trace/internal/example" in shard["packages"])
+        source["packages"].remove("lsp-trace/internal/example")
+        self.recompute_shard_weights(co_located)
+        self.assertIn("FAIL linux: exclusive shard linux-5 must contain only ['lsp-trace/sessionruntime']", self.check(co_located, expected=False))
+
+        missing = copy.deepcopy(base)
+        next(shard for shard in missing["platforms"]["linux"]["shards"] if shard["id"] == reserved_id)["packages"].remove(package)
+        self.recompute_shard_weights(missing)
+        self.assertIn("FAIL linux: exclusive package lsp-trace/sessionruntime missing from linux-5", self.check(missing, expected=False))
+
+        duplicate = copy.deepcopy(base)
+        next(shard for shard in duplicate["platforms"]["linux"]["shards"] if shard["id"] != reserved_id)["packages"].append(package)
+        self.recompute_shard_weights(duplicate)
+        self.assertIn("FAIL linux: exclusive package lsp-trace/sessionruntime must appear only in linux-5", self.check(duplicate, expected=False))
+
+        wrong_platform = copy.deepcopy(base)
+        linux_reserved = next(shard for shard in wrong_platform["platforms"]["linux"]["shards"] if shard["id"] == reserved_id)
+        wrong_platform["platforms"]["linux"]["shards"].remove(linux_reserved)
+        wrong_platform["platforms"]["darwin"]["shards"].append(linux_reserved)
+        self.assertNotEqual(self.check(wrong_platform, expected=False), "")
+
+        reopened = copy.deepcopy(base)
+        next(shard for shard in reopened["platforms"]["linux"]["shards"] if shard["id"] == reserved_id)["packages"].append("lsp-trace/internal/example")
+        self.recompute_shard_weights(reopened)
+        self.assertIn("FAIL linux: exclusive shard linux-5 must contain only ['lsp-trace/sessionruntime']", self.check(reopened, expected=False))
+
+        comment_only = copy.deepcopy(base)
+        comment_only["comment"] = "exclusive Linux shard policy"
+        self.assertEqual(self.check(comment_only), "PASS CI shard manifest accounting\n")
 
     def test_mutations_are_rejected_with_exact_diagnostics(self):
         base = self.generate()

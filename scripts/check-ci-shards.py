@@ -13,6 +13,7 @@ POLICY = json.loads(Path(__file__).with_name("ci-shard-policy.json").read_text()
 CANONICAL_FALLBACK = POLICY["fallback_weight"]
 CANONICAL_DEFAULT = POLICY["default_weight"]
 CANONICAL_OVERRIDES = POLICY["overrides"]
+EXCLUSIVE_SHARDS = POLICY["exclusive_shards"]
 HEAVY = ("lsp-trace/internal/censuschunking", "lsp-trace/internal/censuscontinuation")
 EXPECTED_GOPLS = {"lsp-trace/cmd/lsp-trace-mcp"}
 
@@ -32,12 +33,14 @@ def expected_assignment(goos, packages, weights, fallback):
     count = EXPECTED_COUNTS[goos]
     shards = {f"{goos}-{i}": {"packages": [], "weight": 0} for i in range(1, count + 1)}
     pins = dict(zip(HEAVY, ("linux-1", "linux-2"))) if goos == "linux" else {p: "darwin-1" for p in EXPECTED_GOPLS if p in packages}
-    for package, shard_id in sorted(pins.items()):
+    exclusive = {package: shard_id for shard_id, package in EXCLUSIVE_SHARDS.items() if shard_id.startswith(f"{goos}-")}
+    for package, shard_id in sorted({**pins, **exclusive}.items()):
         if package in packages:
             shards[shard_id]["packages"].append(package)
             shards[shard_id]["weight"] += weights.get(package, fallback)
-    for package in sorted((p for p in packages if p not in pins), key=lambda p: (-weights.get(p, fallback), p)):
-        eligible = list(shards)
+    fixed = set(pins) | set(exclusive)
+    for package in sorted((p for p in packages if p not in fixed), key=lambda p: (-weights.get(p, fallback), p)):
+        eligible = [shard_id for shard_id in shards if shard_id not in EXCLUSIVE_SHARDS]
         if goos == "darwin":
             eligible.remove("darwin-1")
         shard_id = min(eligible, key=lambda sid: (shards[sid]["weight"], sid))
@@ -89,6 +92,20 @@ def validate(manifest, packages_by_os):
         if duplicates:
             fail(errors, f"{goos}: duplicate packages: {duplicates}")
         accounting_valid = not missing and not unknown and not duplicates
+        exclusive_for_platform = {
+            shard_id: package
+            for shard_id, package in EXCLUSIVE_SHARDS.items()
+            if shard_id.startswith(f"{goos}-")
+        }
+        for shard_id, package in sorted(exclusive_for_platform.items()):
+            reserved = next((shard for shard in shards if shard.get("id") == shard_id), None)
+            locations = [shard.get("id") for shard in shards if package in shard.get("packages", [])]
+            if reserved is None or package not in reserved.get("packages", []):
+                fail(errors, f"{goos}: exclusive package {package} missing from {shard_id}")
+            elif locations != [shard_id]:
+                fail(errors, f"{goos}: exclusive package {package} must appear only in {shard_id}")
+            if reserved is not None and reserved.get("packages", []) != [package]:
+                fail(errors, f"{goos}: exclusive shard {shard_id} must contain only ['{package}']")
         if goos == "linux" and all(p in expected for p in HEAVY):
             owners = {p: next((s.get("id") for s in shards if p in s.get("packages", [])), None) for p in HEAVY}
             if owners[HEAVY[0]] == owners[HEAVY[1]]:

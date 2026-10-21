@@ -1,6 +1,9 @@
 {
   "default_weight": 100,
   "fallback_weight": 300,
+  "exclusive_shards": {
+    "linux-5": "lsp-trace/sessionruntime"
+  },
   "overrides": {
     "lsp-trace/cmd/lsp-trace-mcp": 600,
     "lsp-trace/internal/censuschunking": 1200,
