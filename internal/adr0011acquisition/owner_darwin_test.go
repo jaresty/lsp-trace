@@ -95,7 +95,44 @@ func TestADR0011OwnerPrivateFinalTwoEqualLocations(t *testing.T) {
 
 func TestADR0011OwnerPrivateFinalAtLimitFrame(t *testing.T) {
 	t.Setenv("ADR0011_PEER_AT_LIMIT_FRAME", "1")
-	testADR0011OwnerManagedTwoEqualLocations(t, false)
+	fixture := newOwnerAcquisitionFixture(t)
+	fixture.Owner.finalImplementationPin = reviewedSyntheticSourcePin
+
+	private, privateErr := fixture.Owner.acquirePrivateFinal(fixture.Context, fixture.Query)
+	if privateErr != nil || private == nil || private.T != 1 || private.A != 2 || len(private.OrdinalRefs) != 2 || private.OrdinalRefs[0] == private.OrdinalRefs[1] || private.FinalRef.Selector == "" {
+		t.Fatalf("ASSERT_PRIVATE_FINAL_VERIFIED_ORDINALS: receipt=%+v err=%v", private, privateErr)
+	}
+
+	seenFrame := false
+	readPaths, _ := filepath.Glob(filepath.Join(fixture.Root.Path(), "adr0011-references-read-v1-*.bin"))
+	for _, path := range readPaths {
+		body, readErr := publication.ReadVerifiedBoundFile(fixture.Root, filepath.Base(path), 2<<20)
+		if readErr != nil {
+			t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_BODY_READBACK: %v", readErr)
+		}
+		frameBytes := len(body) + len(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)))
+		if frameBytes == 2<<20 {
+			seenFrame = true
+		}
+	}
+	if !seenFrame {
+		t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_FRAME_MISSING: read_bodies=%d", len(readPaths))
+	}
+	for _, kind := range []string{"proposal", "candidate"} {
+		paths, _ := filepath.Glob(filepath.Join(fixture.Root.Path(), "adr0011-references-issuance-v1-"+kind+"-*.json"))
+		if len(paths) != 1 {
+			t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_%s_COUNT: %d", kind, len(paths))
+		}
+		body, readErr := publication.ReadVerifiedBoundFile(fixture.Root, filepath.Base(paths[0]), sourceRecordLimit)
+		if readErr != nil || len(body) == 0 {
+			t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_%s_READBACK: %v", kind, readErr)
+		}
+	}
+	finalBytes, readErr := publication.ReadVerifiedBoundFile(fixture.Root, private.FinalRef.Selector, sourceRecordLimit)
+	var counts struct{ T, A, P int }
+	if readErr != nil || json.Unmarshal(finalBytes, &counts) != nil || counts.T != 1 || counts.A != 2 || counts.P != 2 {
+		t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_FINAL_READBACK: counts=%+v err=%v", counts, readErr)
+	}
 }
 
 func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
