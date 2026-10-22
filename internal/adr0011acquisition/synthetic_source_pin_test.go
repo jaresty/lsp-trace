@@ -166,6 +166,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/describeworker/config.go",
 		"internal/describeworker/runner.go",
 		"internal/describeworker/runner_v2.go",
+		"internal/censusenumerationprojection/projection.go",
 	}
 	expectedAdditionalSchemaPaths := []string{
 		"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
@@ -271,6 +272,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	arbitraryJSON[len(arbitraryJSON)-1].Path = "internal/mcpcontract/testdata/schemas/arbitrary.json"
 	assertReject("arbitrary json", arbitraryJSON)
 	for _, name := range []string{
+		"internal/censusenumerationprojection/projection_test.go",
 		"cmd/lsp-trace/census_enumeration_projection_test.go",
 		"cmd/lsp-trace/private_census_terminal_observation_test.go",
 		"sessionruntime/private_terminal_observation_test.go",
