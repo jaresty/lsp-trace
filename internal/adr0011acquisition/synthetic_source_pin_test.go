@@ -316,13 +316,13 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 }
 
 func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
-	const manifestHash = "035360f4979f6f3feb9ab54af8e59fda0dfd65bbb452476a33e78359e5dc215d"
-	const aggregate = "sha256:45995e04d7e1ceeba95d39826e43eb43060536dc4697cbff68e3735b37724991"
+	const manifestHash = "7afa01cb27caf91114a2f76f7996c59c395dc98f41ce50769996969c412e0b93"
+	const aggregate = "sha256:f613563993c80b5358c6f3a82eca8e0a3517c42dbd2cc31c1580ccfcd23c541a"
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("producer candidate source location unavailable")
 	}
-	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.035360f4979f6f3f.manifest.json")
+	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.7afa01cb27caf911.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
@@ -340,7 +340,7 @@ func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
 			SHA256     string `json:"sha256"`
 		} `json:"files"`
 	}
-	if err := json.Unmarshal(b, &manifest); err != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != aggregate || len(manifest.Files) != 163 {
+	if err := json.Unmarshal(b, &manifest); err != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != aggregate || len(manifest.Files) != 164 {
 		t.Fatalf("producer manifest identity: files=%d digest=%q schema=%q err=%v", len(manifest.Files), manifest.Digest, manifest.SchemaVersion, err)
 	}
 	entries := make([]SyntheticSourceEntry, 0, len(manifest.Files))
