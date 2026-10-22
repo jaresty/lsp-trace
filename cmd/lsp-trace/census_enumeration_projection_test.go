@@ -71,6 +71,28 @@ func incompleteEnumerationDiscovery(t *testing.T) censusacquisition.Discovery {
 	return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, Workspace: t.TempDir(), Complete: false, Accounting: census.Accounting{FileDenominator: 1, Files: []census.FileEntry{{Ordinal: 0, Disposition: census.FileIncomplete}}, SymbolDenominator: 1, Symbols: []census.SymbolEntry{{Ordinal: 0, Disposition: census.SymbolIncomplete}}}, FileLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "a.go", Disposition: "incomplete"}}}, SymbolLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private", Disposition: "incomplete"}}}, EnumerationSymbols: []censusacquisition.EnumerationSymbol{{Ordinal: 0, FileOrdinal: 0, Kind: 12, Name: "secret", Disposition: census.SymbolIncomplete}}, ProviderFailures: []censusacquisition.ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: func() *int { v := 0; return &v }()}}, IncompleteCauses: []censusacquisition.IncompleteCause{{Scope: "FILE", Stage: "DISCOVERY", Code: "CHILD_INCOMPLETE", FileOrdinal: func() *int { v := 0; return &v }()}, {Scope: "SYMBOL", Stage: "PREPARE_CALL_HIERARCHY", Code: "RESULT_MISMATCH", SymbolOrdinal: func() *int { v := 0; return &v }()}}, Observations: []censusacquisition.DiscoveryObservation{{Dimension: censusacquisition.DiscoveryProviderCompleteness, Known: true, Omitted: ptrU64(1)}}}
 }
 
+func TestDocumentSupplyLifecycleCausesDoNotBecomeEncodingFailures(t *testing.T) {
+	request, err := censusrequest.New(censusrequest.RefreshCoordinate{SessionID: "s", Generation: 1}, censusrequest.SemanticFields{Sources: []string{"."}, DownDepth: 1, MaxNodes: 631, BatchTargets: 63, TimeoutMS: 60000, RequestTimeoutMS: 30000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{"SESSION_POISONED", "LIFECYCLE_CONFLICT", "SESSION_UNAVAILABLE"} {
+		t.Run(code, func(t *testing.T) {
+			discovery := incompleteEnumerationDiscovery(t)
+			fileOrdinal := 0
+			discovery.IncompleteCauses[0] = censusacquisition.IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, FileOrdinal: &fileOrdinal}
+			root := t.TempDir()
+			if err := os.Chmod(root, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			receipt := publishCensusEnumerationProjection(context.Background(), discovery, request, root)
+			if receipt.Status != "PUBLISHED" || receipt.UnavailableReason == "ENCODE_FAILED" || receipt.EncodingFailureCategory != "" {
+				t.Fatalf("ASSERT_DOCUMENT_SUPPLY_CAUSE_NOT_ENCODING_FAILURE: code=%s receipt=%+v", code, receipt)
+			}
+		})
+	}
+}
+
 func TestIncompleteOptInPublishesOnceBeforeAcquisitionAndSuccessPublishesNone(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -313,6 +335,117 @@ func TestPrivateDiscoveryCauseSummaryDistinguishesEqualTotals(t *testing.T) {
 	symbolRaw, _ := marshalPrivateCensusDiscoveryCauses(symbolSummary)
 	if bytes.Equal(fileRaw, symbolRaw) || len(fileSummary.Causes) != 1 || fileSummary.Causes[0].Count != 2 || fileSummary.Causes[0].FirstOrdinal != 0 || len(symbolSummary.Causes) != 1 || symbolSummary.Causes[0].Count != 2 || symbolSummary.Causes[0].FirstOrdinal != 2 {
 		t.Fatalf("ASSERT_EQUAL_TOTAL_SCOPE_DISTINCTION file=%s symbol=%s", fileRaw, symbolRaw)
+	}
+}
+
+func TestPrivateDiscoveryCauseSummaryDocumentSupplyLifecycleCodes(t *testing.T) {
+	codes := []string{"SESSION_UNAVAILABLE", "SESSION_POISONED", "LIFECYCLE_CONFLICT"}
+	for _, code := range codes {
+		t.Run(code, func(t *testing.T) {
+			first, later := 1, 4
+			discovery := censusacquisition.Discovery{
+				Session:   censusacquisition.SessionIdentity{SessionID: "private-session-id", Generation: 9},
+				Workspace: "file:///private/workspace/path.go",
+				Accounting: census.Accounting{
+					FileDenominator: 5,
+				},
+				IncompleteCauses: []censusacquisition.IncompleteCause{
+					{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, FileOrdinal: &later},
+					{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, FileOrdinal: &first},
+				},
+			}
+			got, err := newPrivateCensusDiscoveryCausesForDiscovery(discovery)
+			if err != nil {
+				t.Fatalf("ASSERT_DOCUMENT_SUPPLY_PRIVATE_SUMMARY_%s: %v", code, err)
+			}
+			want := privateCensusDiscoveryCauses{
+				SchemaVersion: privateCensusDiscoveryCausesSchemaVersion,
+				Authority:     0,
+				Causes: []privateCensusDiscoveryCause{{
+					Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, Count: 2, FirstOrdinal: 1,
+				}},
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("ASSERT_DOCUMENT_SUPPLY_PRIVATE_SCALARS_%s: got=%+v want=%+v", code, got, want)
+			}
+		})
+	}
+
+	ordinals := map[string]int{
+		"SESSION_UNAVAILABLE": 5,
+		"SESSION_POISONED":    3,
+		"LIFECYCLE_CONFLICT":  1,
+	}
+	causes := make([]censusacquisition.IncompleteCause, 0, len(codes))
+	for _, code := range codes {
+		ordinal := ordinals[code]
+		causes = append(causes, censusacquisition.IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, FileOrdinal: &ordinal})
+	}
+	discovery := censusacquisition.Discovery{
+		Session:          censusacquisition.SessionIdentity{SessionID: "private-session-id", Generation: 9},
+		Workspace:        "file:///private/workspace/path.go",
+		Accounting:       census.Accounting{FileDenominator: 6},
+		IncompleteCauses: causes,
+	}
+	summary, err := newPrivateCensusDiscoveryCausesForDiscovery(discovery)
+	if err != nil {
+		t.Fatalf("ASSERT_DOCUMENT_SUPPLY_PRIVATE_MIXED_SUMMARY: %v", err)
+	}
+	raw, err := marshalPrivateCensusDiscoveryCauses(summary)
+	if err != nil {
+		t.Fatalf("ASSERT_DOCUMENT_SUPPLY_PRIVATE_MIXED_MARSHAL: %v", err)
+	}
+	wantRaw := `{"schema_version":"lsp-trace.private-census-discovery-causes.v1","authority":0,"causes":[{"scope":"FILE","stage":"DOCUMENT_SUPPLY","code":"LIFECYCLE_CONFLICT","count":1,"first_ordinal":1},{"scope":"FILE","stage":"DOCUMENT_SUPPLY","code":"SESSION_POISONED","count":1,"first_ordinal":3},{"scope":"FILE","stage":"DOCUMENT_SUPPLY","code":"SESSION_UNAVAILABLE","count":1,"first_ordinal":5}]}`
+	if string(raw) != wantRaw {
+		t.Fatalf("ASSERT_DOCUMENT_SUPPLY_PRIVATE_CANONICAL_MARSHAL: got=%s want=%s", raw, wantRaw)
+	}
+	for _, forbidden := range []string{
+		"file:///private/workspace/path.go",
+		"private-session-id",
+		"package secret_source_bytes",
+		"provider supplied prose",
+		"raw provider error",
+	} {
+		if bytes.Contains(raw, []byte(forbidden)) {
+			t.Fatalf("ASSERT_DOCUMENT_SUPPLY_PRIVATE_NO_LEAK: %q in %s", forbidden, raw)
+		}
+	}
+}
+
+func TestPrivateDiscoveryCauseSummaryRejectsInvalidLifecycleCodeCombinations(t *testing.T) {
+	for _, code := range []string{"SESSION_POISONED", "LIFECYCLE_CONFLICT"} {
+		code := code
+		for _, tc := range []struct {
+			name  string
+			cause func() censusacquisition.IncompleteCause
+		}{
+			{name: "scope", cause: func() censusacquisition.IncompleteCause {
+				ordinal := 0
+				return censusacquisition.IncompleteCause{Scope: "SYMBOL", Stage: "DOCUMENT_SUPPLY", Code: code, SymbolOrdinal: &ordinal}
+			}},
+			{name: "stage", cause: func() censusacquisition.IncompleteCause {
+				ordinal := 0
+				return censusacquisition.IncompleteCause{Scope: "FILE", Stage: "DISCOVERY", Code: code, FileOrdinal: &ordinal}
+			}},
+			{name: "ordinal-kind", cause: func() censusacquisition.IncompleteCause {
+				ordinal := 0
+				return censusacquisition.IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, SymbolOrdinal: &ordinal}
+			}},
+			{name: "ordinal-range", cause: func() censusacquisition.IncompleteCause {
+				ordinal := 1
+				return censusacquisition.IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, FileOrdinal: &ordinal}
+			}},
+		} {
+			t.Run(code+"/"+tc.name, func(t *testing.T) {
+				discovery := censusacquisition.Discovery{
+					Accounting:       census.Accounting{FileDenominator: 1, SymbolDenominator: 1},
+					IncompleteCauses: []censusacquisition.IncompleteCause{tc.cause()},
+				}
+				if got, err := newPrivateCensusDiscoveryCausesForDiscovery(discovery); err == nil {
+					t.Fatalf("ASSERT_DOCUMENT_SUPPLY_PRIVATE_INVALID_%s_%s_FAILS_CLOSED: got=%+v", code, tc.name, got)
+				}
+			})
+		}
 	}
 }
 

@@ -260,6 +260,28 @@ func TestDiscoveryClassifiesSessionUnavailableSupplyAsIncomplete(t *testing.T) {
 	}
 }
 
+func TestDiscoveryClassifiesClosedSessionSupplyCauses(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "poisoned", err: ErrSessionPoisoned, want: "SESSION_POISONED"},
+		{name: "lifecycle-conflict", err: ErrLifecycleConflict, want: "LIFECYCLE_CONFLICT"},
+		{name: "legacy-undifferentiated", err: ErrSessionUnavailable, want: "SESSION_UNAVAILABLE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			file := testSource(workspace, "a.go")
+			client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{file.URI: {}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{}}
+			got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{file}, Supplier: &fakeSupplier{errors: map[string]error{"a.go": tc.err}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
+			if err != nil || len(got.IncompleteCauses) != 1 || got.IncompleteCauses[0].Code != tc.want {
+				t.Fatalf("ASSERT_CLOSED_SESSION_SUPPLY_CAUSE_%s: causes=%+v err=%v", tc.want, got.IncompleteCauses, err)
+			}
+		})
+	}
+}
+
 func TestDiscoveryAdapterExplicitFailureDispositionsAndIncomplete(t *testing.T) {
 	workspace := t.TempDir()
 	names := []string{"bad-symbols.go", "missing.go", "noncallable.go", "prepare-error.go", "supply.go", "unsupported.go"}

@@ -13,6 +13,7 @@ import (
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/session"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -20,11 +21,15 @@ import (
 type fakeCensusInitializedSession struct {
 	workspace string
 	supplied  map[string][]byte
+	failure   session.Failure
 }
 
 func (f *fakeCensusInitializedSession) SessionID() string  { return "initialized" }
 func (f *fakeCensusInitializedSession) Generation() uint64 { return 7 }
 func (f *fakeCensusInitializedSession) PrepareDocument(ctx context.Context, r sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
+	if f.failure != "" {
+		return sessionruntime.DocumentResult{Failure: f.failure}
+	}
 	if ctx.Err() != nil {
 		return sessionruntime.DocumentResult{Failure: sessionruntime.DocumentSupplyUnavailable}
 	}
@@ -81,6 +86,25 @@ func discoverCensusFixture(t *testing.T, workspace string, mutate func(*censusCL
 		t.Fatal(err)
 	}
 	return got, s, c
+}
+
+func TestCensusRuntimeDocumentSupplierPreservesManagerFailureCause(t *testing.T) {
+	file := censusacquisition.SourceFile{URI: "file:///private/leak-sentinel.go", LanguageID: "go"}
+	for _, tc := range []struct {
+		name    string
+		failure session.Failure
+		want    string
+	}{
+		{name: "session-poisoned", failure: session.SessionPoisoned, want: "census acquisition session poisoned"},
+		{name: "lifecycle-conflict", failure: session.LifecycleConflict, want: "census acquisition lifecycle conflict"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (censusRuntimeDocumentSupplier{runtime: &fakeCensusInitializedSession{failure: tc.failure}}).Supply(context.Background(), file)
+			if err == nil || err.Error() != tc.want || strings.Contains(err.Error(), file.URI) {
+				t.Fatalf("ASSERT_MANAGER_FAILURE_EXACT_PRIVATE_SCALAR: got=%q want=%q", err, tc.want)
+			}
+		})
+	}
 }
 
 func TestCensusDiscoveryAdapterDefaultRootDeterministicUnicodeAndExactBytes(t *testing.T) {

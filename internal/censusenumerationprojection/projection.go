@@ -124,18 +124,41 @@ type Input struct {
 	IncompleteCauses                                                                                    []IncompleteCause
 	RequestDownDepth, RequestUpDepth, RequestMaxNodes, RequestBatchTargets, RequestTimeoutMS, TimeoutMS uint64
 }
+type EncodingFailureCategory string
+
+const (
+	EncodingBoundExhaustion EncodingFailureCategory = "BOUND_EXHAUSTION"
+	EncodingInvalidInput    EncodingFailureCategory = "INVALID_INPUT"
+	EncodingOtherFailure    EncodingFailureCategory = "OTHER_ENCODING_FAILURE"
+)
+
+type encodingFailure struct{ category EncodingFailureCategory }
+
+func (e encodingFailure) Error() string { return string(e.category) }
+func EncodingFailureCategoryOf(err error) EncodingFailureCategory {
+	var failure encodingFailure
+	if errors.As(err, &failure) {
+		return failure.category
+	}
+	return EncodingOtherFailure
+}
+func encodingError(category EncodingFailureCategory) error {
+	return encodingFailure{category: category}
+}
+
 type Receipt struct {
-	SchemaVersion       string `json:"schema_version"`
-	Status              string `json:"status"`
-	Selector            string `json:"selector,omitempty"`
-	Digest              string `json:"digest,omitempty"`
-	ByteLength          uint64 `json:"byte_length,omitempty"`
-	Mechanism           string `json:"mechanism,omitempty"`
-	NamespaceAtomic     bool   `json:"namespace_atomic,omitempty"`
-	VerificationStatus  string `json:"verification_status,omitempty"`
-	DirectorySyncStatus string `json:"directory_sync_status,omitempty"`
-	CloseStatus         string `json:"close_status,omitempty"`
-	UnavailableReason   string `json:"unavailable_reason,omitempty"`
+	SchemaVersion           string                  `json:"schema_version"`
+	Status                  string                  `json:"status"`
+	Selector                string                  `json:"selector,omitempty"`
+	Digest                  string                  `json:"digest,omitempty"`
+	ByteLength              uint64                  `json:"byte_length,omitempty"`
+	Mechanism               string                  `json:"mechanism,omitempty"`
+	NamespaceAtomic         bool                    `json:"namespace_atomic,omitempty"`
+	VerificationStatus      string                  `json:"verification_status,omitempty"`
+	DirectorySyncStatus     string                  `json:"directory_sync_status,omitempty"`
+	CloseStatus             string                  `json:"close_status,omitempty"`
+	UnavailableReason       string                  `json:"unavailable_reason,omitempty"`
+	EncodingFailureCategory EncodingFailureCategory `json:"-"`
 }
 
 func SymbolIdentityDigest(filePath string, start Position, kind int, _ string, ordinal int) (string, int, error) {
@@ -294,8 +317,8 @@ func failureRank(f ProviderFailure) string {
 }
 func causeRank(c IncompleteCause) string {
 	scope := enumRank(c.Scope, []string{"FILE", "SYMBOL"})
-	stage := enumRank(c.Stage, []string{"DISCOVERY", "DOCUMENT_SYMBOL_FLATTEN", "PREPARE_CALL_HIERARCHY"})
-	code := enumRank(c.Code, []string{"CANCELED", "FILE_LIMIT", "SYMBOL_LIMIT", "TARGET_LIMIT", "NODE_LIMIT", "DEPTH_LIMIT", "STRING_BYTE_LIMIT", "RESULT_MISMATCH", "COORDINATE_OVERFLOW", "CHILD_INCOMPLETE"})
+	stage := enumRank(c.Stage, []string{"DISCOVERY", "DOCUMENT_SUPPLY", "DOCUMENT_SYMBOL_FLATTEN", "PREPARE_CALL_HIERARCHY"})
+	code := enumRank(c.Code, []string{"CANCELED", "FILE_LIMIT", "SYMBOL_LIMIT", "TARGET_LIMIT", "SESSION_POISONED", "LIFECYCLE_CONFLICT", "SESSION_UNAVAILABLE", "NODE_LIMIT", "DEPTH_LIMIT", "STRING_BYTE_LIMIT", "RESULT_MISMATCH", "COORDINATE_OVERFLOW", "CHILD_INCOMPLETE"})
 	return fmt.Sprintf("%02d:%08d:%08d:%02d:%02d", scope, ordinalOrMax(c.FileOrdinal, MaxFiles), ordinalOrMax(c.SymbolOrdinal, MaxSymbols), stage, code)
 }
 func enumRank(value string, order []string) int {
@@ -317,34 +340,34 @@ func encodeWithWork(p Projection) ([]byte, error) {
 	identity := uint64(0)
 	for _, s := range p.Symbols {
 		if s.FileOrdinal < 0 || s.FileOrdinal >= len(p.Files) {
-			return nil, errors.New("invalid symbol file ordinal")
+			return nil, encodingError(EncodingInvalidInput)
 		}
 		var ok bool
 		identity, ok = add(identity, uint64(identityInputSize(s, p.Files[s.FileOrdinal].Path)))
 		if !ok || identity > uint64(identityInputLimit) {
-			return nil, errors.New("identity input limit exceeded")
+			return nil, encodingError(EncodingBoundExhaustion)
 		}
 	}
 	base, ok := add(uint64(len(p.Files)), uint64(len(p.Symbols)))
 	if !ok {
-		return nil, errors.New("work overflow")
+		return nil, encodingError(EncodingBoundExhaustion)
 	}
 	base, ok = add(base, identity)
 	if !ok {
-		return nil, errors.New("work overflow")
+		return nil, encodingError(EncodingBoundExhaustion)
 	}
 	p.Work = 0
 	for {
 		raw, err := json.Marshal(p)
 		if err != nil {
-			return nil, err
+			return nil, encodingError(EncodingOtherFailure)
 		}
 		if len(raw) > encodeCanonicalLimit {
-			return nil, errors.New("canonical byte limit exceeded")
+			return nil, encodingError(EncodingBoundExhaustion)
 		}
 		work, ok := add(base, uint64(len(raw)))
 		if !ok || work > MaxWork {
-			return nil, errors.New("work limit exceeded")
+			return nil, encodingError(EncodingBoundExhaustion)
 		}
 		if p.Work == work {
 			return raw, nil
@@ -365,7 +388,7 @@ func EncodeCanonical(p Projection) ([]byte, error) {
 	if p.Work != 0 {
 		raw, err := json.Marshal(p)
 		if err != nil || validate(p, raw) != nil {
-			return nil, errors.New("invalid projection work")
+			return nil, encodingError(EncodingInvalidInput)
 		}
 	}
 	raw, e := encodeWithWork(p)
@@ -582,7 +605,7 @@ func validCausePair(c IncompleteCause) bool {
 		if c.FileOrdinal == nil || c.SymbolOrdinal != nil {
 			return false
 		}
-		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "FILE_LIMIT" || c.Code == "CHILD_INCOMPLETE") || c.Stage == "DOCUMENT_SYMBOL_FLATTEN" && (c.Code == "NODE_LIMIT" || c.Code == "DEPTH_LIMIT" || c.Code == "STRING_BYTE_LIMIT")
+		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "FILE_LIMIT" || c.Code == "CHILD_INCOMPLETE") || c.Stage == "DOCUMENT_SUPPLY" && (c.Code == "SESSION_POISONED" || c.Code == "LIFECYCLE_CONFLICT" || c.Code == "SESSION_UNAVAILABLE") || c.Stage == "DOCUMENT_SYMBOL_FLATTEN" && (c.Code == "NODE_LIMIT" || c.Code == "DEPTH_LIMIT" || c.Code == "STRING_BYTE_LIMIT")
 	}
 	if c.Scope == "SYMBOL" {
 		if c.SymbolOrdinal == nil || c.FileOrdinal != nil {
@@ -704,6 +727,14 @@ func Publish(root *publication.Root, p Projection) (Receipt, error) {
 }
 func Unavailable(reason string) Receipt {
 	return Receipt{SchemaVersion: SchemaVersion, Status: "UNAVAILABLE", UnavailableReason: reason}
+}
+func UnavailableEncodingFailure(category EncodingFailureCategory) (Receipt, error) {
+	switch category {
+	case EncodingBoundExhaustion, EncodingInvalidInput, EncodingOtherFailure:
+		return Receipt{SchemaVersion: SchemaVersion, Status: "UNAVAILABLE", UnavailableReason: "ENCODE_FAILED", EncodingFailureCategory: category}, nil
+	default:
+		return Receipt{}, errors.New("invalid encoding failure category")
+	}
 }
 func MarshalReceipt(r Receipt) ([]byte, error) {
 	if r.SchemaVersion != SchemaVersion || (r.Status != "PUBLISHED" && r.Status != "UNAVAILABLE") {

@@ -69,8 +69,11 @@ func (s censusRuntimeDocumentSupplier) Supply(ctx context.Context, file censusac
 	result := s.runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{
 		URI: file.URI, LanguageID: file.LanguageID, CaptureSupply: true,
 	})
-	if result.Failure == session.SessionPoisoned || result.Failure == session.LifecycleConflict {
-		return censusacquisition.ErrSessionUnavailable
+	switch result.Failure {
+	case session.SessionPoisoned:
+		return censusacquisition.ErrSessionPoisoned
+	case session.LifecycleConflict:
+		return censusacquisition.ErrLifecycleConflict
 	}
 	if result.Failure != "" || result.URI != file.URI || result.LanguageID != file.LanguageID {
 		return errors.New("document supply failed")

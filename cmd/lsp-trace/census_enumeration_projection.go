@@ -23,7 +23,7 @@ func publishCensusEnumerationProjection(ctx context.Context, discovery censusacq
 		start := censusenumerationprojection.Position{Line: symbol.SelectionStart.Line, Character: symbol.SelectionStart.Character}
 		digest, _, err := censusenumerationprojection.SymbolIdentityDigest(filePath, start, symbol.Kind, symbol.Name, symbol.Ordinal)
 		if err != nil {
-			return censusenumerationprojection.Unavailable("ENCODE_FAILED")
+			return unavailableEnumerationEncodingFailure(censusenumerationprojection.EncodingInvalidInput)
 		}
 		symbols[i] = censusenumerationprojection.Symbol{Ordinal: symbol.Ordinal, FileOrdinal: symbol.FileOrdinal, SelectionStart: start, Kind: symbol.Kind, Disposition: string(symbol.Disposition), IdentityDigest: digest}
 	}
@@ -46,7 +46,7 @@ func publishCensusEnumerationProjection(ctx context.Context, discovery censusacq
 	workspaceURI := (&url.URL{Scheme: "file", Path: discovery.Workspace}).String()
 	projection, err := censusenumerationprojection.Build(censusenumerationprojection.Input{SessionID: discovery.Session.SessionID, Generation: discovery.Session.Generation, RequestFingerprint: request.Fingerprint, WorkspaceURI: workspaceURI, Files: files, Symbols: symbols, Observations: observations, ProviderFailures: failures, IncompleteCauses: causes, RequestDownDepth: request.Semantic.DownDepth, RequestUpDepth: request.Semantic.UpDepth, RequestMaxNodes: request.Semantic.MaxNodes, RequestBatchTargets: request.Semantic.BatchTargets, RequestTimeoutMS: request.Semantic.RequestTimeoutMS, TimeoutMS: request.Semantic.TimeoutMS})
 	if err != nil {
-		return censusenumerationprojection.Unavailable("ENCODE_FAILED")
+		return unavailableEnumerationEncodingFailure(censusenumerationprojection.EncodingFailureCategoryOf(err))
 	}
 	root, err := publication.OpenRoot(rootPath)
 	if err != nil {
@@ -59,6 +59,14 @@ func publishCensusEnumerationProjection(ctx context.Context, discovery censusacq
 	receipt, err := publishEnumerationProjection(root, projection)
 	if err != nil {
 		return censusenumerationprojection.Unavailable("PUBLICATION_FAILED")
+	}
+	return receipt
+}
+
+func unavailableEnumerationEncodingFailure(category censusenumerationprojection.EncodingFailureCategory) censusenumerationprojection.Receipt {
+	receipt, err := censusenumerationprojection.UnavailableEncodingFailure(category)
+	if err != nil {
+		return censusenumerationprojection.Unavailable("ENCODE_FAILED")
 	}
 	return receipt
 }

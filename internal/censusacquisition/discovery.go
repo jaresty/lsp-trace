@@ -61,9 +61,12 @@ type DiscoveryLimits struct {
 	MaxStringBytes int
 }
 
-// ErrSessionUnavailable marks document supply failure caused by the managed
-// session lifecycle rather than by source readability.
-var ErrSessionUnavailable = errors.New("census acquisition session unavailable")
+// Closed document-supply lifecycle failures carry no session identity or raw error.
+var (
+	ErrSessionUnavailable = errors.New("census acquisition session unavailable")
+	ErrSessionPoisoned    = errors.New("census acquisition session poisoned")
+	ErrLifecycleConflict  = errors.New("census acquisition lifecycle conflict")
+)
 
 const (
 	// FileProcessed and SymbolPrepared are the successful terminal vocabulary
@@ -166,7 +169,17 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		if err := a.Supplier.Supply(ctx, file); err != nil {
 			code := "REQUEST_FAILED"
 			disposition := census.FileUnreadable
-			if errors.Is(err, ErrSessionUnavailable) {
+			if errors.Is(err, ErrSessionPoisoned) {
+				code = "SESSION_POISONED"
+				disposition = census.FileIncomplete
+				appendFileIncompleteCause(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
+				sourceOmissions++
+			} else if errors.Is(err, ErrLifecycleConflict) {
+				code = "LIFECYCLE_CONFLICT"
+				disposition = census.FileIncomplete
+				appendFileIncompleteCause(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
+				sourceOmissions++
+			} else if errors.Is(err, ErrSessionUnavailable) {
 				code = "SESSION_UNAVAILABLE"
 				disposition = census.FileIncomplete
 				appendFileIncompleteCause(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
