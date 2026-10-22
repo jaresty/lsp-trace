@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"lsp-trace/internal/lspwire"
@@ -24,6 +25,7 @@ const (
 	privateProviderProbeSchemaV5 = "lsp-trace.private-provider-probe.v5"
 	privateProviderProbeSchemaV6 = "lsp-trace.private-provider-probe.v6"
 	privateProviderProbeSchemaV7 = "lsp-trace.private-provider-probe.v7"
+	privateProviderProbeSchemaV8 = "lsp-trace.private-provider-probe.v8"
 )
 
 type privateProviderProbeRecord struct {
@@ -196,27 +198,42 @@ type privateProviderProbeArtifactV7 struct {
 	Witness *privateProviderProbeWitnessV7 `json:"witness,omitempty"`
 }
 
+type privateProviderProbeArtifactV8 struct {
+	Schema                            string                         `json:"schema"`
+	Status                            string                         `json:"status"`
+	FirstCompleted                    *privateProviderProbeWitnessV7 `json:"first_completed"`
+	FirstNonPoisonFailure             *privateProviderProbeWitnessV7 `json:"first_non_poison_failure"`
+	FirstPoison                       *privateProviderProbeWitnessV7 `json:"first_poison"`
+	PreProviderRefusalCount           uint64                         `json:"pre_provider_refusal_count"`
+	MissingDispatchedObservationCount uint64                         `json:"missing_dispatched_observation_count"`
+}
+
 type privateProviderProbe struct {
-	mu                    sync.Mutex
-	path, version         string
-	byteTimeNotifications bool
-	sequence, files, work uint64
-	counts                map[string]uint64
-	records               []privateProviderProbeRecord
-	recordsV2             []privateProviderProbeRecordV2
-	compositionV3         *privateProviderProbeCompositionV3
-	compositionV4         *privateProviderProbeCompositionV4
-	transactionV5         *privateProviderProbeTransactionV5
-	transactionV6         *privateProviderProbeTransactionV6
-	witnessV7             *privateProviderProbeWitnessV7
-	incomplete            bool
+	mu                      sync.Mutex
+	path, version           string
+	byteTimeNotifications   bool
+	sequence, files, work   uint64
+	counts                  map[string]uint64
+	records                 []privateProviderProbeRecord
+	recordsV2               []privateProviderProbeRecordV2
+	compositionV3           *privateProviderProbeCompositionV3
+	compositionV4           *privateProviderProbeCompositionV4
+	transactionV5           *privateProviderProbeTransactionV5
+	transactionV6           *privateProviderProbeTransactionV6
+	witnessV7               *privateProviderProbeWitnessV7
+	firstCompletedV8        *privateProviderProbeWitnessV7
+	firstNonPoisonFailureV8 *privateProviderProbeWitnessV7
+	firstPoisonV8           *privateProviderProbeWitnessV7
+	preProviderRefusalsV8   uint64
+	missingDispatchedV8     uint64
+	incomplete              bool
 }
 
 func newPrivateProviderProbe(path string) (*privateProviderProbe, error) {
 	return newPrivateProviderProbeVersion(path, "v1")
 }
 func newPrivateProviderProbeVersion(path, version string) (*privateProviderProbe, error) {
-	if version != "v1" && version != "v2" && version != "v3" && version != "v4" && version != "v5" && version != "v6" && version != "v7" {
+	if version != "v1" && version != "v2" && version != "v3" && version != "v4" && version != "v5" && version != "v6" && version != "v7" && version != "v8" {
 		return nil, errors.New("invalid private provider probe version")
 	}
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -469,6 +486,14 @@ func (p *privateProviderProbe) observeV6(observation sessionruntime.ProviderTran
 	}
 }
 
+func coherentPrivateProviderProbeV7Observation(observation sessionruntime.ProviderTransactionObservation) bool {
+	total, ok := checkedProbeSum(observation.NotificationMessagesProcessed, observation.ControlMessagesProcessed)
+	return ok && total == observation.ProviderMessagesProcessed && observation.ConfiguredControlCeiling != 0 && observation.ConfiguredMaxBytes != 0 &&
+		(observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecycleReady || observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) &&
+		observation.TerminalPoisonObserved == (observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) &&
+		(!observation.SelectedResponseReadCompleted || observation.SelectedResponseObserved)
+}
+
 func (p *privateProviderProbe) observeV7(phase, class, cause string, c sessionruntime.ProviderMessageComposition, compositionPresent bool, observation sessionruntime.ProviderTransactionObservation, transactionPresent bool, maxMessages int, maxBytes int64, messages int, bytes int64) {
 	if p == nil || p.version != "v7" {
 		return
@@ -483,11 +508,7 @@ func (p *privateProviderProbe) observeV7(phase, class, cause string, c sessionru
 		p.incomplete = true
 		return
 	}
-	total, ok := checkedProbeSum(observation.NotificationMessagesProcessed, observation.ControlMessagesProcessed)
-	if !ok || total != observation.ProviderMessagesProcessed || observation.ConfiguredControlCeiling == 0 || observation.ConfiguredMaxBytes == 0 ||
-		observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady && observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned ||
-		observation.TerminalPoisonObserved != (observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) ||
-		observation.SelectedResponseReadCompleted && !observation.SelectedResponseObserved {
+	if !coherentPrivateProviderProbeV7Observation(observation) {
 		p.incomplete = true
 		return
 	}
@@ -510,6 +531,49 @@ func (p *privateProviderProbe) observeV7(phase, class, cause string, c sessionru
 		Phase: phase, Class: class, Cause: cause,
 		Composition: privateProviderProbeCompositionV4{p.sequence, selection, c.ProgressNotifications, c.LogShowTelemetryNotifications, c.PublishDiagnosticsNotifications, c.OtherNotifications, c.ServerRequests, c.UnmatchedLateInvalidResponses, c.AcceptedTerminalResponses, c.InvalidProtocolMessages, uint64(messages), uint64(bytes), uint64(maxMessages), uint64(maxBytes), string(c.Outcome), cause},
 		Transaction: privateProviderProbeTransactionV7{observation.CompletionSequence, observation.NotificationCeilingPolicy, observation.ConfiguredControlCeiling, observation.ConfiguredMaxBytes, observation.NotificationMessagesProcessed, observation.ControlMessagesProcessed, observation.SelectedResponseObserved, observation.SelectedResponseReadCompleted, observation.TerminalLifecycle},
+	}
+}
+
+func (p *privateProviderProbe) observeV8(phase, class, cause string, c sessionruntime.ProviderMessageComposition, compositionPresent bool, observation sessionruntime.ProviderTransactionObservation, transactionPresent bool, maxMessages int, maxBytes int64, messages int, bytes int64) {
+	if p == nil || p.version != "v8" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !transactionPresent {
+		if cause == string(session.LifecycleConflict) {
+			if !checkedProbeAdd(&p.preProviderRefusalsV8, 1) {
+				p.incomplete = true
+			}
+			return
+		}
+		if !checkedProbeAdd(&p.missingDispatchedV8, 1) {
+			p.incomplete = true
+		}
+		p.incomplete = true
+		return
+	}
+	if !compositionPresent || observation.CompletionSequence == 0 || messages < 0 || bytes < 0 || maxMessages <= 0 || maxBytes <= 0 || !coherentPrivateProviderProbeV7Observation(observation) {
+		p.incomplete = true
+		return
+	}
+	selection := "FIRST_COMPLETED"
+	if cause != "" {
+		selection = "FIRST_FAILURE_OR_POISON"
+	}
+	w := &privateProviderProbeWitnessV7{Phase: phase, Class: class, Cause: cause,
+		Composition: privateProviderProbeCompositionV4{Sequence: observation.CompletionSequence, Selection: selection, ProgressNotifications: c.ProgressNotifications, LogShowTelemetryNotifications: c.LogShowTelemetryNotifications, PublishDiagnosticsNotifications: c.PublishDiagnosticsNotifications, OtherNotifications: c.OtherNotifications, ServerRequests: c.ServerRequests, UnmatchedLateInvalidResponses: c.UnmatchedLateInvalidResponses, AcceptedTerminalResponses: c.AcceptedTerminalResponses, InvalidProtocolMessages: c.InvalidProtocolMessages, ManagerMessages: uint64(messages), ManagerBytes: uint64(bytes), ConfiguredMaxMessages: uint64(maxMessages), ConfiguredMaxBytes: uint64(maxBytes), Outcome: string(c.Outcome), Failure: cause},
+		Transaction: privateProviderProbeTransactionV7{observation.CompletionSequence, observation.NotificationCeilingPolicy, observation.ConfiguredControlCeiling, observation.ConfiguredMaxBytes, observation.NotificationMessagesProcessed, observation.ControlMessagesProcessed, observation.SelectedResponseObserved, observation.SelectedResponseReadCompleted, observation.TerminalLifecycle}}
+	retain := func(slot **privateProviderProbeWitnessV7) {
+		if *slot == nil || (*slot).Transaction.CompletionSequence > observation.CompletionSequence {
+			*slot = w
+		}
+	}
+	retain(&p.firstCompletedV8)
+	if observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned {
+		retain(&p.firstPoisonV8)
+	} else if cause != "" {
+		retain(&p.firstNonPoisonFailureV8)
 	}
 }
 
@@ -638,6 +702,23 @@ func (p *privateProviderProbe) artifactV7() privateProviderProbeArtifactV7 {
 	return privateProviderProbeArtifactV7{privateProviderProbeSchemaV7, status, witness}
 }
 
+func (p *privateProviderProbe) artifactV8() privateProviderProbeArtifactV8 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	copyWitness := func(w *privateProviderProbeWitnessV7) *privateProviderProbeWitnessV7 {
+		if w == nil {
+			return nil
+		}
+		c := *w
+		return &c
+	}
+	status := "COMPLETE"
+	if p.incomplete || p.firstCompletedV8 == nil || p.firstNonPoisonFailureV8 == nil || p.firstPoisonV8 == nil || p.missingDispatchedV8 != 0 {
+		status = "INCOMPLETE"
+	}
+	return privateProviderProbeArtifactV8{privateProviderProbeSchemaV8, status, copyWitness(p.firstCompletedV8), copyWitness(p.firstNonPoisonFailureV8), copyWitness(p.firstPoisonV8), p.preProviderRefusalsV8, p.missingDispatchedV8}
+}
+
 func (p *privateProviderProbe) finalize() error {
 	if p == nil {
 		return nil
@@ -655,6 +736,8 @@ func (p *privateProviderProbe) finalize() error {
 		value = p.artifactV6()
 	} else if p.version == "v7" {
 		value = p.artifactV7()
+	} else if p.version == "v8" {
+		value = p.artifactV8()
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -1202,6 +1285,80 @@ func parsePrivateProviderProbeV7(raw []byte) (privateProviderProbeArtifactV7, er
 	}
 	if !valid {
 		return bad()
+	}
+	return a, nil
+}
+
+func parsePrivateProviderProbeV8(raw []byte) (privateProviderProbeArtifactV8, error) {
+	var a privateProviderProbeArtifactV8
+	bad := func() (privateProviderProbeArtifactV8, error) { return a, errors.New("invalid private provider probe") }
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' || len(raw) > 1 && raw[len(raw)-2] == '\n' {
+		return bad()
+	}
+	line := bytes.TrimSuffix(raw, []byte{'\n'})
+	d := json.NewDecoder(bytes.NewReader(line))
+	d.DisallowUnknownFields()
+	if d.Decode(&a) != nil || d.Decode(&struct{}{}) != io.EOF {
+		return bad()
+	}
+	canonical, err := json.Marshal(a)
+	if err != nil || !bytes.Equal(canonical, line) || a.Schema != privateProviderProbeSchemaV8 || a.Status != "COMPLETE" && a.Status != "INCOMPLETE" {
+		return bad()
+	}
+	forbidden := []string{`"path":`, `"uri":`, `"session":`, `"source":`, `"content":`, `"request":`, `"params":`, `"frame":`, `"raw":`, `"error":`}
+	lower := strings.ToLower(string(line))
+	for _, field := range forbidden {
+		if strings.Contains(lower, field) {
+			return bad()
+		}
+	}
+	validateWitness := func(w *privateProviderProbeWitnessV7) bool {
+		if w == nil {
+			return true
+		}
+		candidate := privateProviderProbeArtifactV7{Schema: privateProviderProbeSchemaV7, Status: "COMPLETE", Witness: w}
+		encoded, marshalErr := json.Marshal(candidate)
+		if marshalErr != nil {
+			return false
+		}
+		_, parseErr := parsePrivateProviderProbeV7(append(encoded, '\n'))
+		return parseErr == nil
+	}
+	if !validateWitness(a.FirstCompleted) || !validateWitness(a.FirstNonPoisonFailure) || !validateWitness(a.FirstPoison) {
+		return bad()
+	}
+	allPresent := a.FirstCompleted != nil && a.FirstNonPoisonFailure != nil && a.FirstPoison != nil
+	if a.Status == "COMPLETE" && (!allPresent || a.MissingDispatchedObservationCount != 0) {
+		return bad()
+	}
+	if a.FirstNonPoisonFailure != nil && (a.FirstNonPoisonFailure.Cause == "" || a.FirstNonPoisonFailure.Composition.Selection != "FIRST_FAILURE_OR_POISON" || a.FirstNonPoisonFailure.Transaction.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady) {
+		return bad()
+	}
+	if a.FirstPoison != nil && (a.FirstPoison.Cause == "" || a.FirstPoison.Composition.Selection != "FIRST_FAILURE_OR_POISON" || a.FirstPoison.Transaction.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned) {
+		return bad()
+	}
+	sequences := make(map[uint64]privateProviderProbeWitnessV7, 3)
+	for _, witness := range []*privateProviderProbeWitnessV7{a.FirstCompleted, a.FirstNonPoisonFailure, a.FirstPoison} {
+		if witness == nil {
+			continue
+		}
+		sequence := witness.Transaction.CompletionSequence
+		if retained, duplicate := sequences[sequence]; duplicate && retained != *witness {
+			return bad()
+		}
+		sequences[sequence] = *witness
+	}
+	if a.FirstCompleted != nil {
+		firstSequence := a.FirstCompleted.Transaction.CompletionSequence
+		for _, classified := range []*privateProviderProbeWitnessV7{a.FirstNonPoisonFailure, a.FirstPoison} {
+			if classified == nil {
+				continue
+			}
+			classifiedSequence := classified.Transaction.CompletionSequence
+			if firstSequence > classifiedSequence || firstSequence == classifiedSequence && *a.FirstCompleted != *classified {
+				return bad()
+			}
+		}
 	}
 	return a, nil
 }

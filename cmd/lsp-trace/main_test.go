@@ -777,6 +777,12 @@ func TestRuntimeHelperServer(t *testing.T) {
 				continue
 			}
 			writeRuntimeResponse(msg.ID, []any{})
+		case "callHierarchy/incomingCalls":
+			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_INCOMING_CALLS_SERVER_ERROR") == "1" {
+				writeRuntimeError(msg.ID, -32601)
+				continue
+			}
+			writeRuntimeResponse(msg.ID, []any{})
 		case "textDocument/prepareCallHierarchy":
 			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_MALFORMED_PREPARE_CALL_HIERARCHY_FRAME") == "1" {
 				fmt.Fprint(os.Stdout, "Content-Length: nope\r\n\r\n{}")
@@ -819,6 +825,11 @@ func readRuntimeMessage(r *bufio.Reader) ([]byte, error) {
 
 func writeRuntimeResponse(id json.RawMessage, result any) {
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
+	fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
+}
+
+func writeRuntimeError(id json.RawMessage, code int) {
+	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": code, "message": "scripted"}})
 	fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
 }
 

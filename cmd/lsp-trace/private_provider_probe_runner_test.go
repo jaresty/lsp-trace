@@ -7,7 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -45,6 +47,7 @@ type providerProbeRunnerResult struct {
 	probeV5                               privateProviderProbeArtifactV5
 	probeV6                               privateProviderProbeArtifactV6
 	probeV7                               privateProviderProbeArtifactV7
+	probeV8                               privateProviderProbeArtifactV8
 	probeErr                              error
 	probeExists                           bool
 }
@@ -152,6 +155,11 @@ func runProviderProbeRunnerInWorkspaceVersion(t *testing.T, workspace, version s
 
 func runProviderProbeRunnerInWorkspaceVersionWithStarter(t *testing.T, workspace, version string, enableProbe, enumeration, portableStarter bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome) providerProbeRunnerResult {
 	t.Helper()
+	return runProviderProbeRunnerInWorkspaceVersionWithStarterAndProbeRewrite(t, workspace, version, enableProbe, enumeration, portableStarter, runCore, nil)
+}
+
+func runProviderProbeRunnerInWorkspaceVersionWithStarterAndProbeRewrite(t *testing.T, workspace, version string, enableProbe, enumeration, portableStarter bool, runCore func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome, rewriteProbe func(string)) providerProbeRunnerResult {
+	t.Helper()
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
@@ -216,6 +224,9 @@ func runProviderProbeRunnerInWorkspaceVersionWithStarter(t *testing.T, workspace
 		}
 	}
 	if probe != "" {
+		if rewriteProbe != nil {
+			rewriteProbe(probe)
+		}
 		raw, err := os.ReadFile(probe)
 		if err == nil {
 			switch version {
@@ -235,10 +246,17 @@ func runProviderProbeRunnerInWorkspaceVersionWithStarter(t *testing.T, workspace
 			case "v7":
 				result.probeV7, err = parsePrivateProviderProbeV7(raw)
 				result.probeErr = err
+			case "v8":
+				var candidate privateProviderProbeArtifactV8
+				candidate, err = parsePrivateProviderProbeV8(raw)
+				if err == nil {
+					result.probeV8 = candidate
+				}
+				result.probeErr = err
 			default:
 				result.probe, err = parsePrivateProviderProbe(raw)
 			}
-			if err != nil && version != "v4" && version != "v5" && version != "v6" {
+			if err != nil && version != "v4" && version != "v5" && version != "v6" && version != "v8" {
 				t.Fatalf("%v: %s", err, raw)
 			}
 			result.probeExists = true
@@ -444,6 +462,107 @@ func TestRunCensusProviderProbeV2RealSessionParityAndSingleLifecycle(t *testing.
 	}
 	if !v4.probeExists || v4.probeErr != nil || v4.probeV4.Schema != privateProviderProbeSchemaV4 || len(v4.probeV4.Records) != 1 || v4.probeV4.Records[0].Cause != string(session.ResourceExhausted) || v4.probeV4.Records[0].Exhaustion == nil || v4.probeV4.Records[0].Exhaustion.Boundary != "BYTE_LIMIT_EXCEEDED" || v4.probeV4.Composition == nil || v4.probeV4.Composition.Selection != "FIRST_RESOURCE_EXHAUSTED" || v4.probeV4.Composition.Outcome != string(sessionruntime.ProviderMessageOutcomeByteLimit) {
 		t.Fatalf("ASSERT_PROVIDER_PROBE_V4_PRODUCTION_MANAGER_DISPATCH probe=%+v", v4.probeV4)
+	}
+}
+
+func TestProviderProbeRunnerV8RejectsCanonicalSemanticInvalidArtifact(t *testing.T) {
+	core := func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome {
+		return deterministicProviderProbeOutcome(t)
+	}
+	rewrite := func(path string) {
+		artifact := completePrivateProviderProbeV8Artifact()
+		artifact.MissingDispatchedObservationCount = 1
+		if err := os.WriteFile(path, marshalPrivateProviderProbeV8TestArtifact(t, artifact), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := runProviderProbeRunnerInWorkspaceVersionWithStarterAndProbeRewrite(t, t.TempDir(), "v8", true, false, true, core, rewrite)
+	if got.probeErr == nil || got.probeV8 != (privateProviderProbeArtifactV8{}) {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V8_RUNNER_REJECTS_SEMANTIC_INVALID err=%v evidence=%+v", got.probeErr, got.probeV8)
+	}
+}
+
+func TestProviderProbeRunnerV8FinalizeReadStrictParseCustody(t *testing.T) {
+	path := probePath(t)
+	p, err := newPrivateProviderProbeVersion(path, "v8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := providerProbeV7Observation(sessionruntime.ProviderTransactionLifecycleReady, 0, 1)
+	completed.CompletionSequence = 1
+	p.observeV8("DOCUMENT_SYMBOL", "", "", sessionruntime.ProviderMessageComposition{AcceptedTerminalResponses: 1, Outcome: sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse}, true, completed, true, 64, 4096, 1, 10)
+	nonPoison := providerProbeV7Observation(sessionruntime.ProviderTransactionLifecycleReady, 0, 1)
+	nonPoison.CompletionSequence = 2
+	p.observeV8("PROVIDER_REQUEST", "JSON_RPC_CODE_BUCKET", "METHOD_NOT_FOUND", sessionruntime.ProviderMessageComposition{AcceptedTerminalResponses: 1, Outcome: sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse}, true, nonPoison, true, 64, 4096, 1, 20)
+	poison := providerProbeV7Observation(sessionruntime.ProviderTransactionLifecyclePoisoned, 0, 0)
+	poison.CompletionSequence = 3
+	p.observeV8("PROVIDER_REQUEST", "TYPED_SESSION_RUNTIME_FAILURE", string(session.SessionPoisoned), sessionruntime.ProviderMessageComposition{InvalidProtocolMessages: 1, Outcome: sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage}, true, poison, true, 64, 4096, 0, 30)
+	if err := p.finalize(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parsePrivateProviderProbeV8(raw); err != nil {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V8_RUNNER_STRICT_VALID err=%v raw=%s", err, raw)
+	}
+	noncanonical := append([]byte{' '}, raw...)
+	if _, err := parsePrivateProviderProbeV8(noncanonical); err == nil {
+		t.Fatal("ASSERT_PROVIDER_PROBE_V8_RUNNER_STRICT_REJECTION accepted noncanonical bytes")
+	}
+}
+
+func assertProviderProbeV8FirstCompletedDocumentSymbol(t *testing.T, witness *privateProviderProbeWitnessV7) {
+	t.Helper()
+	if witness == nil || witness.Phase != "DOCUMENT_SYMBOL" || witness.Class != "" || witness.Cause != "" || witness.Composition.Selection != "FIRST_COMPLETED" || witness.Transaction.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V8_FIRST_COMPLETED_DOCUMENT_SYMBOL witness=%+v", witness)
+	}
+}
+
+func TestRunCensusProviderProbeV8OneManagerFourStageSequence(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process test uses Darwin supervisor")
+	}
+	core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+		cfg.runner.start.Process = managedprocess.Spec{
+			Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: cfg.runner.start.Process.Dir,
+			Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1", "LSP_TRACE_RUNTIME_HELPER_INCOMING_CALLS_SERVER_ERROR=1", "LSP_TRACE_RUNTIME_HELPER_MALFORMED_PREPARE_CALL_HIERARCHY_FRAME=1"),
+		}
+		cfg.runner.timeout = 3 * time.Second
+		cfg.runner.requestTimeout = time.Second
+		fixtureURI := (&url.URL{Scheme: "file", Path: filepath.Join(cfg.runner.start.Process.Dir, "a.go")}).String()
+		code := runInitializedAcquisitionSession(cfg.runner, func(ctx context.Context, initialized initializedAcquisitionSession) int {
+			runtime := initialized.(*initializedAcquisitionRuntime)
+			_, _ = runInitializedCensusDiscovery(ctx, options, runtime, true)
+			request := func(method string) {
+				_ = runtime.RoundTrip(ctx, sessionruntime.RoundTripRequest{
+					SessionID: runtime.SessionID(), Generation: runtime.Generation(), Method: method,
+					Params:   json.RawMessage(fmt.Sprintf(`{"textDocument":{"uri":%q},"position":{"line":1,"character":0}}`, fixtureURI)),
+					Deadline: time.Now().Add(time.Second), MaxMessages: 64, MaxBytes: 4 << 20,
+				})
+			}
+			request("callHierarchy/incomingCalls")
+			request("textDocument/prepareCallHierarchy")
+			prepared := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{URI: fixtureURI, LanguageID: "go", CaptureSupply: true})
+			if prepared.Failure != session.LifecycleConflict {
+				t.Fatalf("ASSERT_PROVIDER_PROBE_V8_POST_POISON_REFUSAL failure=%q", prepared.Failure)
+			}
+			return 0
+		})
+		if code != 0 {
+			t.Fatalf("session code=%d", code)
+		}
+		return deterministicProviderProbeOutcome(t)
+	}
+	got := runProviderProbeRunnerVersion(t, "v8", true, false, core)
+	p := got.probeV8
+	if got.managerCalls != 1 || !got.probeExists || got.probeErr != nil || p.Schema != privateProviderProbeSchemaV8 || p.Status != "COMPLETE" || p.FirstCompleted == nil || p.FirstNonPoisonFailure == nil || p.FirstPoison == nil || p.PreProviderRefusalCount != 1 || p.MissingDispatchedObservationCount != 0 {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V8_ONE_MANAGER_FOUR_STAGE manager_calls=%d exists=%t err=%v artifact=%+v", got.managerCalls, got.probeExists, got.probeErr, p)
+	}
+	assertProviderProbeV8FirstCompletedDocumentSymbol(t, p.FirstCompleted)
+	if p.FirstNonPoisonFailure.Cause != "METHOD_NOT_FOUND" || p.FirstPoison.Transaction.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned || !(p.FirstCompleted.Transaction.CompletionSequence < p.FirstNonPoisonFailure.Transaction.CompletionSequence && p.FirstNonPoisonFailure.Transaction.CompletionSequence < p.FirstPoison.Transaction.CompletionSequence) {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V8_COMPLETION_ORDER artifact=%+v", p)
 	}
 }
 

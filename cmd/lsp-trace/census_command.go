@@ -139,7 +139,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	if versionCount != 0 && o.PrivateProviderProbePath == "" {
 		return o, errors.New("private provider probe version requires path")
 	}
-	if o.PrivateProviderProbeVersion != "v1" && o.PrivateProviderProbeVersion != "v2" && o.PrivateProviderProbeVersion != "v3" && o.PrivateProviderProbeVersion != "v4" && o.PrivateProviderProbeVersion != "v5" && o.PrivateProviderProbeVersion != "v6" && o.PrivateProviderProbeVersion != "v7" {
+	if o.PrivateProviderProbeVersion != "v1" && o.PrivateProviderProbeVersion != "v2" && o.PrivateProviderProbeVersion != "v3" && o.PrivateProviderProbeVersion != "v4" && o.PrivateProviderProbeVersion != "v5" && o.PrivateProviderProbeVersion != "v6" && o.PrivateProviderProbeVersion != "v7" && o.PrivateProviderProbeVersion != "v8" {
 		return o, errors.New("invalid private provider probe version")
 	}
 	if o.PrivateProviderProbeByteTimeNotifications && (o.PrivateProviderProbePath == "" || o.PrivateProviderProbeVersion != "v6") {

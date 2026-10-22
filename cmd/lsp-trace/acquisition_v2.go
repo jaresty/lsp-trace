@@ -184,7 +184,7 @@ func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessi
 		if legacyComposition {
 			request.CaptureProviderMessageComposition = true
 			request.CaptureProviderTransactionObservation = r.probe.version == "v5" || r.probe.version == "v6"
-		} else if r.probe.version == "v7" {
+		} else if r.probe.version == "v7" || r.probe.version == "v8" {
 			request.CaptureProviderMessageCompositionAllMethods = true
 			request.CaptureProviderTransactionObservationAllMethods = true
 		}
@@ -197,7 +197,7 @@ func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMa
 	if r.probe == nil {
 		return
 	}
-	if r.probe.version == "v7" {
+	if r.probe.version == "v7" || r.probe.version == "v8" {
 		composition, compositionPresent := result.ProviderMessageComposition()
 		transaction, transactionPresent := result.ProviderTransactionObservation()
 		class, cause := "", ""
@@ -208,7 +208,11 @@ func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMa
 		} else if decodeErr != nil {
 			class, cause = "DECODE_FAILURE", "DECODE_FAILURE"
 		}
-		r.probe.observeV7(privateProbePhase(method), class, cause, composition, compositionPresent, transaction, transactionPresent, configuredMaxMessages, configuredMaxBytes, result.Messages, result.Bytes)
+		if r.probe.version == "v8" {
+			r.probe.observeV8(privateProbePhase(method), class, cause, composition, compositionPresent, transaction, transactionPresent, configuredMaxMessages, configuredMaxBytes, result.Messages, result.Bytes)
+		} else {
+			r.probe.observeV7(privateProbePhase(method), class, cause, composition, compositionPresent, transaction, transactionPresent, configuredMaxMessages, configuredMaxBytes, result.Messages, result.Bytes)
+		}
 		return
 	}
 	if (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5" || r.probe.version == "v6") && privateProbePhase(method) == "DOCUMENT_SYMBOL" {
@@ -259,7 +263,11 @@ func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request
 	if r.probe != nil {
 		if result.Failure != "" {
 			class, cause := privateDocumentFailureCause(result.Failure)
-			r.probe.observe("DOCUMENT_SUPPLY", class, cause, true)
+			if r.probe.version == "v8" {
+				r.probe.observeV8("DOCUMENT_SUPPLY", class, cause, sessionruntime.ProviderMessageComposition{}, false, sessionruntime.ProviderTransactionObservation{}, false, 0, 0, 0, 0)
+			} else {
+				r.probe.observe("DOCUMENT_SUPPLY", class, cause, true)
+			}
 		} else if result.URI != request.URI || result.LanguageID != request.LanguageID {
 			r.probe.observe("DOCUMENT_SUPPLY", "ADAPTER_IDENTITY_MISMATCH", "ADAPTER_IDENTITY_MISMATCH", true)
 		} else {

@@ -47,6 +47,17 @@ func TestPrivateProviderProbeV7AtomicSelectionAndStability(t *testing.T) {
 	}
 }
 
+func TestPrivateProviderProbeV7ProducerAcceptsLegacyNotificationCeilingPolicy(t *testing.T) {
+	p, _ := newPrivateProviderProbeVersion(probePath(t), "v7")
+	observation := providerProbeV7Observation(sessionruntime.ProviderTransactionLifecycleReady, 0, 1)
+	observation.NotificationCeilingPolicy = "LEGACY_UNKNOWN"
+	p.observeV7("DOCUMENT_SYMBOL", "", "", sessionruntime.ProviderMessageComposition{AcceptedTerminalResponses: 1, Outcome: sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse}, true, observation, true, 64, 4096, 1, 10)
+	a := p.artifactV7()
+	if a.Status != "COMPLETE" || a.Witness == nil || a.Witness.Transaction.NotificationCeilingPolicy != "LEGACY_UNKNOWN" {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V7_LEGACY_POLICY_PRODUCER_COMPATIBILITY artifact=%+v", a)
+	}
+}
+
 func TestPrivateProviderProbeV7JSONRPCErrorNonPoisonAndParserPrivacy(t *testing.T) {
 	p, _ := newPrivateProviderProbeVersion(probePath(t), "v7")
 	composition := sessionruntime.ProviderMessageComposition{AcceptedTerminalResponses: 1, Outcome: sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse}
@@ -142,7 +153,7 @@ func TestPrivateProviderProbeV7AbsentUnknownAndConcurrentAtomic(t *testing.T) {
 	if a := p.artifactV7(); a.Status != "INCOMPLETE" || a.Witness != nil {
 		t.Fatalf("ASSERT_PROVIDER_PROBE_V7_ABSENT %+v", a)
 	}
-	if _, err := newPrivateProviderProbeVersion(probePath(t), "v8"); err == nil {
+	if _, err := newPrivateProviderProbeVersion(probePath(t), "v9"); err == nil {
 		t.Fatal("ASSERT_PROVIDER_PROBE_V7_UNKNOWN accepted")
 	}
 	var wg sync.WaitGroup
