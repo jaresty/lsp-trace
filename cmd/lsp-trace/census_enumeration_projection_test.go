@@ -264,6 +264,35 @@ func TestPrivateEnumerationProjectionEmitsScalarCauseSummary(t *testing.T) {
 	}
 }
 
+func TestPrivateDiscoveryCauseSummaryTargetLimitScalarOnly(t *testing.T) {
+	symbol2, symbol5 := 2, 5
+	discovery := censusacquisition.Discovery{
+		Workspace:  "/private/secret/workspace",
+		Accounting: census.Accounting{SymbolDenominator: 6},
+		IncompleteCauses: []censusacquisition.IncompleteCause{
+			{Scope: "SYMBOL", Stage: "DISCOVERY", Code: "TARGET_LIMIT", SymbolOrdinal: &symbol5},
+			{Scope: "SYMBOL", Stage: "DISCOVERY", Code: "TARGET_LIMIT", SymbolOrdinal: &symbol2},
+		},
+	}
+	summary, err := newPrivateCensusDiscoveryCausesForDiscovery(discovery)
+	if err != nil {
+		t.Fatalf("ASSERT_TARGET_LIMIT_PRIVATE_SCALAR_SUMMARY: %v", err)
+	}
+	raw, err := marshalPrivateCensusDiscoveryCauses(summary)
+	if err != nil {
+		t.Fatalf("ASSERT_TARGET_LIMIT_PRIVATE_SCALAR_MARSHAL: %v", err)
+	}
+	want := `{"schema_version":"lsp-trace.private-census-discovery-causes.v1","authority":0,"causes":[{"scope":"SYMBOL","stage":"DISCOVERY","code":"TARGET_LIMIT","count":2,"first_ordinal":2}]}`
+	if string(raw) != want {
+		t.Fatalf("ASSERT_TARGET_LIMIT_PRIVATE_SCALAR_EXACT: got=%s want=%s", raw, want)
+	}
+	for _, forbidden := range []string{discovery.Workspace, "secret", "workspace", "uri", "path", "name", "source"} {
+		if bytes.Contains(raw, []byte(forbidden)) {
+			t.Fatalf("ASSERT_TARGET_LIMIT_PRIVATE_SCALAR_NO_PRIVACY_LEAK: %q in %s", forbidden, raw)
+		}
+	}
+}
+
 func TestPrivateDiscoveryCauseSummaryDistinguishesEqualTotals(t *testing.T) {
 	file0, file4, symbol2, symbol9 := 0, 4, 2, 9
 	fileSummary, err := newPrivateCensusDiscoveryCauses([]censusacquisition.IncompleteCause{

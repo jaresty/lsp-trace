@@ -9,6 +9,7 @@ import (
 	"lsp-trace/internal/acquisitionengine"
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
@@ -313,8 +314,8 @@ func TestInvalidCompleteSymbolLedgerHasNoAcquisitionSideEffects(t *testing.T) {
 
 func TestCoreRejectsOversizedDiscoveryBeforeAcquisition(t *testing.T) {
 	d := Discovery{Session: SessionIdentity{"s", 7}, Workspace: "/w", Complete: true}
-	d.Accounting.SymbolDenominator = captureset.MaxTargets + 1
-	d.SymbolLedger.Denominator = captureset.MaxTargets + 1
+	d.Accounting.SymbolDenominator = censusenumerationprojection.MaxSymbols + 1
+	d.SymbolLedger.Denominator = censusenumerationprojection.MaxSymbols + 1
 	calls := 0
 	_, err := (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { calls++; return AcquiredV5{}, nil })}).Run(context.Background(), SessionIdentity{"s", 7})
 	if err == nil || calls != 0 || !strings.Contains(err.Error(), "discovery bounds exceeded") {

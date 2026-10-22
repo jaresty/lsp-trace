@@ -12,9 +12,11 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/lsp"
 )
 
@@ -346,6 +348,65 @@ func TestDiscoveryAdapterUnsupportedPreparationMalformedAndBounds(t *testing.T) 
 	}
 }
 
+func TestDiscoveryAdapterExclusionPrecedesCancellationAccounting(t *testing.T) {
+	workspace := t.TempDir()
+	excluded := testSource(workspace, "excluded.go")
+	selected := testSource(workspace, "selected.go")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	got, err := (DiscoveryAdapter{
+		Workspace: workspace,
+		Filters:   Filters{Excludes: []string{"excluded.go"}},
+		Files:     StaticFiles{selected, excluded},
+		Supplier:  &fakeSupplier{errors: map[string]error{}},
+		Client:    &fakeDiscoveryClient{documentSupported: true},
+	}).Discover(ctx, SessionIdentity{"s", 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Accounting.Files[0].Disposition != census.FileExcluded || got.Accounting.Files[1].Disposition != census.FileIncomplete {
+		t.Fatalf("ASSERT_EXCLUDED_FILE_STAYS_EXCLUDED_AFTER_CANCELLATION: %+v", got.Accounting.Files)
+	}
+	if len(got.IncompleteCauses) != 1 || got.IncompleteCauses[0].FileOrdinal == nil || *got.IncompleteCauses[0].FileOrdinal != 1 || got.IncompleteCauses[0].Code != "CANCELED" {
+		t.Fatalf("ASSERT_SELECTED_FILE_CANCELLATION_REMAINS_INCOMPLETE: %+v", got.IncompleteCauses)
+	}
+}
+
+func TestDiscoveryAdapterDeadlineAndGenericCancellationTimeoutProvenance(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		context   func() (context.Context, context.CancelFunc)
+		wantKnown bool
+	}{
+		{name: "deadline", context: func() (context.Context, context.CancelFunc) {
+			return context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		}, wantKnown: true},
+		{name: "generic-cancellation", context: func() (context.Context, context.CancelFunc) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx, cancel
+		}, wantKnown: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			file := testSource(workspace, "selected.go")
+			ctx, cancel := tc.context()
+			defer cancel()
+
+			got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{file}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: &fakeDiscoveryClient{documentSupported: true}}).Discover(ctx, SessionIdentity{"s", 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, observation := range got.Observations {
+				if observation.Dimension == DiscoveryTimeoutRequestBudget && observation.Known != tc.wantKnown {
+					t.Fatalf("ASSERT_TIMEOUT_REQUEST_BUDGET_DEADLINE_ONLY: want_known=%v observation=%+v", tc.wantKnown, observation)
+				}
+			}
+		})
+	}
+}
+
 func TestDiscoveryAdapterFileCancellationPrecedence(t *testing.T) {
 	workspace := t.TempDir()
 	f := testSource(workspace, "cancel.go")
@@ -459,6 +520,27 @@ func TestDiscoverToCoreRunAcquiresNestedSameFileTargets(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAdapterNonCallablesDoNotConsumeTargetCapacity(t *testing.T) {
+	workspace := t.TempDir()
+	file := testSource(workspace, "mixed.go")
+	symbols := make([]lsp.DocumentSymbol, captureset.MaxTargets+1)
+	for i := 0; i < captureset.MaxTargets; i++ {
+		symbols[i] = sym(fmt.Sprintf("Field%d", i), 5, uint32(i), 0)
+	}
+	callable := sym("Run", 12, uint32(captureset.MaxTargets), 0)
+	symbols[captureset.MaxTargets] = callable
+	client := &fakeDiscoveryClient{
+		documentSupported: true,
+		callSupported:     true,
+		symbols:           map[string][]lsp.DocumentSymbol{file.URI: symbols},
+		prepare:           map[lsp.Position][]lsp.CallHierarchyItem{callable.SelectionRange.Start: {item("Run", file.URI, 12, uint32(captureset.MaxTargets), 0)}},
+	}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{file}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
+	if err != nil || !got.Complete || len(got.Targets) != 1 || got.Targets[0].Name != "Run" {
+		t.Fatalf("ASSERT_NON_CALLABLES_DO_NOT_CONSUM_TARGET_CAPACITY: complete=%v targets=%d err=%v causes=%+v", got.Complete, len(got.Targets), err, got.IncompleteCauses)
+	}
+}
+
 func TestDiscoveryAdapterTargetAdmissionCapIsNotTraversalNodeCeiling(t *testing.T) {
 	workspace := t.TempDir()
 	files := StaticFiles{testSource(workspace, "a.go"), testSource(workspace, "b.go")}
@@ -466,24 +548,49 @@ func TestDiscoveryAdapterTargetAdmissionCapIsNotTraversalNodeCeiling(t *testing.
 	for fileIndex, file := range files {
 		count := captureset.MaxTargets / 2
 		if fileIndex == len(files)-1 {
-			count = captureset.MaxTargets + 1 - count
+			count = captureset.MaxTargets + 3 - count
 		}
 		items := make([]lsp.DocumentSymbol, count)
 		for i := range items {
-			items[i] = sym(fmt.Sprintf("S%d", i), 12, uint32(i), 0)
+			line := fileIndex*captureset.MaxTargets + i
+			items[i] = sym(fmt.Sprintf("S%d", line), 12, uint32(line), 0)
 		}
 		symbols[file.URI] = items
 	}
-	client := &fakeDiscoveryClient{documentSupported: true, symbols: symbols}
+	unseedable := &symbols[files[1].URI][captureset.MaxTargets/2]
+	unseedablePosition := lsp.Position{Line: unseedable.SelectionRange.Start.Line, Character: math.MaxUint32}
+	unseedable.Range = lsp.Range{Start: unseedablePosition, End: unseedablePosition}
+	unseedable.SelectionRange = unseedable.Range
+	prepare := make(map[lsp.Position][]lsp.CallHierarchyItem, captureset.MaxTargets+3)
+	for _, file := range files {
+		for _, symbol := range symbols[file.URI] {
+			prepare[symbol.SelectionRange.Start] = []lsp.CallHierarchyItem{item(symbol.Name, file.URI, symbol.Kind, symbol.SelectionRange.Start.Line, symbol.SelectionRange.Start.Character)}
+		}
+	}
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: symbols, prepare: prepare}
 	got, err := (DiscoveryAdapter{Workspace: workspace, Files: files, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Complete || got.Accounting.FileDenominator != len(files) || got.Accounting.SymbolDenominator != captureset.MaxTargets+1 {
+	wantSymbols := captureset.MaxTargets + 3
+	if got.Complete || got.Accounting.FileDenominator != len(files) || got.Accounting.SymbolDenominator != wantSymbols {
 		t.Fatalf("ASSERT_TARGET_CAP_ACCOUNTING: complete=%v files=%d symbols=%d", got.Complete, got.Accounting.FileDenominator, got.Accounting.SymbolDenominator)
 	}
-	if len(got.Accounting.Files) != len(files) || len(got.Accounting.Symbols) != captureset.MaxTargets+1 {
-		t.Fatalf("ASSERT_TARGET_CAP_OBSERVED_FILES_SYMBOLS: files=%d symbols=%d", len(got.Accounting.Files), len(got.Accounting.Symbols))
+	if len(got.Accounting.Files) != len(files) || len(got.Accounting.Symbols) != wantSymbols || len(got.SymbolLedger.Entries) != wantSymbols {
+		t.Fatalf("ASSERT_TARGET_CAP_OBSERVED_FILES_SYMBOLS: files=%d symbols=%d ledger=%d", len(got.Accounting.Files), len(got.Accounting.Symbols), len(got.SymbolLedger.Entries))
+	}
+	if len(got.Targets) != captureset.MaxTargets {
+		t.Fatalf("ASSERT_TARGET_CAP_COUNTS_PREPARED_TARGETS: targets=%d", len(got.Targets))
+	}
+	wantCodes := []string{"COORDINATE_OVERFLOW", "TARGET_LIMIT", "TARGET_LIMIT", "CHILD_INCOMPLETE"}
+	if !reflect.DeepEqual(incompleteCauseCodes(got), wantCodes) {
+		t.Fatalf("ASSERT_ADMISSION_ORDER_EXACT_CAUSES: got=%+v want=%v", got.IncompleteCauses, wantCodes)
+	}
+	for i, wantOrdinal := range []int{captureset.MaxTargets, captureset.MaxTargets + 1, captureset.MaxTargets + 2} {
+		cause := got.IncompleteCauses[i]
+		if cause.Scope != "SYMBOL" || cause.SymbolOrdinal == nil || *cause.SymbolOrdinal != wantOrdinal || got.Accounting.Symbols[wantOrdinal].Disposition != census.SymbolIncomplete || got.SymbolLedger.Entries[wantOrdinal].Disposition != string(census.SymbolIncomplete) {
+			t.Fatalf("ASSERT_INCOMPLETE_CAUSE_LEDGER_BY_ORDINAL[%d]: cause=%+v accounting=%+v ledger=%+v", wantOrdinal, cause, got.Accounting.Symbols[wantOrdinal], got.SymbolLedger.Entries[wantOrdinal])
+		}
 	}
 	observations := make(map[DiscoveryDimension]DiscoveryObservation, len(got.Observations))
 	for _, observation := range got.Observations {
@@ -493,7 +600,7 @@ func TestDiscoveryAdapterTargetAdmissionCapIsNotTraversalNodeCeiling(t *testing.
 		t.Fatalf("ASSERT_TARGET_CAP_NOT_NODE_CEILING: %+v", observations[DiscoveryNodeCeiling])
 	}
 	omissions := observations[DiscoveryTargetSourceOmissions]
-	if !omissions.Known || omissions.Omitted == nil || *omissions.Omitted != 1 {
+	if !omissions.Known || omissions.Omitted == nil || *omissions.Omitted != 3 {
 		t.Fatalf("ASSERT_TARGET_CAP_OMITTED_DENOMINATOR: %+v", omissions)
 	}
 }
@@ -501,7 +608,7 @@ func TestDiscoveryAdapterTargetAdmissionCapIsNotTraversalNodeCeiling(t *testing.
 func TestDiscoveryAdapterTerminalResponseIncompleteBounds(t *testing.T) {
 	workspace := t.TempDir()
 	f := testSource(workspace, "bounded.go")
-	wide := make([]lsp.DocumentSymbol, captureset.MaxTargets+1)
+	wide := make([]lsp.DocumentSymbol, censusenumerationprojection.MaxSymbols+1)
 	for i := range wide {
 		wide[i] = sym(fmt.Sprintf("S%d", i), 12, uint32(i), 0)
 	}

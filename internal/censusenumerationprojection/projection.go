@@ -295,7 +295,7 @@ func failureRank(f ProviderFailure) string {
 func causeRank(c IncompleteCause) string {
 	scope := enumRank(c.Scope, []string{"FILE", "SYMBOL"})
 	stage := enumRank(c.Stage, []string{"DISCOVERY", "DOCUMENT_SYMBOL_FLATTEN", "PREPARE_CALL_HIERARCHY"})
-	code := enumRank(c.Code, []string{"CANCELED", "FILE_LIMIT", "SYMBOL_LIMIT", "NODE_LIMIT", "DEPTH_LIMIT", "STRING_BYTE_LIMIT", "RESULT_MISMATCH", "COORDINATE_OVERFLOW", "CHILD_INCOMPLETE"})
+	code := enumRank(c.Code, []string{"CANCELED", "FILE_LIMIT", "SYMBOL_LIMIT", "TARGET_LIMIT", "NODE_LIMIT", "DEPTH_LIMIT", "STRING_BYTE_LIMIT", "RESULT_MISMATCH", "COORDINATE_OVERFLOW", "CHILD_INCOMPLETE"})
 	return fmt.Sprintf("%02d:%08d:%08d:%02d:%02d", scope, ordinalOrMax(c.FileOrdinal, MaxFiles), ordinalOrMax(c.SymbolOrdinal, MaxSymbols), stage, code)
 }
 func enumRank(value string, order []string) int {
@@ -588,7 +588,7 @@ func validCausePair(c IncompleteCause) bool {
 		if c.SymbolOrdinal == nil || c.FileOrdinal != nil {
 			return false
 		}
-		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "SYMBOL_LIMIT" || c.Code == "COORDINATE_OVERFLOW") || c.Stage == "PREPARE_CALL_HIERARCHY" && c.Code == "RESULT_MISMATCH"
+		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "SYMBOL_LIMIT" || c.Code == "TARGET_LIMIT" || c.Code == "COORDINATE_OVERFLOW") || c.Stage == "PREPARE_CALL_HIERARCHY" && c.Code == "RESULT_MISMATCH"
 	}
 	return false
 }

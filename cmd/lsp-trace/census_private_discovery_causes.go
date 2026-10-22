@@ -38,7 +38,7 @@ func validPrivateCensusDiscoveryCause(scope, stage, code string) bool {
 			stage == "DOCUMENT_SUPPLY" && code == "SESSION_UNAVAILABLE" ||
 			stage == "DOCUMENT_SYMBOL_FLATTEN" && (code == "NODE_LIMIT" || code == "DEPTH_LIMIT" || code == "STRING_BYTE_LIMIT")
 	case "SYMBOL":
-		return stage == "DISCOVERY" && (code == "CANCELED" || code == "SYMBOL_LIMIT" || code == "COORDINATE_OVERFLOW") ||
+		return stage == "DISCOVERY" && (code == "CANCELED" || code == "SYMBOL_LIMIT" || code == "TARGET_LIMIT" || code == "COORDINATE_OVERFLOW") ||
 			stage == "PREPARE_CALL_HIERARCHY" && code == "RESULT_MISMATCH"
 	default:
 		return false

@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/seedformat"
@@ -342,7 +343,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (projection Projection
 }
 
 func validateDiscovery(d Discovery) error {
-	if d.Accounting.FileDenominator < 0 || d.Accounting.FileDenominator > captureset.MaxResources || d.Accounting.SymbolDenominator < 0 || d.Accounting.SymbolDenominator > captureset.MaxTargets || len(d.Targets) > captureset.MaxTargets {
+	if d.Accounting.FileDenominator < 0 || d.Accounting.FileDenominator > captureset.MaxResources || d.Accounting.SymbolDenominator < 0 || d.Accounting.SymbolDenominator > censusenumerationprojection.MaxSymbols || len(d.Targets) > captureset.MaxTargets {
 		return errors.New("discovery bounds exceeded")
 	}
 	if d.FileLedger.Denominator != d.Accounting.FileDenominator || d.SymbolLedger.Denominator != d.Accounting.SymbolDenominator || len(d.FileLedger.Entries) != d.FileLedger.Denominator || len(d.SymbolLedger.Entries) != d.SymbolLedger.Denominator {
@@ -425,7 +426,7 @@ func validDiscoveryCause(c IncompleteCause) bool {
 		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "FILE_LIMIT" || c.Code == "CHILD_INCOMPLETE") || c.Stage == "ENUMERATION" && c.Code == "CANCELED" || c.Stage == "DOCUMENT_SYMBOL_FLATTEN" && (c.Code == "NODE_LIMIT" || c.Code == "DEPTH_LIMIT" || c.Code == "STRING_BYTE_LIMIT")
 	}
 	if c.Scope == "SYMBOL" {
-		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "SYMBOL_LIMIT" || c.Code == "COORDINATE_OVERFLOW") || c.Stage == "PREPARE_CALL_HIERARCHY" && c.Code == "RESULT_MISMATCH"
+		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "SYMBOL_LIMIT" || c.Code == "TARGET_LIMIT" || c.Code == "COORDINATE_OVERFLOW") || c.Stage == "PREPARE_CALL_HIERARCHY" && c.Code == "RESULT_MISMATCH"
 	}
 	return false
 }

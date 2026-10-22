@@ -15,6 +15,7 @@ import (
 
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
+	"lsp-trace/internal/censusenumerationprojection"
 	"lsp-trace/internal/discoveryfilter"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/seedformat"
@@ -70,7 +71,7 @@ const (
 	FileProcessed  = "processed"
 	SymbolPrepared = "prepared"
 
-	defaultMaxSymbolNodes = captureset.MaxTargets
+	defaultMaxSymbolNodes = censusenumerationprojection.MaxSymbols
 	defaultMaxSymbolDepth = 64
 	defaultMaxStringBytes = 1 << 20
 )
@@ -131,14 +132,14 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	var sourceOmissions uint64
 	for fileOrdinal, file := range files {
 		fileDisposition := file.Disposition
+		if fileDisposition == "" && !selectPath(includes, excludes, file.Path) {
+			fileDisposition = census.FileExcluded
+		}
 		if fileDisposition == "" && ctx.Err() != nil {
 			fileDisposition = census.FileIncomplete
 			appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)
-			timeoutBoundary = true
+			timeoutBoundary = errors.Is(ctx.Err(), context.DeadlineExceeded)
 			sourceOmissions++
-		}
-		if fileDisposition == "" && !selectPath(includes, excludes, file.Path) {
-			fileDisposition = census.FileExcluded
 		}
 		if fileDisposition == "" && a.Limits.MaxFiles > 0 && filesAttempted >= a.Limits.MaxFiles {
 			fileDisposition = census.FileIncomplete
@@ -174,7 +175,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				code = "CANCELED"
 				disposition = census.FileIncomplete
 				appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)
-				timeoutBoundary = true
+				timeoutBoundary = errors.Is(ctx.Err(), context.DeadlineExceeded)
 				sourceOmissions++
 			}
 			appendFile(&out, fileOrdinal, file.Path, disposition)
@@ -187,7 +188,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			appendFile(&out, fileOrdinal, file.Path, census.FileIncomplete)
 			appendFileIncompleteCause(&out, "ENUMERATION", "CANCELED", fileOrdinal)
 			complete = false
-			timeoutBoundary = true
+			timeoutBoundary = errors.Is(ctx.Err(), context.DeadlineExceeded)
 			sourceOmissions++
 			continue
 		}
@@ -206,7 +207,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				code = "CANCELED"
 				disposition = census.FileIncomplete
 				appendFileIncompleteCause(&out, "DISCOVERY", "CANCELED", fileOrdinal)
-				timeoutBoundary = true
+				timeoutBoundary = errors.Is(ctx.Err(), context.DeadlineExceeded)
 				sourceOmissions++
 			}
 			appendFile(&out, fileOrdinal, file.Path, disposition)
@@ -245,7 +246,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			symbolOrdinal++
 			identity := symbolIdentity(file, symbol, ordinal)
 			disposition := census.SymbolIncomplete
-			if ctx.Err() != nil || ordinal >= captureset.MaxTargets || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols) {
+			if ctx.Err() != nil || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols) {
 				fileComplete, complete = false, false
 				sourceOmissions++
 				code := "SYMBOL_LIMIT"
@@ -254,7 +255,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 					fileCanceled = true
 				}
 				appendSymbolIncompleteCause(&out, "DISCOVERY", code, ordinal)
-				timeoutBoundary = timeoutBoundary || ctx.Err() != nil
+				timeoutBoundary = timeoutBoundary || errors.Is(ctx.Err(), context.DeadlineExceeded)
 				nodeBoundary = nodeBoundary || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols)
 			} else if !callableSymbolKind(symbol.Kind) {
 				disposition = census.SymbolNonCallable
@@ -272,7 +273,8 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 					appendSymbolIncompleteCause(&out, "DISCOVERY", "CANCELED", ordinal)
 					fileCanceled = true
 					fileComplete, complete = false, false
-					providerIncomplete, timeoutBoundary = true, true
+					providerIncomplete = true
+					timeoutBoundary = timeoutBoundary || errors.Is(ctx.Err(), context.DeadlineExceeded)
 					sourceOmissions++
 				case prepareErr != nil:
 					disposition = census.SymbolPreparationFailed
@@ -293,14 +295,20 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 					sourceOmissions++
 				default:
 					seed, seedErr := canonicalPositionSeed(a.Workspace, file.Path, ordinal, symbol.SelectionRange.Start)
-					if seedErr == nil {
-						disposition = census.SymbolSelected
-						out.Targets = append(out.Targets, PreparedTarget{CensusOrdinal: ordinal, CanonicalSeedV2: seed, URI: file.URI, LanguageID: file.LanguageID, Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Range, SelectionRange: symbol.SelectionRange, SymbolIdentity: identity})
-					} else {
+					switch {
+					case seedErr != nil:
 						disposition = census.SymbolIncomplete
 						appendSymbolIncompleteCause(&out, "DISCOVERY", "COORDINATE_OVERFLOW", ordinal)
 						fileComplete, complete = false, false
 						sourceOmissions++
+					case len(out.Targets) >= captureset.MaxTargets:
+						disposition = census.SymbolIncomplete
+						appendSymbolIncompleteCause(&out, "DISCOVERY", "TARGET_LIMIT", ordinal)
+						fileComplete, complete = false, false
+						sourceOmissions++
+					default:
+						disposition = census.SymbolSelected
+						out.Targets = append(out.Targets, PreparedTarget{CensusOrdinal: ordinal, CanonicalSeedV2: seed, URI: file.URI, LanguageID: file.LanguageID, Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Range, SelectionRange: symbol.SelectionRange, SymbolIdentity: identity})
 					}
 				}
 			}
@@ -327,7 +335,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	out.SymbolLedger.Denominator = symbolOrdinal
 	if ctx.Err() != nil {
 		complete = false
-		timeoutBoundary = true
+		timeoutBoundary = timeoutBoundary || errors.Is(ctx.Err(), context.DeadlineExceeded)
 	}
 	accountingErr := out.Accounting.Validate()
 	discoveryErr := validateDiscovery(out)
