@@ -71,6 +71,7 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"internal/censusrequest/receipt_v2.go",
 	"internal/schema/schema.go",
 	"internal/source/discovery.go",
+	"cmd/lsp-trace/private_census_terminal_observation.go",
 }
 
 var syntheticSourceAdditionalSchemaPaths = []string{

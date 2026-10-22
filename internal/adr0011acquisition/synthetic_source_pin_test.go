@@ -161,6 +161,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/censusrequest/receipt_v2.go",
 		"internal/schema/schema.go",
 		"internal/source/discovery.go",
+		"cmd/lsp-trace/private_census_terminal_observation.go",
 	}
 	expectedAdditionalSchemaPaths := []string{
 		"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
@@ -265,9 +266,15 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	arbitraryJSON := append([]SyntheticSourceEntry(nil), entries...)
 	arbitraryJSON[len(arbitraryJSON)-1].Path = "internal/mcpcontract/testdata/schemas/arbitrary.json"
 	assertReject("arbitrary json", arbitraryJSON)
-	testSource := append([]SyntheticSourceEntry(nil), entries...)
-	testSource[oldFiveEnd].Path = "cmd/lsp-trace/acquisition_v2_test.go"
-	assertReject("test source", testSource)
+	for _, name := range []string{
+		"cmd/lsp-trace/census_enumeration_projection_test.go",
+		"cmd/lsp-trace/private_census_terminal_observation_test.go",
+		"sessionruntime/private_terminal_observation_test.go",
+	} {
+		testSource := append([]SyntheticSourceEntry(nil), entries...)
+		testSource[oldFiveEnd].Path = name
+		assertReject("test source "+name, testSource)
+	}
 	docSource := append([]SyntheticSourceEntry(nil), entries...)
 	docSource[oldFiveEnd].Path = "docs/qualification/source-pin.go"
 	assertReject("docs source", docSource)
