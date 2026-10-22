@@ -141,6 +141,13 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 					privateReceipt = publisher(ctx, discovery, receipt, options.PublicationRoot)
 				}
 				outcome.EnumerationReceipt = &privateReceipt
+				if len(discovery.IncompleteCauses) > 0 {
+					terminal, terminalErr := newPrivateCensusTerminalObservation(discovery, privateReceipt, ctx.Err())
+					if terminalErr != nil {
+						return fail(censusStageDiscovery, nil)
+					}
+					outcome.PrivateTerminalObservation = &terminal
+				}
 			}
 			return 1
 		}

@@ -350,10 +350,26 @@ type DocumentSupply struct {
 	Params          json.RawMessage
 }
 
+type LifecycleSubcause string
+
+const (
+	LifecycleSubcauseManagerClosed      LifecycleSubcause = "MANAGER_CLOSED"
+	LifecycleSubcauseSessionNotReady    LifecycleSubcause = "SESSION_NOT_READY"
+	LifecycleSubcauseProtocolOwned      LifecycleSubcause = "PROTOCOL_OWNED"
+	LifecycleSubcauseLeaseClosing       LifecycleSubcause = "LEASE_CLOSING"
+	LifecycleSubcauseLeaseTokenMismatch LifecycleSubcause = "LEASE_TOKEN_MISMATCH"
+	LifecycleSubcauseLanguageIDConflict LifecycleSubcause = "LANGUAGE_ID_CONFLICT"
+)
+
+func ProducedLifecycleSubcauses() []LifecycleSubcause {
+	return []LifecycleSubcause{LifecycleSubcauseManagerClosed, LifecycleSubcauseSessionNotReady, LifecycleSubcauseProtocolOwned, LifecycleSubcauseLeaseClosing, LifecycleSubcauseLeaseTokenMismatch, LifecycleSubcauseLanguageIDConflict}
+}
+
 type DocumentResult struct {
 	URI, LanguageID     string
 	Version             int
 	Failure             session.Failure
+	LifecycleSubcause   LifecycleSubcause         `json:"-"`
 	DiagnosticOperation DiagnosticOperationHandle `json:"-"`
 	// Supply is nil for omitted capture, unchanged/cached documents, and errors.
 	// A cached digest is never promoted to evidence of a new notification.
@@ -463,8 +479,9 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		return DocumentResult{Failure: session.StaleGeneration}
 	}
 	if !m.validSessionLeaseLocked(ctx, r) {
+		subcause := m.lifecycleSubcauseLocked(r)
 		m.mu.Unlock()
-		return DocumentResult{Failure: session.LifecycleConflict}
+		return DocumentResult{Failure: session.LifecycleConflict, LifecycleSubcause: subcause}
 	}
 	workspace := filepath.Clean(r.record.Profile.Workspace().String())
 	registeredWorkspace := r.record.Profile.Workspace().String()
@@ -544,8 +561,9 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		return finishDocument(DocumentResult{Failure: session.StaleGeneration}, diagnosticEventTerminalFailure)
 	}
 	if m.closed || r.record.State != session.Ready || r.protocolOwned || !m.validSessionLeaseLocked(ctx, r) {
+		subcause := m.lifecycleSubcauseLocked(r)
 		m.mu.Unlock()
-		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
+		return finishDocument(DocumentResult{Failure: session.LifecycleConflict, LifecycleSubcause: subcause}, diagnosticEventTerminalFailure)
 	}
 	child, ok := r.process.(wireChild)
 	if !ok {
@@ -555,7 +573,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	previous, opened := r.documents[req.URI]
 	if opened && previous.languageID != languageID {
 		m.mu.Unlock()
-		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
+		return finishDocument(DocumentResult{Failure: session.LifecycleConflict, LifecycleSubcause: LifecycleSubcauseLanguageIDConflict}, diagnosticEventTerminalFailure)
 	}
 	cacheCanSatisfy := !req.CaptureSupply || previous.supply != nil
 	if opened && previous.digest == digest && !refresh && cacheCanSatisfy {
@@ -2188,6 +2206,21 @@ func (m *Manager) validSessionLeaseLocked(ctx context.Context, r *runtimeSession
 	return token != nil && token == r.leaseToken && token.manager == m && token.session == r &&
 		token.generation == r.record.Generation && token.nonce == r.leaseNonce && r.leaseCount == 1 &&
 		!r.leaseClosing && r.record.State == session.Ready && m.sessions[r.record.SessionID] == r
+}
+
+func (m *Manager) lifecycleSubcauseLocked(r *runtimeSession) LifecycleSubcause {
+	switch {
+	case m.closed:
+		return LifecycleSubcauseManagerClosed
+	case r.record.State != session.Ready:
+		return LifecycleSubcauseSessionNotReady
+	case r.protocolOwned:
+		return LifecycleSubcauseProtocolOwned
+	case r.leaseClosing:
+		return LifecycleSubcauseLeaseClosing
+	default:
+		return LifecycleSubcauseLeaseTokenMismatch
+	}
 }
 
 func (m *Manager) invalidateSessionLeaseLocked(r *runtimeSession) context.CancelCauseFunc {

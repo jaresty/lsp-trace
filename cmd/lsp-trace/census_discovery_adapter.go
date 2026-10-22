@@ -73,7 +73,7 @@ func (s censusRuntimeDocumentSupplier) Supply(ctx context.Context, file censusac
 	case session.SessionPoisoned:
 		return censusacquisition.ErrSessionPoisoned
 	case session.LifecycleConflict:
-		return censusacquisition.ErrLifecycleConflict
+		return &censusacquisition.DocumentSupplyFailure{Cause: censusacquisition.ErrLifecycleConflict, LifecycleSubcause: censusacquisition.LifecycleSubcause(result.LifecycleSubcause)}
 	}
 	if result.Failure != "" || result.URI != file.URI || result.LanguageID != file.LanguageID {
 		return errors.New("document supply failed")

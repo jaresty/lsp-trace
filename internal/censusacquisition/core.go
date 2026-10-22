@@ -122,12 +122,33 @@ type ProviderFailure struct {
 
 // IncompleteCause is the normalized, closed reason for one incomplete ledger member.
 // Exactly one ordinal is populated and Scope agrees with it.
+type LifecycleSubcause string
+
+const (
+	LifecycleSubcauseManagerClosed      LifecycleSubcause = "MANAGER_CLOSED"
+	LifecycleSubcauseSessionNotReady    LifecycleSubcause = "SESSION_NOT_READY"
+	LifecycleSubcauseProtocolOwned      LifecycleSubcause = "PROTOCOL_OWNED"
+	LifecycleSubcauseLeaseClosing       LifecycleSubcause = "LEASE_CLOSING"
+	LifecycleSubcauseLeaseTokenMismatch LifecycleSubcause = "LEASE_TOKEN_MISMATCH"
+	LifecycleSubcauseLanguageIDConflict LifecycleSubcause = "LANGUAGE_ID_CONFLICT"
+)
+
+type DocumentSupplyFailure struct {
+	Cause             error
+	LifecycleSubcause LifecycleSubcause
+}
+
+func (e *DocumentSupplyFailure) Error() string { return e.Cause.Error() }
+func (e *DocumentSupplyFailure) Unwrap() error { return e.Cause }
+
+// IncompleteCause is internal typed custody; fields are not public JSON.
 type IncompleteCause struct {
-	Scope         string
-	Stage         string
-	Code          string
-	FileOrdinal   *int
-	SymbolOrdinal *int
+	Scope             string
+	Stage             string
+	Code              string
+	LifecycleSubcause LifecycleSubcause
+	FileOrdinal       *int
+	SymbolOrdinal     *int
 }
 
 type Discovery struct {

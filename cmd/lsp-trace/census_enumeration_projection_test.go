@@ -246,11 +246,12 @@ func TestPrivateEnumerationProjectionEmitsScalarCauseSummary(t *testing.T) {
 	public := out
 	public.EnumerationReceipt = nil
 	public.PrivateDiscoveryCauses = nil
+	public.PrivateTerminalObservation = nil
 	if writeCensusOutcome(&publicOut, &publicErr, true, public) != 1 || writeCensusOutcome(&privateOut, &privateErr, true, out) != 1 {
 		t.Fatal("unexpected exit")
 	}
 	lines := bytes.Split(bytes.TrimSuffix(privateErr.Bytes(), []byte{'\n'}), []byte{'\n'})
-	if len(lines) != 3 || !bytes.Equal(lines[0], bytes.TrimSuffix(publicErr.Bytes(), []byte{'\n'})) {
+	if len(lines) != 4 || !bytes.Equal(lines[0], bytes.TrimSuffix(publicErr.Bytes(), []byte{'\n'})) {
 		t.Fatalf("ASSERT_PRIVATE_CAUSE_SUMMARY_ADDITIVE public=%q private=%q", publicErr.Bytes(), privateErr.Bytes())
 	}
 	var summary struct {

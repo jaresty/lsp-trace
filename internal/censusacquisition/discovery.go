@@ -177,7 +177,12 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			} else if errors.Is(err, ErrLifecycleConflict) {
 				code = "LIFECYCLE_CONFLICT"
 				disposition = census.FileIncomplete
-				appendFileIncompleteCause(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
+				var typed *DocumentSupplyFailure
+				if errors.As(err, &typed) {
+					appendFileIncompleteCauseWithLifecycle(&out, "DOCUMENT_SUPPLY", code, typed.LifecycleSubcause, fileOrdinal)
+				} else {
+					appendFileIncompleteCause(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
+				}
 				sourceOmissions++
 			} else if errors.Is(err, ErrSessionUnavailable) {
 				code = "SESSION_UNAVAILABLE"
@@ -361,8 +366,11 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 }
 
 func appendFileIncompleteCause(out *Discovery, stage, code string, ordinal int) {
+	appendFileIncompleteCauseWithLifecycle(out, stage, code, "", ordinal)
+}
+func appendFileIncompleteCauseWithLifecycle(out *Discovery, stage, code string, subcause LifecycleSubcause, ordinal int) {
 	value := ordinal
-	out.IncompleteCauses = append(out.IncompleteCauses, IncompleteCause{Scope: "FILE", Stage: stage, Code: code, FileOrdinal: &value})
+	out.IncompleteCauses = append(out.IncompleteCauses, IncompleteCause{Scope: "FILE", Stage: stage, Code: code, LifecycleSubcause: subcause, FileOrdinal: &value})
 }
 func appendSymbolIncompleteCause(out *Discovery, stage, code string, ordinal int) {
 	value := ordinal
