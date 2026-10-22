@@ -518,7 +518,7 @@ func discoveryObservations(limits DiscoveryLimits, observed, omitted uint64, nod
 	omit := omitted
 	out := []DiscoveryObservation{unknown(DiscoveryNodeCeiling), unknown(DiscoveryDepthBoundary), unknown(DiscoveryTargetSourceOmissions), unknown(DiscoveryProviderCompleteness), unknown(DiscoveryTimeoutRequestBudget), unknown(DiscoveryMessageByteBudget)}
 	if node {
-		limit := uint64(captureset.MaxTargets)
+		limit := uint64(defaultMaxSymbolNodes)
 		if limits.MaxSymbols > 0 && limits.MaxSymbols < int(limit) {
 			limit = uint64(limits.MaxSymbols)
 		}

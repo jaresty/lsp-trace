@@ -628,7 +628,25 @@ func TestDiscoveryAdapterTerminalResponseIncompleteBounds(t *testing.T) {
 			if !reflect.DeepEqual(incompleteCauseCodes(got), []string{wantCode}) {
 				t.Fatalf("ASSERT_FLATTEN_CAUSE[%s]: %+v", name, got.IncompleteCauses)
 			}
+			if name == "wide" {
+				observation := got.Observations[0]
+				if !observation.Known || observation.Dimension != DiscoveryNodeCeiling || observation.Limit == nil || *observation.Limit != censusenumerationprojection.MaxSymbols {
+					var limit uint64
+					if observation.Limit != nil {
+						limit = *observation.Limit
+					}
+					t.Fatalf("ASSERT_WIDE_NODE_CEILING_LIMIT: got=%d want=%d observation=%+v", limit, censusenumerationprojection.MaxSymbols, observation)
+				}
+			}
 		})
+	}
+}
+
+func TestDiscoveryObservationsExplicitMaxSymbolsLimit(t *testing.T) {
+	const maxSymbols = 17
+	observation := discoveryObservations(DiscoveryLimits{MaxSymbols: maxSymbols}, 18, 1, true, false, false, false, false)[0]
+	if !observation.Known || observation.Dimension != DiscoveryNodeCeiling || observation.Limit == nil || *observation.Limit != maxSymbols {
+		t.Fatalf("ASSERT_EXPLICIT_MAX_SYMBOLS_NODE_CEILING_LIMIT: %+v", observation)
 	}
 }
 
