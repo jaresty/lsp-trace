@@ -489,6 +489,9 @@ func validate(p Projection, raw []byte) error {
 	if err := validateCauses(p); err != nil {
 		return err
 	}
+	if err := validateDocumentSupplyCompatibility(p); err != nil {
+		return err
+	}
 	for i, f := range p.Files {
 		required := f.Disposition == "unreadable" || f.Disposition == "unsupported" || f.Disposition == "document-symbol-failed"
 		if required && fileFailures[i] != 1 || !required && f.Disposition != "incomplete" && fileFailures[i] != 0 || fileFailures[i] > 1 {
@@ -528,7 +531,7 @@ func failureKey(f ProviderFailure) string {
 func fileFailureMatches(f ProviderFailure, disposition string) bool {
 	switch f.Stage {
 	case "DOCUMENT_SUPPLY":
-		return disposition == "unreadable" && (f.Code == "UNAVAILABLE" || f.Code == "REQUEST_FAILED" || f.Code == "CANCELED") || disposition == "incomplete" && f.Code == "CANCELED"
+		return (disposition == "unreadable" || disposition == "incomplete") && (f.Code == "UNAVAILABLE" || f.Code == "REQUEST_FAILED" || f.Code == "CANCELED")
 	case "DOCUMENT_SYMBOL":
 		return disposition == "unsupported" && f.Code == "UNSUPPORTED" || disposition == "document-symbol-failed" && (f.Code == "REQUEST_FAILED" || f.Code == "CANCELED") || disposition == "incomplete" && f.Code == "CANCELED"
 	case "DOCUMENT_SYMBOL_FLATTEN":
@@ -600,6 +603,55 @@ func validateObservations(v []Observation) error {
 	}
 	return nil
 }
+func documentSupplyFailureCodeForCause(c IncompleteCause) (string, bool) {
+	switch {
+	case c.Stage == "DOCUMENT_SUPPLY" && (c.Code == "SESSION_POISONED" || c.Code == "LIFECYCLE_CONFLICT"):
+		return "REQUEST_FAILED", true
+	case c.Stage == "DOCUMENT_SUPPLY" && c.Code == "SESSION_UNAVAILABLE":
+		return "UNAVAILABLE", true
+	case c.Stage == "DISCOVERY" && c.Code == "CANCELED":
+		return "CANCELED", true
+	default:
+		return "", false
+	}
+}
+
+func validateDocumentSupplyCompatibility(p Projection) error {
+	failures := map[int]ProviderFailure{}
+	for _, failure := range p.ProviderFailures {
+		if failure.Stage != "DOCUMENT_SUPPLY" {
+			continue
+		}
+		if failure.FileOrdinal == nil || failure.SymbolOrdinal != nil || *failure.FileOrdinal < 0 || *failure.FileOrdinal >= len(p.Files) {
+			return errors.New("invalid document supply failure ordinal")
+		}
+		if p.Files[*failure.FileOrdinal].Disposition == "incomplete" {
+			failures[*failure.FileOrdinal] = failure
+		}
+	}
+	causes := map[int]IncompleteCause{}
+	for _, cause := range p.IncompleteCauses {
+		want, relevant := documentSupplyFailureCodeForCause(cause)
+		if !relevant {
+			continue
+		}
+		if cause.FileOrdinal == nil || cause.SymbolOrdinal != nil || *cause.FileOrdinal < 0 || *cause.FileOrdinal >= len(p.Files) {
+			return errors.New("invalid document supply cause ordinal")
+		}
+		failure, ok := failures[*cause.FileOrdinal]
+		if !ok || failure.Code != want {
+			return errors.New("document supply failure cause mismatch")
+		}
+		causes[*cause.FileOrdinal] = cause
+	}
+	for ordinal := range failures {
+		if _, ok := causes[ordinal]; !ok {
+			return errors.New("document supply failure cause mismatch")
+		}
+	}
+	return nil
+}
+
 func validCausePair(c IncompleteCause) bool {
 	if c.Scope == "FILE" {
 		if c.FileOrdinal == nil || c.SymbolOrdinal != nil {

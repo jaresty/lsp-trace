@@ -260,12 +260,18 @@ func TestDocumentSupplyLifecycleCausesBuildCanonicalRoundTripAndOrder(t *testing
 	codes := []string{"SESSION_POISONED", "LIFECYCLE_CONFLICT", "SESSION_UNAVAILABLE"}
 	files := make([]File, 5)
 	causes := make([]IncompleteCause, 0, 5)
+	failures := make([]ProviderFailure, 0, len(codes))
 	for i := range files {
 		files[i] = File{Ordinal: i, Path: fmt.Sprintf("private/%d.go", i), Disposition: "incomplete"}
 	}
 	for i, code := range codes {
 		ordinal := i
 		causes = append(causes, IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, FileOrdinal: &ordinal})
+		failureCode := "REQUEST_FAILED"
+		if code == "SESSION_UNAVAILABLE" {
+			failureCode = "UNAVAILABLE"
+		}
+		failures = append(failures, ProviderFailure{Stage: "DOCUMENT_SUPPLY", Code: failureCode, FileOrdinal: &ordinal})
 	}
 	discoveryOrdinal := 3
 	causes = append(causes, IncompleteCause{Scope: "FILE", Stage: "DISCOVERY", Code: "CHILD_INCOMPLETE", FileOrdinal: &discoveryOrdinal})
@@ -277,7 +283,7 @@ func TestDocumentSupplyLifecycleCausesBuildCanonicalRoundTripAndOrder(t *testing
 	}
 	build := func(inputCauses []IncompleteCause) Projection {
 		t.Helper()
-		got, err := Build(Input{SessionID: "session", Generation: 2, RequestFingerprint: "sha256:" + strings.Repeat("a", 64), WorkspaceURI: "file:///private/workspace", Files: files, IncompleteCauses: inputCauses, RequestMaxNodes: 631, RequestTimeoutMS: 30, TimeoutMS: 60})
+		got, err := Build(Input{SessionID: "session", Generation: 2, RequestFingerprint: "sha256:" + strings.Repeat("a", 64), WorkspaceURI: "file:///private/workspace", Files: files, ProviderFailures: failures, IncompleteCauses: inputCauses, RequestMaxNodes: 631, RequestTimeoutMS: 30, TimeoutMS: 60})
 		if err != nil {
 			t.Fatalf("ASSERT_DOCUMENT_SUPPLY_CAUSE_BUILD: %v", err)
 		}
@@ -309,6 +315,40 @@ func TestDocumentSupplyLifecycleCausesBuildCanonicalRoundTripAndOrder(t *testing
 	}
 	if bytes.Contains(firstRaw, []byte("file:///private/workspace")) {
 		t.Fatalf("ASSERT_DOCUMENT_SUPPLY_CAUSE_PRIVACY: workspace URI in %s", firstRaw)
+	}
+}
+
+func TestDocumentSupplyCompatibilityRejectsUnsafeCauseOrdinalsWithoutPanic(t *testing.T) {
+	fileOrdinal := 0
+	symbolOrdinal := 0
+	negativeOrdinal := -1
+	outOfRangeOrdinal := 1
+
+	for _, tc := range []struct {
+		name  string
+		cause IncompleteCause
+	}{
+		{name: "nil file ordinal", cause: IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_POISONED"}},
+		{name: "both ordinal kinds", cause: IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_POISONED", FileOrdinal: &fileOrdinal, SymbolOrdinal: &symbolOrdinal}},
+		{name: "symbol ordinal only", cause: IncompleteCause{Scope: "SYMBOL", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_POISONED", SymbolOrdinal: &symbolOrdinal}},
+		{name: "negative file ordinal", cause: IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_POISONED", FileOrdinal: &negativeOrdinal}},
+		{name: "out of range file ordinal", cause: IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: "SESSION_POISONED", FileOrdinal: &outOfRangeOrdinal}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := Projection{
+				Files:            []File{{Ordinal: 0, Path: "a.go", Disposition: "incomplete"}},
+				ProviderFailures: []ProviderFailure{{Stage: "DOCUMENT_SUPPLY", Code: "REQUEST_FAILED", FileOrdinal: &fileOrdinal}},
+				IncompleteCauses: []IncompleteCause{tc.cause},
+			}
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					t.Fatalf("ASSERT_DOCUMENT_SUPPLY_COMPATIBILITY_NO_PANIC: %v", recovered)
+				}
+			}()
+			if err := validateDocumentSupplyCompatibility(p); err == nil {
+				t.Fatal("ASSERT_DOCUMENT_SUPPLY_COMPATIBILITY_UNSAFE_CAUSE_REJECTED: got nil error")
+			}
+		})
 	}
 }
 

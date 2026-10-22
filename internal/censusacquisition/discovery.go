@@ -197,7 +197,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				sourceOmissions++
 			}
 			appendFile(&out, fileOrdinal, file.Path, disposition)
-			appendFileProviderFailure(&out, "DOCUMENT_SUPPLY", code, fileOrdinal)
+			appendFileProviderFailure(&out, "DOCUMENT_SUPPLY", publicDocumentSupplyFailureCode(code), fileOrdinal)
 			complete = false
 			providerIncomplete = true
 			continue
@@ -375,6 +375,19 @@ func appendFileIncompleteCauseWithLifecycle(out *Discovery, stage, code string, 
 func appendSymbolIncompleteCause(out *Discovery, stage, code string, ordinal int) {
 	value := ordinal
 	out.IncompleteCauses = append(out.IncompleteCauses, IncompleteCause{Scope: "SYMBOL", Stage: stage, Code: code, SymbolOrdinal: &value})
+}
+
+func publicDocumentSupplyFailureCode(code string) string {
+	switch code {
+	case "SESSION_POISONED", "LIFECYCLE_CONFLICT":
+		return "REQUEST_FAILED"
+	case "SESSION_UNAVAILABLE":
+		return "UNAVAILABLE"
+	case "REQUEST_FAILED", "CANCELED":
+		return code
+	default:
+		return "REQUEST_FAILED"
+	}
 }
 
 func appendFileProviderFailure(out *Discovery, stage, code string, ordinal int) {

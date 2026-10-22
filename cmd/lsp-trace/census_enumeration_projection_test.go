@@ -76,18 +76,26 @@ func TestDocumentSupplyLifecycleCausesDoNotBecomeEncodingFailures(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, code := range []string{"SESSION_POISONED", "LIFECYCLE_CONFLICT", "SESSION_UNAVAILABLE"} {
-		t.Run(code, func(t *testing.T) {
+	for _, tc := range []struct {
+		causeCode   string
+		failureCode string
+	}{
+		{causeCode: "SESSION_POISONED", failureCode: "REQUEST_FAILED"},
+		{causeCode: "LIFECYCLE_CONFLICT", failureCode: "REQUEST_FAILED"},
+		{causeCode: "SESSION_UNAVAILABLE", failureCode: "UNAVAILABLE"},
+	} {
+		t.Run(tc.causeCode, func(t *testing.T) {
 			discovery := incompleteEnumerationDiscovery(t)
 			fileOrdinal := 0
-			discovery.IncompleteCauses[0] = censusacquisition.IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: code, FileOrdinal: &fileOrdinal}
+			discovery.IncompleteCauses[0] = censusacquisition.IncompleteCause{Scope: "FILE", Stage: "DOCUMENT_SUPPLY", Code: tc.causeCode, FileOrdinal: &fileOrdinal}
+			discovery.ProviderFailures = append(discovery.ProviderFailures, censusacquisition.ProviderFailure{Stage: "DOCUMENT_SUPPLY", Code: tc.failureCode, FileOrdinal: &fileOrdinal})
 			root := t.TempDir()
 			if err := os.Chmod(root, 0o700); err != nil {
 				t.Fatal(err)
 			}
 			receipt := publishCensusEnumerationProjection(context.Background(), discovery, request, root)
 			if receipt.Status != "PUBLISHED" || receipt.UnavailableReason == "ENCODE_FAILED" || receipt.EncodingFailureCategory != "" {
-				t.Fatalf("ASSERT_DOCUMENT_SUPPLY_CAUSE_NOT_ENCODING_FAILURE: code=%s receipt=%+v", code, receipt)
+				t.Fatalf("ASSERT_DOCUMENT_SUPPLY_CAUSE_NOT_ENCODING_FAILURE: code=%s receipt=%+v", tc.causeCode, receipt)
 			}
 		})
 	}
