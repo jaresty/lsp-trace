@@ -179,9 +179,15 @@ func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessi
 	if request.Method == "textDocument/documentSymbol" && r.privateEnumerationProjection {
 		request.PrivateNotificationMaxMessages = -1
 	}
-	if r.probe != nil && (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5" || r.probe.version == "v6") && request.Method == "textDocument/documentSymbol" {
-		request.CaptureProviderMessageComposition = true
-		request.CaptureProviderTransactionObservation = r.probe.version == "v5" || r.probe.version == "v6"
+	if r.probe != nil {
+		legacyComposition := (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5" || r.probe.version == "v6") && request.Method == "textDocument/documentSymbol"
+		if legacyComposition {
+			request.CaptureProviderMessageComposition = true
+			request.CaptureProviderTransactionObservation = r.probe.version == "v5" || r.probe.version == "v6"
+		} else if r.probe.version == "v7" {
+			request.CaptureProviderMessageCompositionAllMethods = true
+			request.CaptureProviderTransactionObservationAllMethods = true
+		}
 	}
 	result := r.manager.RoundTrip(ctx, request)
 	r.retainHandle(result.DiagnosticOperation)
@@ -189,6 +195,20 @@ func (r *privateAcquisitionRuntime) roundTrip(ctx context.Context, request sessi
 }
 func (r *privateAcquisitionRuntime) observeRoundTrip(method string, configuredMaxMessages int, configuredMaxBytes int64, result sessionruntime.RoundTripResult, decodeErr error) {
 	if r.probe == nil {
+		return
+	}
+	if r.probe.version == "v7" {
+		composition, compositionPresent := result.ProviderMessageComposition()
+		transaction, transactionPresent := result.ProviderTransactionObservation()
+		class, cause := "", ""
+		if result.Failure != "" {
+			class, cause = privateSessionFailureCause(result.Failure)
+		} else if result.ServerError != nil {
+			class, cause = privateRPCErrorCause(result.ServerError)
+		} else if decodeErr != nil {
+			class, cause = "DECODE_FAILURE", "DECODE_FAILURE"
+		}
+		r.probe.observeV7(privateProbePhase(method), class, cause, composition, compositionPresent, transaction, transactionPresent, configuredMaxMessages, configuredMaxBytes, result.Messages, result.Bytes)
 		return
 	}
 	if (r.probe.version == "v3" || r.probe.version == "v4" || r.probe.version == "v5" || r.probe.version == "v6") && privateProbePhase(method) == "DOCUMENT_SYMBOL" {

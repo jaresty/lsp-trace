@@ -101,6 +101,12 @@ func (c *roundTripChild) serve() {
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`{"ok":true}`)})
 		case "references-empty":
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`[]`)})
+		case "document-success-then-malformed":
+			if msg.Method == "textDocument/documentSymbol" {
+				_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`[]`)})
+			} else {
+				_, _ = io.WriteString(c.output, "Content-Length: nope\r\n\r\n{}")
+			}
 		case "references-null":
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`null`)})
 		case "call-hierarchy-hang-incoming", "call-hierarchy-hang-outgoing":

@@ -44,6 +44,7 @@ type providerProbeRunnerResult struct {
 	probeV4                               privateProviderProbeArtifactV4
 	probeV5                               privateProviderProbeArtifactV5
 	probeV6                               privateProviderProbeArtifactV6
+	probeV7                               privateProviderProbeArtifactV7
 	probeErr                              error
 	probeExists                           bool
 }
@@ -230,6 +231,9 @@ func runProviderProbeRunnerInWorkspaceVersionWithStarter(t *testing.T, workspace
 				result.probeErr = err
 			case "v6":
 				result.probeV6, err = parsePrivateProviderProbeV6(raw)
+				result.probeErr = err
+			case "v7":
+				result.probeV7, err = parsePrivateProviderProbeV7(raw)
 				result.probeErr = err
 			default:
 				result.probe, err = parsePrivateProviderProbe(raw)
@@ -440,5 +444,45 @@ func TestRunCensusProviderProbeV2RealSessionParityAndSingleLifecycle(t *testing.
 	}
 	if !v4.probeExists || v4.probeErr != nil || v4.probeV4.Schema != privateProviderProbeSchemaV4 || len(v4.probeV4.Records) != 1 || v4.probeV4.Records[0].Cause != string(session.ResourceExhausted) || v4.probeV4.Records[0].Exhaustion == nil || v4.probeV4.Records[0].Exhaustion.Boundary != "BYTE_LIMIT_EXCEEDED" || v4.probeV4.Composition == nil || v4.probeV4.Composition.Selection != "FIRST_RESOURCE_EXHAUSTED" || v4.probeV4.Composition.Outcome != string(sessionruntime.ProviderMessageOutcomeByteLimit) {
 		t.Fatalf("ASSERT_PROVIDER_PROBE_V4_PRODUCTION_MANAGER_DISPATCH probe=%+v", v4.probeV4)
+	}
+}
+
+func TestRunCensusProviderProbeV7FinalizeReadParseAfterNonDocumentPoison(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process test uses Darwin supervisor")
+	}
+	core := func(options censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+		cfg.runner.start.Process = managedprocess.Spec{
+			Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: cfg.runner.start.Process.Dir,
+			Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1", "LSP_TRACE_RUNTIME_HELPER_MALFORMED_PREPARE_CALL_HIERARCHY_FRAME=1"),
+		}
+		cfg.runner.timeout = 3 * time.Second
+		cfg.runner.requestTimeout = time.Second
+		code := runInitializedAcquisitionSession(cfg.runner, func(ctx context.Context, initialized initializedAcquisitionSession) int {
+			runtime := initialized.(*initializedAcquisitionRuntime)
+			_, _ = runInitializedCensusDiscovery(ctx, options, runtime, true)
+			_ = runtime.RoundTrip(ctx, sessionruntime.RoundTripRequest{
+				SessionID: runtime.SessionID(), Generation: runtime.Generation(),
+				Method:   "textDocument/prepareCallHierarchy",
+				Params:   json.RawMessage(`{"textDocument":{"uri":"file:///fixture/main.go"},"position":{"line":1,"character":0}}`),
+				Deadline: time.Now().Add(time.Second), MaxMessages: 64, MaxBytes: 4 << 20,
+			})
+			return 0
+		})
+		if code != 0 {
+			t.Fatalf("session code=%d", code)
+		}
+		return deterministicProviderProbeOutcome(t)
+	}
+	got := runProviderProbeRunnerVersion(t, "v7", true, false, core)
+	if !got.probeExists || got.probeErr != nil || got.probeV7.Schema != privateProviderProbeSchemaV7 || got.probeV7.Status != "COMPLETE" || got.probeV7.Witness == nil {
+		var witness any
+		if got.probeV7.Witness != nil {
+			witness = *got.probeV7.Witness
+		}
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V7_RUNNER_CUSTODY exists=%t err=%v status=%s witness=%+v", got.probeExists, got.probeErr, got.probeV7.Status, witness)
+	}
+	if got.probeV7.Witness.Phase != "PROVIDER_REQUEST" || got.probeV7.Witness.Composition.Selection != "FIRST_FAILURE_OR_POISON" || got.probeV7.Witness.Composition.Outcome != string(sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage) || got.probeV7.Witness.Transaction.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V7_NON_DOCUMENT_POISON witness=%+v", got.probeV7.Witness)
 	}
 }

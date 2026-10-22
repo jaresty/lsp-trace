@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -304,10 +305,12 @@ type RoundTripRequest struct {
 	// Private per-run documentSymbol frame caps; zero disables each capture.
 	CaptureDocumentSymbolRequestFrameMaxBytes  int64 `json:"-"`
 	CaptureDocumentSymbolResponseFrameMaxBytes int64 `json:"-"`
-	// Private documentSymbol-only message-composition observation; zero value disables.
-	CaptureProviderMessageComposition bool `json:"-"`
-	// Private documentSymbol-only scalar transaction observation; zero value disables.
+	// Legacy private observation opt-ins remain documentSymbol-specific; zero values disable.
+	CaptureProviderMessageComposition     bool `json:"-"`
 	CaptureProviderTransactionObservation bool `json:"-"`
+	// Private all-method observation opt-ins; zero values disable.
+	CaptureProviderMessageCompositionAllMethods     bool `json:"-"`
+	CaptureProviderTransactionObservationAllMethods bool `json:"-"`
 	// Diagnostic join values must be opaque safe identities, never labels or paths.
 	DiagnosticCallerID       string
 	DiagnosticTargetID       string
@@ -1012,8 +1015,8 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
 	started := m.now()
 	result := RoundTripResult{directionalV5: req.directionalV5, Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
-	result.providerMessageAccumulator.enabled = req.CaptureProviderMessageComposition && req.Method == "textDocument/documentSymbol"
-	result.providerTransaction.enabled = req.CaptureProviderTransactionObservation && req.Method == "textDocument/documentSymbol"
+	result.providerMessageAccumulator.enabled = req.CaptureProviderMessageCompositionAllMethods || req.CaptureProviderMessageComposition && req.Method == "textDocument/documentSymbol"
+	result.providerTransaction.enabled = req.CaptureProviderTransactionObservationAllMethods || req.CaptureProviderTransactionObservation && req.Method == "textDocument/documentSymbol"
 	var privateRetainedNotifications []lspwire.Message
 	var privateRetainedResponses []lspwire.Message
 	maxMessages := req.MaxMessages
@@ -1672,9 +1675,11 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 		case session.Poisoned:
 			lifecycle = ProviderTransactionLifecyclePoisoned
 		}
-		if lifecycle != "" && result.Messages >= 0 {
+		if lifecycle != "" && result.Messages >= 0 && m.providerTransactionCompletionSequence != math.MaxUint64 {
+			m.providerTransactionCompletionSequence++
 			_, requestWriteCompleted := result.CompletedRequestWrite()
 			result.providerTransaction.observation = ProviderTransactionObservation{
+				CompletionSequence:            m.providerTransactionCompletionSequence,
 				SelectedResponseObserved:      result.providerTransaction.selectedResponseObserved,
 				RequestWriteCompleted:         requestWriteCompleted,
 				ProviderMessagesProcessed:     uint64(result.Messages),
@@ -1826,6 +1831,7 @@ type Manager struct {
 	readinessIDs                                 map[string]string
 	observations                                 []Observation
 	sequence                                     uint64
+	providerTransactionCompletionSequence        uint64
 	readinessSeq                                 uint64
 	readinessTimeout                             time.Duration
 	now                                          func() time.Time
@@ -3506,10 +3512,12 @@ const (
 )
 
 // ProviderTransactionObservation contains only privacy-reduced scalar facts
-// owned by one completed document-symbol transaction. SelectedResponseReadCompleted
+// owned by one completed transaction selected through either the legacy
+// documentSymbol-specific or all-method opt-in. SelectedResponseReadCompleted
 // means the Manager completed reading the selected response frame; it does not
 // establish that the provider completed writing that frame.
 type ProviderTransactionObservation struct {
+	CompletionSequence            uint64
 	SelectedResponseObserved      bool
 	RequestWriteCompleted         bool
 	ProviderMessagesProcessed     uint64
@@ -3534,8 +3542,8 @@ type privateProviderTransactionCapture struct {
 	present                   bool
 }
 
-// ProviderTransactionObservation returns a value copy only when private
-// capture was explicitly enabled for a completed document-symbol transaction.
+// ProviderTransactionObservation returns a value copy only when private capture
+// was explicitly enabled through the legacy documentSymbol-specific or all-method opt-in.
 func (r RoundTripResult) ProviderTransactionObservation() (ProviderTransactionObservation, bool) {
 	return r.providerTransaction.observation, r.providerTransaction.present
 }

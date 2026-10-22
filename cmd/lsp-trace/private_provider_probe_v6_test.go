@@ -29,6 +29,7 @@ func TestPrivateProviderProbeV6OptInAdmission(t *testing.T) {
 	for name, args := range map[string][]string{
 		"without-path": append(append([]string{}, base...), "--private-provider-probe-byte-time-notifications"),
 		"without-v6":   append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-version", "v5", "--private-provider-probe-byte-time-notifications"),
+		"with-v7":      append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-version", "v7", "--private-provider-probe-byte-time-notifications"),
 		"duplicate":    append(append([]string{}, base...), "--private-provider-probe-path", path, "--private-provider-probe-version", "v6", "--private-provider-probe-byte-time-notifications", "--private-provider-probe-byte-time-notifications"),
 	} {
 		t.Run(name, func(t *testing.T) {

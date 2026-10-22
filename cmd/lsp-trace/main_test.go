@@ -778,6 +778,10 @@ func TestRuntimeHelperServer(t *testing.T) {
 			}
 			writeRuntimeResponse(msg.ID, []any{})
 		case "textDocument/prepareCallHierarchy":
+			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_MALFORMED_PREPARE_CALL_HIERARCHY_FRAME") == "1" {
+				fmt.Fprint(os.Stdout, "Content-Length: nope\r\n\r\n{}")
+				continue
+			}
 			time.Sleep(3 * time.Second)
 			writeRuntimeResponse(msg.ID, []any{})
 		case "shutdown":

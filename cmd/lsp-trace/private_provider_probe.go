@@ -23,6 +23,7 @@ const (
 	privateProviderProbeSchemaV4 = "lsp-trace.private-provider-probe.v4"
 	privateProviderProbeSchemaV5 = "lsp-trace.private-provider-probe.v5"
 	privateProviderProbeSchemaV6 = "lsp-trace.private-provider-probe.v6"
+	privateProviderProbeSchemaV7 = "lsp-trace.private-provider-probe.v7"
 )
 
 type privateProviderProbeRecord struct {
@@ -169,6 +170,32 @@ type privateProviderProbeArtifactV6 struct {
 	Transaction     *privateProviderProbeTransactionV6 `json:"document_symbol_transaction,omitempty"`
 }
 
+type privateProviderProbeTransactionV7 struct {
+	CompletionSequence        uint64                                           `json:"completion_sequence"`
+	NotificationCeilingPolicy sessionruntime.ProviderNotificationCeilingPolicy `json:"notification_ceiling_policy"`
+	ConfiguredControlCeiling  uint64                                           `json:"configured_control_ceiling"`
+	ConfiguredBytes           uint64                                           `json:"configured_bytes"`
+	ObservedNotificationCount uint64                                           `json:"observed_notification_count"`
+	ObservedControlCount      uint64                                           `json:"observed_control_count"`
+	TerminalResponseObserved  bool                                             `json:"terminal_response_observed"`
+	ReadCompleted             bool                                             `json:"read_completed"`
+	TerminalLifecycle         sessionruntime.ProviderTransactionLifecycle      `json:"terminal_lifecycle"`
+}
+
+type privateProviderProbeWitnessV7 struct {
+	Phase       string                            `json:"phase"`
+	Class       string                            `json:"class"`
+	Cause       string                            `json:"cause"`
+	Composition privateProviderProbeCompositionV4 `json:"message_composition"`
+	Transaction privateProviderProbeTransactionV7 `json:"provider_transaction"`
+}
+
+type privateProviderProbeArtifactV7 struct {
+	Schema  string                         `json:"schema"`
+	Status  string                         `json:"status"`
+	Witness *privateProviderProbeWitnessV7 `json:"witness,omitempty"`
+}
+
 type privateProviderProbe struct {
 	mu                    sync.Mutex
 	path, version         string
@@ -181,6 +208,7 @@ type privateProviderProbe struct {
 	compositionV4         *privateProviderProbeCompositionV4
 	transactionV5         *privateProviderProbeTransactionV5
 	transactionV6         *privateProviderProbeTransactionV6
+	witnessV7             *privateProviderProbeWitnessV7
 	incomplete            bool
 }
 
@@ -188,7 +216,7 @@ func newPrivateProviderProbe(path string) (*privateProviderProbe, error) {
 	return newPrivateProviderProbeVersion(path, "v1")
 }
 func newPrivateProviderProbeVersion(path, version string) (*privateProviderProbe, error) {
-	if version != "v1" && version != "v2" && version != "v3" && version != "v4" && version != "v5" && version != "v6" {
+	if version != "v1" && version != "v2" && version != "v3" && version != "v4" && version != "v5" && version != "v6" && version != "v7" {
 		return nil, errors.New("invalid private provider probe version")
 	}
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -441,6 +469,50 @@ func (p *privateProviderProbe) observeV6(observation sessionruntime.ProviderTran
 	}
 }
 
+func (p *privateProviderProbe) observeV7(phase, class, cause string, c sessionruntime.ProviderMessageComposition, compositionPresent bool, observation sessionruntime.ProviderTransactionObservation, transactionPresent bool, maxMessages int, maxBytes int64, messages int, bytes int64) {
+	if p == nil || p.version != "v7" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !checkedProbeAdd(&p.work, 1) || !checkedProbeAdd(&p.sequence, 1) {
+		p.incomplete = true
+		return
+	}
+	if !compositionPresent || !transactionPresent || messages < 0 || bytes < 0 || maxMessages <= 0 || maxBytes <= 0 {
+		p.incomplete = true
+		return
+	}
+	total, ok := checkedProbeSum(observation.NotificationMessagesProcessed, observation.ControlMessagesProcessed)
+	if !ok || total != observation.ProviderMessagesProcessed || observation.ConfiguredControlCeiling == 0 || observation.ConfiguredMaxBytes == 0 ||
+		observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady && observation.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned ||
+		observation.TerminalPoisonObserved != (observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned) ||
+		observation.SelectedResponseReadCompleted && !observation.SelectedResponseObserved {
+		p.incomplete = true
+		return
+	}
+	if observation.CompletionSequence == 0 {
+		p.incomplete = true
+		return
+	}
+	failed := cause != "" || observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned
+	if p.witnessV7 != nil {
+		retainedFailed := p.witnessV7.Composition.Selection == "FIRST_FAILURE_OR_POISON"
+		if retainedFailed && !failed || retainedFailed == failed && p.witnessV7.Transaction.CompletionSequence <= observation.CompletionSequence {
+			return
+		}
+	}
+	selection := "FIRST_COMPLETED"
+	if failed {
+		selection = "FIRST_FAILURE_OR_POISON"
+	}
+	p.witnessV7 = &privateProviderProbeWitnessV7{
+		Phase: phase, Class: class, Cause: cause,
+		Composition: privateProviderProbeCompositionV4{p.sequence, selection, c.ProgressNotifications, c.LogShowTelemetryNotifications, c.PublishDiagnosticsNotifications, c.OtherNotifications, c.ServerRequests, c.UnmatchedLateInvalidResponses, c.AcceptedTerminalResponses, c.InvalidProtocolMessages, uint64(messages), uint64(bytes), uint64(maxMessages), uint64(maxBytes), string(c.Outcome), cause},
+		Transaction: privateProviderProbeTransactionV7{observation.CompletionSequence, observation.NotificationCeilingPolicy, observation.ConfiguredControlCeiling, observation.ConfiguredMaxBytes, observation.NotificationMessagesProcessed, observation.ControlMessagesProcessed, observation.SelectedResponseObserved, observation.SelectedResponseReadCompleted, observation.TerminalLifecycle},
+	}
+}
+
 func checkedProbeSum(a, b uint64) (uint64, bool) {
 	if math.MaxUint64-a < b {
 		return 0, false
@@ -551,6 +623,21 @@ func (p *privateProviderProbe) artifactV6() privateProviderProbeArtifactV6 {
 	return privateProviderProbeArtifactV6{privateProviderProbeSchemaV6, status, v4.FileDenominator, v4.CauseCounts, v4.Records, v4.RerunCount, v4.Work, v4.Composition, transaction}
 }
 
+func (p *privateProviderProbe) artifactV7() privateProviderProbeArtifactV7 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	status := "COMPLETE"
+	if p.incomplete || p.witnessV7 == nil {
+		status = "INCOMPLETE"
+	}
+	var witness *privateProviderProbeWitnessV7
+	if p.witnessV7 != nil {
+		copy := *p.witnessV7
+		witness = &copy
+	}
+	return privateProviderProbeArtifactV7{privateProviderProbeSchemaV7, status, witness}
+}
+
 func (p *privateProviderProbe) finalize() error {
 	if p == nil {
 		return nil
@@ -566,6 +653,8 @@ func (p *privateProviderProbe) finalize() error {
 		value = p.artifactV5()
 	} else if p.version == "v6" {
 		value = p.artifactV6()
+	} else if p.version == "v7" {
+		value = p.artifactV7()
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -1030,6 +1119,88 @@ func parsePrivateProviderProbeV6(raw []byte) (privateProviderProbeArtifactV6, er
 			return bad()
 		}
 	} else {
+		return bad()
+	}
+	return a, nil
+}
+
+func parsePrivateProviderProbeV7(raw []byte) (privateProviderProbeArtifactV7, error) {
+	var a privateProviderProbeArtifactV7
+	bad := func() (privateProviderProbeArtifactV7, error) { return a, errors.New("invalid private provider probe") }
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' || len(raw) > 1 && raw[len(raw)-2] == '\n' {
+		return bad()
+	}
+	line := bytes.TrimSuffix(raw, []byte{'\n'})
+	d := json.NewDecoder(bytes.NewReader(line))
+	d.DisallowUnknownFields()
+	if d.Decode(&a) != nil || d.Decode(&struct{}{}) != io.EOF {
+		return bad()
+	}
+	canonical, _ := json.Marshal(a)
+	if !bytes.Equal(canonical, line) || a.Schema != privateProviderProbeSchemaV7 || a.Status != "COMPLETE" && a.Status != "INCOMPLETE" || a.Witness == nil && a.Status != "INCOMPLETE" {
+		return bad()
+	}
+	if a.Witness == nil {
+		return a, nil
+	}
+	w := a.Witness
+	if w.Phase != "DOCUMENT_SYMBOL" && w.Phase != "PROVIDER_REQUEST" || w.Composition.Selection != "FIRST_COMPLETED" && w.Composition.Selection != "FIRST_FAILURE_OR_POISON" || w.Composition.Sequence == 0 || w.Composition.ConfiguredMaxMessages == 0 || w.Composition.ConfiguredMaxBytes == 0 {
+		return bad()
+	}
+	if w.Cause == "" != (w.Class == "") || w.Cause != "" && (!validPrivateProviderProbeCause(w.Class, w.Cause) || w.Class == "DOCUMENT_FAILURE" || w.Class == "ADAPTER_IDENTITY_MISMATCH") {
+		return bad()
+	}
+	t := w.Transaction
+	c := w.Composition
+	total, ok := checkedProbeSum(t.ObservedNotificationCount, t.ObservedControlCount)
+	if !ok || t.CompletionSequence == 0 || total != c.ManagerMessages || t.ConfiguredControlCeiling != c.ConfiguredMaxMessages || t.ConfiguredBytes != c.ConfiguredMaxBytes || t.ConfiguredControlCeiling == 0 || t.ConfiguredBytes == 0 ||
+		t.NotificationCeilingPolicy != sessionruntime.ProviderNotificationCeilingConfiguredCount && t.NotificationCeilingPolicy != sessionruntime.ProviderNotificationCeilingByteTimeBounded ||
+		t.ReadCompleted && !t.TerminalResponseObserved || t.TerminalLifecycle != sessionruntime.ProviderTransactionLifecycleReady && t.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned {
+		return bad()
+	}
+	notifications, notificationsOK := checkedProbeSum(c.ProgressNotifications, c.LogShowTelemetryNotifications)
+	if notificationsOK {
+		notifications, notificationsOK = checkedProbeSum(notifications, c.PublishDiagnosticsNotifications)
+	}
+	if notificationsOK {
+		notifications, notificationsOK = checkedProbeSum(notifications, c.OtherNotifications)
+	}
+	controls, controlsOK := checkedProbeSum(c.ServerRequests, c.UnmatchedLateInvalidResponses)
+	if controlsOK {
+		controls, controlsOK = checkedProbeSum(controls, c.AcceptedTerminalResponses)
+	}
+	if !notificationsOK || !controlsOK || notifications != t.ObservedNotificationCount || controls != t.ObservedControlCount ||
+		t.NotificationCeilingPolicy == sessionruntime.ProviderNotificationCeilingConfiguredCount && t.ObservedNotificationCount > t.ConfiguredControlCeiling || t.ObservedControlCount > t.ConfiguredControlCeiling {
+		return bad()
+	}
+	failed := w.Cause != "" || t.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned
+	if (c.Selection == "FIRST_FAILURE_OR_POISON") != failed {
+		return bad()
+	}
+	normalTerminal := func(cause string) bool {
+		return c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages < c.ConfiguredMaxMessages && w.Cause == cause
+	}
+	valid := false
+	switch sessionruntime.ProviderMessageOutcome(c.Outcome) {
+	case sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse:
+		acceptedCause := w.Cause == "" || validPrivateProviderProbeCause("DECODE_FAILURE", w.Cause) || validPrivateProviderProbeCause("JSON_RPC_CODE_BUCKET", w.Cause)
+		valid = t.TerminalLifecycle == sessionruntime.ProviderTransactionLifecycleReady && c.AcceptedTerminalResponses == 1 && c.InvalidProtocolMessages == 0 && c.ManagerBytes <= c.ConfiguredMaxBytes && c.ManagerMessages <= c.ConfiguredMaxMessages && t.TerminalResponseObserved && t.ReadCompleted && acceptedCause
+	case sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage:
+		valid = t.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned && c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 1 && w.Cause == string(session.SessionPoisoned)
+	case sessionruntime.ProviderMessageOutcomeByteLimit:
+		valid = t.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned && c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && c.ManagerBytes > c.ConfiguredMaxBytes && w.Cause == string(session.ResourceExhausted)
+	case sessionruntime.ProviderMessageOutcomeMessageCeiling:
+		valid = t.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned && c.AcceptedTerminalResponses == 0 && c.InvalidProtocolMessages == 0 && (t.ObservedNotificationCount > t.ConfiguredControlCeiling || t.ObservedControlCount > t.ConfiguredControlCeiling) && w.Cause == string(session.ResourceExhausted)
+	case sessionruntime.ProviderMessageOutcomeCancelled:
+		valid = normalTerminal(string(session.RequestCancelled))
+	case sessionruntime.ProviderMessageOutcomeTimedOut:
+		valid = normalTerminal(string(session.RequestTimeout))
+	case sessionruntime.ProviderMessageOutcomeReadOrTransportFailure:
+		valid = normalTerminal(string(session.SessionCrashed)) || normalTerminal("OTHER_TYPED_FAILURE")
+	case sessionruntime.ProviderMessageOutcomeOtherRuntimeFailure:
+		valid = validPrivateProviderProbeCause("TYPED_SESSION_RUNTIME_FAILURE", w.Cause) && normalTerminal(w.Cause)
+	}
+	if !valid {
 		return bad()
 	}
 	return a, nil
