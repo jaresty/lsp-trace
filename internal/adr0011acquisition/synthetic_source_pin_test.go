@@ -162,6 +162,10 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/schema/schema.go",
 		"internal/source/discovery.go",
 		"cmd/lsp-trace/private_census_terminal_observation.go",
+		"internal/managedprocess/process.go",
+		"internal/describeworker/config.go",
+		"internal/describeworker/runner.go",
+		"internal/describeworker/runner_v2.go",
 	}
 	expectedAdditionalSchemaPaths := []string{
 		"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
@@ -270,6 +274,8 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"cmd/lsp-trace/census_enumeration_projection_test.go",
 		"cmd/lsp-trace/private_census_terminal_observation_test.go",
 		"sessionruntime/private_terminal_observation_test.go",
+		"internal/managedprocess/process_test.go",
+		"internal/describeworker/runner_process_test.go",
 	} {
 		testSource := append([]SyntheticSourceEntry(nil), entries...)
 		testSource[oldFiveEnd].Path = name

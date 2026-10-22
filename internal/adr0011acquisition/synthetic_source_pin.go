@@ -72,6 +72,10 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"internal/schema/schema.go",
 	"internal/source/discovery.go",
 	"cmd/lsp-trace/private_census_terminal_observation.go",
+	"internal/managedprocess/process.go",
+	"internal/describeworker/config.go",
+	"internal/describeworker/runner.go",
+	"internal/describeworker/runner_v2.go",
 }
 
 var syntheticSourceAdditionalSchemaPaths = []string{
