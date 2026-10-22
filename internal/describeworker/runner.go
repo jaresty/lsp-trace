@@ -19,8 +19,10 @@ import (
 )
 
 type Runner struct {
-	validated ValidatedConfig
-	manager   *managedprocess.Manager
+	validated    ValidatedConfig
+	manager      *managedprocess.Manager
+	stdoutWriter func(io.Writer) io.Writer
+	invocationV2 func(IdentityBinding, TerminalStatus, ResourceReceipt, []byte, []byte, string, ResponseRecordV2) (InvocationRecordV2, error)
 }
 type RunResult struct {
 	Invocation InvocationRecord
@@ -83,15 +85,17 @@ func (r *Runner) Run(ctx context.Context, request describerequest.Record, attemp
 	args := []string{"-f", c.SandboxProfile.Path, c.Worker.Path, "-model", c.Model.Path, "-lib", filepath.Dir(c.Library.Path), "-prompt-file", promptPath, "-timeout", (time.Duration(c.Limits.TimeoutMS) * time.Millisecond).String(), "-max-tokens", strconv.Itoa(c.Limits.MaxTokens), "-context-tokens", strconv.Itoa(c.Limits.ContextTokens)}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(c.Limits.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	process, start := r.manager.Start(runCtx, managedprocess.Spec{Path: c.SandboxExecutable.Path, Args: args, Dir: dir, Env: []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "LANG=C", "LC_ALL=C"}})
+	var out limitedCapture
+	out.limit = c.Limits.StdoutBytes
+	stdout := io.Writer(&out)
+	if r.stdoutWriter != nil {
+		stdout = r.stdoutWriter(stdout)
+	}
+	process, start := r.manager.StartWithStdout(runCtx, managedprocess.Spec{Path: c.SandboxExecutable.Path, Args: args, Dir: dir, Env: []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "LANG=C", "LC_ALL=C"}}, stdout)
 	if start.Kind != managedprocess.StartStarted {
 		return RunResult{}, failure(StageStart, CodeBackendFailure)
 	}
 	receipt := ResourceReceipt{Started: true, TerminalOutcomes: 1}
-	var out limitedCapture
-	out.limit = c.Limits.StdoutBytes
-	readDone := make(chan error, 1)
-	go func() { _, e := io.Copy(&out, process.Stdout()); readDone <- e }()
 	deathDone := make(chan managedprocess.DeathObservation, 1)
 	go func() { deathDone <- process.Wait() }()
 	var death managedprocess.DeathObservation
@@ -104,7 +108,6 @@ func (r *Runner) Run(ctx context.Context, request describerequest.Record, attemp
 		receipt.Reaped = td.Death.Reap.Kind == managedprocess.ReapComplete
 	}
 	_ = process.Close()
-	<-readDone
 	receipt.StdoutBytes = len(out.bytes)
 	receipt.StdoutTruncated = out.truncated
 	receipt.StderrBytes = len(death.Stderr.Bytes)
@@ -120,6 +123,9 @@ func (r *Runner) Run(ctx context.Context, request describerequest.Record, attemp
 	} else if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		status = StatusTimeout
 		code = CodeTimeout
+	} else if death.StdoutDelivery.Err != nil || death.StderrDelivery.Err != nil {
+		status = StatusBackendFailure
+		code = CodeBackendFailure
 	} else if out.truncated || death.Stderr.Truncated {
 		status = StatusResourceLimit
 		code = CodeResourceLimit
@@ -131,14 +137,17 @@ func (r *Runner) Run(ctx context.Context, request describerequest.Record, attemp
 	if code != "" {
 		inv, _ := NewInvocationRecord(binding, status, receipt, zeroResponse(binding))
 		if code == CodeBackendFailure {
+			if death.StdoutDelivery.Err != nil {
+				return RunResult{Invocation: inv}, streamFailure(len(out.bytes), digestBytes(out.bytes), death.StdoutDelivery.Category)
+			}
 			return RunResult{Invocation: inv}, backendFailure(classifyBackendExit(death))
 		}
 		return RunResult{Invocation: inv}, failure(StageRun, code)
 	}
-	wr, err := parseWorkerResult(out.bytes)
+	wr, parseStage, err := parseWorkerResultWithStage(out.bytes)
 	if err != nil {
 		inv, _ := NewInvocationRecord(binding, StatusOutputInvalid, receipt, zeroResponse(binding))
-		return RunResult{Invocation: inv}, failure(StageOutput, CodeOutputInvalid)
+		return RunResult{Invocation: inv}, outputFailure(len(out.bytes), digestBytes(out.bytes), parseStage)
 	}
 	response, err := NewResponseRecord(binding, wr.semantic())
 	if err != nil {
@@ -179,25 +188,35 @@ func zeroResponse(b IdentityBinding) ResponseRecord {
 	r, _ := NewResponseRecord(b, SemanticResponse{Verdict: "UNAVAILABLE", TargetRole: "unavailable", NearestOutwardConsumer: "unavailable", ConsumerNeed: "unavailable", ProvidedBehavior: "unavailable", BoundaryContribution: "unavailable", Limitations: []string{"terminal failure"}, Citations: []string{}})
 	return r
 }
+func digestBytes(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
 func parseWorkerResult(raw []byte) (workerResult, error) {
+	result, _, err := parseWorkerResultWithStage(raw)
+	return result, err
+}
+
+func parseWorkerResultWithStage(raw []byte) (workerResult, string, error) {
 	if len(raw) < 2 || raw[len(raw)-1] != '\n' || raw[len(raw)-2] == '\n' || bytes.HasPrefix(raw, []byte{0xef, 0xbb, 0xbf}) {
-		return workerResult{}, errors.New("worker framing invalid")
+		return workerResult{}, "FRAMING", errors.New("worker framing invalid")
 	}
 	line := raw[:len(raw)-1]
 	var w workerResult
 	if err := strictCanonical(line, &w); err != nil {
-		return w, err
+		return w, "OUTER_CANONICAL", err
 	}
 	if w.Status != "COMPLETE" && w.Status != "TIMEOUT" && w.Status != "CANCELLED" && w.Status != "MODEL_UNAVAILABLE" && w.Status != "ERROR" {
-		return w, errors.New("worker status invalid")
+		return w, "STATUS", errors.New("worker status invalid")
 	}
 	if w.Tokens < 0 || w.LoadMS < 0 || w.RunMS < 0 || w.ContextTokens < 0 {
-		return w, errors.New("worker accounting invalid")
+		return w, "ACCOUNTING", errors.New("worker accounting invalid")
 	}
 	if _, err := w.semanticStrict(); err != nil {
-		return w, err
+		return w, "SEMANTIC", err
 	}
-	return w, nil
+	return w, "COMPLETE", nil
 }
 func (w workerResult) semanticStrict() (SemanticResponse, error) {
 	var s SemanticResponse

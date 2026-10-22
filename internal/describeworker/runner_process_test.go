@@ -7,12 +7,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/describerequest"
@@ -314,6 +317,165 @@ func TestRunnerRetryIdentitiesAndAliases(t *testing.T) {
 	raw, _ := a.Response.Bytes()
 	if bytes.Contains(raw, []byte("mutated")) {
 		t.Fatal("response alias mutation changed immutable record")
+	}
+}
+
+type blockingFragmentWriter struct {
+	dst     io.Writer
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (w *blockingFragmentWriter) Write(p []byte) (int, error) {
+	w.once.Do(func() {
+		close(w.started)
+		<-w.release
+	})
+	for i := range p {
+		if _, err := w.dst.Write(p[i : i+1]); err != nil {
+			return i, err
+		}
+	}
+	return len(p), nil
+}
+
+type failingDeliveryWriter struct{}
+
+func (failingDeliveryWriter) Write([]byte) (int, error) {
+	return 0, errors.New("private delivery sentinel")
+}
+
+func TestRunnerDrainsBlockingFragmentedOutputBeforeParse(t *testing.T) {
+	requireDarwinProcess(t)
+	cfg, _ := processConfig(t, "#!/bin/sh\nprintf '%s' "+shellQuote(workerJSON())+"\n")
+	r, err := NewRunner(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, release := make(chan struct{}), make(chan struct{})
+	r.stdoutWriter = func(dst io.Writer) io.Writer {
+		return &blockingFragmentWriter{dst: dst, started: started, release: release}
+	}
+	result := make(chan error, 1)
+	req := validRunnerRequest(t)
+	go func() {
+		got, runErr := r.Run(context.Background(), req, "attempt")
+		if runErr == nil && got.Invocation.Status() != StatusSucceeded {
+			runErr = fmt.Errorf("status=%s", got.Invocation.Status())
+		}
+		result <- runErr
+	}()
+	<-started
+	select {
+	case err := <-result:
+		t.Fatalf("ASSERT_RUNNER_ENTERED_WRITE_BLOCKS_COMPLETION: returned before release: %v", err)
+	default:
+	}
+	close(release)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("ASSERT_RUNNER_FULL_DRAIN_BEFORE_PARSE: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("ASSERT_RUNNER_BOUNDED_COMPLETION_AFTER_RELEASE")
+	}
+}
+
+func TestRunnerV2DeliveryErrorProducesValidTerminal(t *testing.T) {
+	requireDarwinProcess(t)
+	request, packet := validRunnerFixture(t)
+	cfg, _ := processConfig(t, "#!/bin/sh\nprintf '%s' "+shellQuote(string(EncodeAdapterResultV2(`{"verdict":"COMPLETE","target_role":"role","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"behavior","consumer_relative":false},"boundary_contribution":"boundary","limitations":[]}`)))+"\n")
+	cfg.ResponseVersion = ResponseVersionV2
+	runner, err := NewRunner(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner.stdoutWriter = func(io.Writer) io.Writer { return failingDeliveryWriter{} }
+
+	got, runErr := runner.RunV2(context.Background(), request, packet, "attempt-v2-delivery")
+	var failure *Failure
+	if !AsFailure(runErr, &failure) || failure.Stage() != StageRun || failure.Code() != CodeBackendFailure || failure.Subcode() != "STREAM_DELIVERY" {
+		t.Fatalf("ASSERT_V2_STREAM_DELIVERY_PRIVATE_FAILURE: result=%+v err=%v", got, runErr)
+	}
+	if got.Invocation.Status() != StatusBackendFailure || got.Invocation.ID() == "" || got.Invocation.FailureSubcode() != "SUPERVISION" || got.Response.ID() != "" {
+		t.Fatalf("ASSERT_V2_STREAM_DELIVERY_PUBLIC_TERMINAL: invocation=%+v response=%+v", got.Invocation, got.Response)
+	}
+	raw, err := got.Invocation.Bytes()
+	if err != nil {
+		t.Fatalf("ASSERT_V2_STREAM_DELIVERY_CANONICAL_BYTES: %v", err)
+	}
+	parsed, err := ParseInvocationRecordV2(raw)
+	if err != nil || parsed.ID() != got.Invocation.ID() {
+		t.Fatalf("ASSERT_V2_STREAM_DELIVERY_CANONICAL_REPLAY: parsed=%+v err=%v", parsed, err)
+	}
+	schemaRaw, err := SchemaV2(InvocationSchemaV2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(schemaRaw, []byte(`"SUPERVISION"`)) || bytes.Contains(schemaRaw, []byte(`"STREAM_DELIVERY"`)) {
+		t.Fatalf("ASSERT_V2_STREAM_DELIVERY_UNCHANGED_SCHEMA_VOCABULARY: schema=%s", schemaRaw)
+	}
+	if failure.diagnostic.deliveryError != "WRITE_ERROR" || failure.diagnostic.stdoutBytes != 0 || !strings.HasPrefix(failure.diagnostic.stdoutSHA256, "sha256:") || strings.Contains(runErr.Error(), "private delivery sentinel") || failure.Code() == CodeOutputInvalid {
+		t.Fatalf("ASSERT_V2_STREAM_DELIVERY_SOURCE_SAFE: diagnostic=%+v err=%v", failure.diagnostic, runErr)
+	}
+}
+
+func TestRunnerV2TerminalConstructorFailureFailsClosed(t *testing.T) {
+	requireDarwinProcess(t)
+	request, packet := validRunnerFixture(t)
+	cfg, _ := processConfig(t, "#!/bin/sh\nexit 42\n")
+	cfg.ResponseVersion = ResponseVersionV2
+	runner, err := NewRunner(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	injected, err := NewFailedInvocationRecordV2(bindingFrom(cfg, request, "attempt-v2-constructor", []byte(request.Envelope.Prompt)), StatusBackendFailure, ResourceReceipt{Started: true, TerminalOutcomes: 1, Reaped: true}, nil, nil, "SUPERVISION")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner.invocationV2 = func(IdentityBinding, TerminalStatus, ResourceReceipt, []byte, []byte, string, ResponseRecordV2) (InvocationRecordV2, error) {
+		return injected, errors.New("private constructor sentinel")
+	}
+
+	got, runErr := runner.RunV2(context.Background(), request, packet, "attempt-v2-constructor")
+	var failure *Failure
+	if !AsFailure(runErr, &failure) || failure.Stage() != StageRecord || failure.Code() != CodeBackendFailure || got.Invocation.ID() != "" || strings.Contains(runErr.Error(), "private constructor sentinel") {
+		t.Fatalf("ASSERT_V2_TERMINAL_CONSTRUCTOR_FAILS_CLOSED: result=%+v err=%v", got, runErr)
+	}
+}
+
+func TestRunnerDeliveryErrorIsNotOutputInvalid(t *testing.T) {
+	requireDarwinProcess(t)
+	cfg, _ := processConfig(t, "#!/bin/sh\nprintf '%s' "+shellQuote(workerJSON())+"\n")
+	r, err := NewRunner(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.stdoutWriter = func(io.Writer) io.Writer { return failingDeliveryWriter{} }
+	got, runErr := r.Run(context.Background(), validRunnerRequest(t), "attempt")
+	var f *Failure
+	if !AsFailure(runErr, &f) || f.Code() != CodeBackendFailure || f.Subcode() != "STREAM_DELIVERY" || got.Invocation.Status() != StatusBackendFailure {
+		t.Fatalf("ASSERT_STREAM_DELIVERY_DISTINCT: result=%+v err=%v", got, runErr)
+	}
+	if f.diagnostic.deliveryError != "WRITE_ERROR" || f.diagnostic.stdoutBytes != 0 || !strings.HasPrefix(f.diagnostic.stdoutSHA256, "sha256:") || strings.Contains(runErr.Error(), "private delivery sentinel") {
+		t.Fatalf("ASSERT_STREAM_DELIVERY_SOURCE_SAFE: diagnostic=%+v err=%v", f.diagnostic, runErr)
+	}
+}
+
+func TestRunnerOutputInvalidPrivateDiagnostics(t *testing.T) {
+	requireDarwinProcess(t)
+	secret := "/private/raw-worker-secret"
+	cfg, _ := processConfig(t, "#!/bin/sh\nprintf '%s' "+shellQuote(secret)+"\n")
+	r, err := NewRunner(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, runErr := r.Run(context.Background(), validRunnerRequest(t), "attempt")
+	var f *Failure
+	if !AsFailure(runErr, &f) || f.Code() != CodeOutputInvalid || f.diagnostic.stdoutBytes != len(secret) || f.diagnostic.closedCategory != "DELIVERY_COMPLETE" || f.diagnostic.parseStage != "FRAMING" || !strings.HasPrefix(f.diagnostic.stdoutSHA256, "sha256:") || strings.Contains(fmt.Sprintf("%+v", f.diagnostic), secret) || strings.Contains(runErr.Error(), secret) {
+		t.Fatalf("ASSERT_OUTPUT_INVALID_PRIVATE_DIAGNOSTICS: diagnostic=%+v err=%v", f.diagnostic, runErr)
 	}
 }
 

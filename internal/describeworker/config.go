@@ -29,10 +29,19 @@ const (
 	CodePolicyMismatch   Code  = "POLICY_MISMATCH"
 )
 
+type failureDiagnostic struct {
+	stdoutBytes    int
+	stdoutSHA256   string
+	closedCategory string
+	deliveryError  string
+	parseStage     string
+}
+
 type Failure struct {
-	stage   Stage
-	code    Code
-	subcode string
+	stage      Stage
+	code       Code
+	subcode    string
+	diagnostic failureDiagnostic
 }
 
 func (f *Failure) Error() string              { return "describeworker: " + string(f.stage) + " " + string(f.code) }
@@ -46,6 +55,14 @@ func failureWithSubcode(stage Stage, code Code, subcode string) error {
 }
 func backendFailure(subcode string) error {
 	return &Failure{stage: StageRun, code: CodeBackendFailure, subcode: subcode}
+}
+
+func streamFailure(bytes int, digest, category string) error {
+	return &Failure{stage: StageRun, code: CodeBackendFailure, subcode: "STREAM_DELIVERY", diagnostic: failureDiagnostic{stdoutBytes: bytes, stdoutSHA256: digest, deliveryError: category}}
+}
+
+func outputFailure(bytes int, digest, parseStage string) error {
+	return &Failure{stage: StageOutput, code: CodeOutputInvalid, diagnostic: failureDiagnostic{stdoutBytes: bytes, stdoutSHA256: digest, closedCategory: "DELIVERY_COMPLETE", parseStage: parseStage}}
 }
 
 type FilePin struct {

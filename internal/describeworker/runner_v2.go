@@ -87,15 +87,17 @@ func (r *Runner) RunV2(ctx context.Context, request describerequest.Record, pack
 	args := []string{"-f", c.SandboxProfile.Path, c.Worker.Path, "-model", c.Model.Path, "-lib", filepath.Dir(c.Library.Path), "-prompt-file", promptPath, "-grammar-file", c.Grammar.Path, "-timeout", (time.Duration(c.Limits.TimeoutMS) * time.Millisecond).String(), "-max-tokens", strconv.Itoa(c.Limits.MaxTokens), "-context-tokens", strconv.Itoa(c.Limits.ContextTokens)}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(c.Limits.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	process, start := r.manager.Start(runCtx, managedprocess.Spec{Path: c.SandboxExecutable.Path, Args: args, Dir: dir, Env: []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "LANG=C", "LC_ALL=C"}})
+	var out limitedCapture
+	out.limit = c.Limits.StdoutBytes
+	stdout := io.Writer(&out)
+	if r.stdoutWriter != nil {
+		stdout = r.stdoutWriter(stdout)
+	}
+	process, start := r.manager.StartWithStdout(runCtx, managedprocess.Spec{Path: c.SandboxExecutable.Path, Args: args, Dir: dir, Env: []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir, "LANG=C", "LC_ALL=C"}}, stdout)
 	if start.Kind != managedprocess.StartStarted {
 		return RunResultV2{}, failure(StageStart, CodeBackendFailure)
 	}
 	receipt := ResourceReceipt{Started: true, TerminalOutcomes: 1}
-	var out limitedCapture
-	out.limit = c.Limits.StdoutBytes
-	readDone := make(chan error, 1)
-	go func() { _, e := io.Copy(&out, process.Stdout()); readDone <- e }()
 	deathDone := make(chan managedprocess.DeathObservation, 1)
 	go func() { deathDone <- process.Wait() }()
 	var death managedprocess.DeathObservation
@@ -108,7 +110,6 @@ func (r *Runner) RunV2(ctx context.Context, request describerequest.Record, pack
 		receipt.Reaped = td.Death.Reap.Kind == managedprocess.ReapComplete
 	}
 	_ = process.Close()
-	<-readDone
 	receipt.StdoutBytes = len(out.bytes)
 	receipt.StdoutTruncated = out.truncated
 	receipt.StderrBytes = len(death.Stderr.Bytes)
@@ -121,23 +122,39 @@ func (r *Runner) RunV2(ctx context.Context, request describerequest.Record, pack
 		status, code = StatusCancelled, CodeCancelled
 	} else if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		status, code = StatusTimeout, CodeTimeout
+	} else if death.StdoutDelivery.Err != nil || death.StderrDelivery.Err != nil {
+		status, code = StatusBackendFailure, CodeBackendFailure
 	} else if out.truncated || death.Stderr.Truncated {
 		status, code = StatusResourceLimit, CodeResourceLimit
 	} else if death.Kind != managedprocess.DeathExited || death.ExitCode != 0 {
 		status, code = StatusBackendFailure, CodeBackendFailure
 	}
 	binding := bindingFrom(c, request, attemptID, prompt)
+	terminalFactory := r.invocationV2
+	if terminalFactory == nil {
+		terminalFactory = newInvocationRecordV2
+	}
 	terminal := func(status TerminalStatus, subcode string, response ResponseRecordV2) (InvocationRecordV2, error) {
-		return newInvocationRecordV2(binding, status, receipt, out.bytes, death.Stderr.Bytes, subcode, response)
+		return terminalFactory(binding, status, receipt, out.bytes, death.Stderr.Bytes, subcode, response)
 	}
 	if code != "" {
 		subcode := ""
 		if code == CodeBackendFailure {
-			subcode = classifyBackendExit(death)
+			if death.StdoutDelivery.Err != nil || death.StderrDelivery.Err != nil {
+				subcode = "SUPERVISION"
+			} else {
+				subcode = classifyBackendExit(death)
+			}
 		}
-		invocation, _ := terminal(status, subcode, ResponseRecordV2{})
+		invocation, terminalErr := terminal(status, subcode, ResponseRecordV2{})
+		if terminalErr != nil {
+			return RunResultV2{}, failure(StageRecord, CodeBackendFailure)
+		}
 		result := RunResultV2{Invocation: invocation}
 		if code == CodeBackendFailure {
+			if death.StdoutDelivery.Err != nil {
+				return result, streamFailure(len(out.bytes), digestBytes(out.bytes), death.StdoutDelivery.Category)
+			}
 			return result, backendFailure(subcode)
 		}
 		return result, failure(StageRun, code)
@@ -146,10 +163,16 @@ func (r *Runner) RunV2(ctx context.Context, request describerequest.Record, pack
 	if err != nil {
 		subcode := subcodeInternalValidationV2
 		var f *Failure
-		if AsFailure(err, &f) && f.Subcode() != "" {
-			subcode = f.Subcode()
+		if AsFailure(err, &f) {
+			if f.Subcode() != "" {
+				subcode = f.Subcode()
+			}
+			f.diagnostic = failureDiagnostic{stdoutBytes: len(out.bytes), stdoutSHA256: digestBytes(out.bytes), closedCategory: "DELIVERY_COMPLETE", parseStage: subcode}
 		}
-		invocation, _ := terminal(StatusOutputInvalid, subcode, ResponseRecordV2{})
+		invocation, terminalErr := terminal(StatusOutputInvalid, subcode, ResponseRecordV2{})
+		if terminalErr != nil {
+			return RunResultV2{}, failure(StageRecord, CodeBackendFailure)
+		}
 		return RunResultV2{Invocation: invocation}, err
 	}
 	invocation, err := terminal(StatusSucceeded, "", response)

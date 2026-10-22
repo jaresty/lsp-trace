@@ -75,13 +75,20 @@ type ReapObservation struct {
 	Evidence string
 }
 
-type DeathObservation struct {
-	Kind     DeathKind
-	ExitCode int
+type StreamDeliveryObservation struct {
 	Err      error
-	Stderr   StderrObservation
-	Reap     ReapObservation
-	Evidence string
+	Category string
+}
+
+type DeathObservation struct {
+	Kind           DeathKind
+	ExitCode       int
+	Err            error
+	StdoutDelivery StreamDeliveryObservation
+	StderrDelivery StreamDeliveryObservation
+	Stderr         StderrObservation
+	Reap           ReapObservation
+	Evidence       string
 }
 
 type SurvivorKind string
@@ -195,6 +202,19 @@ func commandFromSpec(ctx context.Context, spec Spec) (*exec.Cmd, error) {
 }
 
 func (m *Manager) Start(ctx context.Context, spec Spec) (*Process, StartObservation) {
+	return m.start(ctx, spec, nil)
+}
+
+// StartWithStdout assigns stdout before starting the command. exec.Cmd.Wait
+// therefore joins its internal delivery goroutine before Process.Wait returns.
+func (m *Manager) StartWithStdout(ctx context.Context, spec Spec, stdout io.Writer) (*Process, StartObservation) {
+	if stdout == nil {
+		return nil, StartObservation{Kind: StartFailed, Reason: "stdout writer unavailable", Err: errors.New("managedprocess: nil stdout writer"), Evidence: localEvidence}
+	}
+	return m.start(ctx, spec, stdout)
+}
+
+func (m *Manager) start(ctx context.Context, spec Spec, stdoutWriter io.Writer) (*Process, StartObservation) {
 	evidence := localEvidence
 	limitations := ""
 	if m != nil && m.localDarwin {
@@ -215,39 +235,53 @@ func (m *Manager) Start(ctx context.Context, spec Spec) (*Process, StartObservat
 	if err != nil {
 		return nil, StartObservation{Kind: StartFailed, Reason: "stdin pipe failed", Err: err, Evidence: evidence, Limitations: limitations}
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = stdin.Close()
-		return nil, StartObservation{Kind: StartFailed, Reason: "stdout pipe failed", Err: err, Evidence: evidence, Limitations: limitations}
+	var stdout io.ReadCloser
+	var stdoutDelivery *deliveryWriter
+	if stdoutWriter == nil {
+		stdout, err = cmd.StdoutPipe()
+		if err != nil {
+			_ = stdin.Close()
+			return nil, StartObservation{Kind: StartFailed, Reason: "stdout pipe failed", Err: err, Evidence: evidence, Limitations: limitations}
+		}
+	} else {
+		stdoutDelivery = &deliveryWriter{writer: stdoutWriter}
+		cmd.Stdout = stdoutDelivery
 	}
 	stderr := &boundedBuffer{limit: m.options.StderrLimit}
-	cmd.Stderr = stderr
+	stderrDelivery := &deliveryWriter{writer: stderr}
+	cmd.Stderr = stderrDelivery
 	if m.localDarwin {
 		if err := configureLocalDarwin(cmd); err != nil {
 			_ = stdin.Close()
-			_ = stdout.Close()
+			if stdout != nil {
+				_ = stdout.Close()
+			}
 			return nil, StartObservation{Kind: StartUnavailable, Reason: "local Darwin supervision unavailable", Err: err, Evidence: LocalDarwinSupervisionOnly, Limitations: localDarwinLimitations}
 		}
 	}
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
-		_ = stdout.Close()
+		if stdout != nil {
+			_ = stdout.Close()
+		}
 		return nil, StartObservation{Kind: StartFailed, Reason: "process start failed", Err: err, Evidence: evidence, Limitations: limitations}
 	}
-	p := &Process{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr, gracePeriod: m.options.GracePeriod, done: make(chan struct{}), evidence: evidence, localDarwin: m.localDarwin}
+	p := &Process{cmd: cmd, stdin: stdin, stdout: stdout, stdoutDelivery: stdoutDelivery, stderr: stderr, stderrDelivery: stderrDelivery, gracePeriod: m.options.GracePeriod, done: make(chan struct{}), evidence: evidence, localDarwin: m.localDarwin}
 	go p.reap()
 	return p, StartObservation{Kind: StartStarted, Evidence: evidence, Limitations: limitations}
 }
 
 type Process struct {
-	cmd         *exec.Cmd
-	stdin       io.WriteCloser
-	stdout      io.ReadCloser
-	stderr      *boundedBuffer
-	gracePeriod time.Duration
-	done        chan struct{}
-	evidence    string
-	localDarwin bool
+	cmd            *exec.Cmd
+	stdin          io.WriteCloser
+	stdout         io.ReadCloser
+	stdoutDelivery *deliveryWriter
+	stderr         *boundedBuffer
+	stderrDelivery *deliveryWriter
+	gracePeriod    time.Duration
+	done           chan struct{}
+	evidence       string
+	localDarwin    bool
 
 	waitOnce  sync.Once
 	death     DeathObservation
@@ -261,6 +295,8 @@ func (p *Process) Stdout() io.ReadCloser { return p.stdout }
 func (p *Process) reap() {
 	err := p.cmd.Wait()
 	p.death = deathFromWait(p.cmd, err, p.stderr.snapshot())
+	p.death.StdoutDelivery = p.stdoutDelivery.snapshot()
+	p.death.StderrDelivery = p.stderrDelivery.snapshot()
 	if p.localDarwin {
 		p.death.Evidence = p.evidence
 		p.death.Reap.Evidence = p.evidence
@@ -389,6 +425,43 @@ func deathFromWait(cmd *exec.Cmd, err error, stderr StderrObservation) DeathObse
 		observation.Reap = ReapObservation{Kind: ReapFailed, Err: err, Evidence: localEvidence}
 	}
 	return observation
+}
+
+type deliveryWriter struct {
+	mu     sync.Mutex
+	writer io.Writer
+	err    error
+}
+
+func (w *deliveryWriter) Write(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	if err == nil && n != len(p) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		w.mu.Lock()
+		if w.err == nil {
+			w.err = err
+		}
+		w.mu.Unlock()
+	}
+	return n, err
+}
+
+func (w *deliveryWriter) snapshot() StreamDeliveryObservation {
+	if w == nil {
+		return StreamDeliveryObservation{}
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err == nil {
+		return StreamDeliveryObservation{}
+	}
+	category := "WRITE_ERROR"
+	if errors.Is(w.err, os.ErrClosed) || errors.Is(w.err, io.ErrClosedPipe) {
+		category = "CLOSED"
+	}
+	return StreamDeliveryObservation{Err: w.err, Category: category}
 }
 
 type boundedBuffer struct {
