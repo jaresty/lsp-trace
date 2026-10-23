@@ -78,6 +78,7 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"internal/describeworker/runner.go",
 	"internal/describeworker/runner_v2.go",
 	"internal/censusenumerationprojection/projection.go",
+	"internal/censussourceplan/plan.go",
 }
 
 var syntheticSourceAdditionalSchemaPaths = []string{

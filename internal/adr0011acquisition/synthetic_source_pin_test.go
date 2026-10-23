@@ -134,6 +134,26 @@ func TestSyntheticSourcePin(t *testing.T) {
 	assertReject("manifest overlimit", []SyntheticSourceEntry{tooLarge}, golden)
 }
 
+func TestSyntheticSourcePinCensusSourcePlanProductionSelection(t *testing.T) {
+	const productionPath = "internal/censussourceplan/plan.go"
+	const testPath = "internal/censussourceplan/plan_test.go"
+
+	selected := make(map[string]bool, len(syntheticSourceAdditionalGoPaths))
+	for _, name := range syntheticSourceAdditionalGoPaths {
+		selected[name] = true
+	}
+	t.Run("production source required", func(t *testing.T) {
+		if !selected[productionPath] {
+			t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_REQUIRED missing production source %q", productionPath)
+		}
+	})
+	t.Run("test source excluded", func(t *testing.T) {
+		if selected[testPath] {
+			t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_TEST_EXCLUDED selected test source %q", testPath)
+		}
+	})
+}
+
 func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	expectedAdditionalGoPaths := []string{
 		"cmd/lsp-trace/census_assembly.go",
@@ -168,6 +188,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/describeworker/runner.go",
 		"internal/describeworker/runner_v2.go",
 		"internal/censusenumerationprojection/projection.go",
+		"internal/censussourceplan/plan.go",
 	}
 	expectedAdditionalSchemaPaths := []string{
 		"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
