@@ -60,6 +60,7 @@ type censusCompletion struct {
 	continuation        *censusCompletionCustody
 	continuationError   completionSubcause
 	privateChunk        *privateCensusChunkCompletion
+	discoveryTerminal   *privateConstituentDiscoveryTerminal
 }
 
 func (c censusCompletion) BuildCommittedHandoff() (censuscontinuation.CommittedHandoff, error) {
@@ -105,18 +106,27 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 		if err != nil {
 			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
 		}
+		terminal, err := newPrivateConstituentDiscoveryTerminal(prepared.sourcePlan, discovery)
+		if err != nil {
+			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+		}
 		prepared.discovery = discovery
+		prepared.discoveryTerminal = terminal
+	}
+	withDiscoveryTerminal := func(completion censusCompletion) censusCompletion {
+		completion.discoveryTerminal = prepared.discoveryTerminal
+		return completion
 	}
 	if !prepared.discovery.Complete {
 		diagnostic, err := censusresult.NewDiscoveryDiagnosticFromAcquisition(prepared.discovery.Observations, prepared.admitted.requestReceipt.Semantic)
 		if err == nil {
 			receipt := prepared.admitted.requestReceipt
-			return censusCompletion{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt}
+			return withDiscoveryTerminal(censusCompletion{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt})
 		}
 	}
 	chunked, chunkRouteErr := privateCensusChunkRoute(request.PrivateCensusChunking, prepared.discovery)
 	if chunkRouteErr != nil {
-		return censusFailureCompletion(censusAcquisitionFailure(), reasonAcquisitionFailed)
+		return withDiscoveryTerminal(censusFailureCompletion(censusAcquisitionFailure(), reasonAcquisitionFailed))
 	}
 	if chunked {
 		chunk := r.chunk
@@ -125,9 +135,9 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 		}
 		terminal, err := chunk(ctx, prepared, request.PublicationRoot)
 		if err != nil {
-			return censusFailureCompletion(censusAcquisitionFailure(), reasonAcquisitionFailed)
+			return withDiscoveryTerminal(censusFailureCompletion(censusAcquisitionFailure(), reasonAcquisitionFailed))
 		}
-		return censusCompletion{privateChunk: terminal}
+		return withDiscoveryTerminal(censusCompletion{privateChunk: terminal})
 	}
 	acquire := r.acquireOverride
 	if acquire == nil {
@@ -135,18 +145,18 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 	}
 	projection, failure, reason := acquire(ctx, prepared)
 	if failure != nil {
-		return censusFailureCompletion(failure, reason)
+		return withDiscoveryTerminal(censusFailureCompletion(failure, reason))
 	}
 	if request.PublicationRoot == nil {
-		return censusFailureCompletion(censusPublicationFailure(), reasonPublicationRootRequired)
+		return withDiscoveryTerminal(censusFailureCompletion(censusPublicationFailure(), reasonPublicationRootRequired))
 	}
 	publisher := captureset.NewPublisher(request.PublicationRoot)
 	completionCtx, cancel := context.WithDeadline(ctx, prepared.deadline)
 	defer cancel()
-	return completeCensusProjectionWithContinuation(completionCtx, projection, publisher, publisher, programccompose.ExactMetadata{
+	return withDiscoveryTerminal(completeCensusProjectionWithContinuation(completionCtx, projection, publisher, publisher, programccompose.ExactMetadata{
 		RevisionCustody: "CALLER_ASSERTED", PositionEncoding: prepared.admitted.positionEncoding,
 		AcquisitionSemantics: "managed-lsp-v1", PrivacyPolicy: "private-census-v1",
-	})
+	}))
 }
 
 func completeCensusProjectionWith(ctx context.Context, projection censusacquisition.Projection, publisher censusProjectionPublisher, verifier censusProjectionVerifier) censusCompletion {

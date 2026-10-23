@@ -151,6 +151,13 @@ type IncompleteCause struct {
 	SymbolOrdinal     *int
 }
 
+type DiscoveryClosure uint8
+
+const (
+	DiscoveryClosureUnknown DiscoveryClosure = iota
+	DiscoveryClosureSuccessful
+)
+
 type Discovery struct {
 	Session                  SessionIdentity
 	Workspace                string
@@ -161,6 +168,7 @@ type Discovery struct {
 	ProviderFailures         []ProviderFailure
 	IncompleteCauses         []IncompleteCause
 	Complete                 bool
+	Closure                  DiscoveryClosure
 	Observations             []DiscoveryObservation
 }
 type Discoverer interface {
@@ -704,7 +712,7 @@ func reflectManifest(a, b captureset.Manifest) bool {
 	return bytes.Equal(x, y)
 }
 func cloneTarget(t PreparedTarget) PreparedTarget {
-	t.CanonicalSeedV2 = append([]byte(nil), t.CanonicalSeedV2...)
+	t.CanonicalSeedV2 = cloneSlice(t.CanonicalSeedV2)
 	return t
 }
 func cloneBatchRequest(b BatchRequest) BatchRequest {

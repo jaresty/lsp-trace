@@ -359,6 +359,9 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	discoveryErr := validateDiscovery(out)
 	_, _, canonicalErr := canonicalTargets(out)
 	out.Complete = complete && len(out.Targets) > 0 && accountingErr == nil && discoveryErr == nil && canonicalErr == nil
+	if complete && len(out.ProviderFailures) == 0 && len(out.IncompleteCauses) == 0 && accountingErr == nil && discoveryErr == nil && canonicalErr == nil {
+		out.Closure = DiscoveryClosureSuccessful
+	}
 	if !out.Complete {
 		out.Observations = discoveryObservations(a.Limits, uint64(filesAttempted+symbolOrdinal), sourceOmissions, nodeBoundary, depthBoundary, providerIncomplete, timeoutBoundary, byteBoundary)
 	}
@@ -622,17 +625,26 @@ func canonicalPositionSeed(workspace, filePath string, ordinal int, position lsp
 	}
 	return seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: fmt.Sprintf("census-%06d", ordinal), Path: filePath, Line: uint64(position.Line) + 1, Column: uint64(position.Character) + 1}}}}, workspace)
 }
+func cloneSlice[T any](values []T) []T {
+	if values == nil {
+		return nil
+	}
+	clone := make([]T, len(values))
+	copy(clone, values)
+	return clone
+}
+
 func cloneDiscovery(d Discovery) Discovery {
-	d.Accounting.Files = append([]census.FileEntry(nil), d.Accounting.Files...)
-	d.Accounting.Symbols = append([]census.SymbolEntry(nil), d.Accounting.Symbols...)
-	d.FileLedger.Entries = append([]captureset.LedgerEntry(nil), d.FileLedger.Entries...)
-	d.SymbolLedger.Entries = append([]captureset.LedgerEntry(nil), d.SymbolLedger.Entries...)
-	d.Targets = append([]PreparedTarget(nil), d.Targets...)
+	d.Accounting.Files = cloneSlice(d.Accounting.Files)
+	d.Accounting.Symbols = cloneSlice(d.Accounting.Symbols)
+	d.FileLedger.Entries = cloneSlice(d.FileLedger.Entries)
+	d.SymbolLedger.Entries = cloneSlice(d.SymbolLedger.Entries)
+	d.Targets = cloneSlice(d.Targets)
 	for i := range d.Targets {
 		d.Targets[i] = cloneTarget(d.Targets[i])
 	}
-	d.EnumerationSymbols = append([]EnumerationSymbol(nil), d.EnumerationSymbols...)
-	d.ProviderFailures = append([]ProviderFailure(nil), d.ProviderFailures...)
+	d.EnumerationSymbols = cloneSlice(d.EnumerationSymbols)
+	d.ProviderFailures = cloneSlice(d.ProviderFailures)
 	for i := range d.ProviderFailures {
 		if d.ProviderFailures[i].FileOrdinal != nil {
 			v := *d.ProviderFailures[i].FileOrdinal
@@ -643,7 +655,7 @@ func cloneDiscovery(d Discovery) Discovery {
 			d.ProviderFailures[i].SymbolOrdinal = &v
 		}
 	}
-	d.IncompleteCauses = append([]IncompleteCause(nil), d.IncompleteCauses...)
+	d.IncompleteCauses = cloneSlice(d.IncompleteCauses)
 	for i := range d.IncompleteCauses {
 		if d.IncompleteCauses[i].FileOrdinal != nil {
 			v := *d.IncompleteCauses[i].FileOrdinal
@@ -652,6 +664,21 @@ func cloneDiscovery(d Discovery) Discovery {
 		if d.IncompleteCauses[i].SymbolOrdinal != nil {
 			v := *d.IncompleteCauses[i].SymbolOrdinal
 			d.IncompleteCauses[i].SymbolOrdinal = &v
+		}
+	}
+	d.Observations = cloneSlice(d.Observations)
+	for i := range d.Observations {
+		if d.Observations[i].Observed != nil {
+			v := *d.Observations[i].Observed
+			d.Observations[i].Observed = &v
+		}
+		if d.Observations[i].Limit != nil {
+			v := *d.Observations[i].Limit
+			d.Observations[i].Limit = &v
+		}
+		if d.Observations[i].Omitted != nil {
+			v := *d.Observations[i].Omitted
+			d.Observations[i].Omitted = &v
 		}
 	}
 	return d

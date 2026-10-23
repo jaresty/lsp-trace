@@ -83,6 +83,7 @@ type censusRuntimeResult struct {
 	enumeration        []censusacquisition.SourceFile
 	sourcePlan         censussourceplan.Plan
 	discovery          censusacquisition.Discovery
+	discoveryTerminal  *privateConstituentDiscoveryTerminal
 	deadline           time.Time
 	privateAcquisition bool
 }
