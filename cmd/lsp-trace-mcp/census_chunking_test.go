@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"net/url"
+	"path/filepath"
 	"testing"
 
 	"lsp-trace/internal/censusacquisition"
@@ -39,12 +41,14 @@ func TestPrivateCensusChunkFailuresCollapseToAcquisitionWithoutCustody(t *testin
 			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 			shell := newCensusRuntime(runtime)
 			retained := []censusacquisition.SourceFile{{Path: "retained.go"}}
-			enumerateCalls := 0
-			shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+			enumerateCalls, discoveryCalls, chunkCalls := 0, 0, 0
+			shell.enumerate = func(_ context.Context, admitted censusAdmittedSession, _ censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
 				enumerateCalls++
+				retained[0].URI = (&url.URL{Scheme: "file", Path: filepath.Join(admitted.workspace, retained[0].Path)}).String()
 				return append([]censusacquisition.SourceFile(nil), retained...), nil
 			}
 			shell.discoverEnumerated = func(ctx context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool, files censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+				discoveryCalls++
 				got, err := files.Enumerate(ctx)
 				if err != nil || len(got) != 1 || got[0].Path != retained[0].Path {
 					t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_DISCOVERY_REUSES_ENUMERATION: got=%+v err=%v", got, err)
@@ -52,6 +56,7 @@ func TestPrivateCensusChunkFailuresCollapseToAcquisitionWithoutCustody(t *testin
 				return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true, Targets: make([]censusacquisition.PreparedTarget, 10001)}, nil
 			}
 			shell.chunk = func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error) {
+				chunkCalls++
 				return nil, errors.New(source + " sentinel")
 			}
 			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
@@ -59,6 +64,9 @@ func TestPrivateCensusChunkFailuresCollapseToAcquisitionWithoutCustody(t *testin
 			completion := shell.run(context.Background(), operation.Request(request))
 			if enumerateCalls != 1 {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_ENUMERATES_ONCE: calls=%d", enumerateCalls)
+			}
+			if discoveryCalls != 1 || chunkCalls != 1 {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_FAILURE_PATH_REACHED: source=%s discovery=%d chunk=%d", source, discoveryCalls, chunkCalls)
 			}
 			if completion.Diagnostic == nil || completion.privateChunk != nil || completion.Result != nil {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_FAILURE_ACQUISITION_NO_CUSTODY: source=%s completion=%+v", source, completion)
@@ -79,8 +87,9 @@ func TestPrivateCensusRuntimeRunRoutesOnlyAboveCompatibility(t *testing.T) {
 		shell := newCensusRuntime(runtime)
 		retained := []censusacquisition.SourceFile{{Path: "retained.go"}}
 		enumerateCalls := 0
-		shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+		shell.enumerate = func(_ context.Context, admitted censusAdmittedSession, _ censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
 			enumerateCalls++
+			retained[0].URI = (&url.URL{Scheme: "file", Path: filepath.Join(admitted.workspace, retained[0].Path)}).String()
 			return append([]censusacquisition.SourceFile(nil), retained...), nil
 		}
 		shell.discoverEnumerated = func(ctx context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool, files censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {

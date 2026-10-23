@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/censuschunking"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusrequest"
+	"lsp-trace/internal/censussourceplan"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
@@ -24,10 +25,15 @@ import (
 )
 
 const (
-	censusRuntimeMaxEntries   = 100000
-	censusRuntimeMaxWork      = 200000
-	censusRuntimeMaxPathBytes = 4096
-	censusRuntimeMaxDepth     = 64
+	censusRuntimeMaxEntries          = 100000
+	censusRuntimeMaxWork             = 200000
+	censusRuntimeMaxPathBytes        = 4096
+	censusRuntimeMaxDepth            = 64
+	censusRuntimeSourcePartitionSize = 256
+
+	censusStagePlanning       censusFailureStage  = "planning"
+	censusCodePlanningInvalid censusFailureCode   = "PLANNING_INVALID"
+	reasonPlanningInvalid     censusFailureReason = "source-planning-invalid"
 )
 
 type censusRuntimeConfig struct {
@@ -74,6 +80,7 @@ type censusRuntimeResult struct {
 	admitted           censusAdmittedSession
 	options            censusRuntimeConfig
 	enumeration        []censusacquisition.SourceFile
+	sourcePlan         censussourceplan.Plan
 	discovery          censusacquisition.Discovery
 	deadline           time.Time
 	privateAcquisition bool
@@ -173,6 +180,7 @@ type censusRuntime struct {
 	enumerate             func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error)
 	discover              func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool) (censusacquisition.Discovery, error)
 	discoverEnumerated    func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error)
+	planSourceFiles       func([]censusacquisition.SourceFile, string, int) (censussourceplan.Plan, error)
 	batchExecute          func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure)
 	chunk                 func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error)
 	chunkLease            func(context.Context, sessionruntime.SessionLeaseRequest, func(context.Context) error) error
@@ -221,7 +229,15 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 		if err != nil {
 			return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
 		}
-		return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), enumeration: enumeration, deadline: deadline, privateAcquisition: true}, nil, reasonNone
+		planSourceFiles := r.planSourceFiles
+		if planSourceFiles == nil {
+			planSourceFiles = censussourceplan.Build
+		}
+		sourcePlan, err := planSourceFiles(enumeration, admitted.workspace, censusRuntimeSourcePartitionSize)
+		if err != nil {
+			return censusRuntimeResult{}, censusPlanningFailure(err), reasonPlanningInvalid
+		}
+		return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), enumeration: append([]censusacquisition.SourceFile(nil), enumeration...), sourcePlan: sourcePlan, deadline: deadline, privateAcquisition: true}, nil, reasonNone
 	}
 	discover := r.discover
 	if discover == nil {
@@ -232,6 +248,10 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 		return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
 	}
 	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline}, nil, reasonNone
+}
+
+func censusPlanningFailure(err error) *censusRuntimeFailure {
+	return &censusRuntimeFailure{stage: censusStagePlanning, code: censusCodePlanningInvalid, err: err}
 }
 
 func effectiveCensusDeadline(parent context.Context, configured time.Time) time.Time {

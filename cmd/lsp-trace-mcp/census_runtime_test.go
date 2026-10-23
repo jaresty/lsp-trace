@@ -17,6 +17,7 @@ import (
 	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censussourceplan"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
@@ -151,6 +152,107 @@ func TestPrivateCensusRuntimeDiscoveryHookAcceptsRetainedEnumeration(t *testing.
 	t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_HOOK_RETAINS_ENUMERATION: hook=%v", hook)
 }
 
+func TestPrivateCensusRuntimeHasTypedSourcePlanCustody(t *testing.T) {
+	field, ok := reflect.TypeOf(censusRuntimeResult{}).FieldByName("sourcePlan")
+	if !ok || field.Type != reflect.TypeOf(censussourceplan.Plan{}) {
+		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_PRECEDES_DISCOVERY: field=%+v present=%t", field, ok)
+	}
+}
+
+func TestPrivateCensusRuntimeBuildsCompleteSourcePlanBeforeDiscovery(t *testing.T) {
+	workspace := t.TempDir()
+	uri, err := source.FileURI(filepath.Join(workspace, "a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	shell := newCensusRuntime(runtime)
+	input := []censusacquisition.SourceFile{{Path: "a.go", URI: uri, LanguageID: "go"}}
+	shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+		return input, nil
+	}
+	discoveryCalls := 0
+	shell.discoverEnumerated = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+		discoveryCalls++
+		return censusacquisition.Discovery{}, errors.New("discovery must not run during execute")
+	}
+	request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+	request.PrivateCensusChunking = true
+	result, failure, reason := shell.execute(context.Background(), request)
+	want := censusacquisition.SourceFile{Path: "a.go", URI: uri, LanguageID: "go"}
+	if failure != nil || reason != reasonNone || discoveryCalls != 0 || result.sourcePlan.Identity == "" || result.sourcePlan.Authority != 0 || len(result.enumeration) != 1 || len(result.sourcePlan.Files) != 1 || len(result.sourcePlan.Partitions) != 1 || result.sourcePlan.Partitions[0].Ordinal != 0 || len(result.sourcePlan.Partitions[0].Members) != 1 || result.enumeration[0] != want || result.sourcePlan.Files[0] != want || result.sourcePlan.Partitions[0].Members[0] != want {
+		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_COMPLETE_BEFORE_DISCOVERY: result=%+v failure=%+v reason=%q calls=%d", result, failure, reason, discoveryCalls)
+	}
+	input[0].Path = "caller.go"
+	if result.enumeration[0] != want || result.sourcePlan.Files[0] != want || result.sourcePlan.Partitions[0].Members[0] != want {
+		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_CALLER_INPUT_CLONE: input=%+v result=%+v", input, result)
+	}
+	result.enumeration[0].Path = "enumeration.go"
+	if result.sourcePlan.Files[0] != want || result.sourcePlan.Partitions[0].Members[0] != want {
+		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_ENUMERATION_CLONE: result=%+v", result)
+	}
+	result.sourcePlan.Files[0].Path = "files.go"
+	if result.sourcePlan.Partitions[0].Members[0] != want {
+		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_FILES_PARTITION_CLONE: result=%+v", result)
+	}
+}
+
+func TestPrivateCensusRuntimePlanRefusalStopsDiscovery(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		files []censusacquisition.SourceFile
+	}{
+		{name: "missing uri", files: []censusacquisition.SourceFile{{Path: "a.go", LanguageID: "go"}}},
+		{name: "reparable path", files: []censusacquisition.SourceFile{{Path: "dir/../a.go", URI: "file:///workspace/a.go", LanguageID: "go"}}},
+		{name: "path uri mismatch", files: []censusacquisition.SourceFile{{Path: "a.go", URI: "file:///workspace/b.go", LanguageID: "go"}}},
+		{name: "invalid disposition", files: []censusacquisition.SourceFile{{Path: "a.go", URI: "file:///workspace/a.go", LanguageID: "go", Disposition: "selected"}}},
+		{name: "empty enumeration"},
+		{name: "malformed", files: []censusacquisition.SourceFile{{Path: "a.go", URI: "://malformed", LanguageID: "go"}}},
+		{name: "duplicate", files: []censusacquisition.SourceFile{{Path: "a.go", URI: "file:///workspace/a.go"}, {Path: "a.go", URI: "file:///workspace/a.go"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+			shell := newCensusRuntime(runtime)
+			shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+				return append([]censusacquisition.SourceFile(nil), tc.files...), nil
+			}
+			discoveryCalls := 0
+			shell.discoverEnumerated = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+				discoveryCalls++
+				return censusacquisition.Discovery{}, nil
+			}
+			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+			request.PrivateCensusChunking = true
+			completion := shell.run(context.Background(), request)
+			if discoveryCalls != 0 || completion.Diagnostic == nil {
+				t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_INVALID_IDENTITY_BEFORE_DISCOVERY: calls=%d completion=%+v", discoveryCalls, completion)
+			}
+		})
+	}
+}
+
+func TestPrivateCensusRuntimePlanFailureIsNotDiscoveryFailure(t *testing.T) {
+	runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	shell := newCensusRuntime(runtime)
+	shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+		return []censusacquisition.SourceFile{{Path: "a.go", URI: "file:///workspace/a.go", LanguageID: "go"}}, nil
+	}
+	shell.planSourceFiles = func([]censusacquisition.SourceFile, string, int) (censussourceplan.Plan, error) {
+		return censussourceplan.Plan{}, censussourceplan.ErrInvalidIdentity
+	}
+	discoveryCalls := 0
+	shell.discoverEnumerated = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+		discoveryCalls++
+		return censusacquisition.Discovery{}, nil
+	}
+	request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+	request.PrivateCensusChunking = true
+	_, failure, reason := shell.execute(context.Background(), request)
+	if discoveryCalls != 0 || failure == nil || failure.stage == censusStageDiscovery || failure.code == censusCodeDiscoveryFailed || reason == reasonDiscoveryFailed {
+		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_FAILURE_DISTINCT_FROM_DISCOVERY: calls=%d failure=%+v reason=%q", discoveryCalls, failure, reason)
+	}
+}
+
 func TestPrivateCensusRuntimeActivatedBoundaryUsesBroadLimitsOnce(t *testing.T) {
 	for _, tc := range []struct {
 		name            string
@@ -163,14 +265,19 @@ func TestPrivateCensusRuntimeActivatedBoundaryUsesBroadLimitsOnce(t *testing.T) 
 		{name: "activated", activated: true, wantNodes: 100000, wantEnumerate: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+			workspace := t.TempDir()
+			uri, err := source.FileURI(filepath.Join(workspace, "a.go"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 			shell := newCensusRuntime(runtime)
 			enumerateCalls, discoveryCalls := 0, 0
 			var observed censusRuntimeConfig
 			shell.enumerate = func(_ context.Context, _ censusAdmittedSession, options censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
 				enumerateCalls++
 				observed = options
-				return nil, nil
+				return []censusacquisition.SourceFile{{Path: "a.go", URI: uri, LanguageID: "go"}}, nil
 			}
 			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
 				discoveryCalls++
