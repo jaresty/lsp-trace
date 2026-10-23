@@ -26,14 +26,14 @@ type State struct {
 	PlanIdentity    string
 }
 
-// Step performs at most one source transition from current.
-type Step func(ctx context.Context, current State) (State, error)
+// Transition performs at most one source transition from current.
+type Transition func(ctx context.Context, current State) (State, error)
 
 // Request configures one bounded sequential repetition.
 type Request struct {
 	Initial State
 	Bound   int
-	Step    Step
+	Step    Transition
 }
 
 // Stop classifies why repetition ended.

@@ -3,6 +3,7 @@ package censussourcedriver
 import (
 	"context"
 	"errors"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"path/filepath"
@@ -212,6 +213,29 @@ func TestRepeatCancellationBetweenSteps(t *testing.T) {
 	if got.Stop != StopDeadline || !errors.Is(got.Err, context.Canceled) || calls != 1 || got.Steps != 1 || got.Transitions != 1 || got.State.CommittedPrefix != 2 {
 		t.Fatalf("ASSERT_CANCEL_BETWEEN result=%+v calls=%d", got, calls)
 	}
+}
+
+func TestSharedAtomicStepDeclared(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range files {
+		if filepath.Ext(path) != ".go" || filepath.Base(path) == "driver_test.go" {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if ok && function.Recv == nil && function.Name.Name == "Step" {
+				return
+			}
+		}
+	}
+	t.Fatal("ASSERT_SHARED_ATOMIC_STEP_DECLARED: package-level func Step is absent")
 }
 
 func TestDriverProductionImportsRemainGeneric(t *testing.T) {
