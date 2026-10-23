@@ -35,6 +35,7 @@ type censusCoreConfig struct {
 	limits        acquisitionops.Limits
 	callHierarchy bool
 	diagnostic    *censusdiagnostic.Recorder
+	controlFlow   *censusControlFlowObserver
 	afterCommit   func(context.Context, *initializedAcquisitionRuntime, censusPublicationOutcome) int
 }
 

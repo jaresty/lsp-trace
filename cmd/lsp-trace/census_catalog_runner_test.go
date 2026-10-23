@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,18 +70,63 @@ func TestCensusCatalogFreshLoadsAcquisitionProfileConfig(t *testing.T) {
 		return "/bin/echo", nil
 	}
 	deps.newStarter = func() (sessionruntime.Starter, error) { return sessionruntime.ManagedStarter{}, nil }
-	coreCalls := 0
-	deps.runCore = func(_ censusCLIOptions, cfg censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
+	coreCalls, nativeCalls := 0, 0
+	deps.runCore = func(_ censusCLIOptions, _ censusCoreConfig, _ censusCoreDependencies) censusPublicationOutcome {
 		coreCalls++
+		return censusPublicationOutcome{}
+	}
+	deps.runNativeCatalog = func(options censusCLIOptions, cfg censusCoreConfig, _, stderr io.Writer) int {
+		nativeCalls++
 		if cfg.runner.start.LanguageID != "go" {
 			t.Fatalf("ASSERT_CENSUS_CATALOG_PROFILE_CONFIG_LANGUAGE language=%q", cfg.runner.start.LanguageID)
 		}
-		return censusPublicationOutcome{}
+		return writeCensusFailure(stderr, censusStageCommitted, options.Machine, errNativeCatalogAggregateUnavailable)
 	}
 	var stdout, stderr bytes.Buffer
 	code := runCensusWithDependencies([]string{"--machine", "--workspace", workspace, "--publication-root", root, "--catalog", "--catalog-config", "/host.json", "--profile", "test", "--config", profileConfig}, &stdout, &stderr, deps)
-	if code == 0 || coreCalls != 1 || stdout.Len() != 0 {
-		t.Fatalf("ASSERT_CENSUS_CATALOG_PROFILE_CONFIG_LOADED code=%d core=%d stdout=%q stderr=%q", code, coreCalls, stdout.String(), stderr.String())
+	if code == 0 || coreCalls != 0 || nativeCalls != 1 || stdout.Len() != 0 {
+		t.Fatalf("ASSERT_CENSUS_CATALOG_PROFILE_CONFIG_LOADED code=%d core=%d native=%d stdout=%q stderr=%q", code, coreCalls, nativeCalls, stdout.String(), stderr.String())
+	}
+}
+
+func TestCensusRunnerShutsManagerOnceAndPreservesStrongerFailure(t *testing.T) {
+	workspace, root := t.TempDir(), t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	profileConfig := filepath.Join(t.TempDir(), "profiles.toml")
+	if err := os.WriteFile(profileConfig, []byte("[profiles.test]\ncommand = \"profile-server\"\nlanguage_ids = [\"go\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name        string
+		runCode     int
+		shutdownErr error
+		wantStage   censusFailureStage
+	}{
+		{name: "shutdown-only", runCode: 0, shutdownErr: errors.New("shutdown conflict"), wantStage: censusStageAcquisition},
+		{name: "stronger-run-failure", runCode: 1, shutdownErr: errors.New("shutdown conflict"), wantStage: censusStageAssembly},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			deps := productionCensusRunnerDependencies()
+			deps.lookPath = func(string) (string, error) { return "/bin/echo", nil }
+			deps.newStarter = func() (sessionruntime.Starter, error) { return sessionruntime.ManagedStarter{}, nil }
+			shutdownCalls := 0
+			deps.shutdownManager = func(*sessionruntime.Manager) error { shutdownCalls++; return tc.shutdownErr }
+			deps.runNativeCatalog = func(options censusCLIOptions, _ censusCoreConfig, _, stderr io.Writer) int {
+				if tc.runCode != 0 {
+					return writeCensusFailure(stderr, censusStageAssembly, options.Machine, errors.New("stronger"))
+				}
+				return 0
+			}
+			var stdout, stderr bytes.Buffer
+			code := runCensusWithDependencies([]string{"--machine", "--workspace", workspace, "--publication-root", root, "--catalog", "--catalog-config", "/host.json", "--profile", "test", "--config", profileConfig}, &stdout, &stderr, deps)
+			var want bytes.Buffer
+			wantCode := writeCensusFailure(&want, tc.wantStage, true, errors.New("safe"))
+			if shutdownCalls != 1 || code != wantCode || stderr.String() != want.String() {
+				t.Fatalf("ASSERT_CENSUS_MANAGER_SHUTDOWN_ONCE calls=%d code=%d/%d stderr=%q/%q", shutdownCalls, code, wantCode, stderr.String(), want.String())
+			}
+		})
 	}
 }
 

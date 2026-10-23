@@ -37,8 +37,10 @@ type censusRunnerDependencies struct {
 	lookPath                 func(string) (string, error)
 	abs                      func(string) (string, error)
 	newManager               func(sessionruntime.Config) (*sessionruntime.Manager, error)
+	shutdownManager          func(*sessionruntime.Manager) error
 	newStarter               func() (sessionruntime.Starter, error)
 	runCore                  func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome
+	runNativeCatalog         func(censusCLIOptions, censusCoreConfig, io.Writer, io.Writer) int
 	openCatalogHost          func(string, string) (*continuationhost.Bundle, error)
 	runCatalog               func(context.Context, censuscontinuation.Request) censuscontinuation.Result
 	resumeCatalog            func(context.Context, censuscontinuation.ResumeRequest) censuscontinuation.Result
@@ -57,6 +59,9 @@ func productionCensusRunnerDependencies() censusRunnerDependencies {
 		newManager: func(cfg sessionruntime.Config) (*sessionruntime.Manager, error) {
 			return sessionruntime.New(cfg)
 		},
+		shutdownManager: func(manager *sessionruntime.Manager) error {
+			return manager.Shutdown(context.Background())
+		},
 		newStarter: func() (sessionruntime.Starter, error) {
 			supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
 			if err != nil {
@@ -65,6 +70,7 @@ func productionCensusRunnerDependencies() censusRunnerDependencies {
 			return sessionruntime.ManagedStarter{Manager: supervisor}, nil
 		},
 		runCore:                  runCensusCore,
+		runNativeCatalog:         runCensusNativeCatalog,
 		openCatalogHost:          openCensusCatalogHost,
 		runCatalog:               censuscontinuation.Run,
 		resumeCatalog:            censuscontinuation.Resume,
@@ -172,6 +178,10 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
 	}
+	shutdown := deps.shutdownManager
+	if shutdown == nil {
+		shutdown = func(manager *sessionruntime.Manager) error { return manager.Shutdown(context.Background()) }
+	}
 	maxEvidenceBytes, maxPathWork := 4<<20, 100000
 	maxResponseBytes, maxMessages := 4<<20, 64
 	timeoutMS, requestTimeoutMS := int(options.Timeout.Milliseconds()), int(options.RequestTimeout.Milliseconds())
@@ -179,29 +189,32 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		timeoutMS = 60000
 	}
 	limits := acquisitionops.Limits{MaxNodes: &options.MaxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
-	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, providerProbe: providerProbe, privateEnumerationProjection: options.PrivateEnumerationProjection, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic}
-	catalogCode := -1
-	if options.Catalog {
-		cfg.afterCommit = func(_ context.Context, runtime *initializedAcquisitionRuntime, outcome censusPublicationOutcome) int {
-			catalogCode = runCensusCatalogFresh(options, stdout, stderr, outcome, runtime, deps)
-			return catalogCode
-		}
+	var controlFlowObserver *censusControlFlowObserver
+	if controlFlow != nil {
+		controlFlowObserver = newCensusControlFlowObserver()
 	}
-	outcome := deps.runCore(options, cfg, productionCensusCoreDependencies())
-	finish := func() int {
-		code := writeCensusOutcome(stdout, stderr, options.Machine, outcome)
+	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, providerProbe: providerProbe, privateEnumerationProjection: options.PrivateEnumerationProjection, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic, controlFlow: controlFlowObserver}
+	code := 0
+	if options.Catalog {
+		code = deps.runNativeCatalog(options, cfg, stdout, stderr)
+	} else {
+		outcome := deps.runCore(options, cfg, productionCensusCoreDependencies())
+		code = writeCensusOutcome(stdout, stderr, options.Machine, outcome)
 		if controlFlow != nil && outcome.controlFlow != nil {
 			_ = controlFlow.Record(*outcome.controlFlow)
 		}
-		return code
 	}
-	if !options.Catalog {
-		return finish()
+	if options.Catalog && controlFlow != nil {
+		if record, ok := controlFlowObserver.record(); ok {
+			_ = controlFlow.Record(record)
+		}
 	}
-	if catalogCode >= 0 {
-		return catalogCode
+	if manager != nil {
+		if shutdownErr := shutdown(manager); shutdownErr != nil && code == 0 {
+			return writeCensusFailure(stderr, censusStageAcquisition, options.Machine, shutdownErr)
+		}
 	}
-	return finish()
+	return code
 }
 
 func enumerateCensusPreflight(options censusCLIOptions) ([]censusacquisition.SourceFile, error) {

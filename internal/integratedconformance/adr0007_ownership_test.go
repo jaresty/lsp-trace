@@ -27,6 +27,8 @@ func ownsADR0007ProductionPath(path string) bool {
 
 	switch path {
 	case "cmd/lsp-trace/census_batch_acquirer_test.go",
+		"cmd/lsp-trace/census_native_catalog.go",
+		"cmd/lsp-trace/census_native_catalog_runner_test.go",
 		"cmd/lsp-trace/census_catalog.go",
 		"cmd/lsp-trace/census_catalog_cli_test.go",
 		"cmd/lsp-trace/census_catalog_runner_test.go",
@@ -78,6 +80,8 @@ func TestADR0007ProductionOwnershipRegistration(t *testing.T) {
 		"internal/v5sourcesnapshotv5/v5.go",
 		"internal/v5sourcesnapshotv6/v6.go",
 		"cmd/lsp-trace/census_batch_acquirer_test.go",
+		"cmd/lsp-trace/census_native_catalog.go",
+		"cmd/lsp-trace/census_native_catalog_runner_test.go",
 		"cmd/lsp-trace/census_catalog.go",
 		"cmd/lsp-trace/census_continuation_test.go",
 		"cmd/lsp-trace-mcp/census_continuation_host.go",
@@ -122,6 +126,7 @@ func TestADR0007OwnershipRejectsAdjacentPaths(t *testing.T) {
 		"internal/censuscontinuation-other/capture.go",
 		"internal/v5sourcesnapshotv40/v4.go",
 		"cmd/lsp-trace/census_unrelated.go",
+		"cmd/lsp-trace/census_native_catalog_extra.go",
 		"cmd/lsp-trace-mcp/census_unrelated.go",
 		"internal/schema/schemas/unrelated.schema.json",
 	} {
