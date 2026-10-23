@@ -84,6 +84,13 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"cmd/lsp-trace-mcp/census_discovery_resume.go",
 	"internal/censussourcecontinuation/coordinator.go",
 	"internal/censussourceplan/plan.go",
+	"internal/censussourcedriver/driver.go",
+	"internal/censussourcedriver/step.go",
+	"internal/censussourceassembly/stores.go",
+	"internal/censussourceassembly/terminal.go",
+	"internal/censussourceassembly/run.go",
+	"cmd/lsp-trace-mcp/census_source_continuation_store.go",
+	"cmd/lsp-trace/census_native_catalog.go",
 }
 
 var syntheticSourceAdditionalSchemaPaths = []string{

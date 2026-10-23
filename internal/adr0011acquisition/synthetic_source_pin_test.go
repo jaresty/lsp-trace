@@ -209,6 +209,13 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"cmd/lsp-trace-mcp/census_discovery_resume.go",
 		"internal/censussourcecontinuation/coordinator.go",
 		"internal/censussourceplan/plan.go",
+		"internal/censussourcedriver/driver.go",
+		"internal/censussourcedriver/step.go",
+		"internal/censussourceassembly/stores.go",
+		"internal/censussourceassembly/terminal.go",
+		"internal/censussourceassembly/run.go",
+		"cmd/lsp-trace-mcp/census_source_continuation_store.go",
+		"cmd/lsp-trace/census_native_catalog.go",
 	}
 	expectedAdditionalSchemaPaths := []string{
 		"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
@@ -222,7 +229,17 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	if strings.Join(syntheticSourceAdditionalSchemaPaths, "\n") != strings.Join(expectedAdditionalSchemaPaths, "\n") {
 		t.Fatalf("additional schema paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalSchemaPaths, expectedAdditionalSchemaPaths)
 	}
-	for _, requiredPath := range []string{censusDiscoveryTerminalPath, censusAcquisitionCorePath} {
+	for _, requiredPath := range []string{
+		censusDiscoveryTerminalPath,
+		censusAcquisitionCorePath,
+		"internal/censussourcedriver/driver.go",
+		"internal/censussourcedriver/step.go",
+		"internal/censussourceassembly/stores.go",
+		"internal/censussourceassembly/terminal.go",
+		"internal/censussourceassembly/run.go",
+		"cmd/lsp-trace-mcp/census_source_continuation_store.go",
+		"cmd/lsp-trace/census_native_catalog.go",
+	} {
 		count := 0
 		for _, actualPath := range syntheticSourceAdditionalGoPaths {
 			if actualPath == requiredPath {
@@ -308,11 +325,18 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		assertReject("renamed schema "+name, nearName)
 	}
 	goNamespaceSubstitutions := map[string]string{
-		"cmd/lsp-trace/census_command.go":      "cmd/lsp-trace/census_commands.go",
-		"internal/censuspreflight/result.go":   "internal/censuspreflight/results.go",
-		"internal/censusrequest/receipt_v2.go": "internal/censusrequest/receipt.go",
-		"internal/schema/schema.go":            "internal/schema/schemas.go",
-		"internal/source/discovery.go":         "internal/source/discover.go",
+		"cmd/lsp-trace/census_command.go":                       "cmd/lsp-trace/census_commands.go",
+		"internal/censuspreflight/result.go":                    "internal/censuspreflight/results.go",
+		"internal/censusrequest/receipt_v2.go":                  "internal/censusrequest/receipt.go",
+		"internal/schema/schema.go":                             "internal/schema/schemas.go",
+		"internal/source/discovery.go":                          "internal/source/discover.go",
+		"internal/censussourcedriver/driver.go":                 "internal/censussourcedriver/drivers.go",
+		"internal/censussourcedriver/step.go":                   "internal/censussourcedriver/steps.go",
+		"internal/censussourceassembly/stores.go":               "internal/censussourceassembly/store.go",
+		"internal/censussourceassembly/terminal.go":             "internal/censussourceassembly/terminals.go",
+		"internal/censussourceassembly/run.go":                  "internal/censussourceassembly/runner.go",
+		"cmd/lsp-trace-mcp/census_source_continuation_store.go": "cmd/lsp-trace-mcp/census_source_continuation_stores.go",
+		"cmd/lsp-trace/census_native_catalog.go":                "cmd/lsp-trace/census_native_catalogs.go",
 	}
 	for name, substitute := range goNamespaceSubstitutions {
 		candidate := append([]SyntheticSourceEntry(nil), entries...)
@@ -338,6 +362,13 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"sessionruntime/private_terminal_observation_test.go",
 		"internal/managedprocess/process_test.go",
 		"internal/describeworker/runner_process_test.go",
+		"internal/censussourcedriver/driver_test.go",
+		"internal/censussourcedriver/step_test.go",
+		"internal/censussourceassembly/stores_test.go",
+		"internal/censussourceassembly/terminal_test.go",
+		"internal/censussourceassembly/run_test.go",
+		"cmd/lsp-trace-mcp/census_source_continuation_store_test.go",
+		"cmd/lsp-trace/census_native_catalog_test.go",
 	} {
 		testSource := append([]SyntheticSourceEntry(nil), entries...)
 		testSource[oldFiveEnd].Path = name
