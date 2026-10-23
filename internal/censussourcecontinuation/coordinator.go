@@ -52,6 +52,24 @@ type HeadRevision struct {
 	Generation uint64
 	Selector   string
 }
+
+// HeadState is the persisted coordinator state exposed by strict neutral inspection.
+type HeadState string
+
+const (
+	HeadStateAbsent    HeadState = "ABSENT"
+	HeadStateClaimed   HeadState = "CLAIMED"
+	HeadStateCommitted HeadState = "COMMITTED"
+)
+
+// HeadInspection exposes only strictly validated persisted continuation custody.
+type HeadInspection struct {
+	Revision        HeadRevision
+	State           HeadState
+	CommittedPrefix int
+	ClaimOrdinal    int
+	ReceiptSelector string
+}
 type CASOutcome string
 
 const (
@@ -159,6 +177,33 @@ func ParseHeadRevision(raw []byte) (HeadRevision, error) {
 	}
 	return HeadRevision{h.Generation, h.Selector}, nil
 }
+
+// InspectHead strictly parses one persisted head and validates its request-bound custody.
+func InspectHead(raw []byte, workflowKey, planIdentity string, partitions int) (HeadInspection, error) {
+	if workflowKey == "" || planIdentity == "" || partitions < 0 {
+		return HeadInspection{}, ErrInvalid
+	}
+	if len(raw) == 0 {
+		return HeadInspection{State: HeadStateAbsent, ClaimOrdinal: -1}, nil
+	}
+	var h head
+	if strict(raw, &h) != nil || h.SchemaVersion != headVersion || h.WorkflowKey != workflowKey || h.PlanIdentity != planIdentity || h.Authority != 0 || validateHead(h, partitions) != nil {
+		return HeadInspection{}, ErrInvalid
+	}
+	copy := h
+	canonical, err := setHeadSelector(&copy)
+	if err != nil || !bytes.Equal(canonical, raw) {
+		return HeadInspection{}, ErrInvalid
+	}
+	return HeadInspection{
+		Revision:        HeadRevision{Generation: h.Generation, Selector: h.Selector},
+		State:           HeadState(h.State),
+		CommittedPrefix: h.CommittedPrefix,
+		ClaimOrdinal:    h.ClaimOrdinal,
+		ReceiptSelector: h.ReceiptSelector,
+	}, nil
+}
+
 func validSelector(s string) bool {
 	if len(s) != len("sha256:")+sha256.Size*2 || !bytes.HasPrefix([]byte(s), []byte("sha256:")) {
 		return false

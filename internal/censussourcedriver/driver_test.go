@@ -152,6 +152,8 @@ func TestRepeatRejectsInvalidStepState(t *testing.T) {
 		{"count change", committed(2, 4, "plan-a")},
 		{"identity change", committed(2, 3, "plan-b")},
 		{"identity added", committed(2, 3, "plan-a")},
+		{"session change", State{Status: StatusCommitted, CommittedPrefix: 2, PartitionCount: 3, PlanIdentity: "plan-a", SessionID: "session-b", ManagerGeneration: 7}},
+		{"manager generation change", State{Status: StatusCommitted, CommittedPrefix: 2, PartitionCount: 3, PlanIdentity: "plan-a", SessionID: "session-a", ManagerGeneration: 8}},
 		{"committed without progress", committed(1, 3, "plan-a")},
 		{"conflict moved prefix", State{Status: StatusConflict, CommittedPrefix: 2, PartitionCount: 3, PlanIdentity: "plan-a"}},
 		{"unknown status", State{Status: Status("OTHER"), CommittedPrefix: 1, PartitionCount: 3, PlanIdentity: "plan-a"}},
@@ -160,6 +162,10 @@ func TestRepeatRejectsInvalidStepState(t *testing.T) {
 			initial := committed(1, 3, "plan-a")
 			if tc.name == "identity added" {
 				initial.PlanIdentity = ""
+			}
+			if tc.name == "session change" || tc.name == "manager generation change" {
+				initial.SessionID = "session-a"
+				initial.ManagerGeneration = 7
 			}
 			got := Repeat(context.Background(), Request{
 				Initial: initial,

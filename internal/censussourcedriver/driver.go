@@ -18,12 +18,14 @@ const (
 )
 
 // State is the authoritative continuation state before or after a Step.
-// PlanIdentity is optional, but its value (including absence) is immutable.
+// PlanIdentity and the optional manager identity are immutable.
 type State struct {
-	Status          Status
-	CommittedPrefix int
-	PartitionCount  int
-	PlanIdentity    string
+	Status            Status
+	CommittedPrefix   int
+	PartitionCount    int
+	PlanIdentity      string
+	SessionID         string
+	ManagerGeneration uint64
 }
 
 // Transition performs at most one source transition from current.
@@ -128,7 +130,7 @@ func validInitial(state State) bool {
 }
 
 func validNext(previous, next State) bool {
-	if !validRange(next) || next.PartitionCount != previous.PartitionCount || next.PlanIdentity != previous.PlanIdentity {
+	if !validRange(next) || next.PartitionCount != previous.PartitionCount || next.PlanIdentity != previous.PlanIdentity || next.SessionID != previous.SessionID || next.ManagerGeneration != previous.ManagerGeneration {
 		return false
 	}
 	switch next.Status {
@@ -142,7 +144,8 @@ func validNext(previous, next State) bool {
 }
 
 func validRange(state State) bool {
-	return state.PartitionCount >= 0 && state.CommittedPrefix >= 0 && state.CommittedPrefix <= state.PartitionCount
+	identityValid := state.SessionID == "" && state.ManagerGeneration == 0 || state.SessionID != "" && state.ManagerGeneration > 0
+	return identityValid && state.PartitionCount >= 0 && state.CommittedPrefix >= 0 && state.CommittedPrefix <= state.PartitionCount
 }
 
 func failed(result Result, err error) Result {

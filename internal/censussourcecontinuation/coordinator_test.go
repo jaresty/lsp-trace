@@ -237,6 +237,61 @@ func baseRequest(p censussourceplan.Plan, objects *memObjects, heads *memHeads, 
 	}}
 }
 
+func TestInspectHeadStrictBoundCustody(t *testing.T) {
+	p := plan3(t)
+	absent, err := InspectHead(nil, "w", p.Identity, len(p.Partitions))
+	if err != nil || absent.State != HeadStateAbsent || absent.CommittedPrefix != 0 || absent.ClaimOrdinal != -1 || absent.ReceiptSelector != "" {
+		t.Fatalf("ASSERT_CONTINUATION_INSPECT_HEAD_ABSENT got=%+v err=%v", absent, err)
+	}
+
+	raw := rawHead(t, head{
+		SchemaVersion: headVersion, WorkflowKey: "w", PlanIdentity: p.Identity,
+		Authority: 0, Generation: 7, State: "COMMITTED", CommittedPrefix: 2,
+		ClaimOrdinal: 1, ClaimGeneration: 6, ClaimSelector: digest([]byte("claim")),
+		IdempotencyKey: "stable", ReceiptSelector: digest([]byte("receipt")),
+	})
+	got, err := InspectHead(raw, "w", p.Identity, len(p.Partitions))
+	if err != nil || got.Revision.Generation != 7 || got.State != HeadStateCommitted || got.CommittedPrefix != 2 || got.ClaimOrdinal != 1 || got.ReceiptSelector == "" {
+		t.Fatalf("ASSERT_CONTINUATION_INSPECT_HEAD_EXACT got=%+v err=%v", got, err)
+	}
+	claimedRaw := rawHead(t, head{
+		SchemaVersion: headVersion, WorkflowKey: "w", PlanIdentity: p.Identity,
+		Authority: 0, Generation: 7, State: "CLAIMED", CommittedPrefix: 1,
+		ClaimOrdinal: 1, ClaimGeneration: 7, ClaimSelector: digest([]byte("claim")),
+		IdempotencyKey: "stable",
+	})
+	claimed, err := InspectHead(claimedRaw, "w", p.Identity, len(p.Partitions))
+	if err != nil || claimed.State != HeadStateClaimed || claimed.CommittedPrefix != 1 || claimed.ClaimOrdinal != 1 || claimed.ReceiptSelector != "" {
+		t.Fatalf("ASSERT_CONTINUATION_INSPECT_HEAD_CLAIMED got=%+v err=%v", claimed, err)
+	}
+	for _, tc := range []struct {
+		name, workflow, plan string
+		partitions           int
+	}{
+		{name: "workflow", workflow: "foreign", plan: p.Identity, partitions: 3},
+		{name: "plan", workflow: "w", plan: "foreign", partitions: 3},
+		{name: "partition-bound", workflow: "w", plan: p.Identity, partitions: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := InspectHead(raw, tc.workflow, tc.plan, tc.partitions); !errors.Is(err, ErrInvalid) {
+				t.Fatalf("ASSERT_CONTINUATION_INSPECT_HEAD_REJECT_%s err=%v", tc.name, err)
+			}
+		})
+	}
+	authority := head{
+		SchemaVersion: headVersion, WorkflowKey: "w", PlanIdentity: p.Identity,
+		Authority: 1, Generation: 7, State: "COMMITTED", CommittedPrefix: 2,
+		ClaimOrdinal: 1, ClaimGeneration: 6, ClaimSelector: digest([]byte("claim")),
+		IdempotencyKey: "stable", ReceiptSelector: digest([]byte("receipt")),
+	}
+	if _, err := InspectHead(rawHead(t, authority), "w", p.Identity, 3); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("ASSERT_CONTINUATION_INSPECT_HEAD_REJECT_AUTHORITY err=%v", err)
+	}
+	if _, err := InspectHead(append(append([]byte(nil), raw...), '\n'), "w", p.Identity, 3); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("ASSERT_CONTINUATION_INSPECT_HEAD_REJECT_NONCANONICAL err=%v", err)
+	}
+}
+
 func TestMalformedHeadsRejectBeforeEffects(t *testing.T) {
 	p := plan3(t)
 	cases := []head{
