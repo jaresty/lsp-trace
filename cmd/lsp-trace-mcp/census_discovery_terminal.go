@@ -40,43 +40,25 @@ func newPrivateConstituentDiscoveryTerminal(plan censussourceplan.Plan, discover
 	if discovery.Closure != censusacquisition.DiscoveryClosureUnknown && discovery.Closure != censusacquisition.DiscoveryClosureSuccessful {
 		return nil, errors.New("invalid discovery closure")
 	}
-	if discovery.Complete && (len(discovery.ProviderFailures) != 0 || len(discovery.IncompleteCauses) != 0) {
+	if discovery.Complete && (len(discovery.Targets) == 0 || len(discovery.ProviderFailures) != 0 || len(discovery.IncompleteCauses) != 0) {
 		return nil, errors.New("complete discovery conflicts with failure custody")
 	}
 	if discovery.Closure == censusacquisition.DiscoveryClosureSuccessful && (len(discovery.ProviderFailures) != 0 || len(discovery.IncompleteCauses) != 0) {
 		return nil, errors.New("successful discovery closure conflicts with failure custody")
 	}
+	outcome := privateDiscoveryOutcome(discovery)
 	return &privateConstituentDiscoveryTerminal{
 		planIdentity: plan.Identity,
 		authority:    plan.Authority,
 		ordinal:      0,
 		members:      cloneTerminalSlice(plan.Partitions[0].Members),
 		discovery:    clonePrivateTerminalDiscovery(discovery),
-		outcome:      privateDiscoveryOutcome(discovery),
+		outcome:      outcome,
 	}, nil
 }
 
 func privateDiscoveryOutcome(discovery censusacquisition.Discovery) privateConstituentDiscoveryOutcome {
-	for _, cause := range discovery.IncompleteCauses {
-		if cause.Code == "LIFECYCLE_CONFLICT" {
-			return privateDiscoveryRefused
-		}
-	}
-	for _, cause := range discovery.IncompleteCauses {
-		if cause.Code == "SESSION_POISONED" {
-			return privateDiscoveryFailed
-		}
-	}
-	if discovery.Complete && len(discovery.Targets) > 0 {
-		return privateDiscoveryCompleteNonempty
-	}
-	if discovery.Closure == censusacquisition.DiscoveryClosureSuccessful && len(discovery.Targets) == 0 {
-		return privateDiscoverySuccessfulEmpty
-	}
-	if len(discovery.Targets) > 0 {
-		return privateDiscoveryPartial
-	}
-	return privateDiscoveryUnknown
+	return privateConstituentDiscoveryOutcome(censusacquisition.TerminalDiscoveryOutcome(discovery))
 }
 
 func cloneTerminalSlice[T any](values []T) []T {

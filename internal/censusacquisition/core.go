@@ -371,6 +371,57 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (projection Projection
 	return cloneProjection(p), nil
 }
 
+// TerminalDiscoveryOutcome derives the closed private terminal class from the
+// retained discovery evidence. It does not mint authority or completeness.
+func TerminalDiscoveryOutcome(d Discovery) string {
+	for _, cause := range d.IncompleteCauses {
+		if cause.Code == "LIFECYCLE_CONFLICT" {
+			return "REFUSED"
+		}
+	}
+	for _, cause := range d.IncompleteCauses {
+		if cause.Code == "SESSION_POISONED" {
+			return "FAILED"
+		}
+	}
+	if d.Complete && len(d.Targets) > 0 {
+		return "COMPLETE_NONEMPTY"
+	}
+	if d.Closure == DiscoveryClosureSuccessful && len(d.Targets) == 0 {
+		return "SUCCESSFUL_EMPTY"
+	}
+	if len(d.Targets) > 0 {
+		return "PARTIAL"
+	}
+	return "UNKNOWN"
+}
+
+// ValidateTerminalDiscovery applies the package-owned semantic contract used by
+// continuation receipts. It validates nested accounting and requires the
+// asserted outcome to equal the class derived from that custody.
+func ValidateTerminalDiscovery(d Discovery, outcome string) error {
+	if err := validateDiscovery(d); err != nil {
+		return err
+	}
+	if err := d.Accounting.Validate(); err != nil {
+		return fmt.Errorf("discovery accounting: %w", err)
+	}
+	if _, _, err := canonicalTargets(d); err != nil {
+		return err
+	}
+	if d.Complete && (d.Closure != DiscoveryClosureSuccessful || len(d.Targets) == 0 || len(d.ProviderFailures) != 0 || len(d.IncompleteCauses) != 0 || len(d.Observations) != 0) {
+		return errors.New("complete discovery contradiction")
+	}
+	if d.Closure == DiscoveryClosureSuccessful && (len(d.ProviderFailures) != 0 || len(d.IncompleteCauses) != 0 || len(d.Observations) != 0) {
+		return errors.New("successful discovery closure contradiction")
+	}
+	derived := TerminalDiscoveryOutcome(d)
+	if outcome != derived {
+		return fmt.Errorf("discovery terminal outcome mismatch: got %q want %q", outcome, derived)
+	}
+	return nil
+}
+
 func validateDiscovery(d Discovery) error {
 	if d.Accounting.FileDenominator < 0 || d.Accounting.FileDenominator > captureset.MaxResources || d.Accounting.SymbolDenominator < 0 || d.Accounting.SymbolDenominator > censusenumerationprojection.MaxSymbols || len(d.Targets) > captureset.MaxTargets {
 		return errors.New("discovery bounds exceeded")
@@ -452,7 +503,7 @@ func validateDiscovery(d Discovery) error {
 }
 func validDiscoveryCause(c IncompleteCause) bool {
 	if c.Scope == "FILE" {
-		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "FILE_LIMIT" || c.Code == "CHILD_INCOMPLETE") || c.Stage == "ENUMERATION" && c.Code == "CANCELED" || c.Stage == "DOCUMENT_SYMBOL_FLATTEN" && (c.Code == "NODE_LIMIT" || c.Code == "DEPTH_LIMIT" || c.Code == "STRING_BYTE_LIMIT")
+		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "FILE_LIMIT" || c.Code == "CHILD_INCOMPLETE") || c.Stage == "ENUMERATION" && c.Code == "CANCELED" || c.Stage == "DOCUMENT_SYMBOL_FLATTEN" && (c.Code == "NODE_LIMIT" || c.Code == "DEPTH_LIMIT" || c.Code == "STRING_BYTE_LIMIT") || c.Stage == "DOCUMENT_SUPPLY" && (c.Code == "SESSION_POISONED" || c.Code == "LIFECYCLE_CONFLICT" || c.Code == "SESSION_UNAVAILABLE")
 	}
 	if c.Scope == "SYMBOL" {
 		return c.Stage == "DISCOVERY" && (c.Code == "CANCELED" || c.Code == "SYMBOL_LIMIT" || c.Code == "TARGET_LIMIT" || c.Code == "COORDINATE_OVERFLOW") || c.Stage == "PREPARE_CALL_HIERARCHY" && c.Code == "RESULT_MISMATCH"
