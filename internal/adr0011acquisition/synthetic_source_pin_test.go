@@ -316,13 +316,13 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 }
 
 func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
-	const manifestHash = "6c13fe3322a965faa6eb70a155a54344e276c5eee6ca2937709f2acfb9cfd492"
-	const aggregate = "sha256:93d1ed2e06a41da0b1eff066190d31004566f2e9c4e62006c8daa15e770d3ad5"
+	const manifestHash = "d894fac416e29a01ae87c2f4fbdf70ffc4cd99470cd9b18a2e6e186410ef2e53"
+	const aggregate = "sha256:71f4d81cd3b6cc3ecd46cd37df98a711acb757077c8b1fc218d39dafdf0cd664"
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("producer candidate source location unavailable")
 	}
-	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.6c13fe3322a965fa.manifest.json")
+	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.d894fac416e29a01.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
