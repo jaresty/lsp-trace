@@ -206,6 +206,8 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/describeworker/runner.go",
 		"internal/describeworker/runner_v2.go",
 		"internal/censusenumerationprojection/projection.go",
+		"cmd/lsp-trace-mcp/census_discovery_resume.go",
+		"internal/censussourcecontinuation/coordinator.go",
 		"internal/censussourceplan/plan.go",
 	}
 	expectedAdditionalSchemaPaths := []string{
