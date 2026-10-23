@@ -123,30 +123,65 @@ func TestCensusRuntimeIdentityOptionsDiscoveryAndDefensiveCopies(t *testing.T) {
 	}
 }
 
-func TestPrivateCensusRuntimeActivatedDiscoveryUsesBroadLimitsOnce(t *testing.T) {
+func TestPrivateCensusRuntimeEnumerationPrecedesDiscoveryEffects(t *testing.T) {
+	workspace := t.TempDir()
+	writeRuntimeSource(t, workspace, "a.go")
+	runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{
+		workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true,
+		results: map[string]json.RawMessage{"textDocument/documentSymbol": json.RawMessage(`[]`)},
+	})
+	request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"."}, "max_nodes": 1}))
+	request.PrivateCensusChunking = true
+	result, failure, _ := newCensusRuntime(runtime).execute(context.Background(), request)
+	_, methods, _, _ := starter.snapshot()
+	joined := strings.Join(methods, ",")
+	if failure != nil || strings.Contains(joined, "textDocument/didOpen") || strings.Contains(joined, "textDocument/documentSymbol") {
+		t.Fatalf("ASSERT_CENSUS_ENUMERATION_PRECEDES_DISCOVERY_EFFECTS: failure=%+v methods=%v discovery=%+v", failure, methods, result.discovery)
+	}
+}
+
+func TestPrivateCensusRuntimeDiscoveryHookAcceptsRetainedEnumeration(t *testing.T) {
+	hook := reflect.TypeOf(censusRuntime{}.discoverEnumerated)
+	fileEnumerator := reflect.TypeOf((*censusacquisition.FileEnumerator)(nil)).Elem()
+	for i := 0; i < hook.NumIn(); i++ {
+		if hook.In(i) == fileEnumerator {
+			return
+		}
+	}
+	t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_HOOK_RETAINS_ENUMERATION: hook=%v", hook)
+}
+
+func TestPrivateCensusRuntimeActivatedBoundaryUsesBroadLimitsOnce(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		activated bool
-		wantNodes uint64
+		name            string
+		activated       bool
+		wantNodes       uint64
+		wantEnumerate   int
+		wantDiscoveries int
 	}{
-		{name: "disabled", wantNodes: 10},
-		{name: "activated", activated: true, wantNodes: 100000},
+		{name: "disabled", wantNodes: 10, wantDiscoveries: 1},
+		{name: "activated", activated: true, wantNodes: 100000, wantEnumerate: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 			shell := newCensusRuntime(runtime)
-			calls := 0
+			enumerateCalls, discoveryCalls := 0, 0
 			var observed censusRuntimeConfig
+			shell.enumerate = func(_ context.Context, _ censusAdmittedSession, options censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+				enumerateCalls++
+				observed = options
+				return nil, nil
+			}
 			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
-				calls++
+				discoveryCalls++
 				observed = options
 				return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true}, nil
 			}
 			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"max_nodes": 10}))
 			request.PrivateCensusChunking = tc.activated
 			result, failure, _ := shell.execute(context.Background(), request)
-			if failure != nil || calls != 1 || observed.maxNodes != tc.wantNodes || result.privateAcquisition != tc.activated {
-				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_LIMITS: activated=%v retained=%v calls=%d max_nodes=%d want=%d failure=%+v", tc.activated, result.privateAcquisition, calls, observed.maxNodes, tc.wantNodes, failure)
+			if failure != nil || enumerateCalls != tc.wantEnumerate || discoveryCalls != tc.wantDiscoveries || observed.maxNodes != tc.wantNodes || result.privateAcquisition != tc.activated {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_BOUNDARY_LIMITS: activated=%v retained=%v enumerate=%d/%d discover=%d/%d max_nodes=%d want=%d failure=%+v", tc.activated, result.privateAcquisition, enumerateCalls, tc.wantEnumerate, discoveryCalls, tc.wantDiscoveries, observed.maxNodes, tc.wantNodes, failure)
 			}
 		})
 	}
@@ -173,7 +208,14 @@ func TestPrivateCensusRuntimeDocumentSymbolNotificationPolicyAndDefaultPoisoning
 			})
 			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"."}, "max_nodes": 2}))
 			request.PrivateCensusChunking = tc.private
-			result, failure, _ := newCensusRuntime(runtime).execute(context.Background(), request)
+			shell := newCensusRuntime(runtime)
+			var result censusRuntimeResult
+			var failure *censusRuntimeFailure
+			if tc.private {
+				_ = shell.run(context.Background(), operation.Request(request))
+			} else {
+				result, failure, _ = shell.execute(context.Background(), request)
+			}
 			_, methods, _, _ := starter.snapshot()
 			joined := strings.Join(methods, ",")
 			if got := strings.Count(joined, "textDocument/documentSymbol"); got != tc.wantSymbol {
@@ -185,9 +227,6 @@ func TestPrivateCensusRuntimeDocumentSymbolNotificationPolicyAndDefaultPoisoning
 			_, stateFailure := runtime.Manager.Metadata(started.SessionID, started.Generation)
 			if stateFailure != tc.wantState {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_SESSION_STATE: private=%t got=%s want=%s failure=%+v discovery=%+v", tc.private, stateFailure, tc.wantState, failure, result.discovery)
-			}
-			if tc.private && failure != nil {
-				t.Fatalf("ASSERT_PRIVATE_CENSUS_65_NOTIFICATIONS_READY: failure=%+v discovery=%+v", failure, result.discovery)
 			}
 			if !tc.private {
 				failures := result.discovery.ProviderFailures

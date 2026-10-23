@@ -38,7 +38,17 @@ func TestPrivateCensusChunkFailuresCollapseToAcquisitionWithoutCustody(t *testin
 		t.Run(source, func(t *testing.T) {
 			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 			shell := newCensusRuntime(runtime)
-			shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
+			retained := []censusacquisition.SourceFile{{Path: "retained.go"}}
+			enumerateCalls := 0
+			shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+				enumerateCalls++
+				return append([]censusacquisition.SourceFile(nil), retained...), nil
+			}
+			shell.discoverEnumerated = func(ctx context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool, files censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+				got, err := files.Enumerate(ctx)
+				if err != nil || len(got) != 1 || got[0].Path != retained[0].Path {
+					t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_DISCOVERY_REUSES_ENUMERATION: got=%+v err=%v", got, err)
+				}
 				return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true, Targets: make([]censusacquisition.PreparedTarget, 10001)}, nil
 			}
 			shell.chunk = func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error) {
@@ -47,6 +57,9 @@ func TestPrivateCensusChunkFailuresCollapseToAcquisitionWithoutCustody(t *testin
 			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
 			request.PrivateCensusChunking = true
 			completion := shell.run(context.Background(), operation.Request(request))
+			if enumerateCalls != 1 {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_ENUMERATES_ONCE: calls=%d", enumerateCalls)
+			}
 			if completion.Diagnostic == nil || completion.privateChunk != nil || completion.Result != nil {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_CHUNK_FAILURE_ACQUISITION_NO_CUSTODY: source=%s completion=%+v", source, completion)
 			}
@@ -64,7 +77,17 @@ func TestPrivateCensusRuntimeRunRoutesOnlyAboveCompatibility(t *testing.T) {
 	}{{10000, 0, 1}, {10001, 1, 0}} {
 		runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 		shell := newCensusRuntime(runtime)
-		shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
+		retained := []censusacquisition.SourceFile{{Path: "retained.go"}}
+		enumerateCalls := 0
+		shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+			enumerateCalls++
+			return append([]censusacquisition.SourceFile(nil), retained...), nil
+		}
+		shell.discoverEnumerated = func(ctx context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool, files censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+			got, err := files.Enumerate(ctx)
+			if err != nil || len(got) != 1 || got[0].Path != retained[0].Path {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_ROUTE_REUSES_ENUMERATION: got=%+v err=%v", got, err)
+			}
 			return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Workspace: admitted.workspace, Complete: true, Targets: make([]censusacquisition.PreparedTarget, tc.count)}, nil
 		}
 		chunkCalls, acquireCalls, leaseCalls, coordinateCalls, readCalls := 0, 0, 0, 0, 0
@@ -88,6 +111,9 @@ func TestPrivateCensusRuntimeRunRoutesOnlyAboveCompatibility(t *testing.T) {
 		request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
 		request.PrivateCensusChunking = true
 		_ = shell.run(context.Background(), operation.Request(request))
+		if enumerateCalls != 1 {
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_ROUTE_ENUMERATES_ONCE: calls=%d", enumerateCalls)
+		}
 		if chunkCalls != tc.wantChunkCalls || acquireCalls != tc.wantAcquireCalls {
 			t.Fatalf("ASSERT_PRIVATE_CENSUS_POST_DISCOVERY_ROUTE: count=%d chunk=%d/%d acquire=%d/%d", tc.count, chunkCalls, tc.wantChunkCalls, acquireCalls, tc.wantAcquireCalls)
 		}

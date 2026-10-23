@@ -88,6 +88,21 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 	if failure != nil {
 		return censusFailureCompletion(failure, reason)
 	}
+	if prepared.privateAcquisition {
+		discover := r.discoverEnumerated
+		if discover == nil {
+			discover = censusRuntimeDiscoverFrom
+		}
+		discoveryOptions := cloneCensusRuntimeConfig(prepared.options)
+		discoveryOptions.maxNodes = censusRuntimeMaxEntries
+		discoveryCtx, cancel := context.WithDeadline(ctx, prepared.deadline)
+		defer cancel()
+		discovery, err := discover(discoveryCtx, r.runtime.Manager, prepared.admitted, discoveryOptions, true, censusacquisition.StaticFiles(prepared.enumeration))
+		if err != nil {
+			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+		}
+		prepared.discovery = discovery
+	}
 	if !prepared.discovery.Complete {
 		diagnostic, err := censusresult.NewDiscoveryDiagnosticFromAcquisition(prepared.discovery.Observations, prepared.admitted.requestReceipt.Semantic)
 		if err == nil {

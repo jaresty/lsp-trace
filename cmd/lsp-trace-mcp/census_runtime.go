@@ -73,6 +73,7 @@ func cloneCensusRuntimeConfig(in censusRuntimeConfig) censusRuntimeConfig {
 type censusRuntimeResult struct {
 	admitted           censusAdmittedSession
 	options            censusRuntimeConfig
+	enumeration        []censusacquisition.SourceFile
 	discovery          censusacquisition.Discovery
 	deadline           time.Time
 	privateAcquisition bool
@@ -169,7 +170,9 @@ type censusRuntime struct {
 	runtime               *hostSelectorRuntime
 	acquisitionDiagnostic *censusdiagnostic.Recorder
 	admit                 func(context.Context, []byte) (censusAdmittedSession, *censusAdmissionFailure, censusFailureReason)
+	enumerate             func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error)
 	discover              func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool) (censusacquisition.Discovery, error)
+	discoverEnumerated    func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error)
 	batchExecute          func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure)
 	chunk                 func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error)
 	chunkLease            func(context.Context, sessionruntime.SessionLeaseRequest, func(context.Context) error) error
@@ -207,19 +210,28 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 	deadline := effectiveCensusDeadline(parent, time.Now().Add(time.Duration(options.timeoutMS)*time.Millisecond))
 	ctx, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
+	if request.PrivateCensusChunking {
+		enumerate := r.enumerate
+		if enumerate == nil {
+			enumerate = censusRuntimeEnumerate
+		}
+		enumerationOptions := cloneCensusRuntimeConfig(options)
+		enumerationOptions.maxNodes = censusRuntimeMaxEntries
+		enumeration, err := enumerate(ctx, admitted, enumerationOptions)
+		if err != nil {
+			return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
+		}
+		return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), enumeration: enumeration, deadline: deadline, privateAcquisition: true}, nil, reasonNone
+	}
 	discover := r.discover
 	if discover == nil {
 		discover = censusRuntimeDiscover
 	}
-	discoveryOptions := cloneCensusRuntimeConfig(options)
-	if request.PrivateCensusChunking {
-		discoveryOptions.maxNodes = censusRuntimeMaxEntries
-	}
-	discovery, err := discover(ctx, r.runtime.Manager, admitted, discoveryOptions, request.PrivateCensusChunking)
+	discovery, err := discover(ctx, r.runtime.Manager, admitted, cloneCensusRuntimeConfig(options), false)
 	if err != nil {
 		return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
 	}
-	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline, privateAcquisition: request.PrivateCensusChunking}, nil, reasonNone
+	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline}, nil, reasonNone
 }
 
 func effectiveCensusDeadline(parent context.Context, configured time.Time) time.Time {
@@ -300,6 +312,11 @@ func (e censusRuntimeEnumerator) Enumerate(ctx context.Context) ([]censusacquisi
 	})
 }
 
+func censusRuntimeEnumerate(ctx context.Context, admitted censusAdmittedSession, options censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+	filters := censusacquisition.Filters{Includes: append([]string(nil), options.includes...), Excludes: append([]string(nil), options.excludes...)}
+	return censusRuntimeEnumerator{workspace: admitted.workspace, roots: append([]string(nil), options.sources...), filters: filters, maxFiles: int(options.maxNodes)}.Enumerate(ctx)
+}
+
 type censusRuntimeSupplier struct {
 	manager    *sessionruntime.Manager
 	sessionID  string
@@ -362,11 +379,18 @@ func (c censusRuntimeDiscoveryClient) PrepareCallHierarchy(ctx context.Context, 
 }
 
 func censusRuntimeDiscover(ctx context.Context, manager *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig, byteTimeBoundNotifications bool) (censusacquisition.Discovery, error) {
+	return censusRuntimeDiscoverFrom(ctx, manager, admitted, options, byteTimeBoundNotifications, nil)
+}
+
+func censusRuntimeDiscoverFrom(ctx context.Context, manager *sessionruntime.Manager, admitted censusAdmittedSession, options censusRuntimeConfig, byteTimeBoundNotifications bool, files censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
 	filters := censusacquisition.Filters{Includes: append([]string(nil), options.includes...), Excludes: append([]string(nil), options.excludes...)}
+	if files == nil {
+		files = censusRuntimeEnumerator{workspace: admitted.workspace, roots: append([]string(nil), options.sources...), filters: filters, maxFiles: int(options.maxNodes)}
+	}
 	adapter := censusacquisition.DiscoveryAdapter{
 		Workspace: admitted.workspace,
 		Filters:   filters,
-		Files:     censusRuntimeEnumerator{workspace: admitted.workspace, roots: append([]string(nil), options.sources...), filters: filters, maxFiles: int(options.maxNodes)},
+		Files:     files,
 		Supplier:  censusRuntimeSupplier{manager: manager, sessionID: admitted.sessionID, generation: admitted.generation},
 		Client:    censusRuntimeDiscoveryClient{manager: manager, sessionID: admitted.sessionID, generation: admitted.generation, requestTimeout: time.Duration(options.requestTimeoutMS) * time.Millisecond, byteTimeBoundNotifications: byteTimeBoundNotifications},
 		Limits:    censusacquisition.DiscoveryLimits{MaxFiles: int(options.maxNodes), MaxSymbols: int(options.maxNodes)},
