@@ -22,17 +22,31 @@ const (
 	ProviderMessageOutcomeOtherRuntimeFailure      ProviderMessageOutcome = "OTHER_RUNTIME_FAILURE"
 )
 
-// ProviderMessageComposition contains only bounded counters and a closed outcome.
+// ProviderInvalidProtocolCategory is a privacy-safe closed classification of a
+// provider-stream decode failure. The zero value means no classified failure.
+type ProviderInvalidProtocolCategory string
+
+const (
+	ProviderInvalidProtocolMalformedJSON          ProviderInvalidProtocolCategory = "MALFORMED_JSON"
+	ProviderInvalidProtocolWrongVersion           ProviderInvalidProtocolCategory = "WRONG_VERSION"
+	ProviderInvalidProtocolInvalidMessage         ProviderInvalidProtocolCategory = "INVALID_MESSAGE"
+	ProviderInvalidProtocolInvalidContentLength   ProviderInvalidProtocolCategory = "INVALID_CONTENT_LENGTH"
+	ProviderInvalidProtocolDuplicateContentLength ProviderInvalidProtocolCategory = "DUPLICATE_CONTENT_LENGTH"
+	ProviderInvalidProtocolMissingContentLength   ProviderInvalidProtocolCategory = "MISSING_CONTENT_LENGTH"
+)
+
+// ProviderMessageComposition contains only bounded counters and closed classifications.
 type ProviderMessageComposition struct {
-	ProgressNotifications           uint64                 `json:"-"`
-	LogShowTelemetryNotifications   uint64                 `json:"-"`
-	PublishDiagnosticsNotifications uint64                 `json:"-"`
-	OtherNotifications              uint64                 `json:"-"`
-	ServerRequests                  uint64                 `json:"-"`
-	UnmatchedLateInvalidResponses   uint64                 `json:"-"`
-	AcceptedTerminalResponses       uint64                 `json:"-"`
-	InvalidProtocolMessages         uint64                 `json:"-"`
-	Outcome                         ProviderMessageOutcome `json:"-"`
+	ProgressNotifications           uint64                          `json:"-"`
+	LogShowTelemetryNotifications   uint64                          `json:"-"`
+	PublishDiagnosticsNotifications uint64                          `json:"-"`
+	OtherNotifications              uint64                          `json:"-"`
+	ServerRequests                  uint64                          `json:"-"`
+	UnmatchedLateInvalidResponses   uint64                          `json:"-"`
+	AcceptedTerminalResponses       uint64                          `json:"-"`
+	InvalidProtocolMessages         uint64                          `json:"-"`
+	InvalidProtocolCategory         ProviderInvalidProtocolCategory `json:"-"`
+	Outcome                         ProviderMessageOutcome          `json:"-"`
 }
 
 type providerMessageCompositionAccumulator struct {
@@ -52,11 +66,37 @@ func (a *providerMessageCompositionAccumulator) increment(value *uint64) {
 }
 
 func (a *providerMessageCompositionAccumulator) invalid(err error) {
-	if !a.enabled || !isProviderInvalidProtocol(err) {
+	if !a.enabled {
+		return
+	}
+	category := providerInvalidProtocolCategory(err)
+	if category == "" {
 		return
 	}
 	a.invalidProtocol = true
+	if a.InvalidProtocolCategory == "" {
+		a.InvalidProtocolCategory = category
+	}
 	a.increment(&a.InvalidProtocolMessages)
+}
+
+func providerInvalidProtocolCategory(err error) ProviderInvalidProtocolCategory {
+	switch {
+	case errors.Is(err, lspwire.ErrMalformedJSON):
+		return ProviderInvalidProtocolMalformedJSON
+	case errors.Is(err, lspwire.ErrWrongVersion):
+		return ProviderInvalidProtocolWrongVersion
+	case errors.Is(err, lspwire.ErrInvalidMessage):
+		return ProviderInvalidProtocolInvalidMessage
+	case errors.Is(err, lspwire.ErrInvalidContentLength):
+		return ProviderInvalidProtocolInvalidContentLength
+	case errors.Is(err, lspwire.ErrDuplicateContentLength):
+		return ProviderInvalidProtocolDuplicateContentLength
+	case errors.Is(err, lspwire.ErrMissingContentLength):
+		return ProviderInvalidProtocolMissingContentLength
+	default:
+		return ""
+	}
 }
 
 func isProviderInvalidProtocol(err error) bool {

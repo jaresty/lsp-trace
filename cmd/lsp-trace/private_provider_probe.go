@@ -199,34 +199,36 @@ type privateProviderProbeArtifactV7 struct {
 }
 
 type privateProviderProbeArtifactV8 struct {
-	Schema                            string                         `json:"schema"`
-	Status                            string                         `json:"status"`
-	FirstCompleted                    *privateProviderProbeWitnessV7 `json:"first_completed"`
-	FirstNonPoisonFailure             *privateProviderProbeWitnessV7 `json:"first_non_poison_failure"`
-	FirstPoison                       *privateProviderProbeWitnessV7 `json:"first_poison"`
-	PreProviderRefusalCount           uint64                         `json:"pre_provider_refusal_count"`
-	MissingDispatchedObservationCount uint64                         `json:"missing_dispatched_observation_count"`
+	Schema                             string                                         `json:"schema"`
+	Status                             string                                         `json:"status"`
+	FirstCompleted                     *privateProviderProbeWitnessV7                 `json:"first_completed"`
+	FirstNonPoisonFailure              *privateProviderProbeWitnessV7                 `json:"first_non_poison_failure"`
+	FirstPoison                        *privateProviderProbeWitnessV7                 `json:"first_poison"`
+	FirstPoisonInvalidProtocolCategory sessionruntime.ProviderInvalidProtocolCategory `json:"first_poison_invalid_protocol_category,omitempty"`
+	PreProviderRefusalCount            uint64                                         `json:"pre_provider_refusal_count"`
+	MissingDispatchedObservationCount  uint64                                         `json:"missing_dispatched_observation_count"`
 }
 
 type privateProviderProbe struct {
-	mu                      sync.Mutex
-	path, version           string
-	byteTimeNotifications   bool
-	sequence, files, work   uint64
-	counts                  map[string]uint64
-	records                 []privateProviderProbeRecord
-	recordsV2               []privateProviderProbeRecordV2
-	compositionV3           *privateProviderProbeCompositionV3
-	compositionV4           *privateProviderProbeCompositionV4
-	transactionV5           *privateProviderProbeTransactionV5
-	transactionV6           *privateProviderProbeTransactionV6
-	witnessV7               *privateProviderProbeWitnessV7
-	firstCompletedV8        *privateProviderProbeWitnessV7
-	firstNonPoisonFailureV8 *privateProviderProbeWitnessV7
-	firstPoisonV8           *privateProviderProbeWitnessV7
-	preProviderRefusalsV8   uint64
-	missingDispatchedV8     uint64
-	incomplete              bool
+	mu                           sync.Mutex
+	path, version                string
+	byteTimeNotifications        bool
+	sequence, files, work        uint64
+	counts                       map[string]uint64
+	records                      []privateProviderProbeRecord
+	recordsV2                    []privateProviderProbeRecordV2
+	compositionV3                *privateProviderProbeCompositionV3
+	compositionV4                *privateProviderProbeCompositionV4
+	transactionV5                *privateProviderProbeTransactionV5
+	transactionV6                *privateProviderProbeTransactionV6
+	witnessV7                    *privateProviderProbeWitnessV7
+	firstCompletedV8             *privateProviderProbeWitnessV7
+	firstNonPoisonFailureV8      *privateProviderProbeWitnessV7
+	firstPoisonV8                *privateProviderProbeWitnessV7
+	firstPoisonInvalidProtocolV8 sessionruntime.ProviderInvalidProtocolCategory
+	preProviderRefusalsV8        uint64
+	missingDispatchedV8          uint64
+	incomplete                   bool
 }
 
 func newPrivateProviderProbe(path string) (*privateProviderProbe, error) {
@@ -571,6 +573,9 @@ func (p *privateProviderProbe) observeV8(phase, class, cause string, c sessionru
 	}
 	retain(&p.firstCompletedV8)
 	if observation.TerminalLifecycle == sessionruntime.ProviderTransactionLifecyclePoisoned {
+		if p.firstPoisonV8 == nil || p.firstPoisonV8.Transaction.CompletionSequence > observation.CompletionSequence {
+			p.firstPoisonInvalidProtocolV8 = c.InvalidProtocolCategory
+		}
 		retain(&p.firstPoisonV8)
 	} else if cause != "" {
 		retain(&p.firstNonPoisonFailureV8)
@@ -716,7 +721,7 @@ func (p *privateProviderProbe) artifactV8() privateProviderProbeArtifactV8 {
 	if p.incomplete || p.firstCompletedV8 == nil || p.firstNonPoisonFailureV8 == nil || p.firstPoisonV8 == nil || p.missingDispatchedV8 != 0 {
 		status = "INCOMPLETE"
 	}
-	return privateProviderProbeArtifactV8{privateProviderProbeSchemaV8, status, copyWitness(p.firstCompletedV8), copyWitness(p.firstNonPoisonFailureV8), copyWitness(p.firstPoisonV8), p.preProviderRefusalsV8, p.missingDispatchedV8}
+	return privateProviderProbeArtifactV8{Schema: privateProviderProbeSchemaV8, Status: status, FirstCompleted: copyWitness(p.firstCompletedV8), FirstNonPoisonFailure: copyWitness(p.firstNonPoisonFailureV8), FirstPoison: copyWitness(p.firstPoisonV8), FirstPoisonInvalidProtocolCategory: p.firstPoisonInvalidProtocolV8, PreProviderRefusalCount: p.preProviderRefusalsV8, MissingDispatchedObservationCount: p.missingDispatchedV8}
 }
 
 func (p *privateProviderProbe) finalize() error {
@@ -1335,6 +1340,17 @@ func parsePrivateProviderProbeV8(raw []byte) (privateProviderProbeArtifactV8, er
 		return bad()
 	}
 	if a.FirstPoison != nil && (a.FirstPoison.Cause == "" || a.FirstPoison.Composition.Selection != "FIRST_FAILURE_OR_POISON" || a.FirstPoison.Transaction.TerminalLifecycle != sessionruntime.ProviderTransactionLifecyclePoisoned) {
+		return bad()
+	}
+	validInvalidCategory := func(category sessionruntime.ProviderInvalidProtocolCategory) bool {
+		switch category {
+		case "", sessionruntime.ProviderInvalidProtocolMalformedJSON, sessionruntime.ProviderInvalidProtocolWrongVersion, sessionruntime.ProviderInvalidProtocolInvalidMessage, sessionruntime.ProviderInvalidProtocolInvalidContentLength, sessionruntime.ProviderInvalidProtocolDuplicateContentLength, sessionruntime.ProviderInvalidProtocolMissingContentLength:
+			return true
+		default:
+			return false
+		}
+	}
+	if !validInvalidCategory(a.FirstPoisonInvalidProtocolCategory) || a.FirstPoisonInvalidProtocolCategory != "" && (a.FirstPoison == nil || a.FirstPoison.Composition.Outcome != string(sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage) || a.FirstPoison.Composition.InvalidProtocolMessages != 1) {
 		return bad()
 	}
 	sequences := make(map[uint64]privateProviderProbeWitnessV7, 3)

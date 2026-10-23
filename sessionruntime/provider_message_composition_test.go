@@ -153,6 +153,27 @@ func TestProviderMessageCompositionExactBucketsAndInvalidAllowlist(t *testing.T)
 	}
 }
 
+func TestProviderMessageCompositionInvalidProtocolCategories(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want ProviderInvalidProtocolCategory
+	}{
+		{lspwire.ErrMalformedJSON, ProviderInvalidProtocolMalformedJSON},
+		{lspwire.ErrWrongVersion, ProviderInvalidProtocolWrongVersion},
+		{lspwire.ErrInvalidMessage, ProviderInvalidProtocolInvalidMessage},
+		{lspwire.ErrInvalidContentLength, ProviderInvalidProtocolInvalidContentLength},
+		{lspwire.ErrDuplicateContentLength, ProviderInvalidProtocolDuplicateContentLength},
+		{lspwire.ErrMissingContentLength, ProviderInvalidProtocolMissingContentLength},
+	} {
+		a := providerMessageCompositionAccumulator{enabled: true}
+		a.invalid(errors.Join(errors.New("private provider prose"), tc.err))
+		got, ok := a.finish(session.SessionPoisoned)
+		if !ok || got.InvalidProtocolMessages != 1 || got.InvalidProtocolCategory != tc.want || got.Outcome != ProviderMessageOutcomeInvalidProtocolMessage {
+			t.Fatalf("ASSERT_PROVIDER_INVALID_PROTOCOL_CATEGORY: err=%v got=%+v ok=%v", tc.err, got, ok)
+		}
+	}
+}
+
 func TestProviderMessageCompositionLinearizedResponseDisposition(t *testing.T) {
 	response := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`7`), Result: json.RawMessage(`null`)}
 	for _, tc := range []struct {

@@ -25,7 +25,7 @@ func completePrivateProviderProbeV8Artifact() privateProviderProbeArtifactV8 {
 	p.observeV8("PROVIDER_REQUEST", "JSON_RPC_CODE_BUCKET", "METHOD_NOT_FOUND", sessionruntime.ProviderMessageComposition{AcceptedTerminalResponses: 1, Outcome: sessionruntime.ProviderMessageOutcomeAcceptedTerminalResponse}, true, nonPoison, true, 64, 4096, 1, 20)
 	poison := providerProbeV7Observation(sessionruntime.ProviderTransactionLifecyclePoisoned, 0, 0)
 	poison.CompletionSequence = 3
-	p.observeV8("PROVIDER_REQUEST", "TYPED_SESSION_RUNTIME_FAILURE", "SESSION_POISONED", sessionruntime.ProviderMessageComposition{InvalidProtocolMessages: 1, Outcome: sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage}, true, poison, true, 64, 4096, 0, 30)
+	p.observeV8("PROVIDER_REQUEST", "TYPED_SESSION_RUNTIME_FAILURE", "SESSION_POISONED", sessionruntime.ProviderMessageComposition{InvalidProtocolMessages: 1, InvalidProtocolCategory: sessionruntime.ProviderInvalidProtocolInvalidContentLength, Outcome: sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage}, true, poison, true, 64, 4096, 0, 30)
 	p.observeV8("DOCUMENT_SUPPLY", "DOCUMENT_FAILURE", "LIFECYCLE_CONFLICT", sessionruntime.ProviderMessageComposition{}, false, sessionruntime.ProviderTransactionObservation{}, false, 0, 0, 0, 0)
 	return p.artifactV8()
 }
@@ -39,6 +39,25 @@ func marshalPrivateProviderProbeV8TestArtifact(t *testing.T, artifact privatePro
 	return append(raw, '\n')
 }
 
+func TestPrivateProviderProbeV8InvalidProtocolCategoryClosure(t *testing.T) {
+	a := completePrivateProviderProbeV8Artifact()
+	if a.FirstPoisonInvalidProtocolCategory != sessionruntime.ProviderInvalidProtocolInvalidContentLength {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V8_INVALID_PROTOCOL_CATEGORY: %+v", a)
+	}
+	if _, err := parsePrivateProviderProbeV8(marshalPrivateProviderProbeV8TestArtifact(t, a)); err != nil {
+		t.Fatalf("ASSERT_PROVIDER_PROBE_V8_INVALID_PROTOCOL_CATEGORY_PARSE: %v", err)
+	}
+	a.FirstPoisonInvalidProtocolCategory = "PROVIDER_PROSE"
+	if _, err := parsePrivateProviderProbeV8(marshalPrivateProviderProbeV8TestArtifact(t, a)); err == nil {
+		t.Fatal("ASSERT_PROVIDER_PROBE_V8_INVALID_PROTOCOL_CATEGORY_UNKNOWN_REJECTED")
+	}
+	a = completePrivateProviderProbeV8Artifact()
+	a.FirstPoison.Composition.InvalidProtocolMessages = 0
+	if _, err := parsePrivateProviderProbeV8(marshalPrivateProviderProbeV8TestArtifact(t, a)); err == nil {
+		t.Fatal("ASSERT_PROVIDER_PROBE_V8_INVALID_PROTOCOL_CATEGORY_INCOHERENT_REJECTED")
+	}
+}
+
 func TestPrivateProviderProbeV8StrictParserClosure(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -50,7 +69,7 @@ func TestPrivateProviderProbeV8StrictParserClosure(t *testing.T) {
 		}},
 		{name: "canonical incomplete", wantValid: true, build: func(t *testing.T) []byte {
 			a := completePrivateProviderProbeV8Artifact()
-			a.Status, a.FirstPoison = "INCOMPLETE", nil
+			a.Status, a.FirstPoison, a.FirstPoisonInvalidProtocolCategory = "INCOMPLETE", nil, ""
 			return marshalPrivateProviderProbeV8TestArtifact(t, a)
 		}},
 		{name: "unknown field", build: func(t *testing.T) []byte {
