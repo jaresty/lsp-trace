@@ -118,6 +118,7 @@ func publishCensusCaptureSetInternal(ctx context.Context, capability censusPubli
 		}
 		root, openErr := openCensusPublicationRoot(rootPath)
 		if openErr != nil {
+			outcome.Diagnostic = censusPublicationFailureDiagnostic(censusresult.PublicationFailureRootOpen, nil)
 			return openErr
 		}
 		defer root.Close()
@@ -129,6 +130,7 @@ func publishCensusCaptureSetInternal(ctx context.Context, capability censusPubli
 		authority := captureset.NativeV5Authority()
 		published := publisher.PublishCaptureSet(projection.Manifest, exact, authority)
 		if published.Err != nil || published.Receipt == nil {
+			outcome.Diagnostic = censusCaptureSetPublicationDiagnostic(published.Failure)
 			return errors.New("capture-set publication failed")
 		}
 		verificationStatus := published.Receipt.VerificationStatus
@@ -191,11 +193,54 @@ func publishCensusCaptureSetInternal(ctx context.Context, capability censusPubli
 		return nil
 	}))
 	if err != nil {
-		diagnostic, _ := buildCensusCLIDiagnostic(censusStagePublication, nil)
 		outcome.Result = nil
-		outcome.Diagnostic = &diagnostic
+		if outcome.Diagnostic == nil {
+			outcome.Diagnostic = censusPublicationFailureDiagnostic(censusresult.PublicationFailureInternal, nil)
+		}
 	}
 	return outcome
+}
+
+func censusCaptureSetPublicationDiagnostic(failure *captureset.PublicationFailure) *censusCLIDiagnostic {
+	if failure == nil {
+		return censusPublicationFailureDiagnostic(censusresult.PublicationFailureInternal, nil)
+	}
+	stages := map[string]censusresult.PublicationFailureStage{
+		"PRIVATE_VALIDATION": censusresult.PublicationFailurePrivateValidation,
+		"ENCODE":             censusresult.PublicationFailureEncode,
+		"CANONICALIZE":       censusresult.PublicationFailureCanonicalize,
+		"TEMP_WRITE":         censusresult.PublicationFailureTempWrite,
+		"FSYNC":              censusresult.PublicationFailureFsync,
+		"NO_REPLACE":         censusresult.PublicationFailureNoReplace,
+		"VERIFY":             censusresult.PublicationFailureVerify,
+		"RECEIPT":            censusresult.PublicationFailureReceipt,
+		"CLEANUP":            censusresult.PublicationFailureCleanup,
+		"INTERNAL":           censusresult.PublicationFailureInternal,
+	}
+	stage, ok := stages[failure.Stage]
+	if !ok {
+		stage = censusresult.PublicationFailureInternal
+	}
+	var accounting *censusresult.PublicationAccounting
+	if failure.CandidateByteLength != 0 {
+		observed := failure.CandidateByteLength
+		accounting = &censusresult.PublicationAccounting{Category: censusresult.PublicationAccountingCandidateBytes, Observed: &observed}
+		if failure.CodecLimit != 0 {
+			limit := failure.CodecLimit
+			accounting.Limit = &limit
+		}
+	}
+	return censusPublicationFailureDiagnostic(stage, accounting)
+}
+
+func censusPublicationFailureDiagnostic(stage censusresult.PublicationFailureStage, accounting *censusresult.PublicationAccounting) *censusCLIDiagnostic {
+	diagnostic, err := buildCensusCLIDiagnostic(censusStagePublication, nil)
+	if err != nil {
+		return nil
+	}
+	diagnostic.PublicationFailure = stage
+	diagnostic.PublicationAccounting = accounting
+	return &diagnostic
 }
 
 func runInitializedCensusAcquisition(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int, diagnostics ...any) (censusAssembly, error) {
