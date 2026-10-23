@@ -254,6 +254,13 @@ func censusPlanningFailure(err error) *censusRuntimeFailure {
 	return &censusRuntimeFailure{stage: censusStagePlanning, code: censusCodePlanningInvalid, err: err}
 }
 
+func selectFirstCensusSourcePartition(plan censussourceplan.Plan) ([]censusacquisition.SourceFile, error) {
+	if err := censussourceplan.Validate(plan, censusRuntimeSourcePartitionSize); err != nil {
+		return nil, err
+	}
+	return append([]censusacquisition.SourceFile(nil), plan.Partitions[0].Members...), nil
+}
+
 func effectiveCensusDeadline(parent context.Context, configured time.Time) time.Time {
 	if deadline, ok := parent.Deadline(); ok && deadline.Before(configured) {
 		return deadline

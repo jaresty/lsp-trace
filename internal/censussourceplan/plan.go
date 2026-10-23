@@ -85,12 +85,11 @@ func Build(files []censusacquisition.SourceFile, workspace string, partitionSize
 		paths[pathKey] = struct{}{}
 		uris[file.URI] = struct{}{}
 	}
-	canonical, err := json.Marshal(identityEnvelope{Policy: policyVersion, Authority: 0, PartitionSize: partitionSize, Files: planned})
+	identity, err := canonicalIdentity(planned, partitionSize)
 	if err != nil {
-		return Plan{}, ErrInvalidIdentity
+		return Plan{}, err
 	}
-	sum := sha256.Sum256(canonical)
-	plan := Plan{Identity: "sha256:" + hex.EncodeToString(sum[:]), Authority: 0, Files: append([]censusacquisition.SourceFile(nil), planned...)}
+	plan := Plan{Identity: identity, Authority: 0, Files: append([]censusacquisition.SourceFile(nil), planned...)}
 	for start := 0; start < len(planned); start += partitionSize {
 		end := start + partitionSize
 		if end > len(planned) {
@@ -99,6 +98,44 @@ func Build(files []censusacquisition.SourceFile, workspace string, partitionSize
 		plan.Partitions = append(plan.Partitions, Partition{Ordinal: len(plan.Partitions), Members: append([]censusacquisition.SourceFile(nil), planned[start:end]...)})
 	}
 	return plan, nil
+}
+
+func Validate(plan Plan, partitionSize int) error {
+	if plan.Authority != 0 || len(plan.Files) == 0 || len(plan.Partitions) == 0 {
+		return ErrInvalidIdentity
+	}
+	identity, err := canonicalIdentity(plan.Files, partitionSize)
+	if err != nil || plan.Identity != identity {
+		return ErrInvalidIdentity
+	}
+	file := 0
+	for ordinal, partition := range plan.Partitions {
+		if partition.Ordinal != ordinal || len(partition.Members) == 0 || file+len(partition.Members) > len(plan.Files) {
+			return ErrInvalidIdentity
+		}
+		for i := range partition.Members {
+			if partition.Members[i] != plan.Files[file+i] {
+				return ErrInvalidIdentity
+			}
+		}
+		file += len(partition.Members)
+	}
+	if file != len(plan.Files) {
+		return ErrInvalidIdentity
+	}
+	return nil
+}
+
+func canonicalIdentity(files []censusacquisition.SourceFile, partitionSize int) (string, error) {
+	if partitionSize <= 0 || partitionSize > MaxPartitionSize {
+		return "", ErrInvalidPartitionSize
+	}
+	canonical, err := json.Marshal(identityEnvelope{Policy: policyVersion, Authority: 0, PartitionSize: partitionSize, Files: files})
+	if err != nil {
+		return "", ErrInvalidIdentity
+	}
+	sum := sha256.Sum256(canonical)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func validate(file censusacquisition.SourceFile, workspace string) error {

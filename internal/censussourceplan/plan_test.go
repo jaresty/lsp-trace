@@ -53,6 +53,71 @@ func TestBuildReturnsIndependentExactClones(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsAuthenticCanonicalPlan(t *testing.T) {
+	workspace := t.TempDir()
+	plan, err := Build([]censusacquisition.SourceFile{
+		source(workspace, "c.go"),
+		source(workspace, "a.go"),
+		source(workspace, "b.go"),
+	}, workspace, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(plan, 2); err != nil {
+		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_VALIDATE_AUTHENTIC_CANONICAL: err=%v plan=%+v", err, plan)
+	}
+}
+
+func TestValidateRejectsMalformedExactCoverageWithoutRepair(t *testing.T) {
+	clone := func(plan Plan) Plan {
+		cloned := plan
+		cloned.Files = append([]censusacquisition.SourceFile(nil), plan.Files...)
+		cloned.Partitions = make([]Partition, len(plan.Partitions))
+		for i, partition := range plan.Partitions {
+			cloned.Partitions[i] = partition
+			cloned.Partitions[i].Members = append([]censusacquisition.SourceFile(nil), partition.Members...)
+		}
+		return cloned
+	}
+	mutations := map[string]func(*Plan){
+		"wrong later ordinal":       func(plan *Plan) { plan.Partitions[1].Ordinal = 2 },
+		"empty later members":       func(plan *Plan) { plan.Partitions[1].Members = nil },
+		"inconsistent later member": func(plan *Plan) { plan.Partitions[1].Members[0].Path = "different.go" },
+		"later partition overlap": func(plan *Plan) {
+			plan.Partitions[1].Members[0] = plan.Partitions[0].Members[len(plan.Partitions[0].Members)-1]
+		},
+		"later partition gap": func(plan *Plan) { plan.Partitions[1].Members = plan.Partitions[1].Members[1:] },
+		"omitted exact coverage": func(plan *Plan) {
+			plan.Partitions[0].Members = plan.Partitions[0].Members[:len(plan.Partitions[0].Members)-1]
+		},
+		"reordered exact coverage": func(plan *Plan) {
+			plan.Partitions[0].Members[0], plan.Partitions[0].Members[1] = plan.Partitions[0].Members[1], plan.Partitions[0].Members[0]
+		},
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			workspace := t.TempDir()
+			plan, err := Build([]censusacquisition.SourceFile{
+				source(workspace, "a.go"),
+				source(workspace, "b.go"),
+				source(workspace, "c.go"),
+				source(workspace, "d.go"),
+			}, workspace, 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutate(&plan)
+			before := clone(plan)
+			if err := Validate(plan, 2); !errors.Is(err, ErrInvalidIdentity) {
+				t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_VALIDATE_REJECTS_MALFORMED: err=%v plan=%+v", err, plan)
+			}
+			if !reflect.DeepEqual(plan, before) {
+				t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_VALIDATE_DOES_NOT_REPAIR: before=%+v after=%+v", before, plan)
+			}
+		})
+	}
+}
+
 func TestBuildRefusesInvalidInputs(t *testing.T) {
 	workspace := t.TempDir()
 	uri := func(path string) string {

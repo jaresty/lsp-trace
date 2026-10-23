@@ -81,6 +81,8 @@ func censusFailureDetail(reason censusFailureReason) string {
 		return "the language server does not advertise the document-symbol and call-hierarchy capabilities census requires"
 	case reasonPublicationRootRequired:
 		return "census requires a publication root; start the server with --publication-root pointing at an owner-only (0700) directory"
+	case reasonPlanningInvalid:
+		return string(reasonPlanningInvalid)
 	case reasonDiscoveryFailed:
 		return "workspace symbol discovery failed"
 	case reasonDiscoveryIncomplete:

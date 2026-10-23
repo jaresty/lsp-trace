@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,6 +18,7 @@ import (
 	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/censussourceplan"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
@@ -194,6 +196,164 @@ func TestPrivateCensusRuntimeBuildsCompleteSourcePlanBeforeDiscovery(t *testing.
 	result.sourcePlan.Files[0].Path = "files.go"
 	if result.sourcePlan.Partitions[0].Members[0] != want {
 		t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_FILES_PARTITION_CLONE: result=%+v", result)
+	}
+}
+
+func TestPrivateCensusRuntimeRunSelectsOnlyFirstPlannedPartition(t *testing.T) {
+	for _, fileCount := range []int{3, censusRuntimeSourcePartitionSize + 1} {
+		t.Run(fmt.Sprintf("files-%d", fileCount), func(t *testing.T) {
+			workspace := t.TempDir()
+			files := make([]censusacquisition.SourceFile, fileCount)
+			for i := range files {
+				name := fmt.Sprintf("file-%03d.go", i)
+				uri, err := source.FileURI(filepath.Join(workspace, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				files[i] = censusacquisition.SourceFile{Path: name, URI: uri, LanguageID: "go"}
+			}
+			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+			shell := newCensusRuntime(runtime)
+			events := make([]string, 0, 3)
+			shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+				events = append(events, "enumerate")
+				return append([]censusacquisition.SourceFile(nil), files...), nil
+			}
+			var planned censussourceplan.Plan
+			shell.planSourceFiles = func(got []censusacquisition.SourceFile, workspace string, partitionSize int) (censussourceplan.Plan, error) {
+				events = append(events, "plan")
+				var err error
+				planned, err = censussourceplan.Build(got, workspace, partitionSize)
+				return planned, err
+			}
+			discoveryCalls := 0
+			var discovered []censusacquisition.SourceFile
+			shell.discoverEnumerated = func(ctx context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool, enumerator censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+				discoveryCalls++
+				events = append(events, "discover")
+				var err error
+				discovered, err = enumerator.Enumerate(ctx)
+				if err != nil {
+					return censusacquisition.Discovery{}, err
+				}
+				return gatewayCompleteDiscovery(t, workspace, censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}), nil
+			}
+			acquireCalls := 0
+			shell.acquireOverride = func(context.Context, censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure, censusFailureReason) {
+				acquireCalls++
+				return censusacquisition.Projection{}, censusAcquisitionFailure(), reasonAcquisitionFailed
+			}
+			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+			request.PrivateCensusChunking = true
+			completion := shell.run(context.Background(), request)
+			if !reflect.DeepEqual(events, []string{"enumerate", "plan", "discover"}) {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_ENUMERATE_PLAN_DISCOVER_ORDER: events=%v", events)
+			}
+			if planned.Authority != 0 {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_SELECTED_PLAN_AUTHORITY_ZERO: authority=%d", planned.Authority)
+			}
+			want := planned.Partitions[0].Members
+			if discoveryCalls != 1 || !reflect.DeepEqual(discovered, want) {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_SELECTS_PARTITION_ZERO_EXACTLY_ONCE: calls=%d got=%+v want=%+v", discoveryCalls, discovered, want)
+			}
+			if acquireCalls != 1 || completion.DiscoveryDiagnostic != nil || completion.Diagnostic == nil || completion.Diagnostic.Stage != censusresult.StageAcquisition {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_COMPLETE_DISCOVERY_REACHES_ACQUISITION: acquire=%d completion=%+v", acquireCalls, completion)
+			}
+			if fileCount == censusRuntimeSourcePartitionSize+1 && (len(planned.Partitions) != 2 || len(discovered) != censusRuntimeSourcePartitionSize || reflect.DeepEqual(discovered, planned.Files)) {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_EXCLUDES_LATER_AND_OUTSIDE_MEMBERS: partitions=%+v discovered=%+v", planned.Partitions, discovered)
+			}
+			if fileCount < censusRuntimeSourcePartitionSize && !reflect.DeepEqual(discovered, planned.Files) {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_ONE_PARTITION_MEMBERSHIP_PARITY: got=%+v want=%+v", discovered, planned.Files)
+			}
+		})
+	}
+}
+
+func TestPrivateCensusRuntimeMalformedSourcePlanStopsDiscovery(t *testing.T) {
+	mutations := map[string]func(*censussourceplan.Plan){
+		"empty identity": func(plan *censussourceplan.Plan) { plan.Identity = "" },
+		"identity inconsistency": func(plan *censussourceplan.Plan) {
+			plan.Identity = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+		},
+		"no partitions":             func(plan *censussourceplan.Plan) { plan.Partitions = nil },
+		"wrong first ordinal":       func(plan *censussourceplan.Plan) { plan.Partitions[0].Ordinal = 1 },
+		"empty first members":       func(plan *censussourceplan.Plan) { plan.Partitions[0].Members = nil },
+		"inconsistent first member": func(plan *censussourceplan.Plan) { plan.Partitions[0].Members[0].Path = "different.go" },
+		"wrong later ordinal":       func(plan *censussourceplan.Plan) { plan.Partitions[1].Ordinal = 2 },
+		"empty later members":       func(plan *censussourceplan.Plan) { plan.Partitions[1].Members = nil },
+		"omitted coverage": func(plan *censussourceplan.Plan) {
+			plan.Partitions[0].Members = plan.Partitions[0].Members[:len(plan.Partitions[0].Members)-1]
+		},
+		"reordered coverage": func(plan *censussourceplan.Plan) {
+			plan.Partitions[0].Members[0], plan.Partitions[0].Members[1] = plan.Partitions[0].Members[1], plan.Partitions[0].Members[0]
+		},
+		"partition overlap": func(plan *censussourceplan.Plan) {
+			plan.Partitions[1].Members[0] = plan.Partitions[0].Members[len(plan.Partitions[0].Members)-1]
+		},
+		"partition gap": func(plan *censussourceplan.Plan) { plan.Partitions[1].Members = plan.Partitions[1].Members[1:] },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			workspace := t.TempDir()
+			files := make([]censusacquisition.SourceFile, censusRuntimeSourcePartitionSize+2)
+			for i := range files {
+				name := fmt.Sprintf("file-%03d.go", i)
+				uri, err := source.FileURI(filepath.Join(workspace, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				files[i] = censusacquisition.SourceFile{Path: name, URI: uri, LanguageID: "go"}
+			}
+			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+			shell := newCensusRuntime(runtime)
+			shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+				return files, nil
+			}
+			shell.planSourceFiles = func(got []censusacquisition.SourceFile, workspace string, partitionSize int) (censussourceplan.Plan, error) {
+				plan, err := censussourceplan.Build(got, workspace, partitionSize)
+				if err == nil {
+					mutate(&plan)
+				}
+				return plan, err
+			}
+			discoveryCalls := 0
+			shell.discoverEnumerated = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+				discoveryCalls++
+				return censusacquisition.Discovery{}, nil
+			}
+			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+			request.PrivateCensusChunking = true
+			completion := shell.run(context.Background(), request)
+			if discoveryCalls != 0 || completion.Diagnostic == nil || completion.Diagnostic.Stage != censusresult.Stage(censusStagePlanning) || completion.Diagnostic.Code != censusresult.Code(censusCodePlanningInvalid) || completion.Diagnostic.Detail != string(reasonPlanningInvalid) {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_MALFORMED_PLAN_EXACT_PLANNING_DIAGNOSTIC: calls=%d completion=%+v", discoveryCalls, completion)
+			}
+		})
+	}
+}
+
+func TestCensusRuntimeNonPrivateDiscoveryRouteUnchanged(t *testing.T) {
+	runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	shell := newCensusRuntime(runtime)
+	discoveryCalls, enumerateCalls, plannedCalls, enumeratedDiscoveryCalls := 0, 0, 0, 0
+	shell.discover = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool) (censusacquisition.Discovery, error) {
+		discoveryCalls++
+		return censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}, Complete: true}, nil
+	}
+	shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+		enumerateCalls++
+		return nil, nil
+	}
+	shell.planSourceFiles = func([]censusacquisition.SourceFile, string, int) (censussourceplan.Plan, error) {
+		plannedCalls++
+		return censussourceplan.Plan{}, nil
+	}
+	shell.discoverEnumerated = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+		enumeratedDiscoveryCalls++
+		return censusacquisition.Discovery{}, nil
+	}
+	_, failure, _ := shell.execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil)))
+	if failure != nil || discoveryCalls != 1 || enumerateCalls != 0 || plannedCalls != 0 || enumeratedDiscoveryCalls != 0 {
+		t.Fatalf("ASSERT_NON_PRIVATE_CENSUS_DISCOVERY_ROUTE_UNCHANGED: failure=%+v discover=%d enumerate=%d plan=%d enumerated_discover=%d", failure, discoveryCalls, enumerateCalls, plannedCalls, enumeratedDiscoveryCalls)
 	}
 }
 

@@ -89,6 +89,10 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 		return censusFailureCompletion(failure, reason)
 	}
 	if prepared.privateAcquisition {
+		selectedFiles, err := selectFirstCensusSourcePartition(prepared.sourcePlan)
+		if err != nil {
+			return censusFailureCompletion(censusPlanningFailure(err), reasonPlanningInvalid)
+		}
 		discover := r.discoverEnumerated
 		if discover == nil {
 			discover = censusRuntimeDiscoverFrom
@@ -97,7 +101,7 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 		discoveryOptions.maxNodes = censusRuntimeMaxEntries
 		discoveryCtx, cancel := context.WithDeadline(ctx, prepared.deadline)
 		defer cancel()
-		discovery, err := discover(discoveryCtx, r.runtime.Manager, prepared.admitted, discoveryOptions, true, censusacquisition.StaticFiles(prepared.enumeration))
+		discovery, err := discover(discoveryCtx, r.runtime.Manager, prepared.admitted, discoveryOptions, true, censusacquisition.StaticFiles(selectedFiles))
 		if err != nil {
 			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
 		}
@@ -268,6 +272,10 @@ func censusFailureCompletion(failure *censusRuntimeFailure, reason censusFailure
 		}
 	}
 	diagnostic, _ := censusresult.NewDiagnostic(stage, nil)
+	if failure != nil && failure.stage == censusStagePlanning {
+		diagnostic.Stage = censusresult.Stage(censusStagePlanning)
+		diagnostic.Code = censusresult.Code(censusCodePlanningInvalid)
+	}
 	if detail := censusFailureDetail(reason); detail != "" {
 		diagnostic = diagnostic.WithDetail(detail)
 	}
