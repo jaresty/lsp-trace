@@ -32,6 +32,10 @@ type Request struct {
 	StepBound     int
 	Identity      Identity
 	Discover      Discover
+
+	// CoordinateForTest transparently preserves the driver's internal integration
+	// seam. Production callers leave it nil.
+	CoordinateForTest func(context.Context, censussourcecontinuation.Request) (censussourcecontinuation.Result, error)
 }
 
 // Run performs bounded sequential source-partition transitions and returns only
@@ -92,12 +96,13 @@ func Run(ctx context.Context, request Request) (censussourcedriver.Result, *Term
 			var candidate *TerminalRecord
 			var callbackErr error
 			stepResult, stepErr := censussourcedriver.Step(stepCtx, censussourcedriver.StepRequest{
-				Plan:          request.Plan,
-				PartitionSize: request.PartitionSize,
-				WorkflowKey:   request.WorkflowKey,
-				HeadKey:       request.HeadKey,
-				Objects:       objects,
-				Heads:         heads,
+				Plan:              request.Plan,
+				PartitionSize:     request.PartitionSize,
+				WorkflowKey:       request.WorkflowKey,
+				HeadKey:           request.HeadKey,
+				Objects:           objects,
+				Heads:             heads,
+				CoordinateForTest: request.CoordinateForTest,
 				Discover: func(discoverCtx context.Context, ordinal int, members []censusacquisition.SourceFile) (censussourcecontinuation.Terminal, error) {
 					discovery, err := request.Discover(discoverCtx, ordinal, cloneSlice(members))
 					if err != nil {
