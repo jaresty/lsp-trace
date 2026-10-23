@@ -9,7 +9,11 @@ import (
 )
 
 func privateDiscoveryContinuationTerminal(plan censussourceplan.Plan, terminal *privateConstituentDiscoveryTerminal) (censussourcecontinuation.Terminal, error) {
-	if terminal == nil || censussourceplan.Validate(plan, censusRuntimeSourcePartitionSize) != nil || terminal.planIdentity != plan.Identity || terminal.authority != 0 || terminal.ordinal != 0 || !reflect.DeepEqual(terminal.members, plan.Partitions[0].Members) {
+	return privateDiscoveryContinuationTerminalAtOrdinal(plan, terminal)
+}
+
+func privateDiscoveryContinuationTerminalAtOrdinal(plan censussourceplan.Plan, terminal *privateConstituentDiscoveryTerminal) (censussourcecontinuation.Terminal, error) {
+	if terminal == nil || censussourceplan.Validate(plan, censusRuntimeSourcePartitionSize) != nil || terminal.planIdentity != plan.Identity || terminal.authority != 0 || terminal.ordinal < 0 || terminal.ordinal >= len(plan.Partitions) || !reflect.DeepEqual(terminal.members, plan.Partitions[terminal.ordinal].Members) {
 		return censussourcecontinuation.Terminal{}, errors.New("invalid private constituent discovery terminal")
 	}
 	outcome := map[privateConstituentDiscoveryOutcome]censussourcecontinuation.Outcome{

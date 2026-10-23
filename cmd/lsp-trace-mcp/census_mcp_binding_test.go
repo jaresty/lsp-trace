@@ -14,7 +14,6 @@ import (
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
-	"lsp-trace/internal/publication"
 	"lsp-trace/internal/session"
 )
 
@@ -110,11 +109,7 @@ func TestPrivateCensusMCPGatewayComposesBootstrapActivationThroughDocumentSymbol
 				workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true,
 				notifications: 65, results: map[string]json.RawMessage{"textDocument/documentSymbol": json.RawMessage(`[]`)},
 			})
-			root, err := publication.OpenRoot(t.TempDir())
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = root.Close() })
+			root := openCensusRuntimeRoot(t)
 			server, bootstrapManager, err := newServerRuntime(false, root)
 			if err != nil {
 				t.Fatal(err)

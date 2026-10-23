@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/censusresult"
+	"lsp-trace/internal/censussourcecontinuation"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/programccompose"
 )
@@ -90,10 +91,6 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 		return censusFailureCompletion(failure, reason)
 	}
 	if prepared.privateAcquisition {
-		selectedFiles, err := selectFirstCensusSourcePartition(prepared.sourcePlan)
-		if err != nil {
-			return censusFailureCompletion(censusPlanningFailure(err), reasonPlanningInvalid)
-		}
 		discover := r.discoverEnumerated
 		if discover == nil {
 			discover = censusRuntimeDiscoverFrom
@@ -102,16 +99,74 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 		discoveryOptions.maxNodes = censusRuntimeMaxEntries
 		discoveryCtx, cancel := context.WithDeadline(ctx, prepared.deadline)
 		defer cancel()
-		discovery, err := discover(discoveryCtx, r.runtime.Manager, prepared.admitted, discoveryOptions, true, censusacquisition.StaticFiles(selectedFiles))
+		objects, err := newCensusSourceContinuationObjects(request.PublicationRoot)
 		if err != nil {
 			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
 		}
-		terminal, err := newPrivateConstituentDiscoveryTerminal(prepared.sourcePlan, discovery)
+		heads, err := newCensusSourceContinuationHeads(request.PublicationRoot)
 		if err != nil {
 			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
 		}
-		prepared.discovery = discovery
-		prepared.discoveryTerminal = terminal
+		workflowKey := fmt.Sprintf("census-source-continuation/private/v1/%s/%s/%d", prepared.sourcePlan.Identity, prepared.admitted.sessionID, prepared.admitted.generation)
+		rawHead, err := heads.Load(discoveryCtx, workflowKey)
+		if err != nil {
+			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+		}
+		expected, err := censussourcecontinuation.ParseHeadRevision(rawHead)
+		if err != nil {
+			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+		}
+		continuationRequest := censussourcecontinuation.Request{Plan: prepared.sourcePlan, PartitionSize: censusRuntimeSourcePartitionSize, WorkflowKey: workflowKey, HeadKey: workflowKey, Expected: expected, Objects: objects, Heads: heads}
+		var selectedOutcome censussourcecontinuation.Outcome
+		if len(rawHead) == 0 {
+			selectedFiles, selectErr := selectFirstCensusSourcePartition(prepared.sourcePlan)
+			if selectErr != nil {
+				return censusFailureCompletion(censusPlanningFailure(selectErr), reasonPlanningInvalid)
+			}
+			discovery, discoverErr := discover(discoveryCtx, r.runtime.Manager, prepared.admitted, discoveryOptions, true, censusacquisition.StaticFiles(selectedFiles))
+			if discoverErr != nil {
+				return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+			}
+			terminal, terminalErr := newPrivateConstituentDiscoveryTerminal(prepared.sourcePlan, discovery)
+			if terminalErr != nil {
+				return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+			}
+			adapted, adaptErr := privateDiscoveryContinuationTerminal(prepared.sourcePlan, terminal)
+			if adaptErr != nil {
+				return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+			}
+			prepared.discovery, prepared.discoveryTerminal = discovery, terminal
+			selectedOutcome = adapted.Outcome
+			continuationRequest.ExistingOrdinalZero = &adapted
+		} else {
+			continuationRequest.Discover = func(callbackCtx context.Context, ordinal int, files []censusacquisition.SourceFile) (censussourcecontinuation.Terminal, error) {
+				discovery, discoverErr := discover(callbackCtx, r.runtime.Manager, prepared.admitted, discoveryOptions, true, censusacquisition.StaticFiles(files))
+				if discoverErr != nil {
+					return censussourcecontinuation.Terminal{}, discoverErr
+				}
+				terminal, terminalErr := newPrivateConstituentDiscoveryTerminalAtOrdinal(prepared.sourcePlan, ordinal, discovery)
+				if terminalErr != nil {
+					return censussourcecontinuation.Terminal{}, terminalErr
+				}
+				adapted, adaptErr := privateDiscoveryContinuationTerminalAtOrdinal(prepared.sourcePlan, terminal)
+				if adaptErr == nil {
+					prepared.discovery, prepared.discoveryTerminal = discovery, terminal
+					selectedOutcome = adapted.Outcome
+				}
+				return adapted, adaptErr
+			}
+		}
+		coordinate := r.sourceCoordinate
+		if coordinate == nil {
+			coordinate = censussourcecontinuation.CoordinateNext
+		}
+		coordinateResult, err := coordinate(discoveryCtx, continuationRequest)
+		if err != nil {
+			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+		}
+		if coordinateResult.Status != censussourcecontinuation.StatusCommitted || prepared.discoveryTerminal == nil || selectedOutcome == "" || coordinateResult.Ordinal != prepared.discoveryTerminal.ordinal || coordinateResult.Outcome != selectedOutcome {
+			return censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+		}
 	}
 	withDiscoveryTerminal := func(completion censusCompletion) censusCompletion {
 		completion.discoveryTerminal = prepared.discoveryTerminal

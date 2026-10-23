@@ -28,10 +28,14 @@ type privateConstituentDiscoveryTerminal struct {
 }
 
 func newPrivateConstituentDiscoveryTerminal(plan censussourceplan.Plan, discovery censusacquisition.Discovery) (*privateConstituentDiscoveryTerminal, error) {
+	return newPrivateConstituentDiscoveryTerminalAtOrdinal(plan, 0, discovery)
+}
+
+func newPrivateConstituentDiscoveryTerminalAtOrdinal(plan censussourceplan.Plan, ordinal int, discovery censusacquisition.Discovery) (*privateConstituentDiscoveryTerminal, error) {
 	if err := censussourceplan.Validate(plan, censusRuntimeSourcePartitionSize); err != nil {
 		return nil, err
 	}
-	if plan.Authority != 0 || len(plan.Partitions) == 0 || plan.Partitions[0].Ordinal != 0 {
+	if plan.Authority != 0 || ordinal < 0 || ordinal >= len(plan.Partitions) || plan.Partitions[ordinal].Ordinal != ordinal {
 		return nil, censussourceplan.ErrInvalidIdentity
 	}
 	if err := discovery.Accounting.Validate(); err != nil {
@@ -50,8 +54,8 @@ func newPrivateConstituentDiscoveryTerminal(plan censussourceplan.Plan, discover
 	return &privateConstituentDiscoveryTerminal{
 		planIdentity: plan.Identity,
 		authority:    plan.Authority,
-		ordinal:      0,
-		members:      cloneTerminalSlice(plan.Partitions[0].Members),
+		ordinal:      ordinal,
+		members:      cloneTerminalSlice(plan.Partitions[ordinal].Members),
 		discovery:    clonePrivateTerminalDiscovery(discovery),
 		outcome:      outcome,
 	}, nil

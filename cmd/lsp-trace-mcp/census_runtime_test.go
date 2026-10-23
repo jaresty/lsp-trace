@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censusresult"
+	"lsp-trace/internal/censussourcecontinuation"
 	"lsp-trace/internal/censussourceplan"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
@@ -36,7 +38,11 @@ func censusRuntimeRequest(t *testing.T, root *publication.Root, raw []byte) oper
 
 func openCensusRuntimeRoot(t *testing.T) *publication.Root {
 	t.Helper()
-	root, err := publication.OpenRoot(t.TempDir())
+	path := t.TempDir()
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := publication.OpenRoot(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +98,39 @@ func TestCensusRuntimeRequiresHostRootBeforeDiscovery(t *testing.T) {
 	_, afterMethods, _, _ := starter.snapshot()
 	if failure == nil || failure.stage != censusStageConfig || failure.code != censusCodeInvalidConfig || !reflect.DeepEqual(beforeMethods, afterMethods) || !reflect.DeepEqual(before, runtime.Census()) {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_ROOT_REQUIRED_NO_DISCOVERY: failure=%+v methods=%v/%v", failure, beforeMethods, afterMethods)
+	}
+}
+
+func TestPrivateCensusRuntimeNonPrivateRootStopsBeforeDiscovery(t *testing.T) {
+	workspace := t.TempDir()
+	uri, err := source.FileURI(filepath.Join(workspace, "a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	shell := newCensusRuntime(runtime)
+	shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+		return []censusacquisition.SourceFile{{Path: "a.go", URI: uri, LanguageID: "go"}}, nil
+	}
+	discoveryCalls := 0
+	shell.discoverEnumerated = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+		discoveryCalls++
+		return censusacquisition.Discovery{}, nil
+	}
+	rootPath := t.TempDir()
+	if err := os.Chmod(rootPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root, err := publication.OpenRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	request := censusRuntimeRequest(t, root, runtimeRaw(t, "project", started.Generation, nil))
+	request.PrivateCensusChunking = true
+	completion := shell.run(context.Background(), request)
+	if discoveryCalls != 0 || completion.Diagnostic == nil {
+		t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_NONPRIVATE_ROOT_REFUSED_BEFORE_DISCOVERY: calls=%d completion=%+v", discoveryCalls, completion)
 	}
 }
 
@@ -247,7 +286,11 @@ func TestPrivateCensusRuntimeRunSelectsOnlyFirstPlannedPartition(t *testing.T) {
 			request.PrivateCensusChunking = true
 			completion := shell.run(context.Background(), request)
 			if !reflect.DeepEqual(events, []string{"enumerate", "plan", "discover"}) {
-				t.Fatalf("ASSERT_PRIVATE_CENSUS_ENUMERATE_PLAN_DISCOVER_ORDER: events=%v", events)
+				var diagnostic any
+				if completion.Diagnostic != nil {
+					diagnostic = *completion.Diagnostic
+				}
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_ENUMERATE_PLAN_DISCOVER_ORDER: events=%v diagnostic=%+v", events, diagnostic)
 			}
 			if planned.Authority != 0 {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_SELECTED_PLAN_AUTHORITY_ZERO: authority=%d", planned.Authority)
@@ -257,15 +300,174 @@ func TestPrivateCensusRuntimeRunSelectsOnlyFirstPlannedPartition(t *testing.T) {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_SELECTS_PARTITION_ZERO_EXACTLY_ONCE: calls=%d got=%+v want=%+v", discoveryCalls, discovered, want)
 			}
 			if acquireCalls != 1 || completion.DiscoveryDiagnostic != nil || completion.Diagnostic == nil || completion.Diagnostic.Stage != censusresult.StageAcquisition {
-				t.Fatalf("ASSERT_PRIVATE_CENSUS_COMPLETE_DISCOVERY_REACHES_ACQUISITION: acquire=%d completion=%+v", acquireCalls, completion)
+				var diagnostic any
+				if completion.Diagnostic != nil {
+					diagnostic = *completion.Diagnostic
+				}
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_COMPLETE_DISCOVERY_REACHES_ACQUISITION: acquire=%d completion=%+v diagnostic=%+v", acquireCalls, completion, diagnostic)
 			}
 			if fileCount == censusRuntimeSourcePartitionSize+1 && (len(planned.Partitions) != 2 || len(discovered) != censusRuntimeSourcePartitionSize || reflect.DeepEqual(discovered, planned.Files)) {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_DISCOVERY_EXCLUDES_LATER_AND_OUTSIDE_MEMBERS: partitions=%+v discovered=%+v", planned.Partitions, discovered)
+			}
+			if fileCount == censusRuntimeSourcePartitionSize+1 {
+				discovered = nil
+				shell.run(context.Background(), request)
+				if discoveryCalls != 2 || !reflect.DeepEqual(discovered, planned.Partitions[1].Members) {
+					t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_ORDINAL_ZERO_NOT_REDISCOVERED: calls=%d got=%+v want=%+v", discoveryCalls, discovered, planned.Partitions[1].Members)
+				}
+				if len(discovered) != 1 {
+					t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_ONE_SELECTED_PARTITION: got=%+v", discovered)
+				}
 			}
 			if fileCount < censusRuntimeSourcePartitionSize && !reflect.DeepEqual(discovered, planned.Files) {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_ONE_PARTITION_MEMBERSHIP_PARITY: got=%+v want=%+v", discovered, planned.Files)
 			}
 		})
+	}
+}
+
+func TestPrivateCensusRuntimeCoordinatorStatusCustodyStopsDownstream(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		coordinate func(context.Context, censussourcecontinuation.Request) (censussourcecontinuation.Result, error)
+		status     censussourcecontinuation.Status
+	}{
+		{name: "retained-terminal", status: censussourcecontinuation.StatusRetained, coordinate: func(ctx context.Context, request censussourcecontinuation.Request) (censussourcecontinuation.Result, error) {
+			request.ExistingOrdinalZero.Outcome = censussourcecontinuation.OutcomeUnknown
+			request.ExistingOrdinalZero.Discovery = censusacquisition.Discovery{}
+			return censussourcecontinuation.CoordinateNext(ctx, request)
+		}},
+		{name: "stale-conflict-cas", status: censussourcecontinuation.StatusConflict, coordinate: func(ctx context.Context, request censussourcecontinuation.Request) (censussourcecontinuation.Result, error) {
+			request.Expected = censussourcecontinuation.HeadRevision{Generation: 1, Selector: strings.Repeat("0", 64)}
+			return censussourcecontinuation.CoordinateNext(ctx, request)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			file := censusacquisition.SourceFile{Path: "a.go", URI: "file://" + filepath.ToSlash(filepath.Join(workspace, "a.go")), LanguageID: "go"}
+			runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+			shell := newCensusRuntime(runtime)
+			shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+				return []censusacquisition.SourceFile{file}, nil
+			}
+			discoveryCalls, coordinateCalls, acquireCalls, chunkCalls := 0, 0, 0, 0
+			shell.discoverEnumerated = func(_ context.Context, _ *sessionruntime.Manager, admitted censusAdmittedSession, _ censusRuntimeConfig, _ bool, _ censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+				discoveryCalls++
+				return gatewayCompleteDiscovery(t, workspace, censusacquisition.SessionIdentity{SessionID: admitted.sessionID, Generation: admitted.generation}), nil
+			}
+			var coordinateResult censussourcecontinuation.Result
+			shell.sourceCoordinate = func(ctx context.Context, request censussourcecontinuation.Request) (censussourcecontinuation.Result, error) {
+				coordinateCalls++
+				var err error
+				coordinateResult, err = tc.coordinate(ctx, request)
+				return coordinateResult, err
+			}
+			shell.acquireOverride = func(context.Context, censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure, censusFailureReason) {
+				acquireCalls++
+				return censusacquisition.Projection{}, nil, reasonNone
+			}
+			shell.chunk = func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error) {
+				chunkCalls++
+				return nil, errors.New("unauthorized chunk")
+			}
+			request := censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil))
+			request.PrivateCensusChunking = true
+			completion := shell.run(context.Background(), request)
+			if coordinateCalls != 1 || coordinateResult.Status != tc.status || coordinateResult.Head.Generation == 0 && tc.status != censussourcecontinuation.StatusConflict || coordinateResult.Ordinal < -1 || acquireCalls != 0 || chunkCalls != 0 || completion.Diagnostic == nil || completion.Result != nil || completion.privateChunk != nil {
+				t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_NO_DOWNSTREAM_SURFACE: want=%s coordinate=%+v calls=%d acquire=%d chunk=%d completion=%+v", tc.status, coordinateResult, coordinateCalls, acquireCalls, chunkCalls, completion)
+			}
+			want := censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed)
+			gotPublic, gotErr := projectPrivateCensusMCP("status-custody", completion)
+			wantPublic, wantErr := projectPrivateCensusMCP("status-custody", want)
+			if gotErr != nil || wantErr != nil || gotPublic.IsError != wantPublic.IsError || !bytes.Equal(gotPublic.Structured, wantPublic.Structured) {
+				t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_PUBLIC_BYTES_IDENTICAL: status=%s got=%q want=%q gotErr=%v wantErr=%v", coordinateResult.Status, gotPublic.Structured, wantPublic.Structured, gotErr, wantErr)
+			}
+			if discoveryCalls != 1 {
+				t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_LEGACY_UNCHANGED: status=%s discovery=%d", coordinateResult.Status, discoveryCalls)
+			}
+		})
+	}
+}
+
+func TestPrivateCensusRuntimeReceiptLinkedResumeHasNoReplayOrRepublication(t *testing.T) {
+	workspace := t.TempDir()
+	file := censusacquisition.SourceFile{Path: "a.go", URI: "file://" + filepath.ToSlash(filepath.Join(workspace, "a.go")), LanguageID: "go"}
+	runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	plan, err := censussourceplan.Build([]censusacquisition.SourceFile{file}, workspace, censusRuntimeSourcePartitionSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootPath := t.TempDir()
+	if err := os.Chmod(rootPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := publication.OpenRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	objects, _ := newCensusSourceContinuationObjects(root)
+	baseHeads, _ := newCensusSourceContinuationHeads(root)
+	heads := &uncertainContinuationHeads{censusSourceContinuationHeads: baseHeads, uncertainAt: 2}
+	workflowKey := fmt.Sprintf("census-source-continuation/private/v1/%s/%s/%d", plan.Identity, started.SessionID, started.Generation)
+	terminal := continuationTerminal(plan, 0, censussourcecontinuation.OutcomeSuccessfulEmpty)
+	interrupted, err := censussourcecontinuation.CoordinateNext(context.Background(), censussourcecontinuation.Request{Plan: plan, PartitionSize: censusRuntimeSourcePartitionSize, WorkflowKey: workflowKey, HeadKey: workflowKey, ExistingOrdinalZero: &terminal, Objects: objects, Heads: heads})
+	if err != nil || interrupted.Status != censussourcecontinuation.StatusIndeterminateExecution {
+		t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_RECEIPT_LINKED_PRECONDITION: result=%+v err=%v", interrupted, err)
+	}
+	snapshotPublication := func() map[string][]byte {
+		t.Helper()
+		snapshot := map[string][]byte{}
+		if err := filepath.WalkDir(rootPath, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil || entry.IsDir() {
+				return walkErr
+			}
+			rel, err := filepath.Rel(rootPath, path)
+			if err != nil {
+				return err
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			snapshot[filepath.ToSlash(rel)] = raw
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		return snapshot
+	}
+	beforePublication := snapshotPublication()
+	shell := newCensusRuntime(runtime)
+	shell.enumerate = func(context.Context, censusAdmittedSession, censusRuntimeConfig) ([]censusacquisition.SourceFile, error) {
+		return []censusacquisition.SourceFile{file}, nil
+	}
+	discoveryCalls, acquireCalls, chunkCalls := 0, 0, 0
+	shell.discoverEnumerated = func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error) {
+		discoveryCalls++
+		return censusacquisition.Discovery{}, errors.New("receipt-linked resume replayed discovery")
+	}
+	shell.acquireOverride = func(context.Context, censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure, censusFailureReason) {
+		acquireCalls++
+		return censusacquisition.Projection{}, nil, reasonNone
+	}
+	shell.chunk = func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error) {
+		chunkCalls++
+		return nil, errors.New("unauthorized chunk")
+	}
+	request := censusRuntimeRequest(t, root, runtimeRaw(t, "project", started.Generation, nil))
+	request.PrivateCensusChunking = true
+	completion := shell.run(context.Background(), request)
+	if discoveryCalls != 0 || acquireCalls != 0 || chunkCalls != 0 || completion.Diagnostic == nil || completion.Result != nil || completion.privateChunk != nil {
+		t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_NO_DOWNSTREAM_SURFACE: discovery=%d acquire=%d chunk=%d completion=%+v", discoveryCalls, acquireCalls, chunkCalls, completion)
+	}
+	if afterPublication := snapshotPublication(); !reflect.DeepEqual(afterPublication, beforePublication) {
+		t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_NO_CONTINUATION_OBJECT_REPUBLICATION: before=%v after=%v", beforePublication, afterPublication)
+	}
+	wantPublic, wantErr := projectPrivateCensusMCP("resume-custody", censusFailureCompletion(censusDiscoveryFailure(), reasonDiscoveryFailed))
+	gotPublic, gotErr := projectPrivateCensusMCP("resume-custody", completion)
+	if wantErr != nil || gotErr != nil || !bytes.Equal(wantPublic.Structured, gotPublic.Structured) {
+		t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_PUBLIC_BYTES_IDENTICAL: want=%q got=%q wantErr=%v gotErr=%v", wantPublic.Structured, gotPublic.Structured, wantErr, gotErr)
 	}
 }
 

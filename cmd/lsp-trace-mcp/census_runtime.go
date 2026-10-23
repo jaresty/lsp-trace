@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/censuschunking"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusrequest"
+	"lsp-trace/internal/censussourcecontinuation"
 	"lsp-trace/internal/censussourceplan"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
@@ -183,6 +184,7 @@ type censusRuntime struct {
 	discover              func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool) (censusacquisition.Discovery, error)
 	discoverEnumerated    func(context.Context, *sessionruntime.Manager, censusAdmittedSession, censusRuntimeConfig, bool, censusacquisition.FileEnumerator) (censusacquisition.Discovery, error)
 	planSourceFiles       func([]censusacquisition.SourceFile, string, int) (censussourceplan.Plan, error)
+	sourceCoordinate      func(context.Context, censussourcecontinuation.Request) (censussourcecontinuation.Result, error)
 	batchExecute          func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure)
 	chunk                 func(context.Context, censusRuntimeResult, *publication.Root) (*privateCensusChunkCompletion, error)
 	chunkLease            func(context.Context, sessionruntime.SessionLeaseRequest, func(context.Context) error) error
