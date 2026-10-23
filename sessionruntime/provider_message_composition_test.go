@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
@@ -80,6 +81,45 @@ func TestProviderMessageCompositionInvalidProtocolAndPrivacy(t *testing.T) {
 	observationRaw, observationErr := json.Marshal(observation)
 	if err != nil || observationErr != nil || string(raw) == "" || containsProviderCompositionJSON(raw) || string(observationRaw) != "{}" {
 		t.Fatalf("ASSERT_PROVIDER_MESSAGE_COMPOSITION_JSON_OMITTED: result=%s observation=%s err=%v observationErr=%v", raw, observationRaw, err, observationErr)
+	}
+}
+
+func TestProviderMessageCompositionMissingLengthManagerPathParity(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		want ProviderInvalidProtocolCategory
+	}{
+		{mode: "empty-header-block", want: ProviderInvalidProtocolEmptyHeaderBlock},
+		{mode: "nonempty-header-missing-length", want: ProviderInvalidProtocolNonemptyHeaderMissingLength},
+	} {
+		for _, directional := range []bool{false, true} {
+			name := "ordinary"
+			if directional {
+				name = "directional"
+			}
+			t.Run(tc.mode+"/"+name, func(t *testing.T) {
+				m, started, _ := roundTripManager(t, tc.mode)
+				t.Cleanup(func() { _ = m.Shutdown(context.Background()) })
+				request := providerMessageCompositionRequest(started)
+				request.MaxMessages = 1
+				var got RoundTripResult
+				if directional {
+					request.Method = "callHierarchy/incomingCalls"
+					request.CaptureProviderMessageCompositionAllMethods = true
+					reservation := directionalraw.NewReservation("missing-length-manager-path")
+					got, _ = m.RoundTripDirectionalPrivate(reservation.Context(context.Background()), request)
+				} else {
+					got = m.RoundTrip(context.Background(), request)
+				}
+				observation, ok := got.ProviderMessageComposition()
+				if got.Failure != session.SessionPoisoned || !ok || observation.InvalidProtocolMessages != 1 || observation.InvalidProtocolCategory != tc.want || observation.Outcome != ProviderMessageOutcomeInvalidProtocolMessage {
+					t.Fatalf("ASSERT_PROVIDER_MISSING_LENGTH_MANAGER_PATH: result=%+v observation=%+v ok=%v", got, observation, ok)
+				}
+				if state, ok := directionalSessionStateForTest(m, started.SessionID); !ok || state != session.Poisoned {
+					t.Fatalf("ASSERT_PROVIDER_MISSING_LENGTH_MANAGER_LIFECYCLE: state=%s ok=%t", state, ok)
+				}
+			})
+		}
 	}
 }
 
@@ -163,6 +203,8 @@ func TestProviderMessageCompositionInvalidProtocolCategories(t *testing.T) {
 		{lspwire.ErrInvalidMessage, ProviderInvalidProtocolInvalidMessage},
 		{lspwire.ErrInvalidContentLength, ProviderInvalidProtocolInvalidContentLength},
 		{lspwire.ErrDuplicateContentLength, ProviderInvalidProtocolDuplicateContentLength},
+		{lspwire.ErrEmptyHeaderBlock, ProviderInvalidProtocolEmptyHeaderBlock},
+		{lspwire.ErrNonemptyHeaderMissingContentLength, ProviderInvalidProtocolNonemptyHeaderMissingLength},
 		{lspwire.ErrMissingContentLength, ProviderInvalidProtocolMissingContentLength},
 	} {
 		a := providerMessageCompositionAccumulator{enabled: true}

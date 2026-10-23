@@ -15,16 +15,21 @@ import (
 const Version = "2.0"
 
 var (
-	ErrInvalidContentLength             = errors.New("invalid Content-Length")
-	ErrDuplicateContentLength           = errors.New("duplicate Content-Length")
-	ErrMissingContentLength             = errors.New("missing Content-Length")
-	ErrFrameTooLarge                    = errors.New("frame too large")
-	ErrOriginalFrameTooLarge            = errors.New("complete original-wire frame too large")
-	ErrCumulativeOriginalFramesTooLarge = errors.New("cumulative complete original-wire frames too large")
-	ErrHeaderTooLarge                   = errors.New("headers too large")
-	ErrMalformedJSON                    = errors.New("malformed JSON")
-	ErrWrongVersion                     = errors.New("wrong JSON-RPC version")
-	ErrInvalidMessage                   = errors.New("invalid JSON-RPC message")
+	ErrInvalidContentLength   = errors.New("invalid Content-Length")
+	ErrDuplicateContentLength = errors.New("duplicate Content-Length")
+	ErrMissingContentLength   = errors.New("missing Content-Length")
+	// The detailed sentinels preserve errors.Is(err, ErrMissingContentLength)
+	// while distinguishing an empty header block from non-empty headers that
+	// omit Content-Length. Neither retains header bytes or values.
+	ErrEmptyHeaderBlock                   = fmt.Errorf("%w: empty header block", ErrMissingContentLength)
+	ErrNonemptyHeaderMissingContentLength = fmt.Errorf("%w: non-empty header block", ErrMissingContentLength)
+	ErrFrameTooLarge                      = errors.New("frame too large")
+	ErrOriginalFrameTooLarge              = errors.New("complete original-wire frame too large")
+	ErrCumulativeOriginalFramesTooLarge   = errors.New("cumulative complete original-wire frames too large")
+	ErrHeaderTooLarge                     = errors.New("headers too large")
+	ErrMalformedJSON                      = errors.New("malformed JSON")
+	ErrWrongVersion                       = errors.New("wrong JSON-RPC version")
+	ErrInvalidMessage                     = errors.New("invalid JSON-RPC message")
 )
 
 type Limits struct{ MaxBodyBytes, MaxHeaderBytes int64 }
@@ -177,6 +182,7 @@ func (r *Reader) LimitCumulativeOriginalFrameBytes(maxBytes int64) {
 func (r *Reader) Read() (Message, error) {
 	length := -1
 	seenLength := false
+	headerLines := 0
 	var used int64
 	var pendingHeader []byte // only used with the opt-in bound; capped by MaxHeaderBytes
 	for {
@@ -206,6 +212,7 @@ func (r *Reader) Read() (Message, error) {
 		if line == "" {
 			break
 		}
+		headerLines++
 		name, value, ok := strings.Cut(line, ":")
 		if !ok {
 			return Message{}, fmt.Errorf("%w: %q", ErrInvalidContentLength, line)
@@ -223,7 +230,10 @@ func (r *Reader) Read() (Message, error) {
 		}
 	}
 	if length < 0 {
-		return Message{}, ErrMissingContentLength
+		if headerLines == 0 {
+			return Message{}, ErrEmptyHeaderBlock
+		}
+		return Message{}, ErrNonemptyHeaderMissingContentLength
 	}
 	if r.originalFrameLimit > 0 {
 		if int64(length) > r.originalFrameLimit-used {

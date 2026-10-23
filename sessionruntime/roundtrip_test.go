@@ -140,6 +140,10 @@ func (c *roundTripChild) serve() {
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Error: &lspwire.RPCError{Code: -32603, Message: "boom"}})
 		case "malformed":
 			_, _ = io.WriteString(c.output, "Content-Length: nope\r\n\r\n{}")
+		case "empty-header-block":
+			_, _ = io.WriteString(c.output, "\r\n")
+		case "nonempty-header-missing-length":
+			_, _ = io.WriteString(c.output, "X-Test: yes\r\n\r\n")
 		case "eof":
 			_ = c.output.Close()
 		case "hang":

@@ -1344,7 +1344,7 @@ func parsePrivateProviderProbeV8(raw []byte) (privateProviderProbeArtifactV8, er
 	}
 	validInvalidCategory := func(category sessionruntime.ProviderInvalidProtocolCategory) bool {
 		switch category {
-		case "", sessionruntime.ProviderInvalidProtocolMalformedJSON, sessionruntime.ProviderInvalidProtocolWrongVersion, sessionruntime.ProviderInvalidProtocolInvalidMessage, sessionruntime.ProviderInvalidProtocolInvalidContentLength, sessionruntime.ProviderInvalidProtocolDuplicateContentLength, sessionruntime.ProviderInvalidProtocolMissingContentLength:
+		case "", sessionruntime.ProviderInvalidProtocolMalformedJSON, sessionruntime.ProviderInvalidProtocolWrongVersion, sessionruntime.ProviderInvalidProtocolInvalidMessage, sessionruntime.ProviderInvalidProtocolInvalidContentLength, sessionruntime.ProviderInvalidProtocolDuplicateContentLength, sessionruntime.ProviderInvalidProtocolMissingContentLength, sessionruntime.ProviderInvalidProtocolEmptyHeaderBlock, sessionruntime.ProviderInvalidProtocolNonemptyHeaderMissingLength:
 			return true
 		default:
 			return false

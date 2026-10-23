@@ -321,6 +321,24 @@ func TestPrivateProviderProbeV8CompletionSequenceExhaustionFailsClosed(t *testin
 	}
 }
 
+func TestPrivateProviderProbeV8AcceptsLegacyAndDetailedMissingLengthCategories(t *testing.T) {
+	for _, category := range []sessionruntime.ProviderInvalidProtocolCategory{
+		sessionruntime.ProviderInvalidProtocolMissingContentLength,
+		sessionruntime.ProviderInvalidProtocolEmptyHeaderBlock,
+		sessionruntime.ProviderInvalidProtocolNonemptyHeaderMissingLength,
+	} {
+		p := &privateProviderProbe{version: "v8"}
+		poison := providerProbeV7Observation("POISONED", 0, 0)
+		poison.CompletionSequence = 1
+		p.observeV8("PROVIDER_REQUEST", "TYPED_SESSION_RUNTIME_FAILURE", "SESSION_POISONED", sessionruntime.ProviderMessageComposition{InvalidProtocolMessages: 1, InvalidProtocolCategory: category, Outcome: sessionruntime.ProviderMessageOutcomeInvalidProtocolMessage}, true, poison, true, 64, 4096, 0, 10)
+		raw := marshalPrivateProviderProbeV8TestArtifact(t, p.artifactV8())
+		parsed, err := parsePrivateProviderProbeV8(raw)
+		if err != nil || parsed.FirstPoisonInvalidProtocolCategory != category {
+			t.Fatalf("ASSERT_PROVIDER_PROBE_V8_MISSING_LENGTH_DETAIL category=%q err=%v parsed=%+v", category, err, parsed)
+		}
+	}
+}
+
 func TestPrivateProviderProbeV8ArtifactContractRED(t *testing.T) {
 	path := probePath(t)
 	p, err := newPrivateProviderProbeVersion(path, "v8")

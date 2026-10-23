@@ -27,12 +27,14 @@ const (
 type ProviderInvalidProtocolCategory string
 
 const (
-	ProviderInvalidProtocolMalformedJSON          ProviderInvalidProtocolCategory = "MALFORMED_JSON"
-	ProviderInvalidProtocolWrongVersion           ProviderInvalidProtocolCategory = "WRONG_VERSION"
-	ProviderInvalidProtocolInvalidMessage         ProviderInvalidProtocolCategory = "INVALID_MESSAGE"
-	ProviderInvalidProtocolInvalidContentLength   ProviderInvalidProtocolCategory = "INVALID_CONTENT_LENGTH"
-	ProviderInvalidProtocolDuplicateContentLength ProviderInvalidProtocolCategory = "DUPLICATE_CONTENT_LENGTH"
-	ProviderInvalidProtocolMissingContentLength   ProviderInvalidProtocolCategory = "MISSING_CONTENT_LENGTH"
+	ProviderInvalidProtocolMalformedJSON               ProviderInvalidProtocolCategory = "MALFORMED_JSON"
+	ProviderInvalidProtocolWrongVersion                ProviderInvalidProtocolCategory = "WRONG_VERSION"
+	ProviderInvalidProtocolInvalidMessage              ProviderInvalidProtocolCategory = "INVALID_MESSAGE"
+	ProviderInvalidProtocolInvalidContentLength        ProviderInvalidProtocolCategory = "INVALID_CONTENT_LENGTH"
+	ProviderInvalidProtocolDuplicateContentLength      ProviderInvalidProtocolCategory = "DUPLICATE_CONTENT_LENGTH"
+	ProviderInvalidProtocolMissingContentLength        ProviderInvalidProtocolCategory = "MISSING_CONTENT_LENGTH"
+	ProviderInvalidProtocolEmptyHeaderBlock            ProviderInvalidProtocolCategory = "EMPTY_HEADER_BLOCK"
+	ProviderInvalidProtocolNonemptyHeaderMissingLength ProviderInvalidProtocolCategory = "NONEMPTY_HEADER_MISSING_CONTENT_LENGTH"
 )
 
 // ProviderMessageComposition contains only bounded counters and closed classifications.
@@ -92,6 +94,10 @@ func providerInvalidProtocolCategory(err error) ProviderInvalidProtocolCategory 
 		return ProviderInvalidProtocolInvalidContentLength
 	case errors.Is(err, lspwire.ErrDuplicateContentLength):
 		return ProviderInvalidProtocolDuplicateContentLength
+	case errors.Is(err, lspwire.ErrEmptyHeaderBlock):
+		return ProviderInvalidProtocolEmptyHeaderBlock
+	case errors.Is(err, lspwire.ErrNonemptyHeaderMissingContentLength):
+		return ProviderInvalidProtocolNonemptyHeaderMissingLength
 	case errors.Is(err, lspwire.ErrMissingContentLength):
 		return ProviderInvalidProtocolMissingContentLength
 	default:

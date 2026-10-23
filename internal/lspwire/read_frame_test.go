@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"lsp-trace/internal/directionalraw"
 )
 
 func TestReadWithFrameRetainsExactConsumedFrameNotDecodedReserialization(t *testing.T) {
@@ -131,6 +133,41 @@ func TestReadWithFrameIfWithinPreflightAndMalformedWithhold(t *testing.T) {
 			t.Fatalf("ASSERT_ADR0011_DEFERRED_FAILED_READ: err=%v observed=%+v retained=%v raw=%q", err, observed, retained, raw)
 		}
 		t.Log("ASSERT_ADR0011_DEFERRED_FAILED_READ: PASS")
+	}
+}
+
+func TestReaderPathsClassifyMissingContentLength(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		want  error
+	}{
+		{name: "empty-header-block", input: "\r\n", want: ErrEmptyHeaderBlock},
+		{name: "nonempty-header-block", input: "X-Test: yes\r\n\r\n", want: ErrNonemptyHeaderMissingContentLength},
+	} {
+		t.Run(tc.name+"/ordinary", func(t *testing.T) {
+			_, err := NewReader(strings.NewReader(tc.input), Limits{MaxBodyBytes: 1024, MaxHeaderBytes: 1024}).Read()
+			if !errors.Is(err, tc.want) || !errors.Is(err, ErrMissingContentLength) {
+				t.Fatalf("ASSERT_LSP_MISSING_LENGTH_ORDINARY: err=%v want=%v", err, tc.want)
+			}
+		})
+		t.Run(tc.name+"/frame", func(t *testing.T) {
+			_, observed, err := NewReader(strings.NewReader(tc.input), Limits{MaxBodyBytes: 1024, MaxHeaderBytes: 1024}).ReadWithFrame()
+			if !errors.Is(err, tc.want) || !errors.Is(err, ErrMissingContentLength) || observed != (ReadFrameObservation{}) {
+				t.Fatalf("ASSERT_LSP_MISSING_LENGTH_FRAME: err=%v want=%v observation=%+v", err, tc.want, observed)
+			}
+		})
+		t.Run(tc.name+"/directional", func(t *testing.T) {
+			reservation := directionalraw.NewReservation("missing-length-detail")
+			if !reservation.AttachPrivate(func(_, _ string, n int) ([]byte, error) { return make([]byte, n), nil }, func(directionalraw.Observation) {}, func() bool { return true }, func() {}) {
+				t.Fatal("fixture: directional reservation attach")
+			}
+			lease := reservation.Begin("callHierarchy/incomingCalls", 1, 1)
+			_, observed, raw, err := NewReader(strings.NewReader(tc.input), Limits{MaxBodyBytes: 1024, MaxHeaderBytes: 1024}).ReadDirectionalReserved(1024, lease)
+			if !errors.Is(err, tc.want) || !errors.Is(err, ErrMissingContentLength) || observed.FrameBytes != int64(len(tc.input)) || !bytes.Equal(raw, []byte(tc.input)) {
+				t.Fatalf("ASSERT_LSP_MISSING_LENGTH_DIRECTIONAL: err=%v want=%v observation=%+v raw=%q", err, tc.want, observed, raw)
+			}
+		})
 	}
 }
 

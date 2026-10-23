@@ -185,6 +185,7 @@ func (r *Reader) ReadDirectionalReserved(maxBytes int64, lease directionalraw.Le
 	var header [65536]byte
 	used := 0
 	length := -1
+	headerLines := 0
 	lineStart := 0
 	retainHeader := func(cause error) (Message, ReadFrameObservation, []byte, error) {
 		if used == 0 {
@@ -217,6 +218,7 @@ func (r *Reader) ReadDirectionalReserved(maxBytes int64, lease directionalraw.Le
 		if line == "" {
 			break
 		}
+		headerLines++
 		name, value, ok := strings.Cut(line, ":")
 		if !ok {
 			return retainHeader(ErrInvalidContentLength)
@@ -233,7 +235,10 @@ func (r *Reader) ReadDirectionalReserved(maxBytes int64, lease directionalraw.Le
 		}
 	}
 	if length < 0 {
-		return retainHeader(ErrMissingContentLength)
+		if headerLines == 0 {
+			return retainHeader(ErrEmptyHeaderBlock)
+		}
+		return retainHeader(ErrNonemptyHeaderMissingContentLength)
 	}
 	if int64(length) > r.limits.MaxBodyBytes || maxBytes <= int64(used) || int64(length) > maxBytes-int64(used) {
 		return retainHeader(ErrFrameTooLarge)
