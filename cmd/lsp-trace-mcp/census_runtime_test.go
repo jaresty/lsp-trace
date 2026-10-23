@@ -842,3 +842,144 @@ func TestCensusRuntimePrivateTypedSurface(t *testing.T) {
 	}
 	var _ censusacquisition.Discovery
 }
+
+type censusRecordingPreparer struct {
+	result   sessionruntime.DocumentResult
+	calls    int
+	requests []sessionruntime.DocumentRequest
+	before   func()
+}
+
+func (p *censusRecordingPreparer) PrepareDocument(_ context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
+	p.calls++
+	p.requests = append(p.requests, request)
+	if p.before != nil {
+		p.before()
+	}
+	return p.result
+}
+
+func TestCensusRuntimeSupplierFailureMappingClosure(t *testing.T) {
+	file := censusacquisition.SourceFile{Path: "private/path.go", URI: "file:///private/path.go", LanguageID: "go"}
+	lifecycle := []struct {
+		manager sessionruntime.LifecycleSubcause
+		census  censusacquisition.LifecycleSubcause
+	}{
+		{sessionruntime.LifecycleSubcauseManagerClosed, censusacquisition.LifecycleSubcauseManagerClosed},
+		{sessionruntime.LifecycleSubcauseSessionNotReady, censusacquisition.LifecycleSubcauseSessionNotReady},
+		{sessionruntime.LifecycleSubcauseProtocolOwned, censusacquisition.LifecycleSubcauseProtocolOwned},
+		{sessionruntime.LifecycleSubcauseLeaseClosing, censusacquisition.LifecycleSubcauseLeaseClosing},
+		{sessionruntime.LifecycleSubcauseLeaseTokenMismatch, censusacquisition.LifecycleSubcauseLeaseTokenMismatch},
+		{sessionruntime.LifecycleSubcauseLanguageIDConflict, censusacquisition.LifecycleSubcauseLanguageIDConflict},
+	}
+	produced := sessionruntime.ProducedLifecycleSubcauses()
+	if len(produced) != len(lifecycle) {
+		t.Fatalf("ASSERT_CENSUS_SUPPLIER_LIFECYCLE_MAPPING_CLOSED got=%v want=%d", produced, len(lifecycle))
+	}
+	for _, supported := range produced {
+		found := false
+		for _, pair := range lifecycle {
+			found = found || pair.manager == supported
+		}
+		if !found {
+			t.Fatalf("ASSERT_CENSUS_SUPPLIER_LIFECYCLE_MAPPING_CLOSED unsupported=%q produced=%v", supported, produced)
+		}
+	}
+	cases := []struct {
+		name      string
+		result    sessionruntime.DocumentResult
+		want      error
+		subcause  censusacquisition.LifecycleSubcause
+		configure func(*censusRecordingPreparer, context.Context) context.Context
+	}{
+		{name: "poisoned", result: sessionruntime.DocumentResult{Failure: session.SessionPoisoned}, want: censusacquisition.ErrSessionPoisoned},
+		{name: "session-not-found", result: sessionruntime.DocumentResult{Failure: session.SessionNotFound}, want: censusacquisition.ErrSessionUnavailable},
+		{name: "supply-unavailable", result: sessionruntime.DocumentResult{Failure: sessionruntime.DocumentSupplyUnavailable}, want: censusacquisition.ErrSessionUnavailable},
+		{name: "stale-generation-generic", result: sessionruntime.DocumentResult{Failure: session.StaleGeneration}},
+		{name: "request-timeout-generic", result: sessionruntime.DocumentResult{Failure: session.RequestTimeout}},
+		{name: "provider-failure-generic", result: sessionruntime.DocumentResult{Failure: sessionruntime.DocumentSourceUnavailable}},
+		{name: "unknown-lifecycle-subcause-generic", result: sessionruntime.DocumentResult{Failure: session.LifecycleConflict, LifecycleSubcause: sessionruntime.LifecycleSubcause("PRIVATE_UNKNOWN")}},
+		{name: "identity-mismatch-generic", result: sessionruntime.DocumentResult{URI: "file:///other.go", LanguageID: file.LanguageID}},
+		{name: "post-attempt-canceled", result: sessionruntime.DocumentResult{Failure: session.RequestCancelled}, want: context.Canceled, configure: func(p *censusRecordingPreparer, _ context.Context) context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			p.before = cancel
+			return ctx
+		}},
+		{name: "post-attempt-deadline", result: sessionruntime.DocumentResult{Failure: session.RequestTimeout}, want: context.DeadlineExceeded, configure: func(p *censusRecordingPreparer, _ context.Context) context.Context {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+			p.before = func() { <-ctx.Done(); cancel() }
+			return ctx
+		}},
+	}
+	for _, pair := range lifecycle {
+		cases = append(cases, struct {
+			name      string
+			result    sessionruntime.DocumentResult
+			want      error
+			subcause  censusacquisition.LifecycleSubcause
+			configure func(*censusRecordingPreparer, context.Context) context.Context
+		}{name: "lifecycle-" + string(pair.manager), result: sessionruntime.DocumentResult{Failure: session.LifecycleConflict, LifecycleSubcause: pair.manager}, want: censusacquisition.ErrLifecycleConflict, subcause: pair.census})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			preparer := &censusRecordingPreparer{result: tc.result}
+			ctx := context.Background()
+			if tc.configure != nil {
+				ctx = tc.configure(preparer, ctx)
+			}
+			err := (censusRuntimeSupplier{manager: preparer, sessionID: "private-session", generation: 7}).Supply(ctx, file)
+			if preparer.calls != 1 || len(preparer.requests) != 1 || preparer.requests[0].SessionID != "private-session" || preparer.requests[0].Generation != 7 || preparer.requests[0].URI != file.URI || preparer.requests[0].LanguageID != file.LanguageID || !preparer.requests[0].CaptureSupply {
+				t.Fatalf("ASSERT_CENSUS_SUPPLIER_EXACTLY_ONE_MANAGER_ATTEMPT calls=%d requests=%+v", preparer.calls, preparer.requests)
+			}
+			if tc.want != nil {
+				if !errors.Is(err, tc.want) {
+					t.Fatalf("ASSERT_CENSUS_SUPPLIER_TYPED_FAILURE name=%s err=%v want=%v", tc.name, err, tc.want)
+				}
+			} else if err == nil || errors.Is(err, censusacquisition.ErrSessionPoisoned) || errors.Is(err, censusacquisition.ErrLifecycleConflict) || errors.Is(err, censusacquisition.ErrSessionUnavailable) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("ASSERT_CENSUS_SUPPLIER_ORDINARY_FAILURE_REMAINS_GENERIC name=%s err=%v", tc.name, err)
+			}
+			var typed *censusacquisition.DocumentSupplyFailure
+			if tc.subcause != "" {
+				if !errors.As(err, &typed) || typed.LifecycleSubcause != tc.subcause {
+					t.Fatalf("ASSERT_CENSUS_SUPPLIER_EXACT_LIFECYCLE_SUBCAUSE name=%s err=%T %v typed=%+v", tc.name, err, err, typed)
+				}
+			} else if errors.As(err, &typed) {
+				t.Fatalf("ASSERT_CENSUS_SUPPLIER_NON_LIFECYCLE_NOT_WRAPPED name=%s typed=%+v", tc.name, typed)
+			}
+			if text := fmt.Sprintf("%v", err); strings.Contains(text, "private-session") || strings.Contains(text, file.Path) || strings.Contains(text, file.URI) {
+				t.Fatalf("ASSERT_CENSUS_SUPPLIER_ERROR_PRIVACY name=%s err=%q", tc.name, text)
+			}
+		})
+	}
+}
+
+func TestCensusRuntimeSupplierSessionNotFoundUsesProductionAdapterCustody(t *testing.T) {
+	workspace := t.TempDir()
+	writeRuntimeSource(t, workspace, "a.go")
+	uri, err := source.FileURI(filepath.Join(workspace, "a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, starter, _ := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	beforeStarts, beforeMethods, beforeTeardown, beforeClose := starter.snapshot()
+	discovery, err := censusRuntimeDiscover(
+		context.Background(),
+		runtime.Manager,
+		censusAdmittedSession{sessionID: "missing-private-session", generation: 1, workspace: workspace},
+		censusRuntimeConfig{sources: []string{"a.go"}, maxNodes: 1, requestTimeoutMS: 500},
+		false,
+	)
+	afterStarts, afterMethods, afterTeardown, afterClose := starter.snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(discovery.IncompleteCauses) != 1 || discovery.IncompleteCauses[0].Code != "SESSION_UNAVAILABLE" || discovery.IncompleteCauses[0].LifecycleSubcause != "" || len(discovery.ProviderFailures) != 1 || discovery.ProviderFailures[0].Code != "UNAVAILABLE" {
+		t.Fatalf("ASSERT_CENSUS_SUPPLIER_SESSION_NOT_FOUND_TYPED_AND_PRIVATE_PUBLIC_COLLAPSE causes=%+v providers=%+v", discovery.IncompleteCauses, discovery.ProviderFailures)
+	}
+	if beforeStarts != afterStarts || beforeTeardown != afterTeardown || beforeClose != afterClose || !reflect.DeepEqual(beforeMethods, afterMethods) {
+		t.Fatalf("ASSERT_CENSUS_SUPPLIER_FAILURE_NO_RETRY_RESTART_OR_SUBSTITUTION starts=%d/%d methods=%v/%v teardown=%d/%d close=%d/%d", beforeStarts, afterStarts, beforeMethods, afterMethods, beforeTeardown, afterTeardown, beforeClose, afterClose)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", discovery.ProviderFailures), "missing-private-session") || strings.Contains(fmt.Sprintf("%+v", discovery.ProviderFailures), workspace) || strings.Contains(fmt.Sprintf("%+v", discovery.ProviderFailures), uri) {
+		t.Fatalf("ASSERT_CENSUS_SUPPLIER_PUBLIC_FAILURE_PRIVACY providers=%+v", discovery.ProviderFailures)
+	}
+}

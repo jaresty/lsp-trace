@@ -20,6 +20,7 @@ import (
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/session"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -344,10 +345,33 @@ func censusRuntimeEnumerate(ctx context.Context, admitted censusAdmittedSession,
 	return censusRuntimeEnumerator{workspace: admitted.workspace, roots: append([]string(nil), options.sources...), filters: filters, maxFiles: int(options.maxNodes)}.Enumerate(ctx)
 }
 
+type censusDocumentPreparer interface {
+	PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
+}
+
 type censusRuntimeSupplier struct {
-	manager    *sessionruntime.Manager
+	manager    censusDocumentPreparer
 	sessionID  string
 	generation uint64
+}
+
+func censusLifecycleSubcause(subcause sessionruntime.LifecycleSubcause) (censusacquisition.LifecycleSubcause, bool) {
+	switch subcause {
+	case sessionruntime.LifecycleSubcauseManagerClosed:
+		return censusacquisition.LifecycleSubcauseManagerClosed, true
+	case sessionruntime.LifecycleSubcauseSessionNotReady:
+		return censusacquisition.LifecycleSubcauseSessionNotReady, true
+	case sessionruntime.LifecycleSubcauseProtocolOwned:
+		return censusacquisition.LifecycleSubcauseProtocolOwned, true
+	case sessionruntime.LifecycleSubcauseLeaseClosing:
+		return censusacquisition.LifecycleSubcauseLeaseClosing, true
+	case sessionruntime.LifecycleSubcauseLeaseTokenMismatch:
+		return censusacquisition.LifecycleSubcauseLeaseTokenMismatch, true
+	case sessionruntime.LifecycleSubcauseLanguageIDConflict:
+		return censusacquisition.LifecycleSubcauseLanguageIDConflict, true
+	default:
+		return "", false
+	}
 }
 
 func (s censusRuntimeSupplier) Supply(ctx context.Context, file censusacquisition.SourceFile) error {
@@ -355,7 +379,25 @@ func (s censusRuntimeSupplier) Supply(ctx context.Context, file censusacquisitio
 		return err
 	}
 	result := s.manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: s.sessionID, Generation: s.generation, URI: file.URI, LanguageID: file.LanguageID, CaptureSupply: true})
-	if result.Failure != "" || result.URI != file.URI || result.LanguageID != file.LanguageID {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	switch result.Failure {
+	case session.SessionPoisoned:
+		return censusacquisition.ErrSessionPoisoned
+	case session.LifecycleConflict:
+		subcause, ok := censusLifecycleSubcause(result.LifecycleSubcause)
+		if !ok {
+			return errors.New("document supply failed")
+		}
+		return &censusacquisition.DocumentSupplyFailure{Cause: censusacquisition.ErrLifecycleConflict, LifecycleSubcause: subcause}
+	case session.SessionNotFound, sessionruntime.DocumentSupplyUnavailable:
+		return censusacquisition.ErrSessionUnavailable
+	case "":
+	default:
+		return errors.New("document supply failed")
+	}
+	if result.URI != file.URI || result.LanguageID != file.LanguageID {
 		return errors.New("document supply failed")
 	}
 	if result.Supply != nil && (result.Supply.URI != file.URI || result.Supply.SessionID != s.sessionID || result.Supply.Generation != s.generation) {
