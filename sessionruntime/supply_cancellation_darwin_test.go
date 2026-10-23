@@ -18,7 +18,12 @@ func TestSupplyStalledProcessHelper(t *testing.T) {
 	if os.Getenv("LSP_TRACE_SUPPLY_STALL_HELPER") != "1" {
 		return
 	}
-	if err := os.WriteFile(os.Getenv("LSP_TRACE_SUPPLY_STALL_MARKER"), []byte("scheduled"), 0600); err != nil {
+	marker := os.Getenv("LSP_TRACE_SUPPLY_STALL_MARKER")
+	pending := marker + ".pending"
+	if err := os.WriteFile(pending, []byte("scheduled"), 0600); err != nil {
+		os.Exit(2)
+	}
+	if err := os.Rename(pending, marker); err != nil {
 		os.Exit(2)
 	}
 	// Deliberately never read stdin. The supervisor owns termination and reap.
