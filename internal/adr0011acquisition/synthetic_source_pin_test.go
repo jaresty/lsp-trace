@@ -167,6 +167,9 @@ func TestSyntheticSourcePinCensusSourcePlanProductionSelection(t *testing.T) {
 }
 
 func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
+	const censusDiscoveryTerminalPath = "cmd/lsp-trace-mcp/census_discovery_terminal.go"
+	const censusAcquisitionCorePath = "internal/censusacquisition/core.go"
+
 	expectedAdditionalGoPaths := []string{
 		"cmd/lsp-trace/census_assembly.go",
 		"cmd/lsp-trace/census_core.go",
@@ -176,6 +179,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/censuschunking/chunking.go",
 		"cmd/lsp-trace-mcp/census_chunking.go",
 		"cmd/lsp-trace-mcp/census_completion.go",
+		censusDiscoveryTerminalPath,
 		"cmd/lsp-trace-mcp/census_executor.go",
 		"cmd/lsp-trace-mcp/census_mcp_binding.go",
 		"cmd/lsp-trace-mcp/census_runtime.go",
@@ -187,6 +191,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/operation/types.go",
 		"cmd/lsp-trace/acquisition_v2.go",
 		"cmd/lsp-trace/census_discovery_adapter.go",
+		censusAcquisitionCorePath,
 		"internal/censusacquisition/discovery.go",
 		"internal/censusacquisition/request_budget.go",
 		"cmd/lsp-trace/census_command.go",
@@ -210,10 +215,24 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/schema/schemas/lsp-trace.census-request-receipt.v2.schema.json",
 	}
 	if strings.Join(syntheticSourceAdditionalGoPaths, "\n") != strings.Join(expectedAdditionalGoPaths, "\n") {
-		t.Fatalf("ASSERT_PRIVATE_DISCOVERY_CAUSE_SOURCE_REQUIRED additional Go paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalGoPaths, expectedAdditionalGoPaths)
+		t.Errorf("ASSERT_PRIVATE_DISCOVERY_CAUSE_SOURCE_REQUIRED additional Go paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalGoPaths, expectedAdditionalGoPaths)
 	}
 	if strings.Join(syntheticSourceAdditionalSchemaPaths, "\n") != strings.Join(expectedAdditionalSchemaPaths, "\n") {
 		t.Fatalf("additional schema paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalSchemaPaths, expectedAdditionalSchemaPaths)
+	}
+	for _, requiredPath := range []string{censusDiscoveryTerminalPath, censusAcquisitionCorePath} {
+		count := 0
+		for _, actualPath := range syntheticSourceAdditionalGoPaths {
+			if actualPath == requiredPath {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Errorf("ASSERT_CENSUS_TERMINAL_CUSTODY_SOURCE_REQUIRED_EXACTLY_ONCE path=%q count=%d", requiredPath, count)
+		}
+	}
+	if t.Failed() {
+		return
 	}
 
 	root := t.TempDir()
@@ -309,6 +328,8 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	for _, name := range []string{
 		"internal/censusenumerationprojection/projection_test.go",
 		"cmd/lsp-trace/census_enumeration_projection_test.go",
+		"cmd/lsp-trace-mcp/census_discovery_terminal_test.go",
+		"internal/censusacquisition/core_test.go",
 		"cmd/lsp-trace/private_census_terminal_observation_test.go",
 		"cmd/lsp-trace/private_provider_probe_test.go",
 		"cmd/lsp-trace/private_provider_probe_darwin_test.go",
@@ -333,10 +354,24 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	traversal[len(traversal)-1].Path = "internal/mcpcontract/testdata/schemas/../schemas/envelope-census-chunk-terminal-result.v1.schema.json"
 	assertReject("schema traversal", traversal)
 	duplicate := append([]SyntheticSourceEntry(nil), entries...)
-	duplicate[len(duplicate)-1] = duplicate[len(duplicate)-2]
+	for i := range duplicate {
+		if duplicate[i].Path == censusAcquisitionCorePath {
+			duplicate[i] = duplicate[i-1]
+			break
+		}
+	}
 	assertReject("successor duplicate", duplicate)
 	outOfOrder := append([]SyntheticSourceEntry(nil), entries...)
-	outOfOrder[oldFiveEnd], outOfOrder[oldFiveEnd+1] = outOfOrder[oldFiveEnd+1], outOfOrder[oldFiveEnd]
+	var discoveryTerminalIndex, acquisitionCoreIndex int
+	for i := range outOfOrder {
+		switch outOfOrder[i].Path {
+		case censusDiscoveryTerminalPath:
+			discoveryTerminalIndex = i
+		case censusAcquisitionCorePath:
+			acquisitionCoreIndex = i
+		}
+	}
+	outOfOrder[discoveryTerminalIndex], outOfOrder[acquisitionCoreIndex] = outOfOrder[acquisitionCoreIndex], outOfOrder[discoveryTerminalIndex]
 	assertReject("successor order", outOfOrder)
 
 	symlinkPath := filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalSchemaPaths[0]))
