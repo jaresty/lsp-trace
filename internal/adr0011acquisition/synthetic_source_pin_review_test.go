@@ -19,9 +19,9 @@ func TestReviewedSyntheticSourcePin(t *testing.T) {
 	}
 }
 
-const reviewedSyntheticSourceDigest = "sha256:12436ecd7d4a9bd7b079c7c8fe1a7e59309b82fd6f1a989b7258f5ec7f3461b5"
-const reviewedSyntheticManifestHash = "fc825861052f8f4fc2bed9faf8fecfa3d9bcf9293ed6dd125c20b6b2c1cdc652"
-const reviewedSyntheticReviewHash = "952dbeac3ef32ffe9f5eb3e93bf7528d99f97629d9cfb6024acb215237539487"
+const reviewedSyntheticSourceDigest = "sha256:0629c4a52ba0d4185d907c6c7b9f76917fc41ef659212bad08614370b3511ce9"
+const reviewedSyntheticManifestHash = "71f9d77c4860911e6e9fcf7e413573d6e665e2df42839536d7653039bfa3870c"
+const reviewedSyntheticReviewHash = "b5516dbead0df7e0d7e3943773677ec6d299abee446111a0d94ba049bd145a72"
 
 // Only tests select this independently reviewed local source-byte expectation.
 // It is not a binary identity, production pin or public issuer.
@@ -31,12 +31,12 @@ func reviewedSyntheticSourcePin() (string, error) {
 		return "", errSyntheticSourcePin
 	}
 	qualificationDir := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification")
-	manifestPath := filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.fc825861052f8f4f.manifest.json")
+	manifestPath := filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.71f9d77c4860911e.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil || len(b) > 1<<20 || len(b) == 0 {
 		return "", errSyntheticSourcePin
 	}
-	review, err := os.ReadFile(filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.fc825861052f8f4f.review.md"))
+	review, err := os.ReadFile(filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.71f9d77c4860911e.review.md"))
 	if err != nil || len(review) > 1<<20 || len(review) == 0 {
 		return "", errSyntheticSourcePin
 	}
@@ -57,7 +57,7 @@ func reviewedSyntheticSourcePin() (string, error) {
 			SHA256     string `json:"sha256"`
 		} `json:"files"`
 	}
-	if json.Unmarshal(b, &manifest) != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != reviewedSyntheticSourceDigest || len(manifest.Files) != 166 {
+	if json.Unmarshal(b, &manifest) != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != reviewedSyntheticSourceDigest || len(manifest.Files) != 168 {
 		return "", errSyntheticSourcePin
 	}
 	entries := make([]SyntheticSourceEntry, 0, len(manifest.Files))
