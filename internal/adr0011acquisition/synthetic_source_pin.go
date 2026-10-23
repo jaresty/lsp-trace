@@ -54,6 +54,7 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"internal/censuschunking/chunking.go",
 	"cmd/lsp-trace-mcp/census_chunking.go",
 	"cmd/lsp-trace-mcp/census_completion.go",
+	"cmd/lsp-trace-mcp/census_executor.go",
 	"cmd/lsp-trace-mcp/census_mcp_binding.go",
 	"cmd/lsp-trace-mcp/census_runtime.go",
 	"cmd/lsp-trace-mcp/main.go",

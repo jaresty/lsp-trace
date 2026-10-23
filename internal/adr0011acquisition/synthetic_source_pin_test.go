@@ -137,6 +137,7 @@ func TestSyntheticSourcePin(t *testing.T) {
 func TestSyntheticSourcePinCensusSourcePlanProductionSelection(t *testing.T) {
 	const productionPath = "internal/censussourceplan/plan.go"
 	const testPath = "internal/censussourceplan/plan_test.go"
+	const censusExecutorPath = "cmd/lsp-trace-mcp/census_executor.go"
 
 	selected := make(map[string]bool, len(syntheticSourceAdditionalGoPaths))
 	for _, name := range syntheticSourceAdditionalGoPaths {
@@ -152,6 +153,17 @@ func TestSyntheticSourcePinCensusSourcePlanProductionSelection(t *testing.T) {
 			t.Fatalf("ASSERT_CENSUS_SOURCE_PLAN_TEST_EXCLUDED selected test source %q", testPath)
 		}
 	})
+	t.Run("MCP census executor required exactly once", func(t *testing.T) {
+		count := 0
+		for _, path := range syntheticSourceAdditionalGoPaths {
+			if path == censusExecutorPath {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("ASSERT_MCP_CENSUS_EXECUTOR_REQUIRED_EXACTLY_ONCE path=%q count=%d", censusExecutorPath, count)
+		}
+	})
 }
 
 func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
@@ -164,6 +176,7 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/censuschunking/chunking.go",
 		"cmd/lsp-trace-mcp/census_chunking.go",
 		"cmd/lsp-trace-mcp/census_completion.go",
+		"cmd/lsp-trace-mcp/census_executor.go",
 		"cmd/lsp-trace-mcp/census_mcp_binding.go",
 		"cmd/lsp-trace-mcp/census_runtime.go",
 		"cmd/lsp-trace-mcp/main.go",
