@@ -203,14 +203,14 @@ func computeInstabilityFromGraphProvenanceV5(input []byte, declaredSeeds []uint6
 }
 
 func ComputeInstability(r InstabilityRequest) (InstabilityArtifact, error) {
-	return computeInstability(r, InstabilityVersion, InstabilityClaimCeiling)
+	return computeInstability(r, InstabilityVersion, InstabilityClaimCeiling, comparePartitions)
 }
 
 func ComputeInstabilityV2(r InstabilityRequest) (InstabilityArtifact, error) {
-	return computeInstability(r, InstabilityVersionV2, InstabilityClaimCeilingV2)
+	return computeInstability(r, InstabilityVersionV2, InstabilityClaimCeilingV2, comparePartitionsCanonical)
 }
 
-func computeInstability(r InstabilityRequest, schemaVersion, claimCeiling string) (InstabilityArtifact, error) {
+func computeInstability(r InstabilityRequest, schemaVersion, claimCeiling string, compare func(InstabilityRun, InstabilityRun) (InstabilityPair, error)) (InstabilityArtifact, error) {
 	a := InstabilityArtifact{SchemaVersion: schemaVersion, ComparisonIdentity: r.Identity, Outcome: "STABLE", Thresholds: exactInstabilityThresholds, PolicyVersion: InstabilityPolicyVersion, Policy: InstabilityPolicy, PolicySHA256: InstabilityPolicyDigest(), PairwiseComparisons: []InstabilityPair{}, ClaimCeiling: claimCeiling, StructuralClaimCeiling: InstabilityStructuralCeiling}
 	if err := validateInstabilityRequest(r); err != nil {
 		return InstabilityArtifact{}, err
@@ -245,7 +245,7 @@ func computeInstability(r InstabilityRequest, schemaVersion, claimCeiling string
 				continue
 			}
 			var err error
-			p, err = comparePartitions(runs[i], runs[j])
+			p, err = compare(runs[i], runs[j])
 			if err != nil {
 				return InstabilityArtifact{}, err
 			}
@@ -422,6 +422,14 @@ type matchedPair struct {
 }
 
 func comparePartitions(l, r InstabilityRun) (InstabilityPair, error) {
+	return comparePartitionsWithVI(l, r, variationInformation)
+}
+
+func comparePartitionsCanonical(l, r InstabilityRun) (InstabilityPair, error) {
+	return comparePartitionsWithVI(l, r, variationInformationCanonical)
+}
+
+func comparePartitionsWithVI(l, r InstabilityRun, variationInformationFor func([]Community, []Community) (float64, int)) (InstabilityPair, error) {
 	p := InstabilityPair{LeftRunID: l.RunID, RightRunID: r.RunID, LeftCommunityArtifactSHA256: rawSHA(l.CommunityArtifact), RightCommunityArtifactSHA256: rawSHA(r.CommunityArtifact)}
 	pairs, err := maximumMatching(l.Community.Communities, r.Community.Communities)
 	if err != nil {
@@ -457,7 +465,7 @@ func comparePartitions(l, r InstabilityRun) (InstabilityPair, error) {
 	p.UnmatchedCommunityNumerator = unmatched
 	p.UnmatchedCommunityDenominator = len(l.Community.Communities) + len(r.Community.Communities)
 	p.NodeReassignmentNumerator, p.NodeReassignmentDenominator = nodeReassignment(pairs)
-	p.VariationOfInformationBits, p.VariationOfInformationNodeDenominator = variationInformation(l.Community.Communities, r.Community.Communities)
+	p.VariationOfInformationBits, p.VariationOfInformationNodeDenominator = variationInformationFor(l.Community.Communities, r.Community.Communities)
 	p.Outcome = "STABLE"
 	if rate(p.NodeReassignmentNumerator, p.NodeReassignmentDenominator) > exactInstabilityThresholds.NodeReassignmentRateMax || rate(p.UnmatchedCommunityNumerator, p.UnmatchedCommunityDenominator) > exactInstabilityThresholds.UnmatchedCommunityRateMax || p.VariationOfInformationBits > exactInstabilityThresholds.VariationOfInformationBitsMax || p.PairwiseJaccardMinimum < exactInstabilityThresholds.PairwiseJaccardMinimumMin {
 		p.Outcome = "UNSTABLE"
@@ -640,6 +648,37 @@ func nodeReassignment(pairs []matchedPair) (int, int) {
 	return n, len(byNode)
 }
 func variationInformation(a, b []Community) (float64, int) {
+	return variationInformationWithEntropy(a, b, entropyMapOrder)
+}
+
+func variationInformationCanonical(a, b []Community) (float64, int) {
+	return variationInformationWithEntropy(a, b, entropyCanonicalKeyOrder)
+}
+
+func entropyMapOrder(counts map[string]int, denominator int) float64 {
+	entropy := 0.0
+	for _, count := range counts {
+		p := float64(count) / float64(denominator)
+		entropy -= p * math.Log2(p)
+	}
+	return entropy
+}
+
+func entropyCanonicalKeyOrder(counts map[string]int, denominator int) float64 {
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	entropy := 0.0
+	for _, key := range keys {
+		p := float64(counts[key]) / float64(denominator)
+		entropy -= p * math.Log2(p)
+	}
+	return entropy
+}
+
+func variationInformationWithEntropy(a, b []Community, entropy func(map[string]int, int) float64) (float64, int) {
 	am, bm := communityMap(a), communityMap(b)
 	nodes := unionNodes(am, bm)
 	n := len(nodes)
@@ -661,14 +700,6 @@ func variationInformation(a, b []Community) (float64, int) {
 		bc[ys]++
 		joint[xs+"\x00"+ys]++
 	}
-	h := func(m map[string]int) float64 {
-		z := 0.0
-		for _, c := range m {
-			p := float64(c) / float64(n)
-			z -= p * math.Log2(p)
-		}
-		return z
-	}
 	mi := 0.0
 	for key, c := range joint {
 		_ = key
@@ -689,7 +720,7 @@ func variationInformation(a, b []Community) (float64, int) {
 		c := joint[xs+"\x00"+ys]
 		mi += math.Log2(float64(c*n)/float64(ac[xs]*bc[ys])) / float64(n)
 	}
-	v := h(ac) + h(bc) - 2*mi
+	v := entropy(ac, n) + entropy(bc, n) - 2*mi
 	if v < 0 && v > -1e-12 {
 		v = 0
 	}

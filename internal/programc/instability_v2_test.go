@@ -1,13 +1,26 @@
 package programc
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/graph"
+)
+
+var (
+	_ func(InstabilityRequest) (InstabilityArtifact, error)                       = ComputeInstability
+	_ func([]byte, InstabilityRequest) error                                      = ValidateInstability
+	_ func(InstabilityRequest) (InstabilityArtifact, error)                       = ComputeInstabilityV2
+	_ func([]byte, InstabilityRequest) error                                      = ValidateInstabilityV2
+	_ func([]byte, []uint64, string, string, string) (InstabilityArtifact, error) = ComputeInstabilityV5
 )
 
 func unstableInstabilityRequest(t *testing.T) InstabilityRequest {
@@ -160,6 +173,172 @@ func TestValidateInstabilityV1V2CrossRejectionAndV2Mutations(t *testing.T) {
 			}
 		})
 	}
+}
+
+func chunk105InstabilityRequest(t *testing.T) InstabilityRequest {
+	t.Helper()
+	componentSizes := []int{1, 2, 34, 68}
+	nodes := make([]graph.Node, 0, 105)
+	edges := make([]graph.Edge, 0, 104)
+	for component, size := range componentSizes {
+		start := len(nodes)
+		for i := 0; i < size; i++ {
+			nodes = append(nodes, node(fmt.Sprintf("chunk-105-c%02d-n%03d", component, i), uint32(len(nodes))))
+		}
+		if size > 1 {
+			for i := 0; i < size; i++ {
+				edges = append(edges, graph.Edge{
+					CallerNodeID: nodes[start+i].ID,
+					CalleeNodeID: nodes[start+(i+1)%size].ID,
+					CallSites:    []graph.Range{{}},
+				})
+			}
+		}
+	}
+	input := validV5(t, nodes, edges)
+	base, failure := Compute(input, 1)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	identity := InstabilityIdentity{
+		AdmittedGraphSHA256:       base.Source.InputSHA256,
+		ProjectionSHA256:          ProfileDigest,
+		ProjectionPolicyID:        ProfileID,
+		AlgorithmName:             algorithm,
+		AlgorithmVersion:          "gonum-v0.17.1",
+		ParametersCanonicalSHA256: "sha256:" + strings.Repeat("c", 64),
+		ResourcePolicySHA256:      "sha256:" + strings.Repeat("d", 64),
+	}
+	request := InstabilityRequest{Identity: identity, DeclaredSeeds: []uint64{1, 2}}
+	for _, seed := range request.DeclaredSeeds {
+		for replay := 0; replay < 3; replay++ {
+			outcome, computeFailure := Compute(input, seed)
+			if computeFailure != nil {
+				t.Fatal(computeFailure)
+			}
+			communityArtifact, err := json.Marshal(expectedCommunityWire(outcome, identity))
+			if err != nil {
+				t.Fatal(err)
+			}
+			boundaryRequest := BoundaryRequest{PageRankTopK: 1, HubTopK: 1}
+			boundary, err := ComputeBoundary(outcome, boundaryRequest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			boundaryArtifact, err := json.Marshal(boundary)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Runs = append(request.Runs, InstabilityRun{
+				RunID:             fmt.Sprintf("seed-%d-replay-%d", seed, replay+1),
+				Seed:              seed,
+				Status:            "COMPLETE",
+				Community:         outcome,
+				CommunityArtifact: communityArtifact,
+				BoundaryArtifact:  boundaryArtifact,
+				BoundaryRequest:   boundaryRequest,
+			})
+		}
+	}
+	return request
+}
+
+func chunk105RequestPermutations(request InstabilityRequest) []InstabilityRequest {
+	permutations := []InstabilityRequest{request}
+	reversedRuns := request
+	reversedRuns.Runs = slices.Clone(request.Runs)
+	slices.Reverse(reversedRuns.Runs)
+	permutations = append(permutations, reversedRuns)
+	reversedSeeds := request
+	reversedSeeds.DeclaredSeeds = slices.Clone(request.DeclaredSeeds)
+	slices.Reverse(reversedSeeds.DeclaredSeeds)
+	permutations = append(permutations, reversedSeeds)
+	both := reversedRuns
+	both.DeclaredSeeds = slices.Clone(reversedSeeds.DeclaredSeeds)
+	permutations = append(permutations, both)
+	return permutations
+}
+
+func TestInstabilityV2Chunk105CompleteRequestCanonicalBytes(t *testing.T) {
+	request := chunk105InstabilityRequest(t)
+	var baseline []byte
+	for permutationIndex, permutation := range chunk105RequestPermutations(request) {
+		artifact, err := ComputeInstabilityV2(permutation)
+		if err != nil {
+			t.Fatalf("ASSERT_V2_CHUNK_105_COMPLETE_REQUEST permutation=%d: %v", permutationIndex, err)
+		}
+		raw := canonicalInstability(artifact)
+		if err := ValidateInstabilityV2(raw, permutation); err != nil {
+			t.Fatalf("ASSERT_V2_CHUNK_105_PUBLIC_VALIDATE permutation=%d: %v", permutationIndex, err)
+		}
+		if baseline == nil {
+			baseline = bytes.Clone(raw)
+		} else if !bytes.Equal(raw, baseline) {
+			t.Fatalf("ASSERT_V2_CHUNK_105_CANONICAL_BYTES permutation=%d", permutationIndex)
+		}
+	}
+
+	artifact, err := ComputeInstabilityV2(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundEquivalentAuthenticPair := false
+	for _, pair := range artifact.PairwiseComparisons {
+		if strings.HasPrefix(pair.LeftRunID, "seed-1-") && strings.HasPrefix(pair.RightRunID, "seed-1-") && pair.LeftCommunityArtifactSHA256 == pair.RightCommunityArtifactSHA256 {
+			foundEquivalentAuthenticPair = true
+			break
+		}
+	}
+	if !foundEquivalentAuthenticPair {
+		t.Fatal("ASSERT_V2_AUTHENTIC_EQUIVALENT_COMMUNITY_DIGEST_PAIR")
+	}
+}
+
+func TestInstabilityV2Chunk105LegacyComparatorCounterfactual(t *testing.T) {
+	request := chunk105InstabilityRequest(t)
+	orderedEntropy := func(domain byte) func(map[string]int, int) float64 {
+		return func(counts map[string]int, denominator int) float64 {
+			keys := make([]string, 0, len(counts))
+			for key := range counts {
+				keys = append(keys, key)
+			}
+			sort.Slice(keys, func(i, j int) bool {
+				left := sha256.Sum256(append([]byte{domain}, keys[i]...))
+				right := sha256.Sum256(append([]byte{domain}, keys[j]...))
+				if comparison := bytes.Compare(left[:], right[:]); comparison != 0 {
+					return comparison < 0
+				}
+				return keys[i] < keys[j]
+			})
+			entropy := 0.0
+			for _, key := range keys {
+				p := float64(counts[key]) / float64(denominator)
+				entropy -= p * math.Log2(p)
+			}
+			return entropy
+		}
+	}
+	legacyArtifact := func(entropy func(map[string]int, int) float64) []byte {
+		t.Helper()
+		compare := func(left, right InstabilityRun) (InstabilityPair, error) {
+			variationInformation := func(a, b []Community) (float64, int) {
+				return variationInformationWithEntropy(a, b, entropy)
+			}
+			return comparePartitionsWithVI(left, right, variationInformation)
+		}
+		artifact, err := computeInstability(request, InstabilityVersionV2, InstabilityClaimCeilingV2, compare)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return canonicalInstability(artifact)
+	}
+
+	domainZero := legacyArtifact(orderedEntropy(0))
+	domainOne := legacyArtifact(orderedEntropy(1))
+	if bytes.Equal(domainZero, domainOne) {
+		t.Fatal("ASSERT_LEGACY_CONTROLLED_ENTROPY_ORDERS_PRODUCE_UNEQUAL_COMPLETE_ARTIFACTS")
+	}
+	t.Logf("RED_LEGACY_CONTROLLED_ENTROPY_ARTIFACTS_UNEQUAL domain_zero_bytes=%d domain_one_bytes=%d", len(domainZero), len(domainOne))
 }
 
 func TestComputeInstabilityV2FromGraphProvenanceV5(t *testing.T) {
