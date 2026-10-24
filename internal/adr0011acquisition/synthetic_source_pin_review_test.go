@@ -19,11 +19,11 @@ func TestReviewedSyntheticSourcePin(t *testing.T) {
 	}
 }
 
-const reviewedSyntheticSourceDigest = "sha256:7f6f268fb6850068fc7e4f7281464b61bdfa7d9a8fba6bc2c3ac175c82b4e19e"
-const reviewedSyntheticManifestHash = "38487f72b1a9111edb11df7984175603271572e1ffe2d131f93ff9c4e12784c9"
-const reviewedSyntheticReviewHash = "ac14ea032bafc5a2f6fabea4d72f96b58a0d5ff4040c8b8e3caf179e2d6eba7d"
+const reviewedSyntheticSourceDigest = "sha256:a9daffb0e453239cf5a56e3c86840f46f14fc8d327d5161fe6ffec5442ac3832"
+const reviewedSyntheticManifestHash = "d39be47a532db79e8ff126333b41ce7ca61537f7cc28cc948cda01d89efa534b"
+const reviewedSyntheticReviewHash = "09e6b1016af2bbc696f26b4c89c3733d5969f16eda1cbc1b88212695c9714acc"
 const reviewedSyntheticSourceCount = 177
-const reviewedSyntheticSourceBytes = 1782318
+const reviewedSyntheticSourceBytes = 1783479
 
 // Only tests select this independently reviewed local source-byte expectation.
 // It is not a binary identity, production pin or public issuer.
@@ -33,12 +33,12 @@ func reviewedSyntheticSourcePin() (string, error) {
 		return "", errSyntheticSourcePin
 	}
 	qualificationDir := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification")
-	manifestPath := filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.38487f72b1a9111e.manifest.json")
+	manifestPath := filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.d39be47a532db79e.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil || len(b) > 1<<20 || len(b) == 0 {
 		return "", errSyntheticSourcePin
 	}
-	review, err := os.ReadFile(filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.38487f72b1a9111e.review.md"))
+	review, err := os.ReadFile(filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.d39be47a532db79e.review.md"))
 	if err != nil || len(review) > 1<<20 || len(review) == 0 {
 		return "", errSyntheticSourcePin
 	}
