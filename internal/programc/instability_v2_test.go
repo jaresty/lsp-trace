@@ -2,13 +2,11 @@ package programc
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 
@@ -295,34 +293,26 @@ func TestInstabilityV2Chunk105CompleteRequestCanonicalBytes(t *testing.T) {
 }
 
 func TestInstabilityV2Chunk105LegacyComparatorCounterfactual(t *testing.T) {
-	request := chunk105InstabilityRequest(t)
-	orderedEntropy := func(domain byte) func(map[string]int, int) float64 {
-		return func(counts map[string]int, denominator int) float64 {
-			keys := make([]string, 0, len(counts))
-			for key := range counts {
-				keys = append(keys, key)
-			}
-			sort.Slice(keys, func(i, j int) bool {
-				left := sha256.Sum256(append([]byte{domain}, keys[i]...))
-				right := sha256.Sum256(append([]byte{domain}, keys[j]...))
-				if comparison := bytes.Compare(left[:], right[:]); comparison != 0 {
-					return comparison < 0
-				}
-				return keys[i] < keys[j]
-			})
-			entropy := 0.0
-			for _, key := range keys {
-				p := float64(counts[key]) / float64(denominator)
-				entropy -= p * math.Log2(p)
-			}
-			return entropy
-		}
+	one := 1.0
+	halfULP := math.Ldexp(1, -53)
+	sequential := one
+	sequential += halfULP
+	sequential += halfULP
+	grouped := one + (halfULP + halfULP)
+	if sequential == grouped || sequential != one || grouped != math.Nextafter(one, math.Inf(1)) {
+		t.Fatal("ASSERT_LEGACY_BINARY64_ACCUMULATION_ORDER_SENSITIVE")
 	}
-	legacyArtifact := func(entropy func(map[string]int, int) float64) []byte {
+
+	request := chunk105InstabilityRequest(t)
+	artifactFor := func(advanceVI bool) []byte {
 		t.Helper()
 		compare := func(left, right InstabilityRun) (InstabilityPair, error) {
-			variationInformation := func(a, b []Community) (float64, int) {
-				return variationInformationWithEntropy(a, b, entropy)
+			variationInformation := variationInformationCanonical
+			if advanceVI {
+				variationInformation = func(a, b []Community) (float64, int) {
+					value, denominator := variationInformationCanonical(a, b)
+					return math.Nextafter(value, math.Inf(1)), denominator
+				}
 			}
 			return comparePartitionsWithVI(left, right, variationInformation)
 		}
@@ -333,12 +323,12 @@ func TestInstabilityV2Chunk105LegacyComparatorCounterfactual(t *testing.T) {
 		return canonicalInstability(artifact)
 	}
 
-	domainZero := legacyArtifact(orderedEntropy(0))
-	domainOne := legacyArtifact(orderedEntropy(1))
-	if bytes.Equal(domainZero, domainOne) {
-		t.Fatal("ASSERT_LEGACY_CONTROLLED_ENTROPY_ORDERS_PRODUCE_UNEQUAL_COMPLETE_ARTIFACTS")
+	canonical := artifactFor(false)
+	oneULPAdvanced := artifactFor(true)
+	if bytes.Equal(canonical, oneULPAdvanced) {
+		t.Fatal("ASSERT_AUTHENTIC_COMPLETE_ARTIFACT_ONE_ULP_SENSITIVE")
 	}
-	t.Logf("RED_LEGACY_CONTROLLED_ENTROPY_ARTIFACTS_UNEQUAL domain_zero_bytes=%d domain_one_bytes=%d", len(domainZero), len(domainOne))
+	t.Logf("RED_LEGACY_CONTROLLED_ONE_ULP_ARTIFACTS_UNEQUAL canonical_bytes=%d advanced_bytes=%d", len(canonical), len(oneULPAdvanced))
 }
 
 func TestComputeInstabilityV2FromGraphProvenanceV5(t *testing.T) {
