@@ -98,6 +98,8 @@ var syntheticSourceAdditionalSchemaPaths = []string{
 	"internal/schema/schemas/lsp-trace.census-enumeration-diagnostic.v1.schema.json",
 	"internal/schema/schemas/lsp-trace.census-enumeration-preflight-result.v1.schema.json",
 	"internal/schema/schemas/lsp-trace.census-request-receipt.v2.schema.json",
+	"internal/schema/schemas/lsp-trace.community-instability.v1.schema.json",
+	"internal/schema/schemas/lsp-trace.community-instability.v2.schema.json",
 }
 
 var syntheticSourceAdditionalGoPathSet = func() map[string]bool {

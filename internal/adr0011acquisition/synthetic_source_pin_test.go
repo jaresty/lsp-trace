@@ -222,6 +222,8 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/schema/schemas/lsp-trace.census-enumeration-diagnostic.v1.schema.json",
 		"internal/schema/schemas/lsp-trace.census-enumeration-preflight-result.v1.schema.json",
 		"internal/schema/schemas/lsp-trace.census-request-receipt.v2.schema.json",
+		"internal/schema/schemas/lsp-trace.community-instability.v1.schema.json",
+		"internal/schema/schemas/lsp-trace.community-instability.v2.schema.json",
 	}
 	if strings.Join(syntheticSourceAdditionalGoPaths, "\n") != strings.Join(expectedAdditionalGoPaths, "\n") {
 		t.Errorf("ASSERT_PRIVATE_DISCOVERY_CAUSE_SOURCE_REQUIRED additional Go paths differ:\n got: %q\nwant: %q", syntheticSourceAdditionalGoPaths, expectedAdditionalGoPaths)
