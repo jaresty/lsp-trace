@@ -125,10 +125,7 @@ func Compose(request Request) (Result, error) {
 	if computation != nil {
 		return Result{}, fail(StageComputation, computation)
 	}
-	candidates := make([]Candidate, len(outcome.Communities))
-	for i, community := range outcome.Communities {
-		candidates[i] = Candidate{Status: CandidateStatus, ClaimCeiling: outcome.ClaimCeiling, Members: append([]string(nil), community.Members...)}
-	}
+	candidates := prepareCandidates(outcome)
 	communities := outcome.Communities
 	if outcome.Outcome == "EMPTY" {
 		communities = nil
@@ -148,6 +145,17 @@ func Compose(request Request) (Result, error) {
 }
 
 func fail(stage Stage, err error) *Failure { return &Failure{Stage: stage, Err: err} }
+
+func prepareCandidates(outcome programc.Outcome) []Candidate {
+	if outcome.Outcome == "EMPTY" {
+		return nil
+	}
+	candidates := make([]Candidate, len(outcome.Communities))
+	for i, community := range outcome.Communities {
+		candidates[i] = Candidate{Status: CandidateStatus, ClaimCeiling: outcome.ClaimCeiling, Members: append([]string(nil), community.Members...)}
+	}
+	return candidates
+}
 
 func representativesFromQualification(projection censusacquisition.Projection, source programcadmission.CompositeSourceBinding, outcome programc.Outcome, qualified programcrepresentative.Output) (RepresentativeSelection, error) {
 	if len(source.Constituents) != len(projection.Constituents) {

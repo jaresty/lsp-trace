@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/programc"
 	"lsp-trace/internal/programccompose"
 	"lsp-trace/internal/programcrepresentative"
 	"lsp-trace/internal/publication"
@@ -107,8 +108,11 @@ func TestComposeVerifiedProjectionDeterministicAndEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if one.Outcome.Outcome != "EMPTY" || one.Outcome.LogicalDigest != two.Outcome.LogicalDigest || len(one.Candidates) != 1 {
+	if one.Outcome.Outcome != "EMPTY" || one.Outcome.LogicalDigest != two.Outcome.LogicalDigest {
 		t.Fatalf("outcome=%+v", one.Outcome)
+	}
+	if len(one.Candidates) != 0 {
+		t.Fatalf("ASSERT_EMPTY_OUTCOME_HAS_NO_PREPARED_CANDIDATES candidates=%+v", one.Candidates)
 	}
 	if one.CensusID != p.CensusID || one.Publication.Selector != r.Publication.Receipt.Selector || len(one.Composite.Bytes) == 0 || len(one.Admission.Bytes) == 0 {
 		t.Fatal("missing retained bindings")
@@ -124,6 +128,33 @@ func TestComposeVerifiedProjectionDeterministicAndEmpty(t *testing.T) {
 		t.Fatal("ASSERT_CENSUS_OUTCOME_SEED_MEMBERSHIPS_NO_ALIAS")
 	}
 }
+func TestPrepareCandidatesRejectsEmptyOutcomeSingletons(t *testing.T) {
+	outcome := programc.Outcome{
+		Outcome:      "EMPTY",
+		ClaimCeiling: programc.ClaimCeiling,
+		Communities: []programc.Community{
+			{Members: []string{"isolated-a"}},
+			{Members: []string{"isolated-b"}},
+		},
+	}
+	if candidates := prepareCandidates(outcome); len(candidates) != 0 {
+		t.Fatalf("ASSERT_EMPTY_OUTCOME_SINGLETONS_NOT_PREPARED candidates=%+v", candidates)
+	}
+	if len(outcome.Communities) != 2 {
+		t.Fatal("ASSERT_EMPTY_OUTCOME_RAW_COMMUNITIES_RETAINED")
+	}
+
+	outcome.Outcome = "COMPLETE"
+	candidates := prepareCandidates(outcome)
+	if len(candidates) != 2 || candidates[0].Status != CandidateStatus || candidates[0].ClaimCeiling != outcome.ClaimCeiling || !reflect.DeepEqual(candidates[0].Members, []string{"isolated-a"}) {
+		t.Fatalf("ASSERT_NONEMPTY_OUTCOME_CANDIDATES_PREPARED candidates=%+v", candidates)
+	}
+	candidates[0].Members[0] = "mutated"
+	if outcome.Communities[0].Members[0] != "isolated-a" {
+		t.Fatal("ASSERT_PREPARED_CANDIDATE_MEMBERS_NO_ALIAS")
+	}
+}
+
 func TestPublicationAndReconciliationFailures(t *testing.T) {
 	p := testProjection(t)
 	cases := map[string]func(*Request){"aggregate": func(x *Request) { x.Publication.Receipt.ArtifactSHA256 = "" }, "missing": func(x *Request) { x.Publication.Resolved = x.Publication.Resolved[:1] }, "reordered": func(x *Request) {
@@ -170,8 +201,8 @@ func TestCandidateStatusAndAliasing(t *testing.T) {
 	}
 	got.Composite.Bytes[0] ^= 1
 	got.Admission.Bytes[0] ^= 1
-	if len(got.Candidates) != 1 || got.Candidates[0].Status != CandidateStatus || got.Candidates[0].ClaimCeiling != got.Outcome.ClaimCeiling {
-		t.Fatalf("candidate=%+v outcome=%+v", got.Candidates, got.Outcome)
+	if got.Outcome.Outcome != "EMPTY" || len(got.Candidates) != 0 {
+		t.Fatalf("ASSERT_EMPTY_OUTCOME_HAS_NO_PREPARED_CANDIDATES candidate=%+v outcome=%+v", got.Candidates, got.Outcome)
 	}
 }
 func TestRepresentativesRejectUncheckedLineage(t *testing.T) {
