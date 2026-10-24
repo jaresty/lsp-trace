@@ -418,13 +418,15 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 }
 
 func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
-	const manifestHash = "f428950e7f2081ad6c86c4c80ce118418067a7800cc586eb57c2a0a1770b6d96"
-	const aggregate = "sha256:1a98a918299ef63e438700ad7cb266ced68da15b81fc017abf0e6e290892c627"
+	const manifestHash = "38487f72b1a9111edb11df7984175603271572e1ffe2d131f93ff9c4e12784c9"
+	const aggregate = "sha256:7f6f268fb6850068fc7e4f7281464b61bdfa7d9a8fba6bc2c3ac175c82b4e19e"
+	const sourceCount = 177
+	const sourceBytes = 1782318
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("producer candidate source location unavailable")
 	}
-	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.f428950e7f2081ad.manifest.json")
+	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.38487f72b1a9111e.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
@@ -442,11 +444,13 @@ func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
 			SHA256     string `json:"sha256"`
 		} `json:"files"`
 	}
-	if err := json.Unmarshal(b, &manifest); err != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != aggregate || len(manifest.Files) != 170 {
+	if err := json.Unmarshal(b, &manifest); err != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != aggregate || len(manifest.Files) != sourceCount {
 		t.Fatalf("producer manifest identity: files=%d digest=%q schema=%q err=%v", len(manifest.Files), manifest.Digest, manifest.SchemaVersion, err)
 	}
 	entries := make([]SyntheticSourceEntry, 0, len(manifest.Files))
+	var totalBytes uint64
 	for _, f := range manifest.Files {
+		totalBytes += f.ByteLength
 		raw, err := hex.DecodeString(strings.TrimPrefix(f.SHA256, "sha256:"))
 		if err != nil || len(raw) != sha256.Size || !strings.HasPrefix(f.SHA256, "sha256:") {
 			t.Fatalf("producer entry hash %q: %v", f.Path, err)
@@ -454,6 +458,9 @@ func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
 		var sum [sha256.Size]byte
 		copy(sum[:], raw)
 		entries = append(entries, SyntheticSourceEntry{Path: f.Path, ByteLength: f.ByteLength, SHA256: sum})
+	}
+	if totalBytes != sourceBytes {
+		t.Fatalf("producer manifest source bytes: got %d want %d", totalBytes, sourceBytes)
 	}
 	rawAggregate, err := hex.DecodeString(strings.TrimPrefix(aggregate, "sha256:"))
 	if err != nil || len(rawAggregate) != sha256.Size {

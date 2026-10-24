@@ -19,9 +19,11 @@ func TestReviewedSyntheticSourcePin(t *testing.T) {
 	}
 }
 
-const reviewedSyntheticSourceDigest = "sha256:1a98a918299ef63e438700ad7cb266ced68da15b81fc017abf0e6e290892c627"
-const reviewedSyntheticManifestHash = "f428950e7f2081ad6c86c4c80ce118418067a7800cc586eb57c2a0a1770b6d96"
-const reviewedSyntheticReviewHash = "418e37f0355936cb944c98750a959f426a620e59ad0840508b37b44516453936"
+const reviewedSyntheticSourceDigest = "sha256:7f6f268fb6850068fc7e4f7281464b61bdfa7d9a8fba6bc2c3ac175c82b4e19e"
+const reviewedSyntheticManifestHash = "38487f72b1a9111edb11df7984175603271572e1ffe2d131f93ff9c4e12784c9"
+const reviewedSyntheticReviewHash = "ac14ea032bafc5a2f6fabea4d72f96b58a0d5ff4040c8b8e3caf179e2d6eba7d"
+const reviewedSyntheticSourceCount = 177
+const reviewedSyntheticSourceBytes = 1782318
 
 // Only tests select this independently reviewed local source-byte expectation.
 // It is not a binary identity, production pin or public issuer.
@@ -31,12 +33,12 @@ func reviewedSyntheticSourcePin() (string, error) {
 		return "", errSyntheticSourcePin
 	}
 	qualificationDir := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification")
-	manifestPath := filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.f428950e7f2081ad.manifest.json")
+	manifestPath := filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.38487f72b1a9111e.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil || len(b) > 1<<20 || len(b) == 0 {
 		return "", errSyntheticSourcePin
 	}
-	review, err := os.ReadFile(filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.f428950e7f2081ad.review.md"))
+	review, err := os.ReadFile(filepath.Join(qualificationDir, "adr0011-synthetic-source-pin.38487f72b1a9111e.review.md"))
 	if err != nil || len(review) > 1<<20 || len(review) == 0 {
 		return "", errSyntheticSourcePin
 	}
@@ -57,11 +59,13 @@ func reviewedSyntheticSourcePin() (string, error) {
 			SHA256     string `json:"sha256"`
 		} `json:"files"`
 	}
-	if json.Unmarshal(b, &manifest) != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != reviewedSyntheticSourceDigest || len(manifest.Files) != 170 {
+	if json.Unmarshal(b, &manifest) != nil || manifest.SchemaVersion != "ADR0011_SYNTHETIC_SOURCE_PIN_V1" || manifest.Digest != reviewedSyntheticSourceDigest || len(manifest.Files) != reviewedSyntheticSourceCount {
 		return "", errSyntheticSourcePin
 	}
 	entries := make([]SyntheticSourceEntry, 0, len(manifest.Files))
+	var totalBytes uint64
 	for _, f := range manifest.Files {
+		totalBytes += f.ByteLength
 		if !strings.HasPrefix(f.SHA256, "sha256:") {
 			return "", errSyntheticSourcePin
 		}
@@ -72,6 +76,9 @@ func reviewedSyntheticSourcePin() (string, error) {
 		var hash [32]byte
 		copy(hash[:], raw)
 		entries = append(entries, SyntheticSourceEntry{Path: f.Path, ByteLength: f.ByteLength, SHA256: hash})
+	}
+	if totalBytes != reviewedSyntheticSourceBytes {
+		return "", errSyntheticSourcePin
 	}
 	raw, err := hex.DecodeString(strings.TrimPrefix(reviewedSyntheticSourceDigest, "sha256:"))
 	if err != nil || len(raw) != 32 {
