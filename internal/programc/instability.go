@@ -15,8 +15,10 @@ import (
 )
 
 const InstabilityVersion = "lsp-trace.community-instability.v1"
+const InstabilityVersionV2 = "lsp-trace.community-instability.v2"
 const InstabilityPolicyVersion = "program-c-a-08-instability/v1"
 const InstabilityClaimCeiling = "STABLE means only that the declared metrics met the declared thresholds for the exact bound graph, projection, implementation, parameters, seeds, and completed runs. It is label-independent, structural, and not a universal stability or semantic-community claim."
+const InstabilityClaimCeilingV2 = "The outcome reports only whether the declared metrics met the declared thresholds for the exact bound graph, projection, implementation, parameters, seeds, and completed runs: STABLE means they met them, UNSTABLE means at least one completed comparison did not meet them, and INCOMPLETE means blocked comparisons prevented a complete determination. It is label-independent, structural, and not a universal stability or semantic-community claim."
 const InstabilityStructuralCeiling = "Structural output does not establish feature identity, ownership, architecture, runtime execution, whole-source completeness, producer authentication, permission, production authority, or stability beyond the exact compared runs."
 
 const instabilityMaxRuns = 300
@@ -148,6 +150,16 @@ func rawSHA(raw []byte) string { s := sha256.Sum256(raw); return "sha256:" + hex
 // ComputeInstabilityV5 constructs the exact three-replay-per-seed A-08 campaign
 // from admitted Graph Provenance V5 bytes. It does not infer semantic labels.
 func ComputeInstabilityV5(input []byte, declaredSeeds []uint64, algorithmVersion, parametersSHA256, resourcePolicySHA256 string) (InstabilityArtifact, error) {
+	return computeInstabilityFromGraphProvenanceV5(input, declaredSeeds, algorithmVersion, parametersSHA256, resourcePolicySHA256, "v1", ComputeInstability)
+}
+
+// ComputeInstabilityV2FromGraphProvenanceV5 constructs the v2 instability artifact
+// from admitted Graph Provenance V5 bytes. It does not infer semantic labels.
+func ComputeInstabilityV2FromGraphProvenanceV5(input []byte, declaredSeeds []uint64, algorithmVersion, parametersSHA256, resourcePolicySHA256 string) (InstabilityArtifact, error) {
+	return computeInstabilityFromGraphProvenanceV5(input, declaredSeeds, algorithmVersion, parametersSHA256, resourcePolicySHA256, "v2", ComputeInstabilityV2)
+}
+
+func computeInstabilityFromGraphProvenanceV5(input []byte, declaredSeeds []uint64, algorithmVersion, parametersSHA256, resourcePolicySHA256, schemaVersion string, compute func(InstabilityRequest) (InstabilityArtifact, error)) (InstabilityArtifact, error) {
 	seeds := append([]uint64(nil), declaredSeeds...)
 	sort.Slice(seeds, func(i, j int) bool { return seeds[i] < seeds[j] })
 	r := InstabilityRequest{DeclaredSeeds: seeds}
@@ -176,7 +188,7 @@ func ComputeInstabilityV5(input []byte, declaredSeeds []uint64, algorithmVersion
 			r.Runs = append(r.Runs, InstabilityRun{RunID: fmt.Sprintf("seed-%020d-replay-%d", seed, replay+1), Seed: seed, Status: "COMPLETE", Community: o, CommunityArtifact: communityBytes, BoundaryArtifact: boundaryBytes, BoundaryRequest: boundaryRequest})
 		}
 	}
-	a, err := ComputeInstability(r)
+	a, err := compute(r)
 	if err != nil {
 		return InstabilityArtifact{}, err
 	}
@@ -184,14 +196,22 @@ func ComputeInstabilityV5(input []byte, declaredSeeds []uint64, algorithmVersion
 	if err != nil {
 		return InstabilityArtifact{}, err
 	}
-	if _, err = schema.ValidateFor(raw, schema.FamilyCommunityInstability, "v1"); err != nil {
+	if _, err = schema.ValidateFor(raw, schema.FamilyCommunityInstability, schemaVersion); err != nil {
 		return InstabilityArtifact{}, err
 	}
 	return a, nil
 }
 
 func ComputeInstability(r InstabilityRequest) (InstabilityArtifact, error) {
-	a := InstabilityArtifact{SchemaVersion: InstabilityVersion, ComparisonIdentity: r.Identity, Outcome: "STABLE", Thresholds: exactInstabilityThresholds, PolicyVersion: InstabilityPolicyVersion, Policy: InstabilityPolicy, PolicySHA256: InstabilityPolicyDigest(), PairwiseComparisons: []InstabilityPair{}, ClaimCeiling: InstabilityClaimCeiling, StructuralClaimCeiling: InstabilityStructuralCeiling}
+	return computeInstability(r, InstabilityVersion, InstabilityClaimCeiling)
+}
+
+func ComputeInstabilityV2(r InstabilityRequest) (InstabilityArtifact, error) {
+	return computeInstability(r, InstabilityVersionV2, InstabilityClaimCeilingV2)
+}
+
+func computeInstability(r InstabilityRequest, schemaVersion, claimCeiling string) (InstabilityArtifact, error) {
+	a := InstabilityArtifact{SchemaVersion: schemaVersion, ComparisonIdentity: r.Identity, Outcome: "STABLE", Thresholds: exactInstabilityThresholds, PolicyVersion: InstabilityPolicyVersion, Policy: InstabilityPolicy, PolicySHA256: InstabilityPolicyDigest(), PairwiseComparisons: []InstabilityPair{}, ClaimCeiling: claimCeiling, StructuralClaimCeiling: InstabilityStructuralCeiling}
 	if err := validateInstabilityRequest(r); err != nil {
 		return InstabilityArtifact{}, err
 	}
@@ -677,7 +697,15 @@ func variationInformation(a, b []Community) (float64, int) {
 }
 
 func ValidateInstability(raw []byte, r InstabilityRequest) error {
-	if _, err := schema.ValidateFor(raw, schema.FamilyCommunityInstability, "v1"); err != nil {
+	return validateInstability(raw, r, "v1", ComputeInstability)
+}
+
+func ValidateInstabilityV2(raw []byte, r InstabilityRequest) error {
+	return validateInstability(raw, r, "v2", ComputeInstabilityV2)
+}
+
+func validateInstability(raw []byte, r InstabilityRequest, schemaVersion string, compute func(InstabilityRequest) (InstabilityArtifact, error)) error {
+	if _, err := schema.ValidateFor(raw, schema.FamilyCommunityInstability, schemaVersion); err != nil {
 		return err
 	}
 	var got InstabilityArtifact
@@ -686,7 +714,7 @@ func ValidateInstability(raw []byte, r InstabilityRequest) error {
 	if err := d.Decode(&got); err != nil {
 		return err
 	}
-	want, err := ComputeInstability(r)
+	want, err := compute(r)
 	if err != nil {
 		return err
 	}
