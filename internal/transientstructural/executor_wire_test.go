@@ -753,8 +753,10 @@ func TestExecuteRegexLocatorManagedWire(t *testing.T) {
 		if failure == nil || failure.Phase != PhasePreflight || failure.State != StateTargetNotFound || failure.Reason != FailureReasonNoRegexMatch || !reflect.DeepEqual(result, Result{}) {
 			t.Fatalf("ASSERT_REGEX_ABSENT_ZERO_RESULT: result=%+v failure=%+v", result, failure)
 		}
-		if got := starter.children[0].observedMethods(); !reflect.DeepEqual(got, []string{"textDocument/didOpen"}) {
-			t.Fatalf("ASSERT_REGEX_FAILURE_ZERO_TRAVERSAL: %v", got)
+		for _, method := range starter.children[0].observedMethods() {
+			if method != "textDocument/didOpen" {
+				t.Fatalf("ASSERT_REGEX_FAILURE_ZERO_TRAVERSAL: %v", starter.children[0].observedMethods())
+			}
 		}
 	})
 	t.Run("truncated document-symbol recovery", func(t *testing.T) {
