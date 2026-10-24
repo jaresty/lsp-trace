@@ -15,6 +15,7 @@ import (
 
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censussourceplan"
+	"lsp-trace/internal/lsp"
 )
 
 type memObjects struct {
@@ -82,6 +83,37 @@ func (h *memHeads) CompareAndSwap(_ context.Context, _ string, w HeadRevision, b
 	}
 	return CASResult{Outcome: CASCommitted}
 }
+
+type continuationDiscoverySupplier struct{}
+
+func (continuationDiscoverySupplier) Supply(context.Context, censusacquisition.SourceFile) error {
+	return nil
+}
+
+type continuationDiscoveryClient struct{ uri string }
+
+func (continuationDiscoveryClient) SupportsDocumentSymbols() bool { return true }
+func (continuationDiscoveryClient) SupportsCallHierarchy() bool   { return true }
+func (c continuationDiscoveryClient) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	var symbols []lsp.DocumentSymbol
+	for line, name := range []string{"Prepared", "Missing", "Failed"} {
+		position := lsp.Position{Line: uint32(line)}
+		symbols = append(symbols, lsp.DocumentSymbol{Name: name, Kind: 12, Range: lsp.Range{Start: position, End: position}, SelectionRange: lsp.Range{Start: position, End: position}})
+	}
+	return symbols, nil
+}
+func (c continuationDiscoveryClient) PrepareCallHierarchy(_ context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	switch params.Position.Line {
+	case 0:
+		position := lsp.Position{Line: 0}
+		return []lsp.CallHierarchyItem{{Name: "Prepared", Kind: 12, URI: c.uri, Range: lsp.Range{Start: position, End: position}, SelectionRange: lsp.Range{Start: position, End: position}}}, nil
+	case 1:
+		return nil, nil
+	default:
+		return nil, errors.New("provider cannot prepare")
+	}
+}
+
 func plan3(t *testing.T) censussourceplan.Plan {
 	t.Helper()
 	fs := []censusacquisition.SourceFile{{Path: "a.go", URI: "file:///w/a.go"}, {Path: "b.go", URI: "file:///w/b.go"}, {Path: "c.go", URI: "file:///w/c.go"}}
@@ -330,6 +362,38 @@ func TestCASResultHasClosedNonBooleanOutcome(t *testing.T) {
 		if typ.Field(i).Type.Kind() == reflect.Bool {
 			t.Fatalf("ASSERT_CAS_OUTCOME_NOT_BOOLEAN field=%s", typ.Field(i).Name)
 		}
+	}
+}
+
+func TestAccountingCompletePreparationFailuresRetainWithoutAdvancement(t *testing.T) {
+	p := plan3(t)
+	file := p.Partitions[0].Members[0]
+	discovery, err := (censusacquisition.DiscoveryAdapter{
+		Workspace: "/w",
+		Files:     censusacquisition.StaticFiles{file},
+		Supplier:  continuationDiscoverySupplier{},
+		Client:    continuationDiscoveryClient{uri: file.URI},
+	}).Discover(context.Background(), censusacquisition.SessionIdentity{SessionID: "ready", Generation: 1})
+	if err != nil || !discovery.Complete || censusacquisition.TerminalDiscoveryOutcome(discovery) != string(OutcomePartial) {
+		t.Fatalf("ASSERT_ACCOUNTING_COMPLETE_FAILURES_AUTHENTIC_PARTIAL: discovery=%+v err=%v", discovery, err)
+	}
+
+	terminal := Terminal{PlanIdentity: p.Identity, Authority: 0, Ordinal: 0, SourceFiles: append([]censusacquisition.SourceFile(nil), p.Partitions[0].Members...), Discovery: discovery, Outcome: OutcomePartial}
+	objects, heads := &memObjects{}, &memHeads{}
+	request := Request{Plan: p, PartitionSize: 1, WorkflowKey: "w", HeadKey: "h", Objects: objects, Heads: heads, ExistingOrdinalZero: &terminal}
+	first, err := CoordinateNext(context.Background(), request)
+	if err != nil || first.Status != StatusRetained || first.CommittedPrefix != 0 || first.Outcome != OutcomePartial || objects.puts != 1 || objects.gets != 1 || heads.cas != 1 {
+		t.Fatalf("ASSERT_ACCOUNTING_COMPLETE_FAILURES_RETAINED_NO_ADVANCE: first=%+v puts=%d gets=%d cas=%d err=%v", first, objects.puts, objects.gets, heads.cas, err)
+	}
+	inspection, err := InspectHead(heads.raw, "w", p.Identity, len(p.Partitions))
+	if err != nil || inspection.State != HeadStateClaimed || inspection.CommittedPrefix != 0 {
+		t.Fatalf("ASSERT_ACCOUNTING_COMPLETE_FAILURES_CLAIMED_PREFIX_ZERO: inspection=%+v err=%v", inspection, err)
+	}
+
+	request.Expected = first.Head
+	second, err := CoordinateNext(context.Background(), request)
+	if err != nil || second.Status != StatusRetained || second.CommittedPrefix != 0 || second.Outcome != OutcomePartial || objects.puts != 1 || heads.cas != 1 {
+		t.Fatalf("ASSERT_ACCOUNTING_COMPLETE_FAILURES_RESUME_RETAINED: second=%+v puts=%d gets=%d cas=%d err=%v", second, objects.puts, objects.gets, heads.cas, err)
 	}
 }
 

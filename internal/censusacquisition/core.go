@@ -384,7 +384,7 @@ func TerminalDiscoveryOutcome(d Discovery) string {
 			return "FAILED"
 		}
 	}
-	if d.Complete && len(d.Targets) > 0 {
+	if d.Complete && d.Closure == DiscoveryClosureSuccessful && len(d.Targets) > 0 && len(d.ProviderFailures) == 0 && len(d.IncompleteCauses) == 0 && len(d.Observations) == 0 {
 		return "COMPLETE_NONEMPTY"
 	}
 	if d.Closure == DiscoveryClosureSuccessful && len(d.Targets) == 0 {
@@ -409,15 +409,54 @@ func ValidateTerminalDiscovery(d Discovery, outcome string) error {
 	if _, _, err := canonicalTargets(d); err != nil {
 		return err
 	}
-	if d.Complete && (d.Closure != DiscoveryClosureSuccessful || len(d.Targets) == 0 || len(d.ProviderFailures) != 0 || len(d.IncompleteCauses) != 0 || len(d.Observations) != 0) {
+	if d.Closure != DiscoveryClosureUnknown && d.Closure != DiscoveryClosureSuccessful {
+		return errors.New("invalid discovery closure")
+	}
+	if d.Complete && len(d.ProviderFailures) > 0 {
+		if err := validateCompleteProviderFailures(d); err != nil {
+			return err
+		}
+	}
+	if d.Complete && (len(d.Targets) == 0 || len(d.IncompleteCauses) != 0 || len(d.Observations) != 0 || (len(d.ProviderFailures) == 0 && d.Closure != DiscoveryClosureSuccessful)) {
 		return errors.New("complete discovery contradiction")
 	}
-	if d.Closure == DiscoveryClosureSuccessful && (len(d.ProviderFailures) != 0 || len(d.IncompleteCauses) != 0 || len(d.Observations) != 0) {
+	if d.Closure == DiscoveryClosureSuccessful && (len(d.ProviderFailures) != 0 || len(d.IncompleteCauses) != 0 || len(d.Targets) > 0 && len(d.Observations) != 0) {
 		return errors.New("successful discovery closure contradiction")
 	}
 	derived := TerminalDiscoveryOutcome(d)
 	if outcome != derived {
 		return fmt.Errorf("discovery terminal outcome mismatch: got %q want %q", outcome, derived)
+	}
+	return nil
+}
+
+func validateCompleteProviderFailures(d Discovery) error {
+	expected := make(map[int]string)
+	for _, entry := range d.Accounting.Symbols {
+		switch entry.Disposition {
+		case census.SymbolPrepareMissing:
+			expected[entry.Ordinal] = "UNAVAILABLE"
+		case census.SymbolPreparationFailed:
+			expected[entry.Ordinal] = "REQUEST_FAILED"
+		}
+	}
+	if len(d.ProviderFailures) != len(expected) {
+		return errors.New("complete discovery provider failure accounting mismatch")
+	}
+	seen := make(map[int]struct{}, len(d.ProviderFailures))
+	for _, failure := range d.ProviderFailures {
+		if failure.Stage != "PREPARE_CALL_HIERARCHY" || failure.SymbolOrdinal == nil || failure.FileOrdinal != nil {
+			return errors.New("invalid complete discovery provider failure scope")
+		}
+		ordinal := *failure.SymbolOrdinal
+		code, ok := expected[ordinal]
+		if !ok || failure.Code != code {
+			return errors.New("complete discovery provider failure disposition mismatch")
+		}
+		if _, duplicate := seen[ordinal]; duplicate {
+			return errors.New("duplicate complete discovery provider failure")
+		}
+		seen[ordinal] = struct{}{}
 	}
 	return nil
 }

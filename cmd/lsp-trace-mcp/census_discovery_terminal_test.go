@@ -12,6 +12,7 @@ import (
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censussourceplan"
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/sessionruntime"
 )
@@ -29,6 +30,95 @@ func terminalPlanFixture(t *testing.T, count int) censussourceplan.Plan {
 		t.Fatal(err)
 	}
 	return plan
+}
+
+type privateTerminalSupplier struct{ failures map[string]error }
+
+func (s privateTerminalSupplier) Supply(_ context.Context, file censusacquisition.SourceFile) error {
+	return s.failures[file.Path]
+}
+
+type privateTerminalClient struct {
+	uri   string
+	mixed bool
+}
+
+func (privateTerminalClient) SupportsDocumentSymbols() bool { return true }
+func (privateTerminalClient) SupportsCallHierarchy() bool   { return true }
+func (c privateTerminalClient) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	count := 1
+	if c.mixed {
+		count = 3
+	}
+	symbols := make([]lsp.DocumentSymbol, count)
+	for line := range symbols {
+		position := lsp.Position{Line: uint32(line)}
+		symbols[line] = lsp.DocumentSymbol{Name: []string{"Prepared", "Missing", "Failed"}[line], Kind: 12, Range: lsp.Range{Start: position, End: position}, SelectionRange: lsp.Range{Start: position, End: position}}
+	}
+	return symbols, nil
+}
+func (c privateTerminalClient) PrepareCallHierarchy(_ context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	position := params.Position
+	switch {
+	case !c.mixed || position.Line == 0:
+		return []lsp.CallHierarchyItem{{Name: "Prepared", Kind: 12, URI: c.uri, Range: lsp.Range{Start: position, End: position}, SelectionRange: lsp.Range{Start: position, End: position}}}, nil
+	case position.Line == 1:
+		return nil, nil
+	default:
+		return nil, errors.New("provider cannot prepare")
+	}
+}
+
+func validPrivateTerminalDiscovery(t *testing.T, plan censussourceplan.Plan, mixed bool, supplyErr error) censusacquisition.Discovery {
+	t.Helper()
+	files := append([]censusacquisition.SourceFile(nil), plan.Partitions[0].Members...)
+	uri, err := url.Parse(files[0].URI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failures := map[string]error{}
+	if supplyErr != nil {
+		for _, file := range files {
+			failures[file.Path] = supplyErr
+		}
+	}
+	discovery, err := (censusacquisition.DiscoveryAdapter{
+		Workspace: filepath.Dir(filepath.FromSlash(uri.Path)),
+		Files:     censusacquisition.StaticFiles(files),
+		Supplier:  privateTerminalSupplier{failures: failures},
+		Client:    privateTerminalClient{uri: files[0].URI, mixed: mixed},
+	}).Discover(context.Background(), censusacquisition.SessionIdentity{SessionID: "ready", Generation: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return discovery
+}
+
+func validClosedTerminalDiscovery(t *testing.T, plan censussourceplan.Plan) censusacquisition.Discovery {
+	t.Helper()
+	file := plan.Partitions[0].Members[0]
+	uri, err := url.Parse(file.URI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	discovery, err := (censusacquisition.DiscoveryAdapter{
+		Workspace: filepath.Dir(filepath.FromSlash(uri.Path)),
+		Files:     censusacquisition.StaticFiles{file},
+		Supplier:  privateTerminalSupplier{},
+		Client:    privateTerminalClient{uri: file.URI},
+	}).Discover(context.Background(), censusacquisition.SessionIdentity{SessionID: "ready", Generation: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return discovery
+}
+
+func validMixedTerminalDiscovery(t *testing.T, plan censussourceplan.Plan) censusacquisition.Discovery {
+	return validPrivateTerminalDiscovery(t, plan, true, nil)
+}
+
+func validLifecycleTerminalDiscovery(t *testing.T, plan censussourceplan.Plan, err error) censusacquisition.Discovery {
+	return validPrivateTerminalDiscovery(t, plan, false, err)
 }
 
 func closedTerminalDiscovery(targets int) censusacquisition.Discovery {
@@ -51,7 +141,8 @@ func TestPrivateDiscoveryTerminalCustodyShape(t *testing.T) {
 
 func TestPrivateDiscoveryTerminalIdentityAndValidation(t *testing.T) {
 	plan := terminalPlanFixture(t, 2)
-	terminal, err := newPrivateConstituentDiscoveryTerminal(plan, closedTerminalDiscovery(1))
+	discovery := validClosedTerminalDiscovery(t, plan)
+	terminal, err := newPrivateConstituentDiscoveryTerminal(plan, discovery)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +150,7 @@ func TestPrivateDiscoveryTerminalIdentityAndValidation(t *testing.T) {
 		t.Fatalf("ASSERT_PRIVATE_DISCOVERY_TERMINAL_PLAN_CUSTODY terminal=%+v plan=%+v", terminal, plan)
 	}
 	plan.Identity = "sha256:" + string(make([]byte, 64))
-	if _, err := newPrivateConstituentDiscoveryTerminal(plan, closedTerminalDiscovery(1)); err == nil {
+	if _, err := newPrivateConstituentDiscoveryTerminal(plan, discovery); err == nil {
 		t.Fatal("ASSERT_PRIVATE_DISCOVERY_TERMINAL_MALFORMED_PLAN_REJECTED")
 	}
 }
@@ -147,7 +238,6 @@ func TestPrivateDiscoveryTerminalCloneSliceNilnessMatrix(t *testing.T) {
 }
 
 func TestPrivateDiscoveryTerminalDeepCloneAndNilPreservation(t *testing.T) {
-	plan := terminalPlanFixture(t, 1)
 	for _, seed := range []struct {
 		name  string
 		value []byte
@@ -157,11 +247,8 @@ func TestPrivateDiscoveryTerminalDeepCloneAndNilPreservation(t *testing.T) {
 	} {
 		t.Run("CanonicalSeedV2/"+seed.name, func(t *testing.T) {
 			discovery := censusacquisition.Discovery{Targets: []censusacquisition.PreparedTarget{{CanonicalSeedV2: seed.value}}}
-			terminal, err := newPrivateConstituentDiscoveryTerminal(plan, discovery)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if gotNil := terminal.discovery.Targets[0].CanonicalSeedV2 == nil; gotNil != (seed.value == nil) {
+			clone := clonePrivateTerminalDiscovery(discovery)
+			if gotNil := clone.Targets[0].CanonicalSeedV2 == nil; gotNil != (seed.value == nil) {
 				t.Fatalf("ASSERT_PRIVATE_DISCOVERY_TERMINAL_CANONICAL_SEED_NILNESS input_nil=%t output_nil=%t", seed.value == nil, gotNil)
 			}
 		})
@@ -177,18 +264,15 @@ func TestPrivateDiscoveryTerminalDeepCloneAndNilPreservation(t *testing.T) {
 	discovery.Observations = []censusacquisition.DiscoveryObservation{{Observed: &observed, Limit: nil, Omitted: &omitted}}
 	discovery.Closure = censusacquisition.DiscoveryClosureUnknown
 	discovery.Complete = false
-	terminal, err := newPrivateConstituentDiscoveryTerminal(plan, discovery)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if terminal.discovery.Observations[0].Limit != nil {
+	clone := clonePrivateTerminalDiscovery(discovery)
+	if clone.Observations[0].Limit != nil {
 		t.Fatal("ASSERT_PRIVATE_DISCOVERY_TERMINAL_NIL_PRESERVED")
 	}
 	discovery.Targets[0].CanonicalSeedV2[0] = 'X'
 	*discovery.ProviderFailures[0].FileOrdinal = 9
 	*discovery.IncompleteCauses[0].SymbolOrdinal = 9
 	*discovery.Observations[0].Observed = 9
-	if string(terminal.discovery.Targets[0].CanonicalSeedV2) != "seed" || *terminal.discovery.ProviderFailures[0].FileOrdinal != 0 || *terminal.discovery.IncompleteCauses[0].SymbolOrdinal != 1 || *terminal.discovery.Observations[0].Observed != 2 {
+	if string(clone.Targets[0].CanonicalSeedV2) != "seed" || *clone.ProviderFailures[0].FileOrdinal != 0 || *clone.IncompleteCauses[0].SymbolOrdinal != 1 || *clone.Observations[0].Observed != 2 {
 		t.Fatal("ASSERT_PRIVATE_DISCOVERY_TERMINAL_DEEP_ANTI_ALIAS")
 	}
 }

@@ -2,6 +2,8 @@ package censussourceassembly
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +15,7 @@ import (
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/censussourcecontinuation"
 	"lsp-trace/internal/censussourceplan"
+	"lsp-trace/internal/lsp"
 )
 
 func terminalPlan(t *testing.T, partitionSize, count int) censussourceplan.Plan {
@@ -30,34 +33,166 @@ func terminalPlan(t *testing.T, partitionSize, count int) censussourceplan.Plan 
 	return plan
 }
 
-func terminalDiscovery(targets int) censusacquisition.Discovery {
-	d := censusacquisition.Discovery{Closure: censusacquisition.DiscoveryClosureSuccessful}
-	if targets > 0 {
-		d.Complete = true
-		d.Targets = make([]censusacquisition.PreparedTarget, targets)
+func successfulEmptyDiscovery() censusacquisition.Discovery {
+	return censusacquisition.Discovery{Closure: censusacquisition.DiscoveryClosureSuccessful}
+}
+
+type terminalSupplier struct{ failures map[string]error }
+
+func (s terminalSupplier) Supply(_ context.Context, file censusacquisition.SourceFile) error {
+	return s.failures[file.Path]
+}
+
+type terminalClient struct {
+	symbols       map[string][]lsp.DocumentSymbol
+	prepare       map[uint32][]lsp.CallHierarchyItem
+	prepareErrors map[uint32]error
+}
+
+func (terminalClient) SupportsDocumentSymbols() bool { return true }
+func (terminalClient) SupportsCallHierarchy() bool   { return true }
+func (c terminalClient) DocumentSymbols(_ context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	return append([]lsp.DocumentSymbol(nil), c.symbols[params.TextDocument.URI]...), nil
+}
+func (c terminalClient) PrepareCallHierarchy(_ context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	return append([]lsp.CallHierarchyItem(nil), c.prepare[params.Position.Line]...), c.prepareErrors[params.Position.Line]
+}
+
+func terminalSymbol(name string, line uint32) lsp.DocumentSymbol {
+	position := lsp.Position{Line: line}
+	return lsp.DocumentSymbol{Name: name, Kind: 12, Range: lsp.Range{Start: position, End: position}, SelectionRange: lsp.Range{Start: position, End: position}}
+}
+
+func terminalItem(name, uri string, line uint32) lsp.CallHierarchyItem {
+	position := lsp.Position{Line: line}
+	return lsp.CallHierarchyItem{Name: name, Kind: 12, URI: uri, Range: lsp.Range{Start: position, End: position}, SelectionRange: lsp.Range{Start: position, End: position}}
+}
+
+func terminalDiscover(t *testing.T, files []censusacquisition.SourceFile, supplier terminalSupplier, client terminalClient) censusacquisition.Discovery {
+	t.Helper()
+	uri, err := url.Parse(files[0].URI)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return d
+	workspace := filepath.Dir(filepath.FromSlash(uri.Path))
+	discovery, err := (censusacquisition.DiscoveryAdapter{Workspace: workspace, Files: censusacquisition.StaticFiles(files), Supplier: supplier, Client: client}).Discover(context.Background(), censusacquisition.SessionIdentity{SessionID: "ready", Generation: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return discovery
 }
 
 func TestTerminalRecordSixOutcomesAndPrecedence(t *testing.T) {
-	plan := terminalPlan(t, 1, 1)
+	plan := terminalPlan(t, 2, 2)
+	files := plan.Partitions[0].Members
+	prepared := terminalSymbol("Prepared", 0)
+	mixedSymbols := []lsp.DocumentSymbol{prepared, terminalSymbol("Missing", 1), terminalSymbol("Failed", 2)}
+	baseClient := terminalClient{symbols: map[string][]lsp.DocumentSymbol{}, prepare: map[uint32][]lsp.CallHierarchyItem{}, prepareErrors: map[uint32]error{}}
 	cases := []struct {
-		name string
-		d    censusacquisition.Discovery
-		want Outcome
+		name      string
+		discovery func() censusacquisition.Discovery
+		want      Outcome
 	}{
-		{"complete-nonempty", terminalDiscovery(1), OutcomeCompleteNonempty},
-		{"successful-empty", terminalDiscovery(0), OutcomeSuccessfulEmpty},
-		{"partial", censusacquisition.Discovery{Targets: []censusacquisition.PreparedTarget{{}}}, OutcomePartial},
-		{"failed", censusacquisition.Discovery{IncompleteCauses: []censusacquisition.IncompleteCause{{Code: "SESSION_POISONED"}}}, OutcomeFailed},
-		{"refused", censusacquisition.Discovery{IncompleteCauses: []censusacquisition.IncompleteCause{{Code: "SESSION_POISONED"}, {Code: "LIFECYCLE_CONFLICT"}}}, OutcomeRefused},
-		{"unknown", censusacquisition.Discovery{ProviderFailures: []censusacquisition.ProviderFailure{{Code: "UNAVAILABLE"}}}, OutcomeUnknown},
+		{"complete-nonempty", func() censusacquisition.Discovery {
+			client := baseClient
+			client.symbols = map[string][]lsp.DocumentSymbol{files[0].URI: {prepared}}
+			client.prepare = map[uint32][]lsp.CallHierarchyItem{0: {terminalItem("Prepared", files[0].URI, 0)}}
+			return terminalDiscover(t, files, terminalSupplier{failures: map[string]error{}}, client)
+		}, OutcomeCompleteNonempty},
+		{"successful-empty", func() censusacquisition.Discovery {
+			return terminalDiscover(t, files, terminalSupplier{failures: map[string]error{}}, baseClient)
+		}, OutcomeSuccessfulEmpty},
+		{"partial", func() censusacquisition.Discovery {
+			client := baseClient
+			client.symbols = map[string][]lsp.DocumentSymbol{files[0].URI: mixedSymbols}
+			client.prepare = map[uint32][]lsp.CallHierarchyItem{0: {terminalItem("Prepared", files[0].URI, 0)}}
+			client.prepareErrors = map[uint32]error{2: errors.New("provider cannot prepare")}
+			return terminalDiscover(t, files, terminalSupplier{failures: map[string]error{}}, client)
+		}, OutcomePartial},
+		{"failed", func() censusacquisition.Discovery {
+			return terminalDiscover(t, files, terminalSupplier{failures: map[string]error{files[0].Path: censusacquisition.ErrSessionPoisoned}}, baseClient)
+		}, OutcomeFailed},
+		{"refused", func() censusacquisition.Discovery {
+			return terminalDiscover(t, files, terminalSupplier{failures: map[string]error{files[0].Path: censusacquisition.ErrSessionPoisoned, files[1].Path: censusacquisition.ErrLifecycleConflict}}, baseClient)
+		}, OutcomeRefused},
+		{"unknown", func() censusacquisition.Discovery {
+			unreadable := append([]censusacquisition.SourceFile(nil), files...)
+			unreadable[0].Disposition = census.FileUnreadable
+			return terminalDiscover(t, unreadable, terminalSupplier{failures: map[string]error{}}, baseClient)
+		}, OutcomeUnknown},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			record, err := NewTerminalRecord(plan, 1, 0, tc.d)
+			record, err := NewTerminalRecord(plan, 2, 0, tc.discovery())
 			if err != nil || record.Outcome != tc.want {
 				t.Fatalf("ASSERT_ASSEMBLY_TERMINAL_SIX_OUTCOMES got=%+v want=%q err=%v", record, tc.want, err)
+			}
+		})
+	}
+}
+
+func TestTerminalRecordRejectsMalformedAccountingCompletePreparationFailures(t *testing.T) {
+	plan := terminalPlan(t, 1, 1)
+	symbolOrdinal := 1
+	discovery := censusacquisition.Discovery{
+		Complete:         true,
+		Targets:          []censusacquisition.PreparedTarget{{}},
+		ProviderFailures: []censusacquisition.ProviderFailure{{Stage: "PREPARE_CALL_HIERARCHY", Code: "REQUEST_FAILED", SymbolOrdinal: &symbolOrdinal}},
+	}
+
+	if record, err := NewTerminalRecord(plan, 1, 0, discovery); err == nil || record != nil {
+		t.Fatalf("ASSERT_ASSEMBLY_MALFORMED_COMPLETE_FAILURES_REJECTED: record=%+v err=%v", record, err)
+	}
+}
+
+func TestTerminalRecordRejectsMalformedAuthenticPreparationFailureCustody(t *testing.T) {
+	plan := terminalPlan(t, 1, 1)
+	files := plan.Partitions[0].Members
+	client := terminalClient{
+		symbols:       map[string][]lsp.DocumentSymbol{files[0].URI: {terminalSymbol("Prepared", 0), terminalSymbol("Missing", 1), terminalSymbol("Failed", 2)}},
+		prepare:       map[uint32][]lsp.CallHierarchyItem{0: {terminalItem("Prepared", files[0].URI, 0)}},
+		prepareErrors: map[uint32]error{2: errors.New("provider cannot prepare")},
+	}
+	authentic := terminalDiscover(t, files, terminalSupplier{failures: map[string]error{}}, client)
+	for name, mutate := range map[string]func(*censusacquisition.Discovery){
+		"stage": func(d *censusacquisition.Discovery) { d.ProviderFailures[0].Stage = "DOCUMENT_SYMBOL" },
+		"code":  func(d *censusacquisition.Discovery) { d.ProviderFailures[0].Code = "UNSUPPORTED" },
+		"file-scope": func(d *censusacquisition.Discovery) {
+			d.ProviderFailures[0].FileOrdinal = d.ProviderFailures[0].SymbolOrdinal
+			d.ProviderFailures[0].SymbolOrdinal = nil
+		},
+		"missing-scope": func(d *censusacquisition.Discovery) { d.ProviderFailures[0].SymbolOrdinal = nil },
+		"both-scopes": func(d *censusacquisition.Discovery) {
+			value := 0
+			d.ProviderFailures[0].FileOrdinal = &value
+		},
+		"out-of-range": func(d *censusacquisition.Discovery) {
+			value := d.Accounting.SymbolDenominator
+			d.ProviderFailures[0].SymbolOrdinal = &value
+		},
+		"disposition-mismatch": func(d *censusacquisition.Discovery) {
+			ordinal := *d.ProviderFailures[0].SymbolOrdinal
+			for i := range d.Accounting.Symbols {
+				if d.Accounting.Symbols[i].Ordinal == ordinal {
+					d.Accounting.Symbols[i].Disposition = census.SymbolPreparationFailed
+				}
+			}
+			for i := range d.SymbolLedger.Entries {
+				if d.SymbolLedger.Entries[i].Ordinal == ordinal {
+					d.SymbolLedger.Entries[i].Disposition = string(census.SymbolPreparationFailed)
+				}
+			}
+		},
+		"duplicate": func(d *censusacquisition.Discovery) {
+			d.ProviderFailures = append(d.ProviderFailures, d.ProviderFailures[0])
+		},
+		"invalid-closure": func(d *censusacquisition.Discovery) { d.Closure = censusacquisition.DiscoveryClosure(99) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := CloneDiscovery(authentic)
+			mutate(&invalid)
+			if record, err := NewTerminalRecord(plan, 1, 0, invalid); err == nil || record != nil {
+				t.Fatalf("ASSERT_ASSEMBLY_AUTHENTIC_MALFORMED_FAILURE_REJECTED case=%s record=%+v err=%v", name, record, err)
 			}
 		})
 	}
@@ -71,7 +206,7 @@ func TestTerminalRecordRejectsInvalidPlanOrdinalAuthorityAccountingAndClosure(t 
 	invalidAuthority.Authority = 1
 	badAccounting := censusacquisition.Discovery{Accounting: census.Accounting{FileDenominator: 1}}
 	badClosure := censusacquisition.Discovery{Closure: censusacquisition.DiscoveryClosure(99)}
-	contradictory := terminalDiscovery(0)
+	contradictory := successfulEmptyDiscovery()
 	contradictory.ProviderFailures = []censusacquisition.ProviderFailure{{Code: "UNAVAILABLE"}}
 	for _, tc := range []struct {
 		name    string
@@ -97,17 +232,13 @@ func TestTerminalRecordRejectsInvalidPlanOrdinalAuthorityAccountingAndClosure(t 
 
 func TestTerminalRecordExactAdaptationAndIndependentClones(t *testing.T) {
 	plan := terminalPlan(t, 1, 1)
-	fileOrdinal, symbolOrdinal := 0, 1
-	observed, limit, omitted := uint64(2), uint64(3), uint64(4)
-	d := censusacquisition.Discovery{
-		Accounting:         census.Accounting{Files: make([]census.FileEntry, 0), Symbols: make([]census.SymbolEntry, 0)},
-		FileLedger:         captureset.Ledger{Entries: make([]captureset.LedgerEntry, 0)},
-		Targets:            []censusacquisition.PreparedTarget{{CanonicalSeedV2: []byte{0, 1, 0, 2}}},
-		EnumerationSymbols: make([]censusacquisition.EnumerationSymbol, 0),
-		ProviderFailures:   []censusacquisition.ProviderFailure{{Stage: "stage", Code: "code", FileOrdinal: &fileOrdinal}},
-		IncompleteCauses:   []censusacquisition.IncompleteCause{{Scope: "SYMBOL", Stage: "DISCOVERY", Code: "CANCELED", SymbolOrdinal: &symbolOrdinal}},
-		Observations:       []censusacquisition.DiscoveryObservation{{Known: true, Observed: &observed, Limit: &limit, Omitted: &omitted}},
+	files := plan.Partitions[0].Members
+	client := terminalClient{
+		symbols:       map[string][]lsp.DocumentSymbol{files[0].URI: {terminalSymbol("Prepared", 0), terminalSymbol("Missing", 1), terminalSymbol("Failed", 2)}},
+		prepare:       map[uint32][]lsp.CallHierarchyItem{0: {terminalItem("Prepared", files[0].URI, 0)}},
+		prepareErrors: map[uint32]error{2: errors.New("provider cannot prepare")},
 	}
+	d := terminalDiscover(t, files, terminalSupplier{failures: map[string]error{}}, client)
 	record, err := NewTerminalRecord(plan, 1, 0, d)
 	if err != nil {
 		t.Fatal(err)
@@ -125,11 +256,9 @@ func TestTerminalRecordExactAdaptationAndIndependentClones(t *testing.T) {
 		t.Fatalf("ASSERT_ASSEMBLY_TERMINAL_EXACT_ADAPTATION first=%+v second=%+v want=%+v", first, second, want)
 	}
 	first.SourceFiles[0].Path = "mutated.go"
-	first.Discovery.Targets[0].CanonicalSeedV2[0] = 9
-	*first.Discovery.ProviderFailures[0].FileOrdinal = 9
-	*first.Discovery.IncompleteCauses[0].SymbolOrdinal = 9
-	*first.Discovery.Observations[0].Observed = 9
-	if record.Members[0].Path != "a.go" || second.SourceFiles[0].Path != "a.go" || record.Discovery.Targets[0].CanonicalSeedV2[0] != 0 || second.Discovery.Targets[0].CanonicalSeedV2[0] != 0 || *record.Discovery.ProviderFailures[0].FileOrdinal != 0 || *second.Discovery.ProviderFailures[0].FileOrdinal != 0 || *record.Discovery.IncompleteCauses[0].SymbolOrdinal != 1 || *second.Discovery.IncompleteCauses[0].SymbolOrdinal != 1 || *record.Discovery.Observations[0].Observed != 2 || *second.Discovery.Observations[0].Observed != 2 {
+	first.Discovery.Targets[0].CanonicalSeedV2[0] ^= 0xff
+	*first.Discovery.ProviderFailures[0].SymbolOrdinal = 9
+	if record.Members[0].Path != "a.go" || second.SourceFiles[0].Path != "a.go" || reflect.DeepEqual(first.Discovery.Targets[0].CanonicalSeedV2, record.Discovery.Targets[0].CanonicalSeedV2) || !reflect.DeepEqual(second.Discovery.Targets[0].CanonicalSeedV2, record.Discovery.Targets[0].CanonicalSeedV2) || *record.Discovery.ProviderFailures[0].SymbolOrdinal == 9 || *second.Discovery.ProviderFailures[0].SymbolOrdinal == 9 {
 		t.Fatal("ASSERT_ASSEMBLY_TERMINAL_NESTED_ANTI_ALIAS")
 	}
 }
@@ -207,6 +336,16 @@ func TestAdaptTerminalRejectsInvalidRecordCustodyAndOutcome(t *testing.T) {
 		func(r *TerminalRecord) { r.Ordinal = -1 },
 		func(r *TerminalRecord) { r.Members = nil },
 		func(r *TerminalRecord) { r.Outcome = Outcome("INVALID") },
+		func(r *TerminalRecord) { r.Discovery.Closure = censusacquisition.DiscoveryClosure(99) },
+		func(r *TerminalRecord) {
+			symbolOrdinal := 0
+			r.Discovery = censusacquisition.Discovery{
+				Complete:         true,
+				Targets:          []censusacquisition.PreparedTarget{{}},
+				ProviderFailures: []censusacquisition.ProviderFailure{{Stage: "DOCUMENT_SYMBOL", Code: "UNSUPPORTED", SymbolOrdinal: &symbolOrdinal}},
+			}
+			r.Outcome = OutcomePartial
+		},
 	} {
 		copy := *record
 		mutate(&copy)

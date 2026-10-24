@@ -8,8 +8,7 @@ import (
 
 func TestPrivateDiscoveryContinuationTerminalExact(t *testing.T) {
 	p := terminalPlanFixture(t, 3)
-	d := closedTerminalDiscovery(1)
-	d.Targets[0].CanonicalSeedV2 = make([]byte, 0)
+	d := validClosedTerminalDiscovery(t, p)
 	x, e := newPrivateConstituentDiscoveryTerminal(p, d)
 	if e != nil {
 		t.Fatal(e)

@@ -36,17 +36,9 @@ func NewTerminalRecord(plan censussourceplan.Plan, partitionSize, ordinal int, d
 	if plan.Authority != 0 || ordinal < 0 || ordinal >= len(plan.Partitions) || plan.Partitions[ordinal].Ordinal != ordinal {
 		return nil, censussourceplan.ErrInvalidIdentity
 	}
-	if err := discovery.Accounting.Validate(); err != nil {
+	outcome := Outcome(censusacquisition.TerminalDiscoveryOutcome(discovery))
+	if err := censusacquisition.ValidateTerminalDiscovery(discovery, string(outcome)); err != nil {
 		return nil, err
-	}
-	if discovery.Closure != censusacquisition.DiscoveryClosureUnknown && discovery.Closure != censusacquisition.DiscoveryClosureSuccessful {
-		return nil, errors.New("invalid discovery closure")
-	}
-	if discovery.Complete && (len(discovery.Targets) == 0 || len(discovery.ProviderFailures) != 0 || len(discovery.IncompleteCauses) != 0) {
-		return nil, errors.New("complete discovery conflicts with failure custody")
-	}
-	if discovery.Closure == censusacquisition.DiscoveryClosureSuccessful && (len(discovery.ProviderFailures) != 0 || len(discovery.IncompleteCauses) != 0) {
-		return nil, errors.New("successful discovery closure conflicts with failure custody")
 	}
 	return &TerminalRecord{
 		PlanIdentity: plan.Identity,
@@ -54,13 +46,16 @@ func NewTerminalRecord(plan censussourceplan.Plan, partitionSize, ordinal int, d
 		Ordinal:      ordinal,
 		Members:      cloneSlice(plan.Partitions[ordinal].Members),
 		Discovery:    cloneDiscovery(discovery),
-		Outcome:      Outcome(censusacquisition.TerminalDiscoveryOutcome(discovery)),
+		Outcome:      outcome,
 	}, nil
 }
 
 func AdaptTerminal(plan censussourceplan.Plan, partitionSize int, record *TerminalRecord) (censussourcecontinuation.Terminal, error) {
 	if record == nil || censussourceplan.Validate(plan, partitionSize) != nil || record.PlanIdentity != plan.Identity || record.Authority != 0 || record.Ordinal < 0 || record.Ordinal >= len(plan.Partitions) || !reflect.DeepEqual(record.Members, plan.Partitions[record.Ordinal].Members) {
 		return censussourcecontinuation.Terminal{}, errors.New("invalid census source terminal record")
+	}
+	if err := censusacquisition.ValidateTerminalDiscovery(record.Discovery, string(record.Outcome)); err != nil {
+		return censussourcecontinuation.Terminal{}, errors.New("invalid census source terminal discovery")
 	}
 	outcome := map[Outcome]censussourcecontinuation.Outcome{
 		OutcomeCompleteNonempty: censussourcecontinuation.OutcomeCompleteNonempty,

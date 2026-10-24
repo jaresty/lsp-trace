@@ -233,6 +233,53 @@ func TestDiscoveryAdapterAccountedPreparationOmissionsRemainComplete(t *testing.
 	if err := got.Accounting.Validate(); err != nil {
 		t.Fatalf("ASSERT_PREPARATION_OMISSIONS_ACCOUNTING_VALID: %v", err)
 	}
+	if outcome := TerminalDiscoveryOutcome(got); outcome != "PARTIAL" {
+		t.Fatalf("ASSERT_ACCOUNTED_PREPARATION_FAILURES_TERMINAL_PARTIAL: got=%s complete=%v failures=%+v", outcome, got.Complete, got.ProviderFailures)
+	}
+	if err := ValidateTerminalDiscovery(got, "PARTIAL"); err != nil {
+		t.Fatalf("ASSERT_ACCOUNTED_PREPARATION_FAILURES_TERMINAL_VALID: %v", err)
+	}
+
+	for name, mutate := range map[string]func(*Discovery){
+		"stage": func(d *Discovery) { d.ProviderFailures[0].Stage = "DOCUMENT_SYMBOL" },
+		"code":  func(d *Discovery) { d.ProviderFailures[0].Code = "UNSUPPORTED" },
+		"file-scope": func(d *Discovery) {
+			d.ProviderFailures[0].FileOrdinal = d.ProviderFailures[0].SymbolOrdinal
+			d.ProviderFailures[0].SymbolOrdinal = nil
+		},
+		"missing-scope": func(d *Discovery) { d.ProviderFailures[0].SymbolOrdinal = nil },
+		"both-scopes": func(d *Discovery) {
+			value := 0
+			d.ProviderFailures[0].FileOrdinal = &value
+		},
+		"out-of-range": func(d *Discovery) {
+			value := d.Accounting.SymbolDenominator
+			d.ProviderFailures[0].SymbolOrdinal = &value
+		},
+		"disposition-mismatch": func(d *Discovery) {
+			ordinal := *d.ProviderFailures[0].SymbolOrdinal
+			for i := range d.Accounting.Symbols {
+				if d.Accounting.Symbols[i].Ordinal == ordinal {
+					d.Accounting.Symbols[i].Disposition = census.SymbolPreparationFailed
+				}
+			}
+			for i := range d.SymbolLedger.Entries {
+				if d.SymbolLedger.Entries[i].Ordinal == ordinal {
+					d.SymbolLedger.Entries[i].Disposition = string(census.SymbolPreparationFailed)
+				}
+			}
+		},
+		"duplicate":       func(d *Discovery) { d.ProviderFailures = append(d.ProviderFailures, d.ProviderFailures[0]) },
+		"invalid-closure": func(d *Discovery) { d.Closure = DiscoveryClosure(99) },
+	} {
+		t.Run("terminal-invalid-"+name, func(t *testing.T) {
+			invalid := cloneDiscovery(got)
+			mutate(&invalid)
+			if err := ValidateTerminalDiscovery(invalid, "PARTIAL"); err == nil {
+				t.Fatalf("ASSERT_ACCOUNTED_PREPARATION_FAILURES_TERMINAL_INVALID_REJECTED case=%s discovery=%+v", name, invalid)
+			}
+		})
+	}
 }
 
 func TestDiscoveryClassifiesSessionUnavailableSupplyAsIncomplete(t *testing.T) {

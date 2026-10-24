@@ -84,7 +84,7 @@ func runRequest(t *testing.T, count, bound int, objects censussourcecontinuation
 			if !reflect.DeepEqual(members, plan.Partitions[ordinal].Members) {
 				t.Fatalf("ASSERT_ASSEMBLY_RUN_EXACT_MEMBERS ordinal=%d got=%+v want=%+v", ordinal, members, plan.Partitions[ordinal].Members)
 			}
-			return terminalDiscovery(0), nil
+			return successfulEmptyDiscovery(), nil
 		},
 	}
 }

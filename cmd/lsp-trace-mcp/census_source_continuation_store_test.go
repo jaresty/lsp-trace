@@ -144,16 +144,17 @@ func ptrContinuationTerminal(terminal censussourcecontinuation.Terminal) *census
 func TestCensusSourceContinuationNonSuccessRetains(t *testing.T) {
 	plan := continuationPlan(t, censusRuntimeSourcePartitionSize)
 	mappings := []struct {
-		private privateConstituentDiscoveryOutcome
-		public  censussourcecontinuation.Outcome
+		private   privateConstituentDiscoveryOutcome
+		public    censussourcecontinuation.Outcome
+		discovery censusacquisition.Discovery
 	}{
-		{privateDiscoveryPartial, censussourcecontinuation.OutcomePartial},
-		{privateDiscoveryFailed, censussourcecontinuation.OutcomeFailed},
-		{privateDiscoveryRefused, censussourcecontinuation.OutcomeRefused},
-		{privateDiscoveryUnknown, censussourcecontinuation.OutcomeUnknown},
+		{privateDiscoveryPartial, censussourcecontinuation.OutcomePartial, validMixedTerminalDiscovery(t, plan)},
+		{privateDiscoveryFailed, censussourcecontinuation.OutcomeFailed, validLifecycleTerminalDiscovery(t, plan, censusacquisition.ErrSessionPoisoned)},
+		{privateDiscoveryRefused, censussourcecontinuation.OutcomeRefused, validLifecycleTerminalDiscovery(t, plan, censusacquisition.ErrLifecycleConflict)},
+		{privateDiscoveryUnknown, censussourcecontinuation.OutcomeUnknown, censusacquisition.Discovery{}},
 	}
 	for _, mapping := range mappings {
-		terminal := &privateConstituentDiscoveryTerminal{planIdentity: plan.Identity, ordinal: 0, members: append([]censusacquisition.SourceFile(nil), plan.Partitions[0].Members...), outcome: mapping.private}
+		terminal := &privateConstituentDiscoveryTerminal{planIdentity: plan.Identity, ordinal: 0, members: append([]censusacquisition.SourceFile(nil), plan.Partitions[0].Members...), discovery: mapping.discovery, outcome: mapping.private}
 		adapted, err := privateDiscoveryContinuationTerminal(plan, terminal)
 		if err != nil || adapted.Outcome != mapping.public {
 			t.Fatalf("ASSERT_PRIVATE_SOURCE_CONTINUATION_NON_SUCCESS_REFUSED: private=%s public=%s got=%+v err=%v", mapping.private, mapping.public, adapted, err)
