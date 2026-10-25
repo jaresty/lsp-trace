@@ -332,6 +332,33 @@ func TestProgramCTransitionPlanMismatchAndFailureRetention(t *testing.T) {
 	}
 }
 
+func TestVerifyProgramCTransitionCompletionLoadsHeadAndReceipt(t *testing.T) {
+	planRaw := transitionPlan(t, records2())
+	objects, heads := &transitionObjects{}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	first, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil || first.Status != ProgramCTransitionCommitted {
+		t.Fatalf("ASSERT_PROGRAM_C_VERIFY_SETUP_FIRST result=%+v err=%v", first, err)
+	}
+	request.Expected = first.Head
+	second, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil || second.Status != ProgramCTransitionCommitted {
+		t.Fatalf("ASSERT_PROGRAM_C_VERIFY_SETUP_SECOND result=%+v err=%v", second, err)
+	}
+	verify := func() (ProgramCTransitionResult, error) {
+		return verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads)
+	}
+	verified, err := verify()
+	if err != nil || verified.Status != ProgramCTransitionComplete || verified.Head != second.Head || verified.CommittedPrefix != 2 || verified.ConstituentCount != 2 || verified.ReceiptSelector == "" {
+		t.Fatalf("ASSERT_PROGRAM_C_VERIFIED_COMPLETION result=%+v err=%v", verified, err)
+	}
+	delete(objects.m, verified.ReceiptSelector)
+	if _, err = verify(); !errors.Is(err, ErrInvalidProgramCTransition) {
+		t.Fatalf("ASSERT_PROGRAM_C_VERIFY_REQUIRES_RECEIPT err=%v", err)
+	}
+}
+
 func TestProgramCTransitionRealPublicationBackedRunner(t *testing.T) {
 	native := func(id string) []byte {
 		b, _ := json.Marshal(graph.Result{SchemaVersion: graph.SchemaVersionV5, Invocation: graph.Invocation{WorkspaceURI: "file:///w", Server: graph.ServerInvocation{Command: "gopls"}, LanguageID: "go", Provenance: graph.InvocationProvenance{InvocationID: id, SourceRevision: "rev", ServerVersion: "v"}}, Summary: graph.Summary{Complete: true}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}})

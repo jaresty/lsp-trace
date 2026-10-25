@@ -136,6 +136,17 @@ type ProgramCTransitionResult struct {
 	ResultByteLength int
 }
 
+// ProgramCTransitionVerificationRequest binds a read-only completion check to
+// the exact authoritative plan, head, immutable receipt, and policy bindings.
+type ProgramCTransitionVerificationRequest struct {
+	WorkflowKey string
+	HeadKey     string
+	Bindings    ProgramCTransitionBindings
+	PlanSource  *AuthoritativeProgramCTransitionPlanSource
+	Objects     censussourcecontinuation.ImmutableStore
+	Heads       censussourcecontinuation.HeadStore
+}
+
 type ProgramCTransitionFailureStage string
 
 const (
@@ -463,6 +474,50 @@ func CoordinateProgramCTransition(ctx context.Context, r ProgramCTransitionReque
 	}
 	return transitionCommitReceipt(ctx, r, linked, censussourcecontinuation.HeadRevision{Generation: linked.Generation, Selector: linked.Selector}, plan)
 }
+
+// VerifyProgramCTransitionCompletion proves terminal Program C custody without
+// advancing, retrying, republishing, or accepting caller-authored status fields.
+func VerifyProgramCTransitionCompletion(ctx context.Context, request ProgramCTransitionVerificationRequest) (ProgramCTransitionResult, error) {
+	if request.PlanSource == nil {
+		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	}
+	return verifyProgramCTransitionCompletion(ctx, request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, request.Objects, request.Heads)
+}
+
+func verifyProgramCTransitionCompletion(ctx context.Context, workflowKey, headKey string, bindings ProgramCTransitionBindings, planSource ProgramCTransitionPlanSource, objects censussourcecontinuation.ImmutableStore, heads censussourcecontinuation.HeadStore) (ProgramCTransitionResult, error) {
+	if ctx == nil || workflowKey == "" || headKey == "" || planSource == nil || objects == nil || heads == nil {
+		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	}
+	planRaw, err := planSource.Load(ctx)
+	if err != nil {
+		return ProgramCTransitionResult{}, err
+	}
+	plan, err := decodeProgramCTransitionPlan(planRaw)
+	if err != nil || !transitionValidBindings(bindings, plan, planRaw) || len(plan.Records) == 0 {
+		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	}
+	raw, err := heads.Load(ctx, headKey)
+	if err != nil {
+		return ProgramCTransitionResult{}, err
+	}
+	var value programCTransitionHead
+	bound := ProgramCTransitionRequest{WorkflowKey: workflowKey, HeadKey: headKey, Bindings: bindings}
+	if transitionStrict(raw, &value) != nil || value.SchemaVersion != programCTransitionHeadVersion || transitionValidateHead(value, bound, len(plan.Records)) != nil {
+		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	}
+	copyValue := value
+	canonical, err := transitionSelector(&copyValue)
+	if err != nil || !bytes.Equal(canonical, raw) || value.State != "COMMITTED" || value.CommittedPrefix != len(plan.Records) {
+		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	}
+	bound.Objects = objects
+	receipt, err := transitionLoadReceipt(ctx, bound, value, plan)
+	if err != nil || receipt.Outcome != "SUCCEEDED" {
+		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	}
+	return transitionResult(value, ProgramCTransitionComplete, receipt), nil
+}
+
 func transitionValidateResult(raw []byte) error {
 	var x programc.InstabilityArtifact
 	if transitionStrict(raw, &x) != nil || x.SchemaVersion != programc.InstabilityVersionV2 || x.ClaimCeiling != programc.InstabilityClaimCeilingV2 || x.StructuralClaimCeiling != programc.InstabilityStructuralCeiling {
