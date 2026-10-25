@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"lsp-trace/internal/censussourcecontinuation"
 	"lsp-trace/internal/publication"
@@ -78,24 +80,38 @@ func (s *Objects) Get(ctx context.Context, selector string) ([]byte, error) {
 
 type compareAndReplaceFunc func(context.Context, *publication.Root, string, publication.BoundFilePredecessor, []byte, func([]byte) error) (*publication.CompareAndReplaceReceipt, error)
 
+type HeadRevisionParser func([]byte) (censussourcecontinuation.HeadRevision, error)
+
 type Heads struct {
 	root              *publication.Root
 	compareAndReplace compareAndReplaceFunc
+	parseRevision     HeadRevisionParser
+	namespace         string
 }
 
 func NewHeads(root *publication.Root) (*Heads, error) {
-	if root == nil || root.ValidatePrivate() != nil {
+	return NewHeadsWithParser(root, "census-source-continuation/heads/v1", censussourcecontinuation.ParseHeadRevision)
+}
+
+// NewHeadsWithParser preserves publication-backed CAS semantics while giving a
+// private continuation family its own strict parser and selector namespace.
+func NewHeadsWithParser(root *publication.Root, namespace string, parser HeadRevisionParser) (*Heads, error) {
+	if root == nil || root.ValidatePrivate() != nil || namespace == "" || parser == nil || filepath.IsAbs(namespace) || filepath.Clean(namespace) != namespace || namespace == "." || strings.HasPrefix(namespace, "..") {
 		return nil, errors.New("invalid private census source-continuation head root")
 	}
-	return &Heads{root: root, compareAndReplace: publication.CompareAndReplaceBoundFile}, nil
+	return &Heads{root: root, compareAndReplace: publication.CompareAndReplaceBoundFile, parseRevision: parser, namespace: filepath.ToSlash(namespace)}, nil
 }
 
 func HeadSelector(key string) (string, error) {
+	return headSelector("census-source-continuation/heads/v1", key)
+}
+
+func headSelector(namespace, key string) (string, error) {
 	if key == "" {
 		return "", errors.New("private census source-continuation head key required")
 	}
 	sum := sha256.Sum256([]byte(key))
-	return "census-source-continuation/heads/v1/" + hex.EncodeToString(sum[:]) + ".json", nil
+	return namespace + "/" + hex.EncodeToString(sum[:]) + ".json", nil
 }
 
 func (s *Heads) Load(ctx context.Context, key string) ([]byte, error) {
@@ -105,7 +121,7 @@ func (s *Heads) Load(ctx context.Context, key string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	selector, err := HeadSelector(key)
+	selector, err := headSelector(s.namespace, key)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +132,7 @@ func (s *Heads) Load(ctx context.Context, key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := censussourcecontinuation.ParseHeadRevision(raw); err != nil {
+	if _, err := s.parseRevision(raw); err != nil {
 		return nil, err
 	}
 	return bytes.Clone(raw), nil
@@ -126,17 +142,17 @@ func (s *Heads) CompareAndSwap(ctx context.Context, key string, expected censuss
 	if s == nil || s.root == nil || s.compareAndReplace == nil || ctx == nil || len(replacement) == 0 || len(replacement) > MaxBytes {
 		return censussourcecontinuation.CASResult{Err: errors.New("invalid private census source-continuation head replacement")}
 	}
-	if _, err := censussourcecontinuation.ParseHeadRevision(replacement); err != nil {
+	if _, err := s.parseRevision(replacement); err != nil {
 		return censussourcecontinuation.CASResult{Err: fmt.Errorf("invalid private census source-continuation head replacement: %w", err)}
 	}
-	selector, err := HeadSelector(key)
+	selector, err := headSelector(s.namespace, key)
 	if err != nil {
 		return censussourcecontinuation.CASResult{Err: err}
 	}
 	predecessor := publication.BoundFilePredecessor{Absent: true}
 	current, loadErr := s.root.ReadSelectorWithAbsence(selector, MaxBytes)
 	if loadErr == nil {
-		revision, parseErr := censussourcecontinuation.ParseHeadRevision(current)
+		revision, parseErr := s.parseRevision(current)
 		if parseErr != nil {
 			return censussourcecontinuation.CASResult{Err: parseErr}
 		}
@@ -150,7 +166,7 @@ func (s *Heads) CompareAndSwap(ctx context.Context, key string, expected censuss
 		return censussourcecontinuation.CASResult{Outcome: censussourcecontinuation.CASNotCommitted}
 	}
 	receipt, err := s.compareAndReplace(ctx, s.root, selector, predecessor, bytes.Clone(replacement), func(raw []byte) error {
-		_, verifyErr := censussourcecontinuation.ParseHeadRevision(raw)
+		_, verifyErr := s.parseRevision(raw)
 		return verifyErr
 	})
 	if errors.Is(err, publication.ErrStalePredecessor) {

@@ -172,7 +172,7 @@ func computeInstabilityFromGraphProvenanceV5(input []byte, declaredSeeds []uint6
 			if len(r.Runs) == 0 {
 				r.Identity = InstabilityIdentity{AdmittedGraphSHA256: o.Source.InputSHA256, ProjectionSHA256: ProfileDigest, ProjectionPolicyID: ProfileID, AlgorithmName: o.Algorithm, AlgorithmVersion: algorithmVersion, ParametersCanonicalSHA256: parametersSHA256, ResourcePolicySHA256: resourcePolicySHA256}
 			}
-			communityBytes, err := json.Marshal(expectedCommunityWire(o, r.Identity))
+			communityBytes, err := BuildCommunityArtifact(o, r.Identity)
 			if err != nil {
 				return InstabilityArtifact{}, err
 			}
@@ -395,6 +395,20 @@ func expectedCommunityWire(o Outcome, id InstabilityIdentity) communityWire {
 	}
 	return communityWire{"lsp-trace.community.v1", communityWireIdentity{o.Source.GraphV5SHA256, id.AdmittedGraphSHA256, id.ProjectionSHA256, id.ProjectionPolicyID, id.AlgorithmName, id.AlgorithmVersion, id.ParametersCanonicalSHA256, o.Seed, id.ResourcePolicySHA256}, o.Outcome, cs, communityWireAccounting{len(o.Projection.NodeIdentities), len(o.Projection.NodeIdentities), 0}, communityWireCeiling}
 }
+
+// BuildCommunityArtifact returns the canonical public v1 community artifact
+// consumed by instability validation.
+func BuildCommunityArtifact(o Outcome, id InstabilityIdentity) ([]byte, error) {
+	raw, err := json.Marshal(expectedCommunityWire(o, id))
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCommunityArtifact(raw, o, id); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 func validateCommunityArtifact(raw []byte, o Outcome, id InstabilityIdentity) error {
 	if len(raw) == 0 {
 		return fmt.Errorf("missing community artifact")

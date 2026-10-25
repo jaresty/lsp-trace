@@ -3,6 +3,7 @@ package programc
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/graph"
@@ -111,6 +112,35 @@ func campaignFixture(t *testing.T) InstabilityRequest {
 	}
 	return r
 }
+func TestCanonicalCommunityArtifactFromComputeOutcome(t *testing.T) {
+	r := campaignFixture(t)
+	outcome := r.Runs[0].Community
+	got, err := BuildCommunityArtifact(outcome, r.Identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := json.Marshal(expectedCommunityWire(outcome, r.Identity))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("ASSERT_CANONICAL_COMMUNITY_ARTIFACT got=%s want=%s", got, want)
+	}
+	if err := validateCommunityArtifact(got, outcome, r.Identity); err != nil {
+		t.Fatalf("ASSERT_CANONICAL_COMMUNITY_ARTIFACT_VALIDATES: %v", err)
+	}
+	wrong := expectedCommunityWire(outcome, r.Identity)
+	wrong.Communities[0].CommunityID = "sha256:" + strings.Repeat("0", 64)
+	wrongBytes, err := json.Marshal(wrong)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateCommunityArtifact(wrongBytes, outcome, r.Identity); err == nil || err.Error() != "semantic community validation mismatch" {
+		t.Fatalf("ASSERT_CANONICAL_COMMUNITY_ARTIFACT_REJECTS_WRONG_ID_DOMAIN: %v", err)
+	}
+	t.Log("A-fail: semantic community validation mismatch; A-pass: canonical community artifact validates")
+}
+
 func TestComputeAndValidateInstability(t *testing.T) {
 	r := campaignFixture(t)
 	a, e := ComputeInstability(r)
@@ -200,12 +230,21 @@ func TestInstabilityRejectsForeignAndPolicyCaps(t *testing.T) {
 	if _, e := ComputeInstability(r); e == nil {
 		t.Fatal("ASSERT_FOREIGN_ID")
 	}
-	cs := make([]Community, 63)
-	for i := range cs {
-		cs[i] = Community{[]string{string(rune(i + 1))}}
+	communities := func(width int) []Community {
+		cs := make([]Community, width)
+		for i := range cs {
+			cs[i] = Community{[]string{string(rune(i + 1))}}
+		}
+		return cs
 	}
-	if _, e := maximumMatching(cs, cs); e == nil {
-		t.Fatal("ASSERT_WORK_CAP")
+	if _, e := maximumMatching(communities(15), communities(15)); e != nil {
+		t.Fatalf("ASSERT_MATCHING_POLICY_15X15_ADMITTED err=%v", e)
+	}
+	if _, e := maximumMatching(communities(16), communities(16)); e == nil || e.Error() != "matching policy work limit" {
+		t.Fatalf("ASSERT_MATCHING_POLICY_16X16_WORK_LIMIT err=%v", e)
+	}
+	if _, e := maximumMatching(communities(63), communities(1)); e == nil || e.Error() != "matching policy work limit" {
+		t.Fatalf("ASSERT_MATCHING_POLICY_WIDTH63_WORK_LIMIT err=%v", e)
 	}
 }
 func TestInstabilityPolicyIdentity(t *testing.T) {
