@@ -14,6 +14,15 @@ import (
 
 const headNamespace = "census-program-c-transition/heads/private/v1"
 
+type CompletionRequest struct {
+	StateRoot   *publication.Root
+	Receipt     censuscontinuation.ExactProgramCTransitionInput
+	Ledger      censuscontinuation.ExactProgramCTransitionInput
+	WorkflowKey string
+	HeadKey     string
+	Bindings    censuscontinuation.ProgramCTransitionBindings
+}
+
 type Request struct {
 	StateRoot   *publication.Root
 	Receipt     censuscontinuation.ExactProgramCTransitionInput
@@ -22,6 +31,40 @@ type Request struct {
 	HeadKey     string
 	Expected    censussourcecontinuation.HeadRevision
 	Bindings    censuscontinuation.ProgramCTransitionBindings
+}
+
+// NewCompletionVerificationRequest constructs read-only production authorities
+// for proving terminal Program C custody in the private head namespace.
+func NewCompletionVerificationRequest(ctx context.Context, request CompletionRequest) (censuscontinuation.ProgramCTransitionVerificationRequest, error) {
+	if ctx == nil || request.StateRoot == nil || request.WorkflowKey == "" || request.HeadKey == "" {
+		return censuscontinuation.ProgramCTransitionVerificationRequest{}, censuscontinuation.ErrInvalidProgramCTransition
+	}
+	source := &censuscontinuation.AuthoritativeProgramCTransitionPlanSource{Receipt: request.Receipt, Ledger: request.Ledger}
+	planRaw, err := source.Load(ctx)
+	if err != nil {
+		return censuscontinuation.ProgramCTransitionVerificationRequest{}, err
+	}
+	request.Bindings.PlanSHA256 = digest(planRaw)
+	objects, err := censussourceassembly.NewObjects(request.StateRoot)
+	if err != nil {
+		return censuscontinuation.ProgramCTransitionVerificationRequest{}, err
+	}
+	heads, err := censussourceassembly.NewHeadsWithParser(request.StateRoot, headNamespace, censuscontinuation.ParseProgramCTransitionHeadRevision)
+	if err != nil {
+		return censuscontinuation.ProgramCTransitionVerificationRequest{}, err
+	}
+	return censuscontinuation.ProgramCTransitionVerificationRequest{
+		WorkflowKey: request.WorkflowKey, HeadKey: request.HeadKey, Bindings: request.Bindings,
+		PlanSource: source, Objects: objects, Heads: heads,
+	}, nil
+}
+
+func VerifyCompletion(ctx context.Context, request CompletionRequest) (censuscontinuation.ProgramCTransitionResult, error) {
+	verification, err := NewCompletionVerificationRequest(ctx, request)
+	if err != nil {
+		return censuscontinuation.ProgramCTransitionResult{}, err
+	}
+	return censuscontinuation.VerifyProgramCTransitionCompletion(ctx, verification)
 }
 
 // InvokeOne constructs all production authorities and advances at most one
