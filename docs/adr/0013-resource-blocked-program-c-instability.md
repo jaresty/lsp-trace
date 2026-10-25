@@ -1,9 +1,12 @@
 # ADR 0013: Represent resource-blocked Program C instability without changing historical bytes
 
-- **Status:** Proposed; no implementation authority
+- **Status:** Accepted additive private implementation and qualification contract
 - **Date:** 2026-10-25
+- **Accepted:** 2026-10-25
 - **Decision authority:** @jaresty (GitHub handle)
 - **Decision owners:** LSP Trace maintainers
+- **Accepted proposal SHA-256:** `6e6ec4fc626f0f6db25629f8eeb1b6e9b125cfa7f590af871e7e02322f6ef94b`
+- **Independent review receipt:** `20261025191316-3630` (`ACCEPT_AS_PROPOSAL` after all blocking findings were corrected)
 - **Depends on:** [ADR 0011](0011-versioned-definition-reference-grouping-evidence.md) and [ADR 0012](0012-private-census-to-candidate-orchestration-bridge.md)
 - **Preserves:** community-instability v1 and v2 schemas, canonical bytes, policy identity, matching algorithm, and resource limits
 
@@ -35,7 +38,7 @@ Increasing the limit, retrying unchanged work, treating the failure as successfu
 
 Define an additive private community-instability v3 contract for complete runs whose pairwise comparison is blocked by the frozen matching resource policy.
 
-No implementation begins merely because this proposal exists. Implementation requires independent review, explicit acceptance by the decision authority, and a frozen proposal digest.
+This decision authorizes only the private implementation and qualification stated here. It does not authorize public enablement, semantic advancement, production admission, release, or deployment.
 
 ## Proposed contract
 
@@ -124,20 +127,7 @@ Every expected canonical run pair has exactly one pair record and contributes to
 
 A canonical v3 artifact with `outcome=INCOMPLETE` is immutable retained evidence. It never establishes successful instability completion.
 
-**Acceptance gate:** exactly one rule below must be retained as normative text before this ADR's status may become `Accepted`. Acceptance is invalid if both rules remain, neither rule remains, the selection appears only in an acceptance-record comment, or the selected rule leaves receipt outcome, prefix movement, durable-head state, replay, or CAS behavior unspecified.
-
-**Rule A — retain without prefix advancement**
-
-- retain the canonical v3 artifact in the immutable receipt;
-- record a distinct terminal receipt disposition `INCOMPLETE_MATCHING_RESOURCE`;
-- do not classify the receipt as generic `FAILED` or successful instability completion;
-- do not advance `committed_prefix`;
-- the durably linked head remains in the versioned retained terminal state `RETAINED_INCOMPLETE_MATCHING_RESOURCE`, binds the immutable receipt, and preserves the unchanged `committed_prefix`;
-- return the retained terminal workflow outcome without retry, skip, replacement, or predecessor rewrite;
-- close and reopen storage before any later invocation, which must return the same retained disposition from the verified head and receipt;
-- preserve existing CAS mappings exactly: not committed is `CONFLICT`; commit uncertainty is `INDETERMINATE_EXECUTION`; neither condition permits retry or advancement.
-
-**Rule B — advance structural prefix as incomplete**
+**Selected rule — advance structural prefix as incomplete**
 
 - retain the canonical v3 artifact in the immutable receipt;
 - record a distinct terminal receipt disposition `COMMITTED_INCOMPLETE_MATCHING_RESOURCE`;
@@ -147,7 +137,7 @@ A canonical v3 artifact with `outcome=INCOMPLETE` is immutable retained evidence
 - after close/reopen, verification of the committed head and receipt returns the same committed incomplete disposition without recomputing or republishing the constituent or advancing it again; the next invocation selects only `plan[committed_prefix]`;
 - preserve existing CAS mappings exactly: not committed is `CONFLICT`; commit uncertainty is `INDETERMINATE_EXECUTION`; neither condition permits retry, duplicate advancement, or predecessor rewrite.
 
-The implementation must not choose between these rules.
+This rule is the only authorized Program C transition behavior for canonical v3 matching-resource incompleteness.
 
 ### Authority ceiling
 
@@ -234,4 +224,6 @@ Rejected. The admitted graph and communities are nonempty, and no pairwise deter
 
 ## Acceptance record
 
-None. This proposal remains non-authoritative until independently reviewed, corrected if required, frozen by digest, and explicitly accepted by @jaresty. The acceptance record must identify the single retained rule by name and freeze the resulting ADR digest. An acceptance record is invalid while both alternatives remain normative.
+On 2026-10-25, @jaresty selected **Rule B — advance structural prefix as incomplete** and explicitly accepted the independently reviewed proposal identified in this ADR header. The rejected Rule A text was removed before acceptance so exactly one transition behavior remains normative.
+
+This acceptance authorizes additive private v3 implementation and qualification only. It does not authorize changing v1/v2 bytes or limits, public CLI/MCP enablement, Describe construction, candidate preparation, semantic grouping or acceptance, production admission, release, or deployment.
