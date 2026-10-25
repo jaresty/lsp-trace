@@ -248,11 +248,10 @@ func TestAuthoritativeProgramCTransitionDurableReopenProgression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publicationDir, err := os.MkdirTemp("/private/tmp", "program-c-publication-")
-	if err != nil {
-		t.Fatal(err)
+	publicationDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil || !filepath.IsAbs(publicationDir) {
+		t.Fatalf("resolve publication temp root: path=%q err=%v", publicationDir, err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(publicationDir) })
 	_ = os.Chmod(publicationDir, 0700)
 	publicationRoot, err := publication.OpenRoot(publicationDir)
 	if err != nil {
