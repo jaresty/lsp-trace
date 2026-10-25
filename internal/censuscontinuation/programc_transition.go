@@ -605,6 +605,11 @@ func (ProgramCProductionRunner) Instability(outcomes []programc.Outcome, b Progr
 	id := programc.InstabilityIdentity{AdmittedGraphSHA256: outcomes[0].Source.InputSHA256, ProjectionSHA256: programc.ProfileDigest, ProjectionPolicyID: programc.ProfileID, AlgorithmName: outcomes[0].Algorithm, AlgorithmVersion: b.AlgorithmVersion, ParametersCanonicalSHA256: b.ParametersSHA256, ResourcePolicySHA256: b.ResourcePolicySHA256}
 	runs := make([]programc.InstabilityRun, 0, 6)
 	for i, o := range outcomes {
+		runID := fmt.Sprintf("seed-%020d-replay-%d", o.Seed, i%3+1)
+		if o.Outcome == "EMPTY" {
+			runs = append(runs, programc.InstabilityRun{RunID: runID, Seed: o.Seed, Status: "INCOMPLETE"})
+			continue
+		}
 		community, e := programc.BuildCommunityArtifact(o, id)
 		if e != nil {
 			return nil, e
@@ -615,7 +620,7 @@ func (ProgramCProductionRunner) Instability(outcomes []programc.Outcome, b Progr
 			return nil, e
 		}
 		boundaryRaw, _ := json.Marshal(boundary)
-		runs = append(runs, programc.InstabilityRun{RunID: fmt.Sprintf("seed-%020d-replay-%d", o.Seed, i%3+1), Seed: o.Seed, Status: "COMPLETE", Community: o, CommunityArtifact: community, BoundaryArtifact: boundaryRaw, BoundaryRequest: br})
+		runs = append(runs, programc.InstabilityRun{RunID: runID, Seed: o.Seed, Status: "COMPLETE", Community: o, CommunityArtifact: community, BoundaryArtifact: boundaryRaw, BoundaryRequest: br})
 	}
 	req := programc.InstabilityRequest{Identity: id, DeclaredSeeds: []uint64{1, 2}, Runs: runs}
 	artifact, e := programc.ComputeInstabilityV2(req)

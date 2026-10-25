@@ -222,6 +222,105 @@ func TestProgramCTransitionEmptyAdvancesDistinctly(t *testing.T) {
 	}
 }
 
+func TestProgramCProductionRunnerEmptyInstabilityIsIncomplete(t *testing.T) {
+	native, err := json.Marshal(graph.Result{
+		SchemaVersion: graph.SchemaVersionV5,
+		Invocation:    graph.Invocation{WorkspaceURI: "file:///w", Server: graph.ServerInvocation{Command: "gopls"}, LanguageID: "go", Provenance: graph.InvocationProvenance{InvocationID: "empty-instability", SourceRevision: "rev", ServerVersion: "v"}},
+		Summary:       graph.Summary{Complete: true}, Capabilities: graph.Capabilities{CallHierarchyProvider: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exact, err := graphprovenance.CaptureV5(native, "session", 7, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcomes := make([]programc.Outcome, 0, 6)
+	for _, seed := range []uint64{1, 2} {
+		for replay := 0; replay < 3; replay++ {
+			outcome, failure := programc.Compute(exact, seed)
+			if failure != nil || outcome.Outcome != "EMPTY" {
+				t.Fatalf("ASSERT_PROGRAM_C_EMPTY_FIXTURE outcome=%+v failure=%v", outcome, failure)
+			}
+			outcomes = append(outcomes, outcome)
+		}
+	}
+	bindings := transitionBindings(transitionPlan(t, records2()[:1]))
+	raw, err := (ProgramCProductionRunner{}).Instability(outcomes, bindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var artifact programc.InstabilityArtifact
+	if err = json.Unmarshal(raw, &artifact); err != nil {
+		t.Fatal(err)
+	}
+	if artifact.SchemaVersion != programc.InstabilityVersionV2 || artifact.Outcome != "INCOMPLETE" || artifact.RunAccounting.IncompleteRunCount != 6 || artifact.RunAccounting.CompletedRunCount != 0 || artifact.RunAccounting.BlockedPairCount != 15 || artifact.RunAccounting.CompletedPairCount != 0 {
+		t.Fatalf("ASSERT_PROGRAM_C_EMPTY_INSTABILITY_INCOMPLETE artifact=%+v", artifact)
+	}
+	if err = (ProgramCProductionRunner{}).ValidateInstability(raw, outcomes, bindings); err != nil {
+		t.Fatalf("ASSERT_PROGRAM_C_EMPTY_INSTABILITY_VALID err=%v", err)
+	}
+}
+
+func TestProgramCProductionRunnerNonemptyBytesMatchPreEmptyBranch(t *testing.T) {
+	node := func(name string, line uint32) graph.Node {
+		rangeValue := graph.Range{Start: graph.Position{Line: line}, End: graph.Position{Line: line, Character: 1}}
+		return graph.NewNode(graph.Item{Name: name, Kind: 12, URI: "file:///w/a.go", Range: rangeValue, SelectionRange: rangeValue})
+	}
+	a, b := node("a", 0), node("b", 1)
+	native, err := json.Marshal(graph.Result{
+		SchemaVersion: graph.SchemaVersionV5,
+		Invocation:    graph.Invocation{WorkspaceURI: "file:///w", Server: graph.ServerInvocation{Command: "gopls"}, LanguageID: "go", Provenance: graph.InvocationProvenance{InvocationID: "nonempty-instability", SourceRevision: "rev", ServerVersion: "v"}},
+		Summary:       graph.Summary{Complete: true}, Capabilities: graph.Capabilities{CallHierarchyProvider: true},
+		Nodes: []graph.Node{a, b}, Edges: []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exact, err := graphprovenance.CaptureV5(native, "session", 7, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable})
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcomes := make([]programc.Outcome, 0, 6)
+	for _, seed := range []uint64{1, 2} {
+		for replay := 0; replay < 3; replay++ {
+			outcome, failure := programc.Compute(exact, seed)
+			if failure != nil || outcome.Outcome != "COMPLETE" {
+				t.Fatalf("ASSERT_PROGRAM_C_NONEMPTY_FIXTURE outcome=%+v failure=%v", outcome, failure)
+			}
+			outcomes = append(outcomes, outcome)
+		}
+	}
+	bindings := transitionBindings(transitionPlan(t, records2()[:1]))
+	got, err := (ProgramCProductionRunner{}).Instability(outcomes, bindings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := programc.InstabilityIdentity{AdmittedGraphSHA256: outcomes[0].Source.InputSHA256, ProjectionSHA256: programc.ProfileDigest, ProjectionPolicyID: programc.ProfileID, AlgorithmName: outcomes[0].Algorithm, AlgorithmVersion: bindings.AlgorithmVersion, ParametersCanonicalSHA256: bindings.ParametersSHA256, ResourcePolicySHA256: bindings.ResourcePolicySHA256}
+	runs := make([]programc.InstabilityRun, 0, 6)
+	for i, outcome := range outcomes {
+		community, buildErr := programc.BuildCommunityArtifact(outcome, id)
+		if buildErr != nil {
+			t.Fatal(buildErr)
+		}
+		boundaryRequest := programc.BoundaryRequest{PageRankTopK: 1, HubTopK: 1}
+		boundary, buildErr := programc.ComputeBoundary(outcome, boundaryRequest)
+		if buildErr != nil {
+			t.Fatal(buildErr)
+		}
+		boundaryRaw, _ := json.Marshal(boundary)
+		runs = append(runs, programc.InstabilityRun{RunID: fmt.Sprintf("seed-%020d-replay-%d", outcome.Seed, i%3+1), Seed: outcome.Seed, Status: "COMPLETE", Community: outcome, CommunityArtifact: community, BoundaryArtifact: boundaryRaw, BoundaryRequest: boundaryRequest})
+	}
+	legacy, err := programc.ComputeInstabilityV2(programc.InstabilityRequest{Identity: id, DeclaredSeeds: []uint64{1, 2}, Runs: runs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := json.Marshal(legacy)
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("ASSERT_PROGRAM_C_NONEMPTY_BYTES_UNCHANGED got_sha=%s want_sha=%s err=%v", transitionDigest(got), transitionDigest(want), err)
+	}
+}
+
 func TestProgramCTransitionReceiptMetadataAndCrashRecovery(t *testing.T) {
 	raw := transitionPlan(t, records2()[:1])
 	o, h := &transitionObjects{}, &transitionHeads{uncertainAt: 2}
