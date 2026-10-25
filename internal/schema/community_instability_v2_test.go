@@ -20,9 +20,20 @@ func TestCommunityInstabilityV1SchemaSHA256Pinned(t *testing.T) {
 	}
 }
 
-func TestCommunityInstabilityRegisteredExactlyV1V2(t *testing.T) {
+func TestCommunityInstabilityV3SchemaSHA256Pinned(t *testing.T) {
+	raw, err := os.ReadFile("schemas/lsp-trace.community-instability.v3.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(raw)
+	if got, want := hex.EncodeToString(sum[:]), "ab28b3dfd77b8e19838e8563329339ce0cd287a781ad7e31990a545476330db0"; got != want {
+		t.Fatalf("ASSERT_COMMUNITY_INSTABILITY_V3_SCHEMA_SHA256 got=%s want=%s", got, want)
+	}
+}
+
+func TestCommunityInstabilityRegisteredExactlyV1V2V3(t *testing.T) {
 	versions := RegisteredFamilies()[FamilyCommunityInstability]
-	if !reflect.DeepEqual(versions, []string{"v1", "v2"}) {
+	if !reflect.DeepEqual(versions, []string{"v1", "v2", "v3"}) {
 		t.Fatalf("ASSERT_COMMUNITY_INSTABILITY_EXACT_REGISTRATION: %v", versions)
 	}
 }

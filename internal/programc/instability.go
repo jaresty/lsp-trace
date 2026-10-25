@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"reflect"
@@ -16,9 +17,11 @@ import (
 
 const InstabilityVersion = "lsp-trace.community-instability.v1"
 const InstabilityVersionV2 = "lsp-trace.community-instability.v2"
+const InstabilityVersionV3 = "lsp-trace.community-instability.v3"
 const InstabilityPolicyVersion = "program-c-a-08-instability/v1"
 const InstabilityClaimCeiling = "STABLE means only that the declared metrics met the declared thresholds for the exact bound graph, projection, implementation, parameters, seeds, and completed runs. It is label-independent, structural, and not a universal stability or semantic-community claim."
 const InstabilityClaimCeilingV2 = "The outcome reports only whether the declared metrics met the declared thresholds for the exact bound graph, projection, implementation, parameters, seeds, and completed runs: STABLE means they met them, UNSTABLE means at least one completed comparison did not meet them, and INCOMPLETE means blocked comparisons prevented a complete determination. It is label-independent, structural, and not a universal stability or semantic-community claim."
+const InstabilityClaimCeilingV3 = "The outcome reports only whether the declared metrics completed under the exact bound graph, projection, implementation, parameters, seeds, completed runs, and frozen matching resource policy. INCOMPLETE includes comparisons blocked by that policy. It is label-independent, structural, and not a universal stability or semantic-community claim."
 const InstabilityStructuralCeiling = "Structural output does not establish feature identity, ownership, architecture, runtime execution, whole-source completeness, producer authentication, permission, production authority, or stability beyond the exact compared runs."
 
 const instabilityMaxRuns = 300
@@ -117,6 +120,58 @@ type InstabilityPair struct {
 	Reason                                string  `json:"reason,omitempty"`
 }
 
+type InstabilityPairV3 struct {
+	LeftRunID                             string   `json:"left_run_id"`
+	RightRunID                            string   `json:"right_run_id"`
+	LeftCommunityArtifactSHA256           string   `json:"left_community_artifact_sha256,omitempty"`
+	RightCommunityArtifactSHA256          string   `json:"right_community_artifact_sha256,omitempty"`
+	Outcome                               string   `json:"outcome"`
+	GuardKind                             string   `json:"guard_kind,omitempty"`
+	MatchingSmallerCommunityCount         int      `json:"matching_smaller_community_count,omitempty"`
+	MatchingLargerCommunityCount          int      `json:"matching_larger_community_count,omitempty"`
+	MatchingStateCount                    *uint64  `json:"matching_state_count,omitempty"`
+	MatchingWork                          *uint64  `json:"matching_work,omitempty"`
+	MatchingWorkLimit                     int      `json:"matching_work_limit,omitempty"`
+	NodeReassignmentNumerator             *int     `json:"node_reassignment_numerator,omitempty"`
+	NodeReassignmentDenominator           *int     `json:"node_reassignment_denominator,omitempty"`
+	UnmatchedCommunityNumerator           *int     `json:"unmatched_community_numerator,omitempty"`
+	UnmatchedCommunityDenominator         *int     `json:"unmatched_community_denominator,omitempty"`
+	VariationOfInformationBits            *float64 `json:"variation_of_information_bits,omitempty"`
+	VariationOfInformationNodeDenominator *int     `json:"variation_of_information_node_denominator,omitempty"`
+	PairwiseJaccardMinimum                *float64 `json:"pairwise_jaccard_minimum,omitempty"`
+	PairwiseJaccardMedian                 *float64 `json:"pairwise_jaccard_median,omitempty"`
+	PairwiseJaccardMean                   *float64 `json:"pairwise_jaccard_mean,omitempty"`
+	MatchedPairDenominator                *int     `json:"matched_pair_denominator,omitempty"`
+	Reason                                string   `json:"reason,omitempty"`
+}
+
+type InstabilityAccountingV3 struct {
+	DeclaredSeedCount                int `json:"declared_seed_count"`
+	DeclaredRunCount                 int `json:"declared_run_count"`
+	CompletedRunCount                int `json:"completed_run_count"`
+	FailedRunCount                   int `json:"failed_run_count"`
+	IncompleteRunCount               int `json:"incomplete_run_count"`
+	ExpectedPairCount                int `json:"expected_pair_count"`
+	CompletedPairCount               int `json:"completed_pair_count"`
+	BlockedIncompleteRunPairCount    int `json:"blocked_incomplete_run_pair_count"`
+	BlockedFailedRunPairCount        int `json:"blocked_failed_run_pair_count"`
+	BlockedMatchingResourcePairCount int `json:"blocked_matching_resource_pair_count"`
+}
+
+type InstabilityArtifactV3 struct {
+	SchemaVersion          string                  `json:"schema_version"`
+	ComparisonIdentity     InstabilityIdentity     `json:"comparison_identity"`
+	Outcome                string                  `json:"outcome"`
+	Thresholds             InstabilityThresholds   `json:"thresholds"`
+	PolicyVersion          string                  `json:"policy_version"`
+	Policy                 InstabilityPolicySpec   `json:"policy"`
+	PolicySHA256           string                  `json:"policy_sha256"`
+	RunAccounting          InstabilityAccountingV3 `json:"run_accounting"`
+	PairwiseComparisons    []InstabilityPairV3     `json:"pairwise_comparisons"`
+	ClaimCeiling           string                  `json:"claim_ceiling"`
+	StructuralClaimCeiling string                  `json:"structural_claim_ceiling"`
+}
+
 type InstabilityArtifact struct {
 	SchemaVersion          string                `json:"schema_version"`
 	ComparisonIdentity     InstabilityIdentity   `json:"comparison_identity"`
@@ -208,6 +263,59 @@ func ComputeInstability(r InstabilityRequest) (InstabilityArtifact, error) {
 
 func ComputeInstabilityV2(r InstabilityRequest) (InstabilityArtifact, error) {
 	return computeInstability(r, InstabilityVersionV2, InstabilityClaimCeilingV2, comparePartitionsCanonical)
+}
+
+func ComputeInstabilityV3(r InstabilityRequest) (InstabilityArtifactV3, error) {
+	a := InstabilityArtifactV3{SchemaVersion: InstabilityVersionV3, ComparisonIdentity: r.Identity, Outcome: "STABLE", Thresholds: exactInstabilityThresholds, PolicyVersion: InstabilityPolicyVersion, Policy: InstabilityPolicy, PolicySHA256: InstabilityPolicyDigest(), PairwiseComparisons: []InstabilityPairV3{}, ClaimCeiling: InstabilityClaimCeilingV3, StructuralClaimCeiling: InstabilityStructuralCeiling}
+	if err := validateInstabilityRequest(r); err != nil {
+		return InstabilityArtifactV3{}, err
+	}
+	runs := append([]InstabilityRun(nil), r.Runs...)
+	sort.Slice(runs, func(i, j int) bool { return runs[i].RunID < runs[j].RunID })
+	a.RunAccounting.DeclaredSeedCount = len(r.DeclaredSeeds)
+	a.RunAccounting.DeclaredRunCount = len(runs)
+	a.RunAccounting.ExpectedPairCount = len(runs) * (len(runs) - 1) / 2
+	for _, run := range runs {
+		switch run.Status {
+		case "COMPLETE":
+			a.RunAccounting.CompletedRunCount++
+		case "FAILED":
+			a.RunAccounting.FailedRunCount++
+		case "INCOMPLETE":
+			a.RunAccounting.IncompleteRunCount++
+		}
+	}
+	for i := 0; i < len(runs); i++ {
+		for j := i + 1; j < len(runs); j++ {
+			p := InstabilityPairV3{LeftRunID: runs[i].RunID, RightRunID: runs[j].RunID}
+			if runs[i].Status == "FAILED" || runs[j].Status == "FAILED" {
+				p.Outcome, p.Reason = "BLOCKED_FAILED_RUN", "incident run failed"
+				a.RunAccounting.BlockedFailedRunPairCount++
+			} else if runs[i].Status == "INCOMPLETE" || runs[j].Status == "INCOMPLETE" {
+				p.Outcome, p.Reason = "BLOCKED_INCOMPLETE_RUN", "incident run incomplete"
+				a.RunAccounting.BlockedIncompleteRunPairCount++
+			} else {
+				var err error
+				p, err = comparePartitionsV3(runs[i], runs[j])
+				if err != nil {
+					return InstabilityArtifactV3{}, err
+				}
+				if p.Outcome == "BLOCKED_MATCHING_RESOURCE" {
+					a.RunAccounting.BlockedMatchingResourcePairCount++
+				} else {
+					a.RunAccounting.CompletedPairCount++
+					if p.Outcome == "UNSTABLE" {
+						a.Outcome = "UNSTABLE"
+					}
+				}
+			}
+			a.PairwiseComparisons = append(a.PairwiseComparisons, p)
+		}
+	}
+	if a.RunAccounting.BlockedIncompleteRunPairCount+a.RunAccounting.BlockedFailedRunPairCount+a.RunAccounting.BlockedMatchingResourcePairCount > 0 {
+		a.Outcome = "INCOMPLETE"
+	}
+	return a, nil
 }
 
 func computeInstability(r InstabilityRequest, schemaVersion, claimCeiling string, compare func(InstabilityRun, InstabilityRun) (InstabilityPair, error)) (InstabilityArtifact, error) {
@@ -441,6 +549,82 @@ func comparePartitions(l, r InstabilityRun) (InstabilityPair, error) {
 
 func comparePartitionsCanonical(l, r InstabilityRun) (InstabilityPair, error) {
 	return comparePartitionsWithVI(l, r, variationInformationCanonical)
+}
+
+func matchingResourcePair(l, r InstabilityRun) (InstabilityPairV3, bool, error) {
+	n, m := len(l.Community.Communities), len(r.Community.Communities)
+	if n > m {
+		n, m = m, n
+	}
+	blocked := InstabilityPairV3{
+		LeftRunID: l.RunID, RightRunID: r.RunID,
+		LeftCommunityArtifactSHA256: rawSHA(l.CommunityArtifact), RightCommunityArtifactSHA256: rawSHA(r.CommunityArtifact),
+		Outcome: "BLOCKED_MATCHING_RESOURCE", MatchingSmallerCommunityCount: n, MatchingLargerCommunityCount: m,
+		MatchingWorkLimit: instabilityMaxMatchingWork, Reason: "exact community matching exceeds frozen resource policy",
+	}
+	if m >= 63 {
+		blocked.GuardKind = "MATCHING_STATE_WIDTH"
+		return blocked, true, nil
+	}
+	states := uint64(1) << uint(m)
+	if n != 0 && states > ^uint64(0)/uint64(n) {
+		return InstabilityPairV3{}, false, fmt.Errorf("matching policy arithmetic overflow")
+	}
+	work := states * uint64(n)
+	if work > uint64(instabilityMaxMatchingWork) {
+		blocked.GuardKind = "MATCHING_WORK_LIMIT"
+		blocked.MatchingStateCount = &states
+		blocked.MatchingWork = &work
+		return blocked, true, nil
+	}
+	return InstabilityPairV3{}, false, nil
+}
+
+func InstabilityRequiresV3(r InstabilityRequest) (bool, error) {
+	for i := 0; i < len(r.Runs); i++ {
+		if r.Runs[i].Status != "COMPLETE" {
+			continue
+		}
+		for j := i + 1; j < len(r.Runs); j++ {
+			if r.Runs[j].Status != "COMPLETE" {
+				continue
+			}
+			_, blocked, err := matchingResourcePair(r.Runs[i], r.Runs[j])
+			if err != nil {
+				return false, err
+			}
+			if blocked {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func comparePartitionsV3(l, r InstabilityRun) (InstabilityPairV3, error) {
+	if blocked, ok, err := matchingResourcePair(l, r); err != nil {
+		return InstabilityPairV3{}, err
+	} else if ok {
+		return blocked, nil
+	}
+	p, err := comparePartitionsCanonical(l, r)
+	if err != nil {
+		return InstabilityPairV3{}, err
+	}
+	return instabilityPairV3FromCompleted(p), nil
+}
+
+func instabilityPairV3FromCompleted(p InstabilityPair) InstabilityPairV3 {
+	return InstabilityPairV3{
+		LeftRunID: p.LeftRunID, RightRunID: p.RightRunID,
+		LeftCommunityArtifactSHA256: p.LeftCommunityArtifactSHA256, RightCommunityArtifactSHA256: p.RightCommunityArtifactSHA256,
+		Outcome:                   p.Outcome,
+		NodeReassignmentNumerator: &p.NodeReassignmentNumerator, NodeReassignmentDenominator: &p.NodeReassignmentDenominator,
+		UnmatchedCommunityNumerator: &p.UnmatchedCommunityNumerator, UnmatchedCommunityDenominator: &p.UnmatchedCommunityDenominator,
+		VariationOfInformationBits: &p.VariationOfInformationBits, VariationOfInformationNodeDenominator: &p.VariationOfInformationNodeDenominator,
+		PairwiseJaccardMinimum: &p.PairwiseJaccardMinimum, PairwiseJaccardMedian: &p.PairwiseJaccardMedian,
+		PairwiseJaccardMean: &p.PairwiseJaccardMean, MatchedPairDenominator: &p.MatchedPairDenominator, Reason: p.Reason,
+	}
 }
 
 func comparePartitionsWithVI(l, r InstabilityRun, variationInformationFor func([]Community, []Community) (float64, int)) (InstabilityPair, error) {
@@ -747,6 +931,106 @@ func ValidateInstability(raw []byte, r InstabilityRequest) error {
 
 func ValidateInstabilityV2(raw []byte, r InstabilityRequest) error {
 	return validateInstability(raw, r, "v2", ComputeInstabilityV2)
+}
+
+func decodeInstabilityV3(raw []byte) (InstabilityArtifactV3, error) {
+	if _, err := schema.ValidateFor(raw, schema.FamilyCommunityInstability, "v3"); err != nil {
+		return InstabilityArtifactV3{}, err
+	}
+	var got InstabilityArtifactV3
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&got); err != nil {
+		return InstabilityArtifactV3{}, err
+	}
+	if d.Decode(&struct{}{}) != io.EOF {
+		return InstabilityArtifactV3{}, fmt.Errorf("trailing instability content")
+	}
+	return got, nil
+}
+
+func ValidateInstabilityV3MatchingResourceDisposition(raw []byte) error {
+	got, err := decodeInstabilityV3(raw)
+	if err != nil {
+		return err
+	}
+	a := got.RunAccounting
+	if got.Outcome != "INCOMPLETE" || a.DeclaredRunCount != a.CompletedRunCount+a.FailedRunCount+a.IncompleteRunCount || a.ExpectedPairCount != a.DeclaredRunCount*(a.DeclaredRunCount-1)/2 || a.ExpectedPairCount != a.CompletedPairCount+a.BlockedIncompleteRunPairCount+a.BlockedFailedRunPairCount+a.BlockedMatchingResourcePairCount || len(got.PairwiseComparisons) != a.ExpectedPairCount || a.BlockedMatchingResourcePairCount == 0 {
+		return fmt.Errorf("invalid v3 matching-resource accounting")
+	}
+	counts := map[string]int{}
+	seen := map[string]bool{}
+	runIDs := map[string]bool{}
+	for _, p := range got.PairwiseComparisons {
+		runIDs[p.LeftRunID], runIDs[p.RightRunID] = true, true
+		if p.LeftRunID >= p.RightRunID {
+			return fmt.Errorf("noncanonical v3 pair order")
+		}
+		key := p.LeftRunID + "\x00" + p.RightRunID
+		if seen[key] {
+			return fmt.Errorf("duplicate v3 pair")
+		}
+		seen[key] = true
+		counts[p.Outcome]++
+		if p.Outcome != "BLOCKED_MATCHING_RESOURCE" {
+			continue
+		}
+		if p.MatchingSmallerCommunityCount > p.MatchingLargerCommunityCount || p.MatchingWorkLimit != instabilityMaxMatchingWork {
+			return fmt.Errorf("invalid v3 matching-resource dimensions")
+		}
+		switch p.GuardKind {
+		case "MATCHING_STATE_WIDTH":
+			if p.MatchingLargerCommunityCount < 63 || p.MatchingStateCount != nil || p.MatchingWork != nil {
+				return fmt.Errorf("invalid v3 width guard")
+			}
+		case "MATCHING_WORK_LIMIT":
+			if p.MatchingLargerCommunityCount >= 63 || p.MatchingStateCount == nil || p.MatchingWork == nil {
+				return fmt.Errorf("invalid v3 work guard")
+			}
+			states := uint64(1) << uint(p.MatchingLargerCommunityCount)
+			if p.MatchingSmallerCommunityCount != 0 && states > ^uint64(0)/uint64(p.MatchingSmallerCommunityCount) || *p.MatchingStateCount != states || *p.MatchingWork != states*uint64(p.MatchingSmallerCommunityCount) || *p.MatchingWork <= uint64(instabilityMaxMatchingWork) {
+				return fmt.Errorf("invalid v3 matching work")
+			}
+		default:
+			return fmt.Errorf("invalid v3 matching-resource guard")
+		}
+	}
+	if len(runIDs) != a.DeclaredRunCount {
+		return fmt.Errorf("v3 declared run identity mismatch")
+	}
+	orderedRunIDs := make([]string, 0, len(runIDs))
+	for id := range runIDs {
+		orderedRunIDs = append(orderedRunIDs, id)
+	}
+	sort.Strings(orderedRunIDs)
+	pairIndex := 0
+	for i := 0; i < len(orderedRunIDs); i++ {
+		for j := i + 1; j < len(orderedRunIDs); j++ {
+			if pairIndex >= len(got.PairwiseComparisons) || got.PairwiseComparisons[pairIndex].LeftRunID != orderedRunIDs[i] || got.PairwiseComparisons[pairIndex].RightRunID != orderedRunIDs[j] {
+				return fmt.Errorf("v3 canonical pair sequence mismatch")
+			}
+			pairIndex++
+		}
+	}
+	if pairIndex != len(got.PairwiseComparisons) || counts["STABLE"]+counts["UNSTABLE"] != a.CompletedPairCount || counts["BLOCKED_INCOMPLETE_RUN"] != a.BlockedIncompleteRunPairCount || counts["BLOCKED_FAILED_RUN"] != a.BlockedFailedRunPairCount || counts["BLOCKED_MATCHING_RESOURCE"] != a.BlockedMatchingResourcePairCount {
+		return fmt.Errorf("v3 pair outcome accounting mismatch")
+	}
+	return nil
+}
+
+func ValidateInstabilityV3(raw []byte, r InstabilityRequest) error {
+	got, err := decodeInstabilityV3(raw)
+	if err != nil {
+		return err
+	}
+	want, err := ComputeInstabilityV3(r)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(canonicalInstability(got), canonicalInstability(want)) {
+		return fmt.Errorf("instability validation mismatch")
+	}
+	return nil
 }
 
 func validateInstability(raw []byte, r InstabilityRequest, schemaVersion string, compute func(InstabilityRequest) (InstabilityArtifact, error)) error {

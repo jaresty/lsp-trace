@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	ProgramCTransitionPlanVersion    = "lsp-trace.census-program-c-transition-plan.private.v1"
-	programCTransitionHeadVersion    = "lsp-trace.census-program-c-transition-head.private.v2"
-	programCTransitionReceiptVersion = "lsp-trace.census-program-c-transition-receipt.private.v3"
+	ProgramCTransitionPlanVersion      = "lsp-trace.census-program-c-transition-plan.private.v1"
+	programCTransitionHeadVersion      = "lsp-trace.census-program-c-transition-head.private.v2"
+	programCTransitionReceiptVersionV3 = "lsp-trace.census-program-c-transition-receipt.private.v3"
+	programCTransitionReceiptVersion   = "lsp-trace.census-program-c-transition-receipt.private.v4"
 )
 
 var ErrInvalidProgramCTransition = errors.New("invalid census program-c transition")
@@ -134,6 +135,7 @@ type ProgramCTransitionResult struct {
 	Failure          string
 	ResultSHA256     string
 	ResultByteLength int
+	Disposition      string
 }
 
 // ProgramCTransitionVerificationRequest binds a read-only completion check to
@@ -190,6 +192,7 @@ type programCTransitionReceipt struct {
 	ClaimGeneration         uint64                         `json:"claim_generation"`
 	ClaimSelector           string                         `json:"claim_selector"`
 	Outcome                 string                         `json:"outcome"`
+	Disposition             string                         `json:"disposition,omitempty"`
 	ProgramCOutcome         string                         `json:"program_c_outcome"`
 	FailureStage            ProgramCTransitionFailureStage `json:"failure_stage"`
 	Failure                 string                         `json:"failure"`
@@ -304,7 +307,7 @@ func transitionValidateHead(h programCTransitionHead, r ProgramCTransitionReques
 	return nil
 }
 func transitionResult(h programCTransitionHead, s ProgramCTransitionStatus, r programCTransitionReceipt) ProgramCTransitionResult {
-	return ProgramCTransitionResult{Status: s, Head: censussourcecontinuation.HeadRevision{Generation: h.Generation, Selector: h.Selector}, ReceiptSelector: h.ReceiptSelector, CommittedPrefix: h.CommittedPrefix, ConstituentCount: h.ConstituentCount, Ordinal: h.ClaimOrdinal, ProgramCOutcome: r.ProgramCOutcome, FailureStage: r.FailureStage, Failure: r.Failure, ResultSHA256: r.ResultSHA256, ResultByteLength: r.ResultByteLength}
+	return ProgramCTransitionResult{Status: s, Head: censussourcecontinuation.HeadRevision{Generation: h.Generation, Selector: h.Selector}, ReceiptSelector: h.ReceiptSelector, CommittedPrefix: h.CommittedPrefix, ConstituentCount: h.ConstituentCount, Ordinal: h.ClaimOrdinal, ProgramCOutcome: r.ProgramCOutcome, FailureStage: r.FailureStage, Failure: r.Failure, ResultSHA256: r.ResultSHA256, ResultByteLength: r.ResultByteLength, Disposition: r.Disposition}
 }
 func transitionCAS(ctx context.Context, r ProgramCTransitionRequest, e censussourcecontinuation.HeadRevision, h programCTransitionHead) (programCTransitionHead, censussourcecontinuation.CASOutcome, error) {
 	raw, x := transitionSelector(&h)
@@ -380,7 +383,11 @@ func CoordinateProgramCTransition(ctx context.Context, r ProgramCTransitionReque
 		return transitionCommitReceipt(ctx, r, h, cur, plan)
 	}
 	if h.CommittedPrefix == h.ConstituentCount {
-		return transitionResult(h, ProgramCTransitionComplete, programCTransitionReceipt{}), nil
+		receipt, err := transitionLoadReceipt(ctx, r, h, plan)
+		if err != nil || receipt.Outcome != "SUCCEEDED" {
+			return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+		}
+		return transitionResult(h, ProgramCTransitionComplete, receipt), nil
 	}
 	record := plan.Records[h.CommittedPrefix]
 	claim := h
@@ -444,10 +451,18 @@ func CoordinateProgramCTransition(ctx context.Context, r ProgramCTransitionReque
 		receipt.Outcome = "FAILED"
 		receipt.FailureStage = failureStage
 		receipt.Failure = runErr.Error()
-	} else if transitionValidateResult(receipt.ResultBytes) != nil {
+	} else if schemaVersion, claimCeiling, outcome, metaErr := transitionResultMetadata(receipt.ResultBytes); metaErr != nil {
 		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
 	} else {
 		receipt.Outcome = "SUCCEEDED"
+		receipt.InstabilitySchema = schemaVersion
+		receipt.InstabilityClaimCeiling = claimCeiling
+		if schemaVersion == programc.InstabilityVersionV3 {
+			if outcome != "INCOMPLETE" {
+				return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+			}
+			receipt.Disposition = "COMMITTED_INCOMPLETE_MATCHING_RESOURCE"
+		}
 		receipt.ResultSHA256 = transitionSHA(receipt.ResultBytes)
 		receipt.ResultByteLength = len(receipt.ResultBytes)
 	}
@@ -519,11 +534,32 @@ func verifyProgramCTransitionCompletion(ctx context.Context, workflowKey, headKe
 }
 
 func transitionValidateResult(raw []byte) error {
-	var x programc.InstabilityArtifact
-	if transitionStrict(raw, &x) != nil || x.SchemaVersion != programc.InstabilityVersionV2 || x.ClaimCeiling != programc.InstabilityClaimCeilingV2 || x.StructuralClaimCeiling != programc.InstabilityStructuralCeiling {
-		return ErrInvalidProgramCTransition
+	_, _, _, err := transitionResultMetadata(raw)
+	return err
+}
+func transitionResultMetadata(raw []byte) (string, string, string, error) {
+	var header struct {
+		SchemaVersion string `json:"schema_version"`
 	}
-	return nil
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return "", "", "", ErrInvalidProgramCTransition
+	}
+	switch header.SchemaVersion {
+	case programc.InstabilityVersionV2:
+		var x programc.InstabilityArtifact
+		if transitionStrict(raw, &x) != nil || x.ClaimCeiling != programc.InstabilityClaimCeilingV2 || x.StructuralClaimCeiling != programc.InstabilityStructuralCeiling {
+			return "", "", "", ErrInvalidProgramCTransition
+		}
+		return x.SchemaVersion, x.ClaimCeiling, x.Outcome, nil
+	case programc.InstabilityVersionV3:
+		var x programc.InstabilityArtifactV3
+		if transitionStrict(raw, &x) != nil || x.ClaimCeiling != programc.InstabilityClaimCeilingV3 || x.StructuralClaimCeiling != programc.InstabilityStructuralCeiling || programc.ValidateInstabilityV3MatchingResourceDisposition(raw) != nil {
+			return "", "", "", ErrInvalidProgramCTransition
+		}
+		return x.SchemaVersion, x.ClaimCeiling, x.Outcome, nil
+	default:
+		return "", "", "", ErrInvalidProgramCTransition
+	}
 }
 func transitionLoadReceipt(ctx context.Context, r ProgramCTransitionRequest, h programCTransitionHead, p ProgramCTransitionPlan) (programCTransitionReceipt, error) {
 	raw, e := r.Objects.Get(ctx, h.ReceiptSelector)
@@ -531,7 +567,7 @@ func transitionLoadReceipt(ctx context.Context, r ProgramCTransitionRequest, h p
 		return programCTransitionReceipt{}, ErrInvalidProgramCTransition
 	}
 	var x programCTransitionReceipt
-	if transitionStrict(raw, &x) != nil || x.SchemaVersion != programCTransitionReceiptVersion || x.WorkflowKey != r.WorkflowKey || x.HeadKey != r.HeadKey || x.Authority != 0 || x.Bindings != r.Bindings || x.ConstituentCount != len(p.Records) || x.Ordinal != h.ClaimOrdinal || x.Ordinal < 0 || x.Ordinal >= len(p.Records) || x.PublicationSelector != h.ClaimPublicationSelector || x.ConstituentSelector != h.ClaimConstituentSelector || x.ReceiptOrdinal != p.Records[x.Ordinal].ReceiptOrdinal || x.PublicationByteLength != p.Records[x.Ordinal].PublicationByteLength || x.BatchOrdinal != p.Records[x.Ordinal].BatchOrdinal || x.PublicationSelector != p.Records[x.Ordinal].PublicationSelector || x.ConstituentSelector != p.Records[x.Ordinal].ConstituentSelector || x.ClaimGeneration != h.ClaimGeneration || x.ClaimSelector != h.ClaimSelector || x.InstabilitySchema != programc.InstabilityVersionV2 || x.InstabilityClaimCeiling != programc.InstabilityClaimCeilingV2 {
+	if transitionStrict(raw, &x) != nil || (x.SchemaVersion != programCTransitionReceiptVersionV3 && x.SchemaVersion != programCTransitionReceiptVersion) || x.WorkflowKey != r.WorkflowKey || x.HeadKey != r.HeadKey || x.Authority != 0 || x.Bindings != r.Bindings || x.ConstituentCount != len(p.Records) || x.Ordinal != h.ClaimOrdinal || x.Ordinal < 0 || x.Ordinal >= len(p.Records) || x.PublicationSelector != h.ClaimPublicationSelector || x.ConstituentSelector != h.ClaimConstituentSelector || x.ReceiptOrdinal != p.Records[x.Ordinal].ReceiptOrdinal || x.PublicationByteLength != p.Records[x.Ordinal].PublicationByteLength || x.BatchOrdinal != p.Records[x.Ordinal].BatchOrdinal || x.PublicationSelector != p.Records[x.Ordinal].PublicationSelector || x.ConstituentSelector != p.Records[x.Ordinal].ConstituentSelector || x.ClaimGeneration != h.ClaimGeneration || x.ClaimSelector != h.ClaimSelector || (x.InstabilitySchema != programc.InstabilityVersionV2 && x.InstabilitySchema != programc.InstabilityVersionV3) || (x.InstabilityClaimCeiling != programc.InstabilityClaimCeilingV2 && x.InstabilityClaimCeiling != programc.InstabilityClaimCeilingV3) || (x.SchemaVersion == programCTransitionReceiptVersionV3 && (x.InstabilitySchema != programc.InstabilityVersionV2 || x.InstabilityClaimCeiling != programc.InstabilityClaimCeilingV2 || x.Disposition != "")) {
 		return x, ErrInvalidProgramCTransition
 	}
 	if !validTransitionReceiptOutcome(x) {
@@ -542,7 +578,15 @@ func transitionLoadReceipt(ctx context.Context, r ProgramCTransitionRequest, h p
 
 func validTransitionReceiptOutcome(x programCTransitionReceipt) bool {
 	if x.Outcome == "SUCCEEDED" {
-		return (x.ProgramCOutcome == "COMPLETE" || x.ProgramCOutcome == "EMPTY") && transitionValidateResult(x.ResultBytes) == nil && x.ResultSHA256 == transitionSHA(x.ResultBytes) && x.ResultByteLength == len(x.ResultBytes) && x.FailureStage == "" && x.Failure == ""
+		schemaVersion, claimCeiling, outcome, err := transitionResultMetadata(x.ResultBytes)
+		if err != nil || schemaVersion != x.InstabilitySchema || claimCeiling != x.InstabilityClaimCeiling {
+			return false
+		}
+		dispositionValid := schemaVersion == programc.InstabilityVersionV2 && x.Disposition == ""
+		if schemaVersion == programc.InstabilityVersionV3 {
+			dispositionValid = outcome == "INCOMPLETE" && x.Disposition == "COMMITTED_INCOMPLETE_MATCHING_RESOURCE"
+		}
+		return dispositionValid && (x.ProgramCOutcome == "COMPLETE" || x.ProgramCOutcome == "EMPTY") && x.ResultSHA256 == transitionSHA(x.ResultBytes) && x.ResultByteLength == len(x.ResultBytes) && x.FailureStage == "" && x.Failure == ""
 	}
 	if x.Outcome != "FAILED" || x.Failure == "" || len(x.ResultBytes) != 0 || x.ResultSHA256 != "" || x.ResultByteLength != 0 {
 		return false
@@ -623,15 +667,22 @@ func (ProgramCProductionRunner) Instability(outcomes []programc.Outcome, b Progr
 		runs = append(runs, programc.InstabilityRun{RunID: runID, Seed: o.Seed, Status: "COMPLETE", Community: o, CommunityArtifact: community, BoundaryArtifact: boundaryRaw, BoundaryRequest: br})
 	}
 	req := programc.InstabilityRequest{Identity: id, DeclaredSeeds: []uint64{1, 2}, Runs: runs}
+	requiresV3, e := programc.InstabilityRequiresV3(req)
+	if e != nil {
+		return nil, e
+	}
+	if requiresV3 {
+		artifact, err := programc.ComputeInstabilityV3(req)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(artifact)
+	}
 	artifact, e := programc.ComputeInstabilityV2(req)
 	if e != nil {
 		return nil, e
 	}
-	raw, _ := json.Marshal(artifact)
-	if e = programc.ValidateInstabilityV2(raw, req); e != nil {
-		return nil, e
-	}
-	return raw, nil
+	return json.Marshal(artifact)
 }
 func (r ProgramCProductionRunner) ValidateInstability(raw []byte, outcomes []programc.Outcome, b ProgramCTransitionBindings) error {
 	expected, err := r.Instability(outcomes, b)

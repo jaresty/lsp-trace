@@ -160,6 +160,25 @@ func transitionResultBytes(outcome string) []byte {
 	b, _ := json.Marshal(programc.InstabilityArtifact{SchemaVersion: programc.InstabilityVersionV2, Outcome: outcome, PairwiseComparisons: []programc.InstabilityPair{}, ClaimCeiling: programc.InstabilityClaimCeilingV2, StructuralClaimCeiling: programc.InstabilityStructuralCeiling})
 	return b
 }
+func transitionV3IncompleteResultBytes() []byte {
+	pairs := make([]programc.InstabilityPairV3, 0, 15)
+	for left := 'a'; left <= 'f'; left++ {
+		for right := left + 1; right <= 'f'; right++ {
+			states, work := uint64(131072), uint64(2228224)
+			pairs = append(pairs, programc.InstabilityPairV3{LeftRunID: string(left), RightRunID: string(right), Outcome: "BLOCKED_MATCHING_RESOURCE", GuardKind: "MATCHING_WORK_LIMIT", MatchingSmallerCommunityCount: 17, MatchingLargerCommunityCount: 17, MatchingStateCount: &states, MatchingWork: &work, MatchingWorkLimit: 1000000, Reason: "exact community matching exceeds frozen resource policy"})
+		}
+	}
+	digest := "sha256:" + strings.Repeat("a", 64)
+	b, _ := json.Marshal(programc.InstabilityArtifactV3{
+		SchemaVersion:      programc.InstabilityVersionV3,
+		ComparisonIdentity: programc.InstabilityIdentity{AdmittedGraphSHA256: digest, ProjectionSHA256: digest, ProjectionPolicyID: "calls-v1", AlgorithmName: "leiden", AlgorithmVersion: "v", ParametersCanonicalSHA256: digest, ResourcePolicySHA256: digest},
+		Outcome:            "INCOMPLETE", Thresholds: programc.InstabilityThresholds{NodeReassignmentRateMax: .05, UnmatchedCommunityRateMax: .05, VariationOfInformationBitsMax: .1, PairwiseJaccardMinimumMin: .8},
+		PolicyVersion: programc.InstabilityPolicyVersion, Policy: programc.InstabilityPolicy, PolicySHA256: programc.InstabilityPolicyDigest(),
+		RunAccounting:       programc.InstabilityAccountingV3{DeclaredSeedCount: 2, DeclaredRunCount: 6, CompletedRunCount: 6, ExpectedPairCount: 15, BlockedMatchingResourcePairCount: 15},
+		PairwiseComparisons: pairs, ClaimCeiling: programc.InstabilityClaimCeilingV3, StructuralClaimCeiling: programc.InstabilityStructuralCeiling,
+	})
+	return b
+}
 func transitionRequest(raw []byte, o *transitionObjects, h *transitionHeads, r ProgramCTransitionRunner) ProgramCTransitionRequest {
 	return ProgramCTransitionRequest{WorkflowKey: "workflow", HeadKey: "head", Bindings: transitionBindings(raw), PlanSource: &transitionPlanSource{raw: raw}, Objects: o, Heads: h, Runner: r}
 }
@@ -209,6 +228,23 @@ func TestProgramCTransitionRequestHasNoCallerSelection(t *testing.T) {
 		if _, ok := typ.FieldByName(name); ok {
 			t.Fatalf("ASSERT_PROGRAM_C_TRANSITION_NO_CALLER_SELECTOR field=%s", name)
 		}
+	}
+}
+
+func TestProgramCTransitionV3MatchingResourceIncompleteAdvancesOnce(t *testing.T) {
+	raw := transitionPlan(t, records2()[:1])
+	o, h := &transitionObjects{}, &transitionHeads{}
+	r := &transitionRunner{result: transitionV3IncompleteResultBytes()}
+	req := transitionRequest(raw, o, h, r)
+	first, err := CoordinateProgramCTransition(context.Background(), req)
+	if err != nil || first.Status != ProgramCTransitionCommitted || first.CommittedPrefix != 1 || first.Disposition != "COMMITTED_INCOMPLETE_MATCHING_RESOURCE" {
+		t.Fatalf("ASSERT_PROGRAM_C_V3_INCOMPLETE_ADVANCES first=%+v err=%v", first, err)
+	}
+	puts, resolves, computes, cas := o.puts, len(r.constituents), len(r.seeds), h.cas
+	req.Expected = first.Head
+	second, err := CoordinateProgramCTransition(context.Background(), req)
+	if err != nil || second.Status != ProgramCTransitionComplete || second.CommittedPrefix != 1 || second.Disposition != "COMMITTED_INCOMPLETE_MATCHING_RESOURCE" || o.puts != puts || len(r.constituents) != resolves || len(r.seeds) != computes || h.cas != cas {
+		t.Fatalf("ASSERT_PROGRAM_C_V3_INCOMPLETE_REOPEN_NO_REPLAY second=%+v puts=%d/%d resolves=%d/%d computes=%d/%d cas=%d/%d err=%v", second, o.puts, puts, len(r.constituents), resolves, len(r.seeds), computes, h.cas, cas, err)
 	}
 }
 

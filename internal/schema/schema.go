@@ -70,7 +70,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyBoundedRankingV2:            {"v2": "lsp-trace.local-normative-ranking.v1", "local-v1": "lsp-trace.local-normative-ranking.v1"},
 	FamilyCommunity:                   {"v1": "lsp-trace.community.v1"},
 	FamilyCommunityBoundary:           {"v1": "lsp-trace.community-boundary.v1"},
-	FamilyCommunityInstability:        {"v1": "lsp-trace.community-instability.v1", "v2": "lsp-trace.community-instability.v2"},
+	FamilyCommunityInstability:        {"v1": "lsp-trace.community-instability.v1", "v2": "lsp-trace.community-instability.v2", "v3": "lsp-trace.community-instability.v3"},
 	FamilyCommunityPresentation:       {"v1": "lsp-trace.community-presentation.v1"},
 	FamilyTechnicalCommunityRegister:  {"v1": "lsp-trace.technical-community-register.v1"},
 	FamilyPassageVerification:         {"v1": "lsp-trace.passage-verification.v1"},

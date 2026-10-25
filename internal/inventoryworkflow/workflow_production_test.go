@@ -207,16 +207,16 @@ func TestRunBoundedProductionCustodyToGapLedger(t *testing.T) {
 }
 
 // TestRunFrozenCorpusProductionCustodyToGapLedger is an opt-in, long-running
-// qualification. The pre-reuse attempt timed out after 10 minutes during
-// repeated authoritative replica verification. With invocation-scoped source
-// reuse, the corpus reached a retained INSTABILITY_BUILD matching-policy work
-// limit after 46 transitions. Neither attempt qualified the frozen corpus. Only
-// a completed passing invocation of this exact test establishes this boundary.
+// qualification. The pre-reuse attempt timed out during repeated authoritative
+// replica verification. Invocation-scoped reuse then exposed a truthful
+// transition-46 matching-resource stop. Accepted ADR 0013 v3 custody preserves
+// that incompleteness and advances the structural prefix exactly once. A
+// completed passing invocation of this exact test establishes this boundary.
 func TestRunFrozenCorpusProductionCustodyToGapLedger(t *testing.T) {
 	receiptPath := os.Getenv("LSP_TRACE_PROGRAM_C_RECEIPT")
 	ledgerPath := os.Getenv("LSP_TRACE_PROGRAM_C_LEDGER")
 	if receiptPath == "" || ledgerPath == "" {
-		t.Skip("frozen 395-constituent qualification remains unqualified; set LSP_TRACE_PROGRAM_C_RECEIPT and LSP_TRACE_PROGRAM_C_LEDGER for the opt-in long-running test")
+		t.Skip("set LSP_TRACE_PROGRAM_C_RECEIPT and LSP_TRACE_PROGRAM_C_LEDGER to reproduce the opt-in frozen 395-constituent qualification")
 	}
 	receipt := exactInput(t, receiptPath)
 	ledger := exactInput(t, ledgerPath)
