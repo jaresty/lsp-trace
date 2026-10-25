@@ -27,6 +27,9 @@ type Result struct {
 	CurrentStage           inventorysuccessor.Stage
 	LastCompletedStage     inventorysuccessor.Stage
 	ProgramCStatus         censuscontinuation.ProgramCTransitionStatus
+	ProgramCOutcome        string
+	ProgramCFailureStage   censuscontinuation.ProgramCTransitionFailureStage
+	ProgramCFailure        string
 	ProgramCTransitions    int
 	Successor              inventorysuccessor.Result
 	GapLedger              []byte
@@ -105,6 +108,9 @@ func run(ctx context.Context, request Request, deps workflowDeps) (Result, error
 	}
 	result := baseResult(inventorysuccessor.OutcomeAdvanced)
 	result.ProgramCStatus = programC.Final.Status
+	result.ProgramCOutcome = programC.Final.ProgramCOutcome
+	result.ProgramCFailureStage = programC.Final.FailureStage
+	result.ProgramCFailure = programC.Final.Failure
 	result.ProgramCTransitions = len(programC.Transitions)
 	result.CurrentStage = inventorysuccessor.StageProgramC
 	switch programC.Final.Status {

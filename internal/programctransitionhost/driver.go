@@ -35,11 +35,20 @@ type repeatedDriverDeps struct {
 }
 
 func RunRepeated(ctx context.Context, request RepeatedRequest) (RepeatedResult, error) {
+	if ctx == nil || request.MaxTransitions < 1 || request.MaxTransitions > MaxRepeatedTransitions || request.OpenState == nil {
+		return RepeatedResult{}, censuscontinuation.ErrInvalidProgramCTransition
+	}
+	prepared, err := prepareInvocation(ctx, request.Receipt, request.Ledger, request.Bindings)
+	if err != nil {
+		return RepeatedResult{}, err
+	}
 	return runRepeated(ctx, request, repeatedDriverDeps{
 		open:     request.OpenState,
 		revision: currentRevision,
-		step:     InvokeOne,
-		close:    func(root *publication.Root) error { return root.Close() },
+		step: func(ctx context.Context, step Request) (censuscontinuation.ProgramCTransitionResult, error) {
+			return invokePrepared(ctx, step.StateRoot, step.WorkflowKey, step.HeadKey, step.Expected, prepared)
+		},
+		close: func(root *publication.Root) error { return root.Close() },
 	})
 }
 

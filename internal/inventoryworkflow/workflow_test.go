@@ -106,6 +106,17 @@ func TestRunCancellationIsTypedBeforeEffects(t *testing.T) {
 	}
 }
 
+func TestRunRetainedFailureExposesOnlyNonCustodialDiagnostics(t *testing.T) {
+	fixture := &workflowDepsFixture{final: censuscontinuation.ProgramCTransitionResult{
+		Status: censuscontinuation.ProgramCTransitionRetained, ProgramCOutcome: "COMPLETE",
+		FailureStage: censuscontinuation.ProgramCTransitionFailureInstabilityBuild, Failure: "matching policy work limit",
+	}}
+	got, err := run(context.Background(), validRequest(), fixture.deps())
+	if err != nil || got.Outcome != inventorysuccessor.OutcomeRetainedFailure || got.ProgramCOutcome != "COMPLETE" || got.ProgramCFailureStage != censuscontinuation.ProgramCTransitionFailureInstabilityBuild || got.ProgramCFailure != "matching policy work limit" || got.Successor.Head.Selector != "" || got.GapLedger != nil {
+		t.Fatalf("ASSERT_WORKFLOW_RETAINED_DIAGNOSTICS got=%+v err=%v", got, err)
+	}
+}
+
 func TestRunStopsOnSuccessorConflictBeforeLedgerReopen(t *testing.T) {
 	fixture := &workflowDepsFixture{final: completeProgramC()}
 	deps := fixture.deps()

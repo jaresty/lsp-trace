@@ -30,6 +30,19 @@ func exactFixtureInput(t *testing.T, path string) censuscontinuation.ExactProgra
 	return censuscontinuation.ExactProgramCTransitionInput{Reader: exactFixtureFile{path: path}, ByteLength: int64(len(raw)), SHA256: digest(raw)}
 }
 
+func TestVerifiedPlanSourceReturnsDefensiveCopies(t *testing.T) {
+	source := verifiedPlanSource{raw: []byte("canonical-plan")}
+	first, err := source.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first[0] = 'X'
+	second, err := source.Load(context.Background())
+	if err != nil || string(second) != "canonical-plan" {
+		t.Fatalf("ASSERT_VERIFIED_PLAN_DEFENSIVE_COPY got=%q err=%v", second, err)
+	}
+}
+
 func TestRequestHasNoCallerPlanSelectorOrPublicationRoot(t *testing.T) {
 	typ := reflect.TypeOf(Request{})
 	for _, field := range []string{"PublicationRoot", "Plan", "RawPlan", "PublicationSelector", "ConstituentSelector"} {

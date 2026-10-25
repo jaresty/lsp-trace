@@ -21,9 +21,15 @@ import (
 	"lsp-trace/internal/publication"
 )
 
-type exactFileReader struct{ path string }
+type exactFileReader struct {
+	path  string
+	reads *int
+}
 
 func (r exactFileReader) ReadBounded(_ context.Context, limit int64) ([]byte, error) {
+	if r.reads != nil {
+		*r.reads++
+	}
 	info, err := os.Lstat(r.path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() > limit {
 		return nil, censuscontinuation.ErrInvalidProgramCTransition
@@ -32,12 +38,16 @@ func (r exactFileReader) ReadBounded(_ context.Context, limit int64) ([]byte, er
 }
 
 func exactInput(t *testing.T, path string) censuscontinuation.ExactProgramCTransitionInput {
+	return countedExactInput(t, path, nil)
+}
+
+func countedExactInput(t *testing.T, path string, reads *int) censuscontinuation.ExactProgramCTransitionInput {
 	t.Helper()
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return censuscontinuation.ExactProgramCTransitionInput{Reader: exactFileReader{path: path}, ByteLength: int64(len(raw)), SHA256: workflowDigest(raw)}
+	return censuscontinuation.ExactProgramCTransitionInput{Reader: exactFileReader{path: path, reads: reads}, ByteLength: int64(len(raw)), SHA256: workflowDigest(raw)}
 }
 
 func workflowDigest(raw []byte) string {
@@ -156,15 +166,15 @@ func TestRunBoundedProductionCustodyToGapLedger(t *testing.T) {
 	if err = os.Chmod(stateDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	opens := 0
-	request := productionWorkflowRequest(t, exactInput(t, receiptPath), exactInput(t, ledgerPath), stateDir, 2, &opens)
+	opens, receiptReads, ledgerReads := 0, 0, 0
+	request := productionWorkflowRequest(t, countedExactInput(t, receiptPath, &receiptReads), countedExactInput(t, ledgerPath, &ledgerReads), stateDir, 2, &opens)
 	result, err := Run(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	gap, err := inventorysuccessor.ValidateDescribePreparationGapLedger(result.GapLedger)
-	if err != nil || result.Outcome != inventorysuccessor.OutcomeWaitingEvidence || result.ProgramCStatus != censuscontinuation.ProgramCTransitionComplete || result.ProgramCTransitions != 2 || opens != 4 || gap.Authority != 0 || gap.Accepted {
-		t.Fatalf("ASSERT_BOUNDED_PRODUCTION_WORKFLOW result=%+v opens=%d gap=%+v err=%v", result, opens, gap, err)
+	if err != nil || result.Outcome != inventorysuccessor.OutcomeWaitingEvidence || result.ProgramCStatus != censuscontinuation.ProgramCTransitionComplete || result.ProgramCTransitions != 2 || opens != 4 || receiptReads != 6 || ledgerReads != 6 || gap.Authority != 0 || gap.Accepted {
+		t.Fatalf("ASSERT_BOUNDED_PRODUCTION_WORKFLOW result=%+v opens=%d receipt_reads=%d ledger_reads=%d gap=%+v err=%v", result, opens, receiptReads, ledgerReads, gap, err)
 	}
 	reopened, err := publication.OpenRoot(stateDir)
 	if err != nil {
@@ -190,12 +200,18 @@ func TestRunBoundedProductionCustodyToGapLedger(t *testing.T) {
 	if err != nil || closeErr != nil || !bytes.Equal(rebuilt, result.GapLedger) {
 		t.Fatalf("ASSERT_BOUNDED_LEDGER_REBUILDS_FROM_RETAINED_HEAD rebuilt=%d returned=%d err=%v close=%v", len(rebuilt), len(result.GapLedger), err, closeErr)
 	}
+	second, err := Run(context.Background(), request)
+	if err != nil || second.Outcome != inventorysuccessor.OutcomeWaitingEvidence || second.ProgramCStatus != censuscontinuation.ProgramCTransitionComplete || second.ProgramCTransitions != 1 || opens != 7 || receiptReads != 11 || ledgerReads != 11 || !bytes.Equal(second.GapLedger, result.GapLedger) {
+		t.Fatalf("ASSERT_BOUNDED_NEW_TOP_LEVEL_REVERIFIES_NO_REPUBLISH second=%+v opens=%d receipt_reads=%d ledger_reads=%d err=%v", second, opens, receiptReads, ledgerReads, err)
+	}
 }
 
 // TestRunFrozenCorpusProductionCustodyToGapLedger is an opt-in, long-running
-// qualification. A prior 10-minute attempt timed out during authoritative
-// replica verification; that attempt did not qualify the frozen corpus. Only a
-// completed passing invocation of this exact test establishes this boundary.
+// qualification. The pre-reuse attempt timed out after 10 minutes during
+// repeated authoritative replica verification. With invocation-scoped source
+// reuse, the corpus reached a retained INSTABILITY_BUILD matching-policy work
+// limit after 46 transitions. Neither attempt qualified the frozen corpus. Only
+// a completed passing invocation of this exact test establishes this boundary.
 func TestRunFrozenCorpusProductionCustodyToGapLedger(t *testing.T) {
 	receiptPath := os.Getenv("LSP_TRACE_PROGRAM_C_RECEIPT")
 	ledgerPath := os.Getenv("LSP_TRACE_PROGRAM_C_LEDGER")
