@@ -216,6 +216,11 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/censussourceassembly/run.go",
 		"cmd/lsp-trace-mcp/census_source_continuation_store.go",
 		"cmd/lsp-trace/census_native_catalog.go",
+		"cmd/lsp-trace/programc_transition_private.go",
+		"internal/censuscontinuation/programc_authoritative.go",
+		"internal/censuscontinuation/programc_transition.go",
+		"internal/programctransitionhost/host.go",
+		"internal/programc/instability.go",
 	}
 	expectedAdditionalSchemaPaths := []string{
 		"internal/mcpcontract/testdata/schemas/envelope-census-chunk-terminal-result.v1.schema.json",
@@ -241,6 +246,11 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/censussourceassembly/run.go",
 		"cmd/lsp-trace-mcp/census_source_continuation_store.go",
 		"cmd/lsp-trace/census_native_catalog.go",
+		"cmd/lsp-trace/programc_transition_private.go",
+		"internal/censuscontinuation/programc_authoritative.go",
+		"internal/censuscontinuation/programc_transition.go",
+		"internal/programctransitionhost/host.go",
+		"internal/programc/instability.go",
 	} {
 		count := 0
 		for _, actualPath := range syntheticSourceAdditionalGoPaths {
@@ -339,6 +349,11 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/censussourceassembly/run.go":                  "internal/censussourceassembly/runner.go",
 		"cmd/lsp-trace-mcp/census_source_continuation_store.go": "cmd/lsp-trace-mcp/census_source_continuation_stores.go",
 		"cmd/lsp-trace/census_native_catalog.go":                "cmd/lsp-trace/census_native_catalogs.go",
+		"cmd/lsp-trace/programc_transition_private.go":          "cmd/lsp-trace/programc_transitions_private.go",
+		"internal/censuscontinuation/programc_authoritative.go": "internal/censuscontinuation/programc_authority.go",
+		"internal/censuscontinuation/programc_transition.go":    "internal/censuscontinuation/programc_transitions.go",
+		"internal/programctransitionhost/host.go":               "internal/programctransitionhost/hosts.go",
+		"internal/programc/instability.go":                      "internal/programc/instabilities.go",
 	}
 	for name, substitute := range goNamespaceSubstitutions {
 		candidate := append([]SyntheticSourceEntry(nil), entries...)
@@ -371,6 +386,11 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 		"internal/censussourceassembly/run_test.go",
 		"cmd/lsp-trace-mcp/census_source_continuation_store_test.go",
 		"cmd/lsp-trace/census_native_catalog_test.go",
+		"cmd/lsp-trace/programc_transition_private_test.go",
+		"internal/censuscontinuation/programc_authoritative_test.go",
+		"internal/censuscontinuation/programc_transition_test.go",
+		"internal/programctransitionhost/host_test.go",
+		"internal/programc/instability_test.go",
 	} {
 		testSource := append([]SyntheticSourceEntry(nil), entries...)
 		testSource[oldFiveEnd].Path = name
@@ -408,6 +428,10 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 	}
 	outOfOrder[discoveryTerminalIndex], outOfOrder[acquisitionCoreIndex] = outOfOrder[acquisitionCoreIndex], outOfOrder[discoveryTerminalIndex]
 	assertReject("successor order", outOfOrder)
+	newOutOfOrder := append([]SyntheticSourceEntry(nil), entries...)
+	lastGo := 1 + len(expectedAdditionalGoPaths) - 1
+	newOutOfOrder[lastGo], newOutOfOrder[lastGo-1] = newOutOfOrder[lastGo-1], newOutOfOrder[lastGo]
+	assertReject("new successor order", newOutOfOrder)
 
 	symlinkPath := filepath.Join(root, filepath.FromSlash(syntheticSourceAdditionalSchemaPaths[0]))
 	if err := os.Remove(symlinkPath); err != nil {
@@ -420,15 +444,15 @@ func TestSyntheticSourcePinAdditionalProductionPaths(t *testing.T) {
 }
 
 func TestSyntheticSourcePinProducerCandidate(t *testing.T) {
-	const manifestHash = "012e7bf737ced062e586acf6d8d69692c3e4d2f9163081235e1679fa9543b7cf"
-	const aggregate = "sha256:fa74cd343e0de7f067f000718592a2e09b3f25a1ad1e4f94c277a37425d16dd8"
-	const sourceCount = 179
-	const sourceBytes = 1795316
+	const manifestHash = "4aab4bb0c7b362c779098f395be86d1027a36d74cfbc0cf52c4a0abc488d6a89"
+	const aggregate = "sha256:7b0fe344ac7d34fee7101d998b1f958f22b71d08f9060a104066732c6017d4a6"
+	const sourceCount = 184
+	const sourceBytes = 1872841
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("producer candidate source location unavailable")
 	}
-	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.012e7bf737ced062.manifest.json")
+	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.4aab4bb0c7b362c7.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)

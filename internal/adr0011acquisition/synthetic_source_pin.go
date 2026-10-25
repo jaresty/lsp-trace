@@ -91,6 +91,11 @@ var syntheticSourceAdditionalGoPaths = []string{
 	"internal/censussourceassembly/run.go",
 	"cmd/lsp-trace-mcp/census_source_continuation_store.go",
 	"cmd/lsp-trace/census_native_catalog.go",
+	"cmd/lsp-trace/programc_transition_private.go",
+	"internal/censuscontinuation/programc_authoritative.go",
+	"internal/censuscontinuation/programc_transition.go",
+	"internal/programctransitionhost/host.go",
+	"internal/programc/instability.go",
 }
 
 var syntheticSourceAdditionalSchemaPaths = []string{
