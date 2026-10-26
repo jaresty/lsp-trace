@@ -992,12 +992,14 @@ func TestStage7BWorkspaceFreeProductionSurfaceAndNoLaterCoupling(t *testing.T) {
 		t.Fatalf("ASSERT_STAGE7B_TESTS_ONLY_STATUS err=%v", err)
 	}
 	allowed := map[string]bool{
-		"internal/programcrepresentative/source_context_red_test.go": true,
-		"internal/programcrepresentative/stage7b_causal_red_test.go": true,
-		"internal/programcrepresentative/stage7b_custody.go":         true,
-		"internal/programc/stage7c_artifacts_red_test.go":            true,
-		"internal/programc/stage7c_coupling.go":                      true,
-		"internal/programc/stage7c_instability.go":                   true,
+		"internal/programcrepresentative/qualification_subject.go":      true,
+		"internal/programcrepresentative/qualification_subject_test.go": true,
+		"internal/programcrepresentative/source_context_red_test.go":    true,
+		"internal/programcrepresentative/stage7b_causal_red_test.go":    true,
+		"internal/programcrepresentative/stage7b_custody.go":            true,
+		"internal/programc/stage7c_artifacts_red_test.go":               true,
+		"internal/programc/stage7c_coupling.go":                         true,
+		"internal/programc/stage7c_instability.go":                      true,
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(changed)), "\n") {
 		if line == "" {

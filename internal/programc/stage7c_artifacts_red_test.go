@@ -632,11 +632,13 @@ func TestStage7COnlyAuthorizedTestFileAndExactOwners(t *testing.T) {
 		}
 		path := string(record[3:])
 		allowed := map[string]bool{
-			"internal/programc/stage7c_artifacts_red_test.go":            true,
-			"internal/programc/stage7c_coupling.go":                      true,
-			"internal/programc/stage7c_instability.go":                   true,
-			"internal/programcrepresentative/source_context_red_test.go": true,
-			"internal/programcrepresentative/stage7b_causal_red_test.go": true,
+			"internal/programc/stage7c_artifacts_red_test.go":               true,
+			"internal/programc/stage7c_coupling.go":                         true,
+			"internal/programc/stage7c_instability.go":                      true,
+			"internal/programcrepresentative/qualification_subject.go":      true,
+			"internal/programcrepresentative/qualification_subject_test.go": true,
+			"internal/programcrepresentative/source_context_red_test.go":    true,
+			"internal/programcrepresentative/stage7b_causal_red_test.go":    true,
 		}
 		if !allowed[path] {
 			t.Fatalf("ASSERT_STAGE7C_ONLY_AUTHORIZED_DIFF status=%q", record)
