@@ -9,6 +9,8 @@
 - **Independent review:** `ACCEPT` after all blocking findings were corrected; task `5957dec3-f1c9-419`
 - **Accepted receipt-discovery amendment SHA-256:** `df8d12f62d3eff9cd7553cbd65db0e6b9b6561d326c5d220f4ae8b387a374d57`
 - **Receipt-amendment independent review:** `ACCEPT`; task `ca520100-8448-475`
+- **Accepted prequalification-mechanics amendment SHA-256:** `b0af4add81ab71ca34d91873d8faa728c58166f48ff9b5d46c7ae9c4eb385f47`
+- **Mechanics-amendment independent review:** `ACCEPT`; task `bfcf46b9-abe4-431`
 - **Depends on:** [ADR 0011](0011-versioned-definition-reference-grouping-evidence.md), [ADR 0012](0012-private-census-to-candidate-orchestration-bridge.md), and [ADR 0013](0013-resource-blocked-program-c-instability.md)
 - **Extends without modifying:** historical Program C receipts, community-instability v1/v2/v3, Stage 6 representative mechanics, and the Describe-preparation gap-ledger v1
 
@@ -146,6 +148,199 @@ For each eligible run/community, a repository-owned adapter creates one singleto
 - context identity is a canonical digest over the exact constituent, run, community, seed-membership closure, and adapter contract.
 
 Unknown membership kinds, duplicate membership/evidence/context identities, missing relations, partial occurrence closure, noncanonical ordering, mixed execution bundles, or mismatched seed labels/positions reject derivation. Exactly one derived context must exist for each denominator entry. Zero or multiple candidate contexts fail closed; arbitrary seed selection, context collapse, and context splitting are prohibited absent a separately accepted contract.
+
+### Prequalification Stage 6 mechanics amendment
+
+Before qualification-envelope publication, implementation may derive only an immutable prequalification mechanics carrier. It must not construct a final `RepresentativeComposition`, `RepresentativeGrouping`, qualification token, representative result, denominator artifact, or lineage artifact. Final sealing remains blocked on the accepted qualification sequence.
+
+The mechanics carrier schema is `lsp-trace.program-c-stage6-mechanics.private.v1` under profile `CALLS_ONLY_FROZEN_CENSUS_V1`. It contains defensive copies of exact evidence, one singleton community partition, one derived selection context, predecessor bindings, and adapter-contract identity. It has authority `0`, acceptance `false`, and no semantic claims.
+
+A narrow repository-owned Native V5 representative view belongs in `internal/graph`. The concrete type is opaque and zero-invalid: storage fields are unexported, construction requires strict Native V5 validation, and accessors defensively copy canonical edges, call sites, invocation seeds, and exact seed memberships. `internal/programcrepresentative` owns construction and validation of immutable singleton mechanics. `internal/censuscontinuation` alone adapts its private verified receipt-inventory entries; it exports neither that inventory nor a custody token.
+
+Every outcome entering adaptation is deep-cloned with `programc.CloneOutcome`; copying only the outcome slice is insufficient. Standalone mechanics bytes confer no custody or producer authentication. Final qualification must reopen and verify the private receipt inventory, recompute mechanics, and require canonical byte identity; it cannot trust caller-supplied mechanics or predecessor fields.
+
+Freeze these domain separators:
+
+```text
+lsp-trace:program-c-stage6-adapter-contract:v1
+lsp-trace:program-c-stage6-evidence:v1
+lsp-trace:program-c-stage6-context:v1
+lsp-trace:program-c-stage6-custody:v1
+lsp-trace:program-c-stage6-mechanics:v1
+```
+
+Every identity uses:
+
+```text
+sha256(domain UTF-8 bytes || 0x00 || canonical JSON DTO bytes)
+```
+
+Canonical JSON uses lower-snake-case field names in the declared order, UTF-8 strings, base-10 JSON integers, booleans, and arrays that are always present (`[]`, never `null`). Unknown fields are rejected. Bytes are exactly Go `encoding/json.Marshal` output: compact JSON, HTML escaping enabled, no trailing newline, and no Unicode normalization. Digest fields use lowercase `sha256:<64 hex>`.
+
+Only the root DTO's `identity` is blank while computing that DTO's hash. Nested evidence and context identities are already populated and independently verified before embedding. Fixed contract arrays retain the stated order; memberships sort strictly by `membership_id`; evidence retains canonical edge order then call-site ordinal; community members, prepared targets, reached nodes, relation IDs, and occurrence IDs sort strict lexicographic unique order.
+
+The exact schema constants are:
+
+```text
+AdapterContractDTO.schema_version  = "lsp-trace.program-c-stage6-adapter-contract.private.v1"
+EvidenceIdentityDTO.schema_version = "lsp-trace.program-c-stage6-evidence.private.v1"
+CustodyIdentityDTO.schema_version  = "lsp-trace.program-c-stage6-custody.private.v1"
+SelectionContextIdentityDTO.schema_version = "lsp-trace.program-c-stage6-context.private.v1"
+MechanicsIdentityDTO.schema_version = "lsp-trace.program-c-stage6-mechanics.private.v1"
+profile = "CALLS_ONLY_FROZEN_CENSUS_V1"
+native_schema_version = "lsp-trace.graph.v5"
+program_c_profile_id = "calls-v1"
+program_c_profile_sha256 = "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9"
+program_c_algorithm = "gonum.org/v1/gonum/graph/community.Leiden"
+```
+
+Program C algorithm version is not a free constant: it is copied from and bound to the verified transition bindings' nonempty `algorithm_version`, and every outcome's algorithm must equal `program_c_algorithm`. `native_v5_sha256` and `native_v5_byte_length` cover the exact retained constituent bytes returned by verified `ResolveConstituent`, before decoding or projection.
+
+Canonical mechanics wire bytes are exactly the populated `MechanicsIdentityDTO` marshaled under these rules. There are no additional unhashed fields or trailing bytes.
+
+The exact preimages are:
+
+```text
+PositionDTO {
+  line uint32
+  character uint32
+}
+
+RangeDTO {
+  start PositionDTO
+  end PositionDTO
+}
+
+AdapterContractDTO {
+  schema_version string
+  profile string
+  domains []string
+  native_schema_version string
+  program_c_profile_id string
+  program_c_profile_sha256 string
+  program_c_algorithm string
+  program_c_algorithm_version string
+  run_seeds []uint64
+  replays_per_seed uint8
+  run_id_grammar string
+  occurrence_ordinal_rule string
+  membership_kinds []string
+  mapped_membership_kinds []string
+  community_order_rule string
+  authority uint8
+  accepted bool
+  identity string
+}
+
+EvidenceIdentityDTO {
+  schema_version string
+  constituent_selector string
+  execution_bundle_id string
+  relation_id string
+  call_site_ordinal int
+  from_node_id string
+  to_node_id string
+  call_site RangeDTO
+  receipt_selector string
+  identity string
+}
+
+CustodyIdentityDTO {
+  schema_version string
+  workflow_key string
+  terminal_program_c_head_selector string
+  receipt_selector string
+  receipt_ordinal int
+  constituent_ordinal int
+  publication_selector string
+  constituent_selector string
+  native_v5_sha256 string
+  native_v5_byte_length uint64
+  execution_bundle_id string
+  identity string
+}
+
+MembershipIdentityDTO {
+  membership_id string
+  execution_bundle_id string
+  seed_label string
+  seed_at string
+  evidence_kind string
+  endpoint_id string
+}
+
+SelectionContextIdentityDTO {
+  schema_version string
+  adapter_contract_sha256 string
+  custody_identity string
+  constituent_selector string
+  execution_bundle_id string
+  run_id string
+  seed uint64
+  replay_ordinal uint8
+  community_ordinal int
+  community_artifact_sha256 string
+  community_members []string
+  memberships []MembershipIdentityDTO
+  prepared_targets []string
+  reached_nodes []string
+  relation_ids []string
+  occurrence_ids []string
+  identity string
+}
+
+MechanicsIdentityDTO {
+  schema_version string
+  profile string
+  adapter_contract_sha256 string
+  custody_identity string
+  receipt_selector string
+  run_id string
+  seed uint64
+  replay_ordinal uint8
+  community_ordinal int
+  community_artifact_sha256 string
+  evidence []EvidenceIdentityDTO
+  community_members []string
+  selection_context SelectionContextIdentityDTO
+  authority uint8
+  accepted bool
+  identity string
+}
+```
+
+`domains` is the five-domain list above in that exact order. `run_seeds=[1,2]`, `replays_per_seed=3`, `run_id_grammar="seed-%020d-replay-%d"`, `occurrence_ordinal_rule="ZERO_BASED_WITHIN_CANONICAL_EDGE_CALL_SITES"`, `membership_kinds` is the five-kind list below, `mapped_membership_kinds` is its first three entries, and `community_order_rule="PROGRAM_C_VALID_CANONICAL_COMMUNITIES"`. The adapter-contract identity uses the adapter-contract domain; evidence, context, custody, and mechanics identities use their correspondingly named domains. Every `int` ordinal must be nonnegative and within the length of its owning canonical array; `receipt_ordinal` must be positive. Composition identity, grouping identity, production policy bytes, limits bytes, qualification IDs, and final family/version constants are deliberately deferred to the qualification subject.
+
+For each canonical Native V5 edge, call-site ordinal is zero-based within that edge's canonical `CallSites` array. One `(edge, CallSites[ordinal])` pair produces one occurrence. A zero-call-site edge, noncanonical edge order, noncanonical call-site order, or duplicate call site fails closed.
+
+All canonical Native V5 seed-membership kinds are validated, endpoint-checked, and retained in the context-identity closure in this exact order:
+
+```text
+PREPARED_TARGET
+REACHED_NODE
+CALL_RELATION
+SIBLING_CANDIDATE
+DISPATCH_ASSOCIATION
+```
+
+Only the first three map into `PreparedTargets`, `ReachedNodes`, and `RelationIDs`. `SIBLING_CANDIDATE` and `DISPATCH_ASSOCIATION` are bound but do not participate in CALLS-only selection and cannot support absence or semantic inference. Any other membership kind fails closed. A new constructor must not reuse a decoder that rejects canonical dispatch membership.
+
+Membership groups must be a bijection with canonical `invocation.seeds`, keyed by `(execution_bundle_id, seed_label, seed_at)`. This unchanged denominator contract admits exactly one group per eligible constituent. Zero or multiple groups classify that constituent and the denominator `INCOMPLETE`; they are never empty or silently excluded. Frozen-corpus qualification must prove exactly one group for every eligible `COMPLETE` constituent.
+
+The receipt inventory supplies exactly six outcomes in preserved order:
+
+```text
+seed 1 replay 1
+seed 1 replay 2
+seed 1 replay 3
+seed 2 replay 1
+seed 2 replay 2
+seed 2 replay 3
+```
+
+No sorting or deduplication is permitted. Seeds must match that sequence. Replay ordinal is derived from position within each seed, and run ID is exactly `seed-%020d-replay-%d`.
+
+For every eligible `COMPLETE` outcome, communities and members must satisfy Program C `validCanonicalCommunities` ordering. The adapter rebuilds each canonical community artifact with `BuildCommunityArtifact`. After strict v2/v3 result validation, it reconstructs all 15 expected pair identities. Each run occurs in five pairs; every incident left/right community-artifact digest for that run must be present, agree with the other four, and equal SHA-256 of the rebuilt artifact bytes. Missing, conflicting, foreign, or unmatched pair/digest evidence fails closed. The verified digest is bound into context and mechanics identities. No exported community-artifact decoder is required.
 
 ## Constituent classification
 
@@ -452,3 +647,7 @@ This acceptance does not authorize public CLI/MCP exposure, semantic acceptance,
 ### Accepted receipt-discovery amendment
 
 After acceptance, implementation planning exposed that historical v2 result bytes do not identify whether their immutable transition receipt used schema v3 or v4. The decision authority selected bounded repository-owned v3/v4 probing as the correction. The exact amendment bytes at SHA-256 `df8d12f62d3eff9cd7553cbd65db0e6b9b6561d326c5d220f4ae8b387a374d57` received independent verdict `ACCEPT` and were explicitly accepted by @jaresty on 2026-10-25 for private implementation and qualification only.
+
+### Accepted prequalification mechanics amendment
+
+Implementation planning after complete receipt-inventory custody exposed unresolved ownership, domain-separation, membership, community-binding, and occurrence-ordinal choices for the Native V5 to Stage 6 adapter. The exact amendment bytes at SHA-256 `b0af4add81ab71ca34d91873d8faa728c58166f48ff9b5d46c7ae9c4eb385f47` received independent verdict `ACCEPT` and were explicitly accepted by @jaresty on 2026-10-25 for private implementation and qualification only.
