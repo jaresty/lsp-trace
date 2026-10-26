@@ -542,7 +542,19 @@ func verifyProgramCTransitionCompletion(ctx context.Context, workflowKey, headKe
 	return result, err
 }
 
+type verifiedProgramCTransitionAuthority struct {
+	result      ProgramCTransitionResult
+	plan        ProgramCTransitionPlan
+	terminal    programCTransitionHead
+	terminalRaw []byte
+	inventory   []programCTransitionReceiptInventoryEntry
+}
+
 func verifyProgramCTransitionReceiptInventory(ctx context.Context, workflowKey, headKey string, bindings ProgramCTransitionBindings, planRaw []byte, objects censussourcecontinuation.ImmutableStore, heads censussourcecontinuation.HeadStore, runner ProgramCTransitionRunner) (ProgramCTransitionResult, []programCTransitionReceiptInventoryEntry, error) {
+	return verifyProgramCTransitionReceiptInventoryWithAuthority(ctx, workflowKey, headKey, bindings, planRaw, objects, heads, runner, nil)
+}
+
+func verifyProgramCTransitionReceiptInventoryWithAuthority(ctx context.Context, workflowKey, headKey string, bindings ProgramCTransitionBindings, planRaw []byte, objects censussourcecontinuation.ImmutableStore, heads censussourcecontinuation.HeadStore, runner ProgramCTransitionRunner, authority *verifiedProgramCTransitionAuthority) (ProgramCTransitionResult, []programCTransitionReceiptInventoryEntry, error) {
 	if ctx == nil || workflowKey == "" || headKey == "" || objects == nil || heads == nil || runner == nil {
 		return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
 	}
@@ -663,7 +675,26 @@ func verifyProgramCTransitionReceiptInventory(ctx context.Context, workflowKey, 
 	if err := ctx.Err(); err != nil {
 		return ProgramCTransitionResult{}, nil, err
 	}
-	return transitionResult(terminal, ProgramCTransitionComplete, inventory[len(inventory)-1].value), inventory, nil
+	result := transitionResult(terminal, ProgramCTransitionComplete, inventory[len(inventory)-1].value)
+	if authority != nil {
+		authority.result = result
+		authority.plan = plan
+		authority.terminal = terminal
+		authority.terminalRaw = bytes.Clone(terminalRaw)
+		authority.inventory = cloneProgramCTransitionReceiptInventory(inventory)
+	}
+	return result, inventory, nil
+}
+
+func cloneProgramCTransitionReceiptInventory(in []programCTransitionReceiptInventoryEntry) []programCTransitionReceiptInventoryEntry {
+	out := make([]programCTransitionReceiptInventoryEntry, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].canonicalReceipt = bytes.Clone(in[i].canonicalReceipt)
+		out[i].nativeV5 = bytes.Clone(in[i].nativeV5)
+		out[i].outcomes = cloneProgramCOutcomes(in[i].outcomes)
+	}
+	return out
 }
 
 func transitionValidateResult(raw []byte) error {

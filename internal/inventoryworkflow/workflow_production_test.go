@@ -6,8 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -17,6 +19,7 @@ import (
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/inventorysuccessor"
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/programcrepresentative"
 	"lsp-trace/internal/programctransitionhost"
 	"lsp-trace/internal/publication"
 )
@@ -176,6 +179,40 @@ func TestRunBoundedProductionCustodyToGapLedger(t *testing.T) {
 	if err != nil || result.Outcome != inventorysuccessor.OutcomeWaitingEvidence || result.ProgramCStatus != censuscontinuation.ProgramCTransitionComplete || result.ProgramCTransitions != 2 || opens != 4 || receiptReads != 6 || ledgerReads != 6 || gap.Authority != 0 || gap.Accepted {
 		t.Fatalf("ASSERT_BOUNDED_PRODUCTION_WORKFLOW result=%+v opens=%d receipt_reads=%d ledger_reads=%d gap=%+v err=%v", result, opens, receiptReads, ledgerReads, gap, err)
 	}
+	beforeSubject := workflowStateSnapshot(t, stateDir)
+	firstSubject, err := BuildProgramCRepresentativeQualificationSubject(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSubject, err := BuildProgramCRepresentativeQualificationSubject(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opens != 6 || receiptReads != 10 || ledgerReads != 10 || !firstSubject.Trusted() || !bytes.Equal(firstSubject.CanonicalBytes(), secondSubject.CanonicalBytes()) || !reflect.DeepEqual(beforeSubject, workflowStateSnapshot(t, stateDir)) {
+		t.Fatalf("ASSERT_PROGRAM_C_SUBJECT_ONE_ROOT_READ_ONLY_DETERMINISTIC opens=%d receipt_reads=%d ledger_reads=%d", opens, receiptReads, ledgerReads)
+	}
+	readsBeforeSubstitution := [2]int{receiptReads, ledgerReads}
+	substituted := request
+	substituted.Identity.PrivacyPolicySHA256 = "sha256:" + strings.Repeat("4", 64)
+	substitutedSubject, err := BuildProgramCRepresentativeQualificationSubject(context.Background(), substituted)
+	if !errors.Is(err, inventorysuccessor.ErrInvalid) || substitutedSubject.Trusted() || receiptReads != readsBeforeSubstitution[0] || ledgerReads != readsBeforeSubstitution[1] {
+		t.Fatalf("ASSERT_PROGRAM_C_SUBJECT_RETAINED_HEAD_IDENTITY_EQUALITY trusted=%t receipt_reads=%d ledger_reads=%d before=%v err=%v", substitutedSubject.Trusted(), receiptReads, ledgerReads, readsBeforeSubstitution, err)
+	}
+	dto := firstSubject.DTO()
+	if dto.CorpusIdentity.FrozenCorpusSHA256 != request.ProgramC.Bindings.FrozenCorpusSHA256 || dto.CorpusIdentity.CensusReceiptSHA256 != request.ProgramC.Bindings.CensusReceiptSHA256 || dto.CorpusIdentity.AvailabilityLedgerSHA256 != request.ProgramC.Bindings.LedgerSHA256 || dto.CorpusIdentity.ProgramCPlanSHA256 != request.ProgramC.Bindings.PlanSHA256 || dto.WorkflowIdentity.Contract != request.Identity.Contract || dto.WorkflowIdentity.Provenance != "PREDECESSOR_RETAINED_CALLER_ASSERTED" || dto.SourcePinSHA256 != request.Identity.SourcePinSHA256 || len(dto.ReceiptInventory) != 1 || dto.ReceiptInventory[0].PlanOrdinal != 0 || dto.ReceiptInventory[0].ReceiptOrdinal != 1 || dto.TerminalProgramCHead.WorkflowKey != request.ProgramC.WorkflowKey || dto.TerminalProgramCHead.HeadKey != request.ProgramC.HeadKey || dto.TerminalProgramCHead.CommittedPrefix != dto.TerminalProgramCHead.ConstituentCount {
+		t.Fatalf("ASSERT_PROGRAM_C_SUBJECT_EXACT_VERIFIED_MAPPING dto=%+v", dto)
+	}
+	parsed, err := programcrepresentative.ParseProgramCRepresentativeQualificationSubject(firstSubject.CanonicalBytes())
+	if err != nil || parsed.Trusted() || !reflect.DeepEqual(parsed.DTO(), dto) || !bytes.Equal(parsed.CanonicalBytes(), firstSubject.CanonicalBytes()) {
+		t.Fatalf("ASSERT_PROGRAM_C_SUBJECT_PARSED_BYTE_EQUALITY trusted=%t err=%v", parsed.Trusted(), err)
+	}
+	mutatedDTO := firstSubject.DTO()
+	mutatedDTO.ReceiptInventory[0].ReceiptSelector = "mutated"
+	mutatedRaw := firstSubject.CanonicalBytes()
+	mutatedRaw[0] ^= 0xff
+	if firstSubject.DTO().ReceiptInventory[0].ReceiptSelector == "mutated" || bytes.Equal(mutatedRaw, firstSubject.CanonicalBytes()) {
+		t.Fatal("ASSERT_PROGRAM_C_SUBJECT_DEFENSIVE_COPIES")
+	}
 	reopened, err := publication.OpenRoot(stateDir)
 	if err != nil {
 		t.Fatal(err)
@@ -201,9 +238,36 @@ func TestRunBoundedProductionCustodyToGapLedger(t *testing.T) {
 		t.Fatalf("ASSERT_BOUNDED_LEDGER_REBUILDS_FROM_RETAINED_HEAD rebuilt=%d returned=%d err=%v close=%v", len(rebuilt), len(result.GapLedger), err, closeErr)
 	}
 	second, err := Run(context.Background(), request)
-	if err != nil || second.Outcome != inventorysuccessor.OutcomeWaitingEvidence || second.ProgramCStatus != censuscontinuation.ProgramCTransitionComplete || second.ProgramCTransitions != 1 || opens != 7 || receiptReads != 11 || ledgerReads != 11 || !bytes.Equal(second.GapLedger, result.GapLedger) {
+	if err != nil || second.Outcome != inventorysuccessor.OutcomeWaitingEvidence || second.ProgramCStatus != censuscontinuation.ProgramCTransitionComplete || second.ProgramCTransitions != 1 || opens != 10 || receiptReads != 15 || ledgerReads != 15 || !bytes.Equal(second.GapLedger, result.GapLedger) {
 		t.Fatalf("ASSERT_BOUNDED_NEW_TOP_LEVEL_REVERIFIES_NO_REPUBLISH second=%+v opens=%d receipt_reads=%d ledger_reads=%d err=%v", second, opens, receiptReads, ledgerReads, err)
 	}
+}
+
+func workflowStateSnapshot(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		out[relative] = workflowDigest(raw)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // TestRunFrozenCorpusProductionCustodyToGapLedger is an opt-in, long-running

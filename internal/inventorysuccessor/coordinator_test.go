@@ -16,6 +16,7 @@ import (
 
 type memoryHeads struct {
 	raw       []byte
+	loads     int
 	cas       int
 	outcome   censussourcecontinuation.CASOutcome
 	loadErr   error
@@ -23,6 +24,7 @@ type memoryHeads struct {
 }
 
 func (h *memoryHeads) Load(context.Context, string) ([]byte, error) {
+	h.loads++
 	return bytes.Clone(h.raw), h.loadErr
 }
 func (h *memoryHeads) CompareAndSwap(_ context.Context, _ string, expected censussourcecontinuation.HeadRevision, raw []byte) censussourcecontinuation.CASResult {
@@ -85,6 +87,43 @@ func TestCoordinateNextCommitsWaitingEvidenceBeforeDescribe(t *testing.T) {
 	want := []EvidenceGap{GapRepresentativeNominationDenominator, GapCommunityRepresentativeLineage, GapRetainedSourceClosure, GapFullDefinitionBindings, GapCallerOccurrenceV3Custody}
 	if !equalGaps(got.MissingEvidence, want) {
 		t.Fatalf("ASSERT_SUCCESSOR_EXACT_GAPS got=%v want=%v", got.MissingEvidence, want)
+	}
+}
+
+func TestVerifyWaitingEvidenceHeadReadOnlyCanonicalAndExact(t *testing.T) {
+	heads := &memoryHeads{}
+	request := validRequest(heads)
+	if _, err := coordinateTest(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	heads.loads, heads.cas = 0, 0
+	identity, revision, err := VerifyWaitingEvidenceHead(context.Background(), request.WorkflowKey, request.HeadKey, request.Identity, heads)
+	wantRevision, parseErr := ParseHeadRevision(heads.raw)
+	if err != nil || parseErr != nil || identity != request.Identity || revision != wantRevision || heads.loads != 1 || heads.cas != 0 {
+		t.Fatalf("ASSERT_WAITING_EVIDENCE_READ_ONLY_EXACT identity=%+v revision=%+v loads=%d cas=%d err=%v parse=%v", identity, revision, heads.loads, heads.cas, err, parseErr)
+	}
+
+	wrong := request.Identity
+	wrong.Contract += "-substitution"
+	if _, _, err := VerifyWaitingEvidenceHead(context.Background(), request.WorkflowKey, request.HeadKey, wrong, heads); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("ASSERT_WAITING_EVIDENCE_IDENTITY_SUBSTITUTION err=%v", err)
+	}
+	canonical := bytes.Clone(heads.raw)
+	heads.raw = append(bytes.Clone(canonical), '\n')
+	if _, _, err := VerifyWaitingEvidenceHead(context.Background(), request.WorkflowKey, request.HeadKey, request.Identity, heads); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("ASSERT_WAITING_EVIDENCE_CANONICAL_BYTES err=%v", err)
+	}
+	heads.raw = canonical
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := VerifyWaitingEvidenceHead(cancelled, request.WorkflowKey, request.HeadKey, request.Identity, heads); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ASSERT_WAITING_EVIDENCE_CANCELLATION err=%v", err)
+	}
+	storageErr := errors.New("load failed")
+	heads.loadErr = storageErr
+	if _, _, err := VerifyWaitingEvidenceHead(context.Background(), request.WorkflowKey, request.HeadKey, request.Identity, heads); !errors.Is(err, storageErr) {
+		t.Fatalf("ASSERT_WAITING_EVIDENCE_STORAGE_ERROR err=%v", err)
 	}
 }
 

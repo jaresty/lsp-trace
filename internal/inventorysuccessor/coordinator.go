@@ -244,6 +244,33 @@ func stopResult(outcome Outcome) Result {
 	return Result{Outcome: outcome, Authority: 0, Accepted: false, FeatureIdentity: "UNRESOLVED", Completeness: "UNKNOWN", Effects: "NONE", ImplementationDecision: "UNISSUED", ProductionAdmission: "REFUSED_MISSING_EVIDENCE", SourceGraphComplete: "UNKNOWN", AbsenceInference: "PROHIBITED"}
 }
 
+// VerifyWaitingEvidenceHead strictly verifies an existing canonical
+// WAITING_EVIDENCE head without performing any write or compare-and-swap. The
+// caller-supplied identity is an equality expectation only; the returned value
+// is reconstructed from the exact canonical head bytes.
+func VerifyWaitingEvidenceHead(ctx context.Context, workflowKey, headKey string, expected WorkflowIdentity, heads censussourcecontinuation.HeadStore) (WorkflowIdentity, censussourcecontinuation.HeadRevision, error) {
+	if ctx == nil || workflowKey == "" || headKey == "" || heads == nil || !validIdentity(expected) {
+		return WorkflowIdentity{}, censussourcecontinuation.HeadRevision{}, ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return WorkflowIdentity{}, censussourcecontinuation.HeadRevision{}, err
+	}
+	raw, err := heads.Load(ctx, headKey)
+	if err != nil {
+		return WorkflowIdentity{}, censussourcecontinuation.HeadRevision{}, err
+	}
+	var existing head
+	if strict(raw, &existing) != nil || validateHead(existing) != nil || existing.WorkflowKey != workflowKey || existing.Identity != expected {
+		return WorkflowIdentity{}, censussourcecontinuation.HeadRevision{}, ErrInvalid
+	}
+	revision, err := ParseHeadRevision(raw)
+	if err != nil {
+		return WorkflowIdentity{}, censussourcecontinuation.HeadRevision{}, err
+	}
+	identity := existing.Identity
+	return identity, revision, nil
+}
+
 // CoordinateNext performs at most one durable successor-head transition. It
 // never constructs Describe packets and callers supply no stage or CAS head.
 func CoordinateNext(ctx context.Context, request Request) (Result, error) {

@@ -200,8 +200,9 @@ type Stage6FinalizationDTO struct {
 	Identity                string   `json:"identity"`
 }
 
-// QualificationSubjectExpectedContext is non-wire trusted input reconstructed by
-// the private census mapper. MaxImplementationSourceBytes is an explicit
+// QualificationSubjectExpectedContext is non-wire trusted input composed by
+// the private inventory workflow from independently verified sides.
+// MaxImplementationSourceBytes is an explicit
 // verification bound because ADR 0014 freezes no numeric implementation-source
 // ceiling; it is never serialized into the subject.
 type QualificationSubjectExpectedContext struct {
@@ -324,6 +325,32 @@ func ValidateProgramCRepresentativeQualificationSubject(raw []byte, expected Qua
 		return ProgramCRepresentativeQualificationSubject{}, fmt.Errorf("qualification subject does not match reconstructed context")
 	}
 	return constructed, nil
+}
+
+// BuildAdapterContract returns the fixed canonical adapter contract bound to
+// the verified Program C algorithm version.
+func BuildAdapterContract(programCAlgorithmVersion string) (AdapterContractDTO, error) {
+	return newAdapterContract(programCAlgorithmVersion)
+}
+
+// BuildStage6Implementation returns the fixed accepted source-snapshot manifest.
+// maxSourceBytes is a caller-owned, non-wire fail-closed verification bound.
+func BuildStage6Implementation(maxSourceBytes uint64) (Stage6ImplementationDTO, error) {
+	dto := Stage6ImplementationDTO{
+		RepositoryCommit: stage6ImplementationCommit,
+		RepositoryTree:   stage6ImplementationTree,
+		Files:            fixedImplementationFiles(),
+	}
+	identityInput := cloneStage6ImplementationDTO(dto)
+	identity, err := hashIdentity(stage6ImplementationDomain, identityInput)
+	if err != nil {
+		return Stage6ImplementationDTO{}, err
+	}
+	dto.Identity = identity
+	if err := validateStage6Implementation(dto, maxSourceBytes); err != nil {
+		return Stage6ImplementationDTO{}, err
+	}
+	return cloneStage6ImplementationDTO(dto), nil
 }
 
 func BuildStage6PolicyArtifact() (Stage6PolicyDTO, ArtifactBindingDTO, []byte, error) {
