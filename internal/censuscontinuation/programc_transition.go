@@ -640,7 +640,7 @@ func verifyProgramCTransitionReceiptInventory(ctx context.Context, workflowKey, 
 				return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
 			}
 			matches++
-			selected = programCTransitionReceiptInventoryEntry{ordinal: record.Ordinal, selector: selector, canonicalReceipt: bytes.Clone(stored), value: value, nativeV5: bytes.Clone(computed.nativeV5), outcomes: append([]programc.Outcome(nil), computed.outcomes...)}
+			selected = programCTransitionReceiptInventoryEntry{ordinal: record.Ordinal, selector: selector, canonicalReceipt: bytes.Clone(stored), value: value, nativeV5: bytes.Clone(computed.nativeV5), outcomes: cloneProgramCOutcomes(computed.outcomes)}
 			linked = candidateLinked
 		}
 		if matches != 1 {
