@@ -7,6 +7,8 @@
 - **Decision owners:** LSP Trace maintainers
 - **Accepted proposal SHA-256:** `85daf073ecb8836d3b5762bd44d6a6ba911d14e23a81847dd9741a274084ebda`
 - **Independent review:** `ACCEPT` after all blocking findings were corrected; task `5957dec3-f1c9-419`
+- **Accepted receipt-discovery amendment SHA-256:** `df8d12f62d3eff9cd7553cbd65db0e6b9b6561d326c5d220f4ae8b387a374d57`
+- **Receipt-amendment independent review:** `ACCEPT`; task `ca520100-8448-475`
 - **Depends on:** [ADR 0011](0011-versioned-definition-reference-grouping-evidence.md), [ADR 0012](0012-private-census-to-candidate-orchestration-bridge.md), and [ADR 0013](0013-resource-blocked-program-c-instability.md)
 - **Extends without modifying:** historical Program C receipts, community-instability v1/v2/v3, Stage 6 representative mechanics, and the Describe-preparation gap-ledger v1
 
@@ -79,7 +81,17 @@ The terminal Program C head names only its latest receipt. Before denominator de
 1. deterministically reconstruct every claim, head, and receipt selector from the initial head, exact plan entry, bindings, recomputed result bytes, and predecessor selector; or
 2. verify a separately retained content-addressed complete receipt manifest linked from verified terminal custody.
 
-The verifier loads each immutable receipt and requires exact ordinal coverage, canonical receipt bytes, exact result bytes/digest/length, claim-predecessor equality, and a reconstructed final head byte-identical to the independently verified terminal head. Caller-supplied receipt selectors are prohibited. A missing, foreign, duplicate, unreachable, or unverifiable receipt contributes to `I`; it cannot be omitted.
+For historical v2 instability result bytes, the receipt schema is not encoded in the plan, bindings, result bytes, or predecessor selector. The verifier therefore performs bounded repository-owned schema probing at each ordinal:
+
+1. derive the complete canonical v3 receipt and selector;
+2. derive the complete canonical v4 receipt and selector;
+3. load both derived selectors without listing the store;
+4. admit exactly one candidate only when its retained bytes exactly equal the derived canonical bytes;
+5. reject zero matches as missing and two matches as ambiguous/duplicate.
+
+For result bytes that require v4, only the canonical v4 candidate is admissible; a v3 representation is invalid rather than an alternative. No other schema candidate may be probed. This rule is deterministic and accepts no caller-supplied schema or selector.
+
+The verifier requires exact ordinal coverage, canonical receipt bytes, exact result bytes/digest/length, claim-predecessor equality, and a reconstructed final head byte-identical to the independently verified terminal head. Caller-supplied receipt selectors are prohibited. A missing, foreign, duplicate, unreachable, or unverifiable receipt in the reconstructed chain contributes to `I`; it cannot be omitted. Unrelated or CAS-orphaned objects outside the reconstructed selector set neither prove nor disprove chain completeness and need not be enumerated.
 
 The bridge must not:
 
@@ -382,23 +394,24 @@ Published artifacts and heads are immutable. A correction creates a new generati
 Before private implementation can be accepted:
 
 1. freeze the accepted ADR bytes and digest;
-2. prove complete ordinal receipt discovery, receipt verification, and reconstructed-final-head equality without caller selectors;
-3. prove exact reconstruction from retained Native V5 bytes without checkout or LSP fallback;
-4. prove the field-level Native V5 adapter, exact relation-occurrence closure, and singleton context invariant;
-5. prove every complete-run community artifact hash matches retained instability evidence;
-6. prove all six run identities are conserved and multiple seeds/replays remain distinct denominator entries;
-7. prove `EMPTY` contributes zero entries but remains classified;
-8. prove resource-incomplete contributes zero entries and remains explicitly excluded;
-9. prove omission, duplication, permutation, substitution, stale identity, malformed bytes, and mixed versions fail closed;
-10. prove denominator and lineage equations, overflow handling, and limit boundaries;
-11. prove every denominator identity has exactly one singleton Stage 6 result and terminal lineage record;
-12. prove selected-node, witness, community, context, occurrence, receipt, qualification, and head substitution rejection;
-13. prove all three one-CAS operations, close/reopen replay, conflict, cancellation, and uncertain-CAS behavior;
-14. prove deterministic v1→v2 successor migration and that only the two authorized gaps become retained;
-15. prove all authority ceilings and the remaining three gaps stay unchanged;
-16. publish and verify the acyclic qualification sequence—subject, independent-review receipt, then final envelope—before denominator derivation;
-17. prove the subject and receipt do not reference the envelope or downstream evidence heads, and prove reviewer/writer separation;
-18. run a bounded frozen-corpus qualification from freshly verified custody.
+2. prove complete ordinal receipt discovery, deterministic bounded v3/v4 probing, exactly-one candidate admission, receipt verification, and reconstructed-final-head equality without caller selectors;
+3. prove zero-match and dual-match receipt candidates fail closed while unrelated shared-store objects do not affect reconstructed-chain completeness;
+4. prove exact reconstruction from retained Native V5 bytes without checkout or LSP fallback;
+5. prove the field-level Native V5 adapter, exact relation-occurrence closure, and singleton context invariant;
+6. prove every complete-run community artifact hash matches retained instability evidence;
+7. prove all six run identities are conserved and multiple seeds/replays remain distinct denominator entries;
+8. prove `EMPTY` contributes zero entries but remains classified;
+9. prove resource-incomplete contributes zero entries and remains explicitly excluded;
+10. prove omission, duplication, permutation, substitution, stale identity, malformed bytes, and mixed versions fail closed;
+11. prove denominator and lineage equations, overflow handling, and limit boundaries;
+12. prove every denominator identity has exactly one singleton Stage 6 result and terminal lineage record;
+13. prove selected-node, witness, community, context, occurrence, receipt, qualification, and head substitution rejection;
+14. prove all three one-CAS operations, close/reopen replay, conflict, cancellation, and uncertain-CAS behavior;
+15. prove deterministic v1→v2 successor migration and that only the two authorized gaps become retained;
+16. prove all authority ceilings and the remaining three gaps stay unchanged;
+17. publish and verify the acyclic qualification sequence—subject, independent-review receipt, then final envelope—before denominator derivation;
+18. prove the subject and receipt do not reference the envelope or downstream evidence heads, and prove reviewer/writer separation;
+19. run a bounded frozen-corpus qualification from freshly verified custody.
 
 ## Alternatives rejected
 
@@ -435,3 +448,7 @@ Rejected. Each gap has independent provenance and qualification requirements.
 The proposal at SHA-256 `85daf073ecb8836d3b5762bd44d6a6ba911d14e23a81847dd9741a274084ebda` received independent verdict `ACCEPT` after three review rounds. On 2026-10-25, @jaresty explicitly selected **Accept ADR 0014**, authorizing private implementation and qualification only under this contract.
 
 This acceptance does not authorize public CLI/MCP exposure, semantic acceptance, candidate preparation before all required evidence is retained, production admission, release, or deployment.
+
+### Accepted receipt-discovery amendment
+
+After acceptance, implementation planning exposed that historical v2 result bytes do not identify whether their immutable transition receipt used schema v3 or v4. The decision authority selected bounded repository-owned v3/v4 probing as the correction. The exact amendment bytes at SHA-256 `df8d12f62d3eff9cd7553cbd65db0e6b9b6561d326c5d220f4ae8b387a374d57` received independent verdict `ACCEPT` and were explicitly accepted by @jaresty on 2026-10-25 for private implementation and qualification only.
