@@ -11,6 +11,8 @@
 - **Receipt-amendment independent review:** `ACCEPT`; task `ca520100-8448-475`
 - **Accepted prequalification-mechanics amendment SHA-256:** `b0af4add81ab71ca34d91873d8faa728c58166f48ff9b5d46c7ae9c4eb385f47`
 - **Mechanics-amendment independent review:** `ACCEPT`; task `bfcf46b9-abe4-431`
+- **Accepted qualification-subject amendment SHA-256:** `235facbbba34f479df4771be845f34b3a39c83988a339dca69eec4f2b6bad9a6`
+- **Qualification-contract independent review:** `ACCEPT`; task `00147418-3d69-4bf`
 - **Depends on:** [ADR 0011](0011-versioned-definition-reference-grouping-evidence.md), [ADR 0012](0012-private-census-to-candidate-orchestration-bridge.md), and [ADR 0013](0013-resource-blocked-program-c-instability.md)
 - **Extends without modifying:** historical Program C receipts, community-instability v1/v2/v3, Stage 6 representative mechanics, and the Describe-preparation gap-ledger v1
 
@@ -342,6 +344,604 @@ No sorting or deduplication is permitted. Seeds must match that sequence. Replay
 
 For every eligible `COMPLETE` outcome, communities and members must satisfy Program C `validCanonicalCommunities` ordering. The adapter rebuilds each canonical community artifact with `BuildCommunityArtifact`. After strict v2/v3 result validation, it reconstructs all 15 expected pair identities. Each run occurs in five pairs; every incident left/right community-artifact digest for that run must be present, agree with the other four, and equal SHA-256 of the rebuilt artifact bytes. Missing, conflicting, foreign, or unmatched pair/digest evidence fails closed. The verified digest is bound into context and mechanics identities. No exported community-artifact decoder is required.
 
+## Qualification-subject wire amendment
+
+Before any review receipt or final qualification envelope, add one pure canonical value owned by `internal/programcrepresentative`:
+
+```text
+ProgramCRepresentativeQualificationSubject
+```
+
+This slice is storage-agnostic. It imports no Census coordinator, inventory-successor, publication, immutable-store, head-store, or CAS package. It cannot name a review receipt, qualification envelope, denominator, lineage, successor, or downstream head.
+
+### Root wire and identity
+
+The exact schema is `lsp-trace.program-c-representative-qualification-subject.private.v1`, profile is `CALLS_ONLY_FROZEN_CENSUS_V1`, and identity domain is `lsp-trace:program-c-representative-qualification-subject:v1`.
+
+Identity is:
+
+```text
+sha256(domain UTF-8 bytes || 0x00 || Go encoding/json.Marshal(root with only root identity=""))
+```
+
+Canonical JSON follows the mechanics amendment's exact compact Go `encoding/json.Marshal` semantics. All arrays are present and never `null`; unknown fields, trailing bytes, duplicate keys, noncanonical order, and self-consistent substitution against independently supplied expected context fail closed. The canonical subject bytes are exactly the populated root DTO with no trailing newline.
+
+Field order and nested DTOs are:
+
+```text
+QualificationSubjectDTO {
+  schema_version string
+  profile string
+  accepted_adr_sha256 string
+  accepted_receipt_discovery_amendment_sha256 string
+  accepted_prequalification_mechanics_amendment_sha256 string
+  accepted_qualification_subject_amendment_sha256 string
+  adapter_contract AdapterContractDTO
+  mechanics_schema_version string
+  mechanics_profile string
+  stage6_implementation Stage6ImplementationDTO
+  stage6_policy ArtifactBindingDTO
+  stage6_limits ArtifactBindingDTO
+  stage6_finalization ArtifactBindingDTO
+  corpus_identity CorpusIdentityDTO
+  workflow_identity QualificationWorkflowIdentityDTO
+  source_pin_sha256 string
+  receipt_inventory []ReceiptInventoryEntryDTO
+  terminal_program_c_head TerminalProgramCHeadDTO
+  claim_ceiling QualificationClaimCeilingDTO
+  authority uint8
+  accepted bool
+  identity string
+}
+
+Stage6ImplementationDTO {
+  repository_commit string
+  repository_tree string
+  files []ImplementationFileDTO
+  identity string
+}
+
+ImplementationFileDTO {
+  path string
+  git_blob_sha1 string
+  sha256 string
+  byte_length uint64
+}
+
+ArtifactBindingDTO {
+  schema_version string
+  identity string
+  sha256 string
+  byte_length uint64
+}
+
+For every `ArtifactBindingDTO`, `sha256` is also the immutable content-addressed selector:
+
+```text
+selector = sha256 = SHA-256(exact canonical populated artifact bytes)
+byte_length = len(exact canonical populated artifact bytes)
+```
+
+The domain-separated artifact `identity` is distinct from that selector. Resolution loads by `sha256`, requires exact length and byte digest, strictly parses the declared schema, reconstructs the domain identity, and requires equality.
+
+CorpusIdentityDTO {
+  frozen_corpus_sha256 string
+  census_receipt_sha256 string
+  availability_ledger_sha256 string
+  program_c_plan_sha256 string
+  program_c_bindings_sha256 string
+}
+
+QualificationWorkflowIdentityDTO {
+  profile string
+  contract string
+  census_receipt_sha256 string
+  availability_ledger_sha256 string
+  source_pin_sha256 string
+  program_c_plan_sha256 string
+  program_c_bindings_sha256 string
+  privacy_policy_sha256 string
+  retention_policy_sha256 string
+  resource_policy_sha256 string
+  replay_policy_sha256 string
+  qualification_policy_sha256 string
+  provenance string
+}
+
+ReceiptInventoryEntryDTO {
+  plan_ordinal int
+  receipt_ordinal int
+  receipt_schema_version string
+  receipt_selector string
+  receipt_sha256 string
+  receipt_byte_length uint64
+}
+
+TerminalProgramCHeadDTO {
+  schema_version string
+  workflow_key string
+  head_key string
+  generation uint64
+  selector string
+  head_bytes_sha256 string
+  byte_length uint64
+  committed_prefix int
+  constituent_count int
+}
+
+QualificationClaimCeilingDTO {
+  authority uint8
+  accepted bool
+  feature_identity string
+  completeness string
+  effects string
+  reviews string
+  implementation_decision string
+  production_admission string
+  source_graph_complete string
+  absence_inference string
+}
+```
+
+All SHA-256 wire values use `sha256:<64 lowercase hex>`, including accepted proposal digests.
+
+### Accepted decision bindings
+
+The subject binds:
+
+```text
+accepted_adr_sha256 = sha256:85daf073ecb8836d3b5762bd44d6a6ba911d14e23a81847dd9741a274084ebda
+accepted_receipt_discovery_amendment_sha256 = sha256:df8d12f62d3eff9cd7553cbd65db0e6b9b6561d326c5d220f4ae8b387a374d57
+accepted_prequalification_mechanics_amendment_sha256 = sha256:b0af4add81ab71ca34d91873d8faa728c58166f48ff9b5d46c7ae9c4eb385f47
+accepted_qualification_subject_amendment_sha256 = the exact reviewed proposal SHA-256 recorded by this ADR's accepted qualification-subject amendment metadata
+mechanics_schema_version = lsp-trace.program-c-stage6-mechanics.private.v1
+mechanics_profile = CALLS_ONLY_FROZEN_CENSUS_V1
+```
+
+`adapter_contract` is the complete canonical `AdapterContractDTO` reconstructed from verified Program C bindings, not merely a digest.
+
+### Stage 6 implementation manifest
+
+The selected reviewed Stage 6 seam manifest is pinned to repository commit `b33cf8cdbda56eefd54c049832129eb67a056727` and tree `f87ac81bfd429d196044b0283574d3de370dc1c3`. The commit/tree seal only the repository source snapshot; the explicit file list identifies reviewed seams and is not a behavioral or compiler closure.
+
+Files are strict lexicographic path order:
+
+```text
+internal/censuscontinuation/programc_stage6_adapter_private.go
+internal/censuscontinuation/programc_transition.go
+internal/graph/native_v5_representative.go
+internal/programc/core.go
+internal/programcrepresentative/mechanics.go
+internal/programcrepresentative/representative.go
+internal/programcrepresentative/stage6_result.go
+```
+
+This is a selected reviewed seam manifest, not a behavioral, transitive-dependency, compiler, module-resolution, platform, or runtime closure. The pinned repository commit and tree seal only the repository source snapshot. Each entry's Git blob SHA-1, SHA-256, and exact byte length are calculated over the exact raw Git blob content at that commit. Implementation identity uses domain `lsp-trace:program-c-representative-stage6-implementation:v1` and the same domain-zero-canonical-JSON rule with only `Stage6ImplementationDTO.identity` blank.
+
+### Fixed policy and limits
+
+The canonical policy schema is `lsp-trace.program-c-representative-stage6-policy.private.v1`, identity domain is `lsp-trace:program-c-representative-stage6-policy:v1`, and canonical fields are:
+
+```text
+Stage6PolicyDTO {
+  schema_version string
+  profile string
+  admitted_kind string
+  admitted_disposition string
+  self_loop_disposition string
+  context_node_scope string
+  relation_occurrence_closure string
+  graph_direction string
+  strongly_connected_components string
+  prepared_root_distance string
+  candidate_scope string
+  prepared_root_scope string
+  selected_scc_members_scope string
+  predecessor_scope string
+  no_calls_outcome string
+  selection_failure_outcome string
+  selected_outcome string
+  selection_order []string
+  predecessor_order []string
+  singleton_result_required bool
+  authority uint8
+  accepted bool
+  identity string
+}
+```
+
+Fixed values are:
+
+```text
+schema_version=lsp-trace.program-c-representative-stage6-policy.private.v1
+profile=CALLS_ONLY_FROZEN_CENSUS_V1
+admitted_kind=CALLS
+admitted_disposition=INCLUDED
+self_loop_disposition=RETAINED_INCLUDED_DERIVED_INELIGIBLE
+context_node_scope=UNION_PREPARED_TARGET_AND_REACHED_NODE
+relation_occurrence_closure=EXACT_ALL_CALLS_OCCURRENCES_PER_CONTEXT_RELATION
+graph_direction=CALLER_TO_CALLEE
+strongly_connected_components=DETERMINISTIC_TARJAN_CANONICAL_NODE_ORDER
+prepared_root_distance=SHORTEST_DIRECTED_CONDENSATION_EDGE_COUNT
+candidate_scope=REACHED_COMMUNITY_MEMBER_REACHABLE_FROM_PREPARED_ROOT_SCC
+prepared_root_scope=ALL_SCCS_CONTAINING_PREPARED_TARGETS
+selected_scc_members_scope=ALL_ACTIVE_CONTEXT_NODES_IN_SELECTED_SCC
+predecessor_scope=INCLUDED_NON_SELF_CALLS_DIRECTLY_INCOMING_TO_SELECTED_NODE
+no_calls_outcome=NO_CALLS_REPRESENTATIVE
+selection_failure_outcome=CALLS_EVIDENCE_INELIGIBLE
+selected_outcome=SELECTED
+selection_order=[MIN_DISTANCE,LEXICOGRAPHIC_NODE_ID]
+predecessor_order=[RELATION_ID,OCCURRENCE_ID]
+singleton_result_required=true
+authority=0
+accepted=false
+```
+
+The policy identity is:
+
+```text
+sha256("lsp-trace:program-c-representative-stage6-policy:v1" || 0x00 || canonical Stage6PolicyDTO with only Stage6PolicyDTO.identity="")
+```
+
+The canonical limits schema is `lsp-trace.program-c-representative-stage6-limits.private.v1`, identity domain is `lsp-trace:program-c-representative-stage6-limits:v1`, and exact DTO field order is:
+
+```text
+Stage6LimitsDTO {
+  schema_version string
+  profile string
+  max_communities int
+  max_members int
+  max_occurrences int
+  max_candidates int
+  max_canonical_bytes int
+  max_string_bytes int
+  max_work int
+  authority uint8
+  accepted bool
+  identity string
+}
+```
+
+Fixed values are:
+
+```text
+schema_version=lsp-trace.program-c-representative-stage6-limits.private.v1
+profile=CALLS_ONLY_FROZEN_CENSUS_V1
+max_communities=10000
+max_members=10000
+max_occurrences=100000
+max_candidates=10000
+max_canonical_bytes=67108864
+max_string_bytes=1048576
+max_work=110000
+authority=0
+accepted=false
+```
+
+The limits identity is:
+
+```text
+sha256("lsp-trace:program-c-representative-stage6-limits:v1" || 0x00 || canonical Stage6LimitsDTO with only Stage6LimitsDTO.identity="")
+```
+
+`max_candidates` applies per community; `max_members` applies to total partition membership. `max_work=110000` equals `max_occurrences + max_members` under the existing Stage 6 work equation.
+
+These are corpus-specific qualification bounds, not a claim that every upstream-admissible Native V5 input is admitted. Before any qualification subject may be issued, a complete frozen-corpus preflight must compute the maximum observed communities, total members, members per community, occurrences, string bytes, and work for every eligible singleton. It does not construct a `RepresentativeResult` or require a qualification token. Every observed value must be within its corresponding non-result bound. ADR 0013 resource-excluded constituents are explicitly classified and contribute zero eligible singletons; they are not measured as successful Stage 6 inputs. Any missing, otherwise incomplete, or unmeasured eligible constituent fails the preflight. If any measured bound is exceeded, subject issuance is refused and the limits require a separately reviewed amendment.
+
+`max_canonical_bytes` is a fixed post-qualification fail-closed cap, not a pre-subject admission proof. It is checked only when the production-qualified result is constructed. Exceeding any limit fails closed and never authorizes truncation.
+
+Policy and limits are each canonical JSON artifacts. Their `ArtifactBindingDTO` binds schema version, populated identity, SHA-256 of complete canonical bytes, and exact byte length.
+
+### Finalization artifact
+
+The deterministic mapping below is itself a canonical artifact bound by the subject as `stage6_finalization`. Its schema is `lsp-trace.program-c-representative-stage6-finalization.private.v1`, profile is `CALLS_ONLY_FROZEN_CENSUS_V1`, identity domain is `lsp-trace:program-c-representative-stage6-finalization:v1`, and exact field order is:
+
+```text
+Stage6FinalizationDTO {
+  schema_version string
+  profile string
+  composition_family string
+  composition_version string
+  grouping_family string
+  grouping_version string
+  grouping_algorithm string
+  grouping_profile string
+  grouping_numeric_contract string
+  qualification_family string
+  qualification_trust string
+  composition_mappings []string
+  evidence_mappings []string
+  grouping_mappings []string
+  context_mappings []string
+  qualification_mappings []string
+  finalization_order []string
+  authority uint8
+  accepted bool
+  identity string
+}
+```
+
+The fixed arrays are:
+
+```text
+composition_mappings=[INPUT_FROM_CUSTODY,POLICY_FROM_VERIFIED_POLICY,COMPOSITION_ID_FROM_MECHANICS,QUALIFICATION_BINDING_FROM_VERIFIED_ENVELOPE,OCCURRENCES_FROM_EXACT_EVIDENCE_MAPPING,ACCOUNTING_ALL_INCLUDED_NO_TRUNCATION,MODEL_FIELDS_EMPTY]
+evidence_mappings=[IDENTITY_EXACT,RELATION_ID_EXACT,KIND_CALLS,FROM_NODE_ID_TO_FROM,TO_NODE_ID_TO_TO,DISPOSITION_INCLUDED,CONSTITUENT_SELECTOR_TO_SOURCE_PREDECESSOR,RECOMPUTED_CUSTODY_IDENTITY_TO_CUSTODY,CANONICAL_ARRAY_INDEX_TO_ORDINAL,CALL_SITE_EXACT]
+grouping_mappings=[LIMITS_FROM_VERIFIED_LIMITS,COMPOSITION_DIGEST_AND_LENGTH_EXACT,SEED_FROM_MECHANICS,SINGLETON_PARTITION_FROM_COMMUNITY,SINGLETON_CONTEXT_FROM_EXACT_CONTEXT_MAPPING]
+context_mappings=[IDENTITY_EXACT,CONSTITUENT_SELECTOR_TO_CONSTITUENT_IDENTITY,EXECUTION_BUNDLE_EXACT,SINGLE_MEMBERSHIP_GROUP_SEED_LABEL_AND_AT,RECOMPUTED_CUSTODY_ORDINAL,COMMUNITY_AND_CLOSURE_ARRAYS_EXACT]
+qualification_mappings=[COMPOSITION_DIGEST_EXACT,GROUPING_DIGEST_TO_EVIDENCE_DIGEST,EPOCH_TO_VALID_FROM_AND_VALID_THROUGH,VERIFIER_RECONSTRUCTS_ALL_BINDINGS]
+finalization_order=[POPULATE_AND_HASH_COMPOSITION,POPULATE_AND_HASH_GROUPING,DERIVE_QUALIFICATION]
+```
+
+`authority=0` and `accepted=false`. Identity is SHA-256 of its domain, zero byte, and canonical DTO with only its own identity blank. Its subject `ArtifactBindingDTO` binds populated identity, complete-byte SHA-256, and exact length.
+
+### Corpus, workflow, and source pin
+
+`CorpusIdentityDTO` is reconstructed from strictly verified Program C custody. The twelve predecessor workflow-identity fields are copied field-for-field from the strictly verified predecessor successor head into `QualificationWorkflowIdentityDTO`; the subject adds fixed `provenance=PREDECESSOR_RETAINED_CALLER_ASSERTED`. Current custody independently cross-binds only Census receipt, availability ledger, Program C plan, Program C bindings, and resource policy. The source-pin, privacy, retention, replay, and qualification-policy digests remain predecessor-retained caller assertions unless separately verified artifacts are supplied in a later contract. The subject binds them without promoting their provenance or claiming their content was verified.
+
+`source_pin_sha256` equals the predecessor-retained `source_pin_sha256`. It does not claim a source-pin schema, selector, canonical bytes, byte length, complete source closure, or independent verification.
+
+### Deterministic Stage 6 finalization
+
+After the final qualification envelope is independently verified, each singleton mechanics value maps to the existing Stage 6 API with these exact constants:
+
+```text
+RepresentativeComposition.Family = PROGRAM_C_REPRESENTATIVE_COMPOSITION
+RepresentativeComposition.Version = private.v1
+RepresentativeGrouping.Family = PROGRAM_C_REPRESENTATIVE_GROUPING
+RepresentativeGrouping.Version = private.v1
+RepresentativeGrouping.Algorithm = gonum.org/v1/gonum/graph/community.Leiden
+RepresentativeGrouping.Profile = CALLS_ONLY_FROZEN_CENSUS_V1
+RepresentativeGrouping.NumericContract = EXACT_INTEGER_DIRECTED_GRAPH_V1
+RepresentativeQualification.Family = PROGRAM_C_REPRESENTATIVE_QUALIFICATION
+RepresentativeQualification.Trust = PRIVATE_INDEPENDENT_REVIEW_ENVELOPE_V1
+```
+
+Composition mapping is:
+
+```text
+InputID = mechanics custody_identity
+InputDigest = custody native_v5_sha256
+InputLength = checked int conversion of custody native_v5_byte_length
+PolicyID = populated Stage6PolicyDTO.identity
+PolicyDigest = sha256(canonical populated Stage6PolicyDTO bytes)
+PolicyLength = len(canonical populated Stage6PolicyDTO bytes)
+CompositionID = mechanics identity
+QualificationID = verified final qualification envelope identity
+QualificationDigest = sha256(exact canonical populated envelope bytes)
+QualificationLength = checked int conversion of len(exact canonical populated envelope bytes)
+Occurrences = mechanics evidence mapped by the exact evidence mapping below
+Accounting = exact input/terminal/included occurrence counts with all other precomputed counters zero and Truncated=false
+ModelJudgment = ""
+ModelAdvice = ""
+```
+
+For mechanics evidence in canonical array order at index `i`, the exact `RepresentativeEvidence` mapping is:
+
+```text
+Identity = EvidenceIdentityDTO.Identity
+RelationID = EvidenceIdentityDTO.RelationID
+Kind = CALLS
+From = EvidenceIdentityDTO.FromNodeID
+To = EvidenceIdentityDTO.ToNodeID
+Disposition = INCLUDED
+SourcePredecessor = EvidenceIdentityDTO.ConstituentSelector
+Custody = recomputed CustodyIdentityDTO.Identity
+Ordinal = i
+CallSite = exact EvidenceIdentityDTO.CallSite converted without coordinate changes
+```
+
+The flattened `RepresentativeEvidence.Ordinal` is distinct from the per-edge `EvidenceIdentityDTO.CallSiteOrdinal` used in evidence identity. Before mapping, recompute the complete `CustodyIdentityDTO` from independently verified workflow, terminal head, receipt, plan ordinal, publication/constituent selectors, exact retained Native V5 bytes, and execution bundle. Its populated identity must equal `MechanicsIdentityDTO.custody_identity`; that identity cannot be accepted from mechanics bytes alone.
+
+The composition unsigned bytes are exactly `append(json.Marshal(composition with Digest=""), '\n')`. The composition digest is SHA-256 of those LF-terminated unsigned bytes using the existing Stage 6 digest spelling. After populating `Digest`, canonical populated composition bytes are exactly `append(json.Marshal(populated composition), '\n')`; `CompositionLength` uses this LF-terminated populated length.
+
+Grouping mapping is:
+
+```text
+LimitsDigest = sha256(canonical populated Stage6LimitsDTO bytes)
+LimitsLength = checked int conversion of len(canonical populated Stage6LimitsDTO bytes)
+CompositionDigest = populated composition digest
+CompositionLength = checked int conversion of LF-terminated canonical populated RepresentativeComposition bytes length
+Seed = mechanics seed
+Partition = [mechanics community_members]
+SelectionContexts = [mechanics selection_context mapped by the exact context mapping below]
+```
+
+The exact `RepresentativeSelectionContext` mapping is:
+
+```text
+Identity = MechanicsIdentityDTO.SelectionContext.Identity
+ConstituentIdentity = recomputed CustodyIdentityDTO.ConstituentSelector
+ExecutionBundleID = MechanicsIdentityDTO.SelectionContext.ExecutionBundleID
+SeedLabel = the single verified membership group's SeedLabel
+SeedAt = the single verified membership group's SeedAt
+ConstituentOrdinal = recomputed CustodyIdentityDTO.ConstituentOrdinal
+CommunityMembers = exact MechanicsIdentityDTO.SelectionContext.CommunityMembers
+PreparedTargets = exact MechanicsIdentityDTO.SelectionContext.PreparedTargets
+ReachedNodes = exact MechanicsIdentityDTO.SelectionContext.ReachedNodes
+RelationIDs = exact MechanicsIdentityDTO.SelectionContext.RelationIDs
+OccurrenceIDs = exact MechanicsIdentityDTO.SelectionContext.OccurrenceIDs
+```
+
+All arrays remain canonical defensive copies. Every `uint64` custody or artifact length converted to a Stage 6 `int` must equal the resulting nonnegative `int` when converted back to `uint64`; overflow, truncation, or mismatch fails closed. Every membership must share the single derived seed label/location; zero or multiple groups fail closed.
+
+The grouping unsigned bytes are exactly `append(json.Marshal(grouping with Digest=""), '\n')`. The grouping digest is SHA-256 of those LF-terminated unsigned bytes. Canonical populated grouping bytes are exactly `append(json.Marshal(populated grouping), '\n')`.
+
+### Independent-review receipt wire
+
+The exact review schema is `lsp-trace.program-c-representative-qualification-review.private.v1`, profile is `CALLS_ONLY_FROZEN_CENSUS_V1`, identity domain is `lsp-trace:program-c-representative-qualification-review:v1`, and field order is:
+
+```text
+ReviewActorIdentityDTO {
+  identity_kind string
+  harness_actor_id string
+  attribution_evidence ArtifactBindingDTO
+  identity string
+}
+
+ReviewAssignmentRecordDTO {
+  schema_version string
+  actor_kind string
+  harness_actor_id string
+  parent_actor_id string
+  subject ArtifactBindingDTO
+  scope []string
+}
+
+ReviewTerminalRecordDTO {
+  schema_version string
+  actor_kind string
+  harness_actor_id string
+  parent_actor_id string
+  subject ArtifactBindingDTO
+  scope []string
+  verdict string
+}
+
+ReviewTranscriptSnapshotDTO {
+  schema_version string
+  actor_kind string
+  harness_actor_id string
+  parent_actor_id string
+  raw_transcript_selector string
+  raw_transcript_sha256 string
+  raw_transcript_byte_length uint64
+  assignment_subject ArtifactBindingDTO
+  assignment_scope []string
+  terminal_subject ArtifactBindingDTO
+  terminal_scope []string
+  terminal_verdict string
+  authority uint8
+  accepted bool
+  identity string
+}
+
+ReviewTaskSeparationDTO {
+  schema_version string
+  writer_session_id string
+  reviewer_task_id string
+  reviewer_parent_session_id string
+  reviewer_isolated bool
+  subject ArtifactBindingDTO
+  review_scope []string
+  authority uint8
+  accepted bool
+  identity string
+}
+
+ProgramCRepresentativeQualificationReviewDTO {
+  schema_version string
+  profile string
+  subject ArtifactBindingDTO
+  review_scope []string
+  verdict string
+  writer ReviewActorIdentityDTO
+  reviewer ReviewActorIdentityDTO
+  separation_method string
+  separation_evidence ArtifactBindingDTO
+  authority uint8
+  accepted bool
+  identity string
+}
+```
+
+Assignment-record schema is `lsp-trace.program-c-representative-review-assignment.private.v1`; terminal-record schema is `lsp-trace.program-c-representative-review-terminal.private.v1`. Transcript snapshot schema is `lsp-trace.program-c-representative-review-transcript-snapshot.private.v1`, domain `lsp-trace:program-c-representative-review-transcript-snapshot:v1`. Task-separation schema is `lsp-trace.program-c-representative-review-task-separation.private.v1`, domain `lsp-trace:program-c-representative-review-task-separation:v1`. Actor identity domain is `lsp-trace:program-c-representative-review-actor:v1`. Each identity uses its domain, zero byte, and canonical DTO with only that DTO's identity blank.
+
+The writer actor and snapshot use `identity_kind/actor_kind=PI_SESSION`, exact writer session ID, and `parent_actor_id=""`. The reviewer actor and snapshot use `identity_kind/actor_kind=PI_ISOLATED_TASK`, exact reviewer task ID, and `parent_actor_id` equal to the writer session ID that launched the isolated review. `harness_actor_id` is derived only from corresponding harness-issued session/task metadata. Actor identity hashes the populated kind, harness ID, and attribution-evidence binding.
+
+The retained review-evidence JSONL is an exact two-record projection, not the full harness transcript:
+
+```text
+json.Marshal(ReviewAssignmentRecordDTO) || LF ||
+json.Marshal(ReviewTerminalRecordDTO) || LF
+```
+
+There are exactly two nonempty UTF-8 lines and a final LF. Blank lines, additional lines, unknown fields, trailing bytes, duplicate keys, noncanonical JSON, missing records, or duplicate assignment/terminal records fail closed. Line 1 must strictly decode as the assignment schema; line 2 as the terminal schema. Both records repeat the snapshot's exact actor kind, harness actor ID, parent actor ID, subject, and fixed scope. Writer terminal verdict is exactly `SUBJECT_PRODUCED`; reviewer terminal verdict is exactly `ACCEPT`.
+
+Each transcript snapshot requires `raw_transcript_selector=raw_transcript_sha256=SHA-256(these exact two LF-terminated JSONL records)` and exact byte length. Snapshot assignment/terminal fields are copied from those decoded records and must agree. Writer and reviewer snapshot `authority=0` and `accepted=false`.
+
+The canonical task-separation record is emitted from harness task metadata. It binds the writer session, reviewer task, reviewer parent session, `reviewer_isolated=true`, exact subject, and scope. Writer session ID and reviewer task ID must differ; the reviewer task must not equal or reuse the writer task/session, and its isolated execution identity must match the reviewer transcript snapshot. `attribution_evidence` binds the corresponding canonical transcript snapshot. `separation_evidence` binds the canonical task-separation record.
+
+Every `ReviewTaskSeparationDTO` also has `authority=0` and `accepted=false`. `review_scope` is this exact fixed-order array:
+
+```text
+[SUBJECT_CANONICAL_BYTES,SUBJECT_EXPECTED_CONTEXT_RECONSTRUCTION,IMPLEMENTATION_SEAM_MANIFEST,STAGE6_POLICY,STAGE6_LIMITS,STAGE6_FINALIZATION,CORPUS_AND_WORKFLOW_BINDINGS,COMPLETE_RECEIPT_INVENTORY,TERMINAL_PROGRAM_C_HEAD,CLAIM_CEILINGS,ACYCLICITY]
+```
+
+`verdict=ACCEPT`, `separation_method=DISTINCT_HARNESS_ISOLATED_TASK`, `authority=0`, and `accepted=false`. Writer and reviewer actor identities and attribution-evidence identities must all differ. The verifier resolves every evidence binding, validates exact transcript bytes, canonical snapshots/task records, and harness-issued IDs, proves task separation, confirms exact subject/schema/scope/version equality, and rejects unverifiable, self-reviewed, shared-task, non-affirmative, or stale evidence. `stale` means any subject binding, fixed scope array, review schema/profile, transcript-snapshot schema, task-separation schema, or verdict differs from the values required by the envelope being verified.
+
+Review identity is SHA-256 of the review domain, zero byte, and canonical DTO with only review identity blank. Canonical review digest is SHA-256 of complete populated bytes; length is exact. The review receipt names no envelope, composition, grouping, denominator, lineage, successor, or head.
+
+### Final qualification envelope wire
+
+The exact future envelope schema is `lsp-trace.program-c-representative-qualification.private.v1`, profile is `CALLS_ONLY_FROZEN_CENSUS_V1`, identity domain is `lsp-trace:program-c-representative-qualification:v1`, and field order is:
+
+```text
+ProgramCRepresentativeQualificationDTO {
+  schema_version string
+  profile string
+  subject ArtifactBindingDTO
+  independent_review_receipt ArtifactBindingDTO
+  stage6_policy ArtifactBindingDTO
+  stage6_limits ArtifactBindingDTO
+  stage6_finalization ArtifactBindingDTO
+  qualification_epoch uint64
+  authority uint8
+  accepted bool
+  identity string
+}
+```
+
+`qualification_epoch` equals the independently verified subject's `terminal_program_c_head.generation` and must be positive. Envelope verification rejects any unequal, older, newer, caller-supplied, or otherwise stale epoch. `authority=0` and `accepted=false`. Identity is SHA-256 of the envelope domain, zero byte, and canonical DTO with only envelope identity blank. Canonical envelope digest is SHA-256 of complete populated envelope bytes; length is exact. Subject, review, policy, limits, and finalization bindings must equal independently verified canonical artifacts. The envelope contains no composition, grouping, representative result, denominator, lineage, successor, or head reference.
+
+The final qualification envelope contains its deterministic terminal-head generation epoch, independently verified subject and review bindings, and exact policy, limits, and finalization bindings. For each singleton, derive:
+
+```text
+RepresentativeQualification.CompositionDigest = populated composition digest
+RepresentativeQualification.EvidenceDigest = populated grouping digest
+RepresentativeQualification.ValidFrom = envelope qualification_epoch
+RepresentativeQualification.ValidThrough = envelope qualification_epoch
+```
+
+The verifier predicate returns true only when it reopens and verifies the exact final envelope, subject, review receipt, policy, limits, finalization, corpus/predecessor bindings, and epoch, reconstructs this exact qualification value, and observes byte/value equality. A caller-supplied boolean, token, digest, epoch, or envelope field cannot satisfy the predicate.
+
+This mapping is acyclic: the envelope binds the subject/review/policy/limits/finalization and deterministic epoch but no per-singleton composition or grouping; composition binds the already published envelope; grouping binds composition; the derived qualification binds composition and grouping.
+
+### Complete receipt inventory and terminal head
+
+The complete verified inventory is represented inline, not by a new aggregate identity. Entries are strict `plan_ordinal` order from zero, with positive receipt ordinals and schema v3 or v4 only. For each entry:
+
+```text
+receipt_selector = receipt_sha256 = sha256(canonical receipt bytes)
+receipt_byte_length = len(canonical receipt bytes)
+```
+
+The array length equals both terminal `committed_prefix` and `constituent_count`. Every plan ordinal appears exactly once.
+
+`TerminalProgramCHeadDTO` binds exact canonical terminal-head bytes loaded from custody. `selector` equals SHA-256 of the canonical head encoded with its selector field empty, matching `transitionSelector`. `head_bytes_sha256` equals SHA-256 of the exact populated terminal-head bytes, and `byte_length` is their exact length. These digests are distinct bindings and are not required to equal. Generation, committed prefix, and count equal the parsed verified head. It must be the same head reconstructed by complete receipt-inventory verification.
+
+### Claim ceiling
+
+The claim ceiling is exact:
+
+```text
+authority=0
+accepted=false
+feature_identity=UNRESOLVED
+completeness=UNKNOWN
+effects=NONE
+reviews=NOT_REQUESTED
+implementation_decision=UNISSUED
+production_admission=REFUSED_MISSING_EVIDENCE
+source_graph_complete=UNKNOWN
+absence_inference=PROHIBITED
+```
+
+The subject root also requires `authority=0` and `accepted=false`. In this ceiling, `reviews=NOT_REQUESTED` means downstream feature/stakeholder semantic review has not been requested; it does not describe the mechanical qualification review required here. `implementation_decision=UNISSUED` means no feature/product implementation decision has been issued; it does not negate the accepted private bridge implementation contract.
+
+### Acyclicity and trust
+
+The pure subject parser may establish canonical syntax but not trusted qualification. Trusted validation reconstructs the entire subject from independently verified expected inputs and requires byte identity. The subject contains no review, envelope, denominator, lineage, successor, storage, head-publication, or CAS fields.
+
 ## Constituent classification
 
 Every Program C plan constituent appears exactly once in constituent accounting.
@@ -538,14 +1138,14 @@ Historical fixtures, test-only qualification tokens, historical representative r
 
 Qualification publication is explicitly acyclic:
 
-1. publish a canonical `ProgramCRepresentativeQualificationSubject` binding the accepted ADR digest, adapter contract, exact Stage 6 implementation identity, policy, limits, corpus identity, source pin, complete receipt inventory, Program C terminal head, and claim ceilings;
-2. obtain and publish an independent-review receipt binding the subject's exact selector, digest, byte length, review scope, affirmative verdict, and reviewer/writer separation;
-3. publish a final `ProgramCRepresentativeQualification` envelope binding the subject and review-receipt selectors, digests, and byte lengths;
+1. publish a canonical `ProgramCRepresentativeQualificationSubject` binding the accepted ADR digest, adapter contract, exact Stage 6 implementation seam identity, policy, limits, finalization, corpus identity, source pin, complete receipt inventory, Program C terminal head, and claim ceilings;
+2. obtain and publish the exact canonical independent-review receipt binding the subject, fixed scope, affirmative verdict, transcript-backed writer/reviewer identities, and independently verified task separation;
+3. publish a final `ProgramCRepresentativeQualification` envelope binding the exact subject, review receipt, policy, limits, finalization, and deterministic terminal-head generation epoch;
 4. publish denominator, lineage, and successor evidence in that order.
 
 Neither the subject nor review receipt may reference the final envelope or any denominator, lineage, or successor head. Each denominator entry binds the final qualification-envelope selector and byte length without creating a dependency on a not-yet-published denominator head.
 
-Before Stage 6, a repository-owned verifier resolves and verifies the subject, review receipt, and final envelope; checks the receipt's exact scope, affirmative verdict, and reviewer/writer separation; then jointly verifies the committed denominator head and requires corpus, predecessor, adapter, policy, limit, and qualification identities to agree. Each lineage record binds both the final qualification-envelope selector/length and denominator selector/length.
+Before Stage 6, a repository-owned verifier resolves and verifies the subject, review receipt, and final envelope; checks the receipt's exact scope, affirmative verdict, and reviewer/writer separation; then jointly verifies the committed denominator head and requires corpus, predecessor, adapter, policy, limit, finalization, and qualification identities to agree. Each lineage record binds both the final qualification-envelope selector/length and denominator selector/length.
 
 The verifier rejects test helper tokens, test trust anchors, stale validity, foreign corpus or predecessor identities, non-affirmative or out-of-scope review, non-independent review, and caller-supplied boolean qualification. Only after this repository-owned verification may it provide the narrow qualification predicate required by the existing Stage 6 mechanics.
 
@@ -651,3 +1251,7 @@ After acceptance, implementation planning exposed that historical v2 result byte
 ### Accepted prequalification mechanics amendment
 
 Implementation planning after complete receipt-inventory custody exposed unresolved ownership, domain-separation, membership, community-binding, and occurrence-ordinal choices for the Native V5 to Stage 6 adapter. The exact amendment bytes at SHA-256 `b0af4add81ab71ca34d91873d8faa728c58166f48ff9b5d46c7ae9c4eb385f47` received independent verdict `ACCEPT` and were explicitly accepted by @jaresty on 2026-10-25 for private implementation and qualification only.
+
+### Accepted qualification-subject wire amendment
+
+After prequalification mechanics were implemented, planning exposed that the subject schema, identity domain, reviewed Stage 6 seam manifest, production Stage 6 policy and limits, finalization, review-evidence wire, envelope, terminal-head byte binding, and complete receipt-inventory representation were not yet frozen. The exact amendment bytes at SHA-256 `235facbbba34f479df4771be845f34b3a39c83988a339dca69eec4f2b6bad9a6` received independent verdict `ACCEPT` and were explicitly accepted by @jaresty on 2026-10-25 for private implementation and qualification only.
