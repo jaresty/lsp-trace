@@ -64,6 +64,49 @@ func TestProgramCQualificationEvidenceAuthorityBoundarySurface(t *testing.T) {
 	}
 }
 
+func TestProgramCQualificationEvidenceUsesQualificationVerifierDuringAuthoritativeReconstruction(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "programc_qualification_subject.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidenceBuilder *ast.FuncDecl
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if ok && function.Name.Name == "BuildProgramCRepresentativeQualificationEvidence" {
+			evidenceBuilder = function
+			break
+		}
+	}
+	if evidenceBuilder == nil {
+		t.Fatal("ASSERT_PROGRAM_C_QUALIFICATION_VERIFIER_IN_AUTHORITATIVE_LOOP missing evidence builder")
+	}
+	verifierCall := false
+	postVerificationPreflight := false
+	ast.Inspect(evidenceBuilder.Body, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		identifier, ok := call.Fun.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		switch identifier.Name {
+		case "verifyProgramCQualificationAuthority":
+			verifierCall = true
+		case "preflightProgramCRepresentativeCorpus":
+			postVerificationPreflight = true
+		}
+		return true
+	})
+	if !verifierCall {
+		t.Fatal("ASSERT_PROGRAM_C_QUALIFICATION_VERIFIER_IN_AUTHORITATIVE_LOOP")
+	}
+	if postVerificationPreflight {
+		t.Fatal("ASSERT_PROGRAM_C_QUALIFICATION_NO_POST_VERIFICATION_PREFLIGHT")
+	}
+}
+
 func TestProgramCQualificationEvidenceDefensiveCopies(t *testing.T) {
 	evidence := ProgramCRepresentativeQualificationEvidence{
 		adapterContract: programcrepresentative.AdapterContractDTO{

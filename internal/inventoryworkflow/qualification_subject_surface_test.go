@@ -31,8 +31,8 @@ func TestProgramCQualificationSubjectPrivateCompositionSurface(t *testing.T) {
 		t.Fatal("ASSERT_PREDECESSOR_WAITING_EVIDENCE_READ_ONLY_VERIFIER_SURFACE")
 	}
 	mapper := read("internal/censuscontinuation/programc_qualification_subject.go")
-	if !strings.Contains(mapper, "preflightProgramCRepresentativeCorpus") {
-		t.Fatal("ASSERT_COMPLETE_CORPUS_PREFLIGHT_SURFACE")
+	if !strings.Contains(mapper, "verifyProgramCQualificationAuthority") || strings.Contains(mapper, "func preflightProgramCRepresentativeCorpus") {
+		t.Fatal("ASSERT_COMPLETE_CORPUS_PREFLIGHT_DURING_RECONSTRUCTION_SURFACE")
 	}
 	if strings.Contains(mapper, "ProgramCRepresentativeWorkflowAuthority") || strings.Contains(mapper, "NewProgramCRepresentativeQualificationSubject") || !strings.Contains(mapper, "BuildProgramCRepresentativeQualificationEvidence") {
 		t.Fatal("ASSERT_CENSUS_QUALIFICATION_EVIDENCE_ONLY_SURFACE")

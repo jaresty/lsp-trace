@@ -64,8 +64,8 @@ func BuildProgramCRepresentativeQualificationEvidence(ctx context.Context, reque
 		return ProgramCRepresentativeQualificationEvidence{}, err
 	}
 	runner := NewProgramCProductionRunner(request.PlanSource)
-	var authority verifiedProgramCTransitionAuthority
-	if _, _, err = verifyProgramCTransitionReceiptInventoryWithAuthority(ctx, request.WorkflowKey, request.HeadKey, request.Bindings, planRaw, request.Objects, request.Heads, runner, &authority); err != nil {
+	authority, adaptations, err := verifyProgramCQualificationAuthority(ctx, request.WorkflowKey, request.HeadKey, request.Bindings, planRaw, request.Objects, request.Heads, runner)
+	if err != nil {
 		return ProgramCRepresentativeQualificationEvidence{}, err
 	}
 
@@ -89,8 +89,8 @@ func BuildProgramCRepresentativeQualificationEvidence(ctx context.Context, reque
 	if err != nil {
 		return ProgramCRepresentativeQualificationEvidence{}, ErrInvalidProgramCTransition
 	}
-	if err := preflightProgramCRepresentativeCorpus(request.WorkflowKey, authority.result.Head.Selector, authority.inventory, limits); err != nil {
-		return ProgramCRepresentativeQualificationEvidence{}, fmt.Errorf("Program C representative corpus preflight: %w", err)
+	if err := measureProgramCRepresentativeCorpus(adaptations, limits); err != nil {
+		return ProgramCRepresentativeQualificationEvidence{}, fmt.Errorf("Program C representative corpus preflight: %w: Stage 6 measurement", err)
 	}
 
 	bindingsRaw, err := json.Marshal(request.Bindings)
@@ -174,18 +174,6 @@ func cloneQualificationFinalization(in programcrepresentative.Stage6Finalization
 	return out
 }
 
-func preflightProgramCRepresentativeCorpus(workflowKey, terminalHeadSelector string, inventory []programCTransitionReceiptInventoryEntry, limits programcrepresentative.Stage6LimitsDTO) error {
-	adaptations := make([]programCStage6Adaptation, len(inventory))
-	for i := range inventory {
-		adapted, err := adaptProgramCStage6InventoryEntry(workflowKey, terminalHeadSelector, inventory[i])
-		if err != nil {
-			return ErrInvalidProgramCTransition
-		}
-		adaptations[i] = adapted
-	}
-	return measureProgramCRepresentativeCorpus(adaptations, limits)
-}
-
 func measureProgramCRepresentativeCorpus(adaptations []programCStage6Adaptation, limits programcrepresentative.Stage6LimitsDTO) error {
 	type runMeasurement struct {
 		communities uint64
@@ -193,7 +181,7 @@ func measureProgramCRepresentativeCorpus(adaptations []programCStage6Adaptation,
 		occurrences uint64
 	}
 	var maxCommunities, maxMembers, maxCandidates, maxOccurrences, maxStringBytes, maxWork uint64
-	for _, adapted := range adaptations {
+	for adaptationOrdinal, adapted := range adaptations {
 		switch adapted.classification {
 		case programCStage6Empty, programCStage6ResourceIncomplete:
 			if len(adapted.mechanics) != 0 {
@@ -202,10 +190,10 @@ func measureProgramCRepresentativeCorpus(adaptations []programCStage6Adaptation,
 			continue
 		case programCStage6Complete:
 			if len(adapted.mechanics) == 0 {
-				return ErrInvalidProgramCTransition
+				return fmt.Errorf("%w: COMPLETE ordinal=%d has no eligible singleton mechanics", ErrInvalidProgramCTransition, adaptationOrdinal)
 			}
 		default:
-			return ErrInvalidProgramCTransition
+			return fmt.Errorf("%w: unknown classification ordinal=%d classification=%q", ErrInvalidProgramCTransition, adaptationOrdinal, adapted.classification)
 		}
 
 		runs := map[string]*runMeasurement{}
@@ -216,7 +204,7 @@ func measureProgramCRepresentativeCorpus(adaptations []programCStage6Adaptation,
 				run = &runMeasurement{occurrences: uint64(len(dto.Evidence))}
 				runs[dto.RunID] = run
 			} else if run.occurrences != uint64(len(dto.Evidence)) {
-				return ErrInvalidProgramCTransition
+				return fmt.Errorf("%w: inconsistent occurrence closure ordinal=%d run=%q", ErrInvalidProgramCTransition, adaptationOrdinal, dto.RunID)
 			}
 			run.communities++
 			run.members += uint64(len(dto.CommunityMembers))

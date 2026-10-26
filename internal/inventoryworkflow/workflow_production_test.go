@@ -300,3 +300,23 @@ func TestRunFrozenCorpusProductionCustodyToGapLedger(t *testing.T) {
 		t.Fatalf("ASSERT_FROZEN_PRODUCTION_WORKFLOW result=%+v opens=%d gap=%+v err=%v", result, opens, gap, err)
 	}
 }
+
+func TestBuildFrozenCorpusQualificationSubjectFromRetainedState(t *testing.T) {
+	receiptPath := os.Getenv("LSP_TRACE_PROGRAM_C_RECEIPT")
+	ledgerPath := os.Getenv("LSP_TRACE_PROGRAM_C_LEDGER")
+	stateDir := os.Getenv("LSP_TRACE_PROGRAM_C_RETAINED_STATE")
+	if receiptPath == "" || ledgerPath == "" || stateDir == "" {
+		t.Skip("set LSP_TRACE_PROGRAM_C_RECEIPT, LSP_TRACE_PROGRAM_C_LEDGER, and LSP_TRACE_PROGRAM_C_RETAINED_STATE to qualify the retained frozen corpus")
+	}
+	receipt := exactInput(t, receiptPath)
+	ledger := exactInput(t, ledgerPath)
+	opens := 0
+	request := productionWorkflowRequest(t, receipt, ledger, stateDir, programctransitionhost.MaxRepeatedTransitions, &opens)
+	before := workflowStateSnapshot(t, stateDir)
+	subject, err := BuildProgramCRepresentativeQualificationSubject(context.Background(), request)
+	const refusal = "Stage 6 adaptation ordinal=1: invalid census program-c transition: stage6 category=count invariant=invocation-seed-count observed=5 expected=1"
+	if !errors.Is(err, censuscontinuation.ErrInvalidProgramCTransition) || !strings.Contains(err.Error(), refusal) || subject.Trusted() || opens != 1 || !reflect.DeepEqual(before, workflowStateSnapshot(t, stateDir)) {
+		t.Fatalf("ASSERT_RETAINED_FROZEN_QUALIFICATION_SUBJECT_REFUSES_MULTI_SEED trusted=%t opens=%d unchanged=%t err=%v", subject.Trusted(), opens, reflect.DeepEqual(before, workflowStateSnapshot(t, stateDir)), err)
+	}
+	t.Logf("RETAINED_FROZEN_QUALIFICATION_SUBJECT_REFUSED %s", refusal)
+}

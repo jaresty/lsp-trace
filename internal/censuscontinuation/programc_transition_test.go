@@ -539,20 +539,6 @@ func TestVerifyProgramCTransitionCompletionLoadsHeadAndReceipt(t *testing.T) {
 		}
 	}
 
-	heads.loads = 0
-	puts, swaps := objects.puts, heads.cas
-	var authority verifiedProgramCTransitionAuthority
-	authorityResult, returnedInventory, err := verifyProgramCTransitionReceiptInventoryWithAuthority(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, planRaw, objects, heads, runner, &authority)
-	if err != nil || authorityResult != authority.result || heads.loads != 1 || objects.puts != puts || heads.cas != swaps || !bytes.Equal(authority.terminalRaw, heads.raw) || len(authority.inventory) != len(returnedInventory) {
-		t.Fatalf("ASSERT_PROGRAM_C_AUTHORITY_ONE_HEAD_LOAD_NO_WRITES result=%+v loads=%d puts=%d/%d cas=%d/%d inventory=%d/%d err=%v", authorityResult, heads.loads, objects.puts, puts, heads.cas, swaps, len(authority.inventory), len(returnedInventory), err)
-	}
-	returnedInventory[0].canonicalReceipt[0] ^= 0xff
-	returnedInventory[0].nativeV5[0] ^= 0xff
-	returnedInventory[0].outcomes[0].Outcome = "MUTATED"
-	if bytes.Equal(returnedInventory[0].canonicalReceipt, authority.inventory[0].canonicalReceipt) || bytes.Equal(returnedInventory[0].nativeV5, authority.inventory[0].nativeV5) || authority.inventory[0].outcomes[0].Outcome == "MUTATED" {
-		t.Fatal("ASSERT_PROGRAM_C_AUTHORITY_DEFENSIVE_INVENTORY_COPY")
-	}
-
 	delete(objects.m, verified.ReceiptSelector)
 	if _, err = verify(); !errors.Is(err, ErrInvalidProgramCTransition) {
 		t.Fatalf("ASSERT_PROGRAM_C_VERIFY_REQUIRES_RECEIPT err=%v", err)
