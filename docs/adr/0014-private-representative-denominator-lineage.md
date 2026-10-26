@@ -13,6 +13,9 @@
 - **Mechanics-amendment independent review:** `ACCEPT`; task `bfcf46b9-abe4-431`
 - **Accepted qualification-subject amendment SHA-256:** `235facbbba34f479df4771be845f34b3a39c83988a339dca69eec4f2b6bad9a6`
 - **Qualification-contract independent review:** `ACCEPT`; task `00147418-3d69-4bf`
+- **Accepted multi-seed v2 mechanics/preflight amendment SHA-256:** `839c71b4d74c0e3fa2fb6c6b49be85725b615754586bf40ab116f9a709f7d66e`
+- **Multi-seed amendment independent review:** `ACCEPT`; tasks `15f9adca-d59e-436`, `800da54d-a2a2-4a1`
+- **Multi-seed amendment accepted:** 2026-10-26 by @jaresty for private automated implementation and qualification only
 - **Depends on:** [ADR 0011](0011-versioned-definition-reference-grouping-evidence.md), [ADR 0012](0012-private-census-to-candidate-orchestration-bridge.md), and [ADR 0013](0013-resource-blocked-program-c-instability.md)
 - **Extends without modifying:** historical Program C receipts, community-instability v1/v2/v3, Stage 6 representative mechanics, and the Describe-preparation gap-ledger v1
 
