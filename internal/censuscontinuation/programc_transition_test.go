@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/censussourcecontinuation"
@@ -24,6 +25,8 @@ import (
 
 type transitionObjects struct {
 	m          map[string][]byte
+	getErr     map[string]error
+	onGet      func(string)
 	puts, gets int
 }
 
@@ -38,9 +41,15 @@ func (s *transitionObjects) Put(_ context.Context, b []byte) (string, error) {
 }
 func (s *transitionObjects) Get(_ context.Context, k string) ([]byte, error) {
 	s.gets++
+	if s.onGet != nil {
+		s.onGet(k)
+	}
+	if err := s.getErr[k]; err != nil {
+		return nil, err
+	}
 	b, ok := s.m[k]
 	if !ok {
-		return nil, errors.New("missing")
+		return nil, os.ErrNotExist
 	}
 	return bytes.Clone(b), nil
 }
@@ -74,6 +83,7 @@ type transitionRunner struct {
 	fail                       error
 	instabilityFail            error
 	validateFail               error
+	onCompute                  func()
 }
 
 func (r *transitionRunner) Resolve(_ context.Context, p, c string) ([]byte, error) {
@@ -86,6 +96,9 @@ func (r *transitionRunner) Resolve(_ context.Context, p, c string) ([]byte, erro
 }
 func (r *transitionRunner) Compute(_ []byte, s uint64) (programc.Outcome, *programc.Failure) {
 	r.seeds = append(r.seeds, s)
+	if r.onCompute != nil {
+		r.onCompute()
+	}
 	if r.fail != nil {
 		return programc.Outcome{}, &programc.Failure{Code: programc.CodeComputation, Message: r.fail.Error()}
 	}
@@ -130,6 +143,33 @@ type transitionPlanSource struct {
 func (s *transitionPlanSource) Load(context.Context) ([]byte, error) {
 	s.loads++
 	return bytes.Clone(s.raw), nil
+}
+
+type transitionReaderFunc func(context.Context, int64) ([]byte, error)
+
+func (f transitionReaderFunc) ReadBounded(ctx context.Context, limit int64) ([]byte, error) {
+	return f(ctx, limit)
+}
+
+type transitionFaultContext struct {
+	parent context.Context
+	done   chan struct{}
+	err    error
+}
+
+func newTransitionFaultContext() *transitionFaultContext {
+	return &transitionFaultContext{parent: context.Background(), done: make(chan struct{})}
+}
+
+func (c *transitionFaultContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (c *transitionFaultContext) Done() <-chan struct{}       { return c.done }
+func (c *transitionFaultContext) Err() error                  { return c.err }
+func (c *transitionFaultContext) Value(key any) any           { return c.parent.Value(key) }
+func (c *transitionFaultContext) fail(err error) {
+	if c.err == nil {
+		c.err = err
+		close(c.done)
+	}
 }
 
 func transitionDigest(b []byte) string {
@@ -482,15 +522,317 @@ func TestVerifyProgramCTransitionCompletionLoadsHeadAndReceipt(t *testing.T) {
 		t.Fatalf("ASSERT_PROGRAM_C_VERIFY_SETUP_SECOND result=%+v err=%v", second, err)
 	}
 	verify := func() (ProgramCTransitionResult, error) {
-		return verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads)
+		return verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
 	}
 	verified, err := verify()
 	if err != nil || verified.Status != ProgramCTransitionComplete || verified.Head != second.Head || verified.CommittedPrefix != 2 || verified.ConstituentCount != 2 || verified.ReceiptSelector == "" {
 		t.Fatalf("ASSERT_PROGRAM_C_VERIFIED_COMPLETION result=%+v err=%v", verified, err)
 	}
+	_, inventory, err := verifyProgramCTransitionReceiptInventory(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, planRaw, objects, heads, runner)
+	if err != nil || len(inventory) != 2 {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_COMPLETE entries=%d err=%v", len(inventory), err)
+	}
+	for ordinal, entry := range inventory {
+		if entry.ordinal != ordinal || entry.selector == "" || len(entry.canonicalReceipt) == 0 || entry.value.Ordinal != ordinal || !bytes.Equal(entry.nativeV5, []byte("native-v5")) || len(entry.outcomes) != 6 {
+			t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_ENTRY ordinal=%d entry=%+v", ordinal, entry)
+		}
+	}
 	delete(objects.m, verified.ReceiptSelector)
 	if _, err = verify(); !errors.Is(err, ErrInvalidProgramCTransition) {
 		t.Fatalf("ASSERT_PROGRAM_C_VERIFY_REQUIRES_RECEIPT err=%v", err)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionRejectsMissingEarlierReceiptWithoutWrites(t *testing.T) {
+	planRaw := transitionPlan(t, records2())
+	objects, heads := &transitionObjects{}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	first, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil || first.Status != ProgramCTransitionCommitted || first.ReceiptSelector == "" {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_SETUP_FIRST result=%+v err=%v", first, err)
+	}
+	request.Expected = first.Head
+	second, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil || second.Status != ProgramCTransitionCommitted {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_SETUP_SECOND result=%+v err=%v", second, err)
+	}
+	delete(objects.m, first.ReceiptSelector)
+	puts, swaps := objects.puts, heads.cas
+	_, err = verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+	if !errors.Is(err, ErrInvalidProgramCTransition) {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_MISSING_EARLIER_REJECTED err=%v", err)
+	}
+	if objects.puts != puts || heads.cas != swaps {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_READ_ONLY puts=%d want=%d swaps=%d want=%d", objects.puts, puts, heads.cas, swaps)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionRejectsTamperedEarlierReceipt(t *testing.T) {
+	planRaw := transitionPlan(t, records2())
+	objects, heads := &transitionObjects{}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	first, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Expected = first.Head
+	if _, err = CoordinateProgramCTransition(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	objects.m[first.ReceiptSelector] = []byte(`{"malformed":true}`)
+	puts, swaps := objects.puts, heads.cas
+	_, err = verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+	if !errors.Is(err, ErrInvalidProgramCTransition) || objects.puts != puts || heads.cas != swaps {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_TAMPERED_EARLIER_REJECTED err=%v puts=%d/%d swaps=%d/%d", err, objects.puts, puts, heads.cas, swaps)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionRejectsDualHistoricalReceiptCandidates(t *testing.T) {
+	planRaw := transitionPlan(t, records2())
+	objects, heads := &transitionObjects{}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	first, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Expected = first.Head
+	if _, err = CoordinateProgramCTransition(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	var historical programCTransitionReceipt
+	if err = transitionStrict(objects.m[first.ReceiptSelector], &historical); err != nil {
+		t.Fatal(err)
+	}
+	historical.SchemaVersion = programCTransitionReceiptVersionV3
+	historicalRaw, _ := json.Marshal(historical)
+	objects.m[transitionDigest(historicalRaw)] = historicalRaw
+	puts, swaps := objects.puts, heads.cas
+	_, err = verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+	if !errors.Is(err, ErrInvalidProgramCTransition) || objects.puts != puts || heads.cas != swaps {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_DUAL_CANDIDATE_REJECTED err=%v puts=%d/%d swaps=%d/%d", err, objects.puts, puts, heads.cas, swaps)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionV3InstabilityProbesOnlyV4Receipt(t *testing.T) {
+	planRaw := transitionPlan(t, records2()[:1])
+	objects, heads := &transitionObjects{}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionV3IncompleteResultBytes()}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	committed, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var invalidHistorical programCTransitionReceipt
+	if err = transitionStrict(objects.m[committed.ReceiptSelector], &invalidHistorical); err != nil {
+		t.Fatal(err)
+	}
+	invalidHistorical.SchemaVersion = programCTransitionReceiptVersionV3
+	invalidHistoricalRaw, _ := json.Marshal(invalidHistorical)
+	objects.m[transitionDigest(invalidHistoricalRaw)] = invalidHistoricalRaw
+	puts, swaps, gets := objects.puts, heads.cas, objects.gets
+	objects.onGet = func(selector string) {
+		if selector != committed.ReceiptSelector {
+			t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_V3_PROBED_NON_V4 selector=%s", selector)
+		}
+	}
+	verified, err := verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+	if err != nil || verified.Status != ProgramCTransitionComplete || objects.puts != puts || heads.cas != swaps || objects.gets != gets+1 {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_V3_ONLY_V4 result=%+v err=%v puts=%d/%d swaps=%d/%d gets=%d/%d", verified, err, objects.puts, puts, heads.cas, swaps, objects.gets, gets+1)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionRejectsCandidateStorageErrorWithoutWrites(t *testing.T) {
+	planRaw := transitionPlan(t, records2()[:1])
+	objects, heads := &transitionObjects{}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	committed, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var historical programCTransitionReceipt
+	if err = transitionStrict(objects.m[committed.ReceiptSelector], &historical); err != nil {
+		t.Fatal(err)
+	}
+	historical.SchemaVersion = programCTransitionReceiptVersionV3
+	historicalRaw, _ := json.Marshal(historical)
+	fault := os.ErrPermission
+	objects.getErr = map[string]error{transitionDigest(historicalRaw): fault}
+	puts, swaps := objects.puts, heads.cas
+	_, err = verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+	if !errors.Is(err, fault) || objects.puts != puts || heads.cas != swaps {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_STORAGE_ERROR_FAILS_CLOSED err=%v puts=%d/%d swaps=%d/%d", err, objects.puts, puts, heads.cas, swaps)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionPreservesCancellationWithoutWrites(t *testing.T) {
+	for _, contextErr := range []error{context.Canceled, context.DeadlineExceeded} {
+		name := strings.TrimPrefix(contextErr.Error(), "context ")
+		t.Run(name+"/pre-load", func(t *testing.T) {
+			objects, heads := &transitionObjects{}, &transitionHeads{}
+			ctx := newTransitionFaultContext()
+			ctx.fail(contextErr)
+			source := &AuthoritativeProgramCTransitionPlanSource{Receipt: ExactProgramCTransitionInput{
+				Reader:     transitionReaderFunc(func(ctx context.Context, _ int64) ([]byte, error) { return nil, ctx.Err() }),
+				ByteLength: 1,
+				SHA256:     transitionDigest([]byte("x")),
+			}}
+			_, err := VerifyProgramCTransitionCompletion(ctx, ProgramCTransitionVerificationRequest{PlanSource: source, Objects: objects, Heads: heads})
+			if !errors.Is(err, contextErr) || objects.puts != 0 || heads.cas != 0 {
+				t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_PRELOAD_CANCELLATION err=%v want=%v puts=%d swaps=%d", err, contextErr, objects.puts, heads.cas)
+			}
+		})
+
+		t.Run(name+"/mid-recompute", func(t *testing.T) {
+			planRaw := transitionPlan(t, records2()[:1])
+			objects, heads := &transitionObjects{}, &transitionHeads{}
+			setupRunner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+			request := transitionRequest(planRaw, objects, heads, setupRunner)
+			if _, err := CoordinateProgramCTransition(context.Background(), request); err != nil {
+				t.Fatal(err)
+			}
+			ctx := newTransitionFaultContext()
+			runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE"), onCompute: func() { ctx.fail(contextErr) }}
+			objects.onGet = func(string) { t.Fatal("candidate probing occurred after mid-recompute cancellation") }
+			puts, swaps := objects.puts, heads.cas
+			_, err := verifyProgramCTransitionCompletion(ctx, request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+			if !errors.Is(err, contextErr) || objects.puts != puts || heads.cas != swaps {
+				t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_MID_RECOMPUTE_CANCELLATION err=%v want=%v puts=%d/%d swaps=%d/%d", err, contextErr, objects.puts, puts, heads.cas, swaps)
+			}
+		})
+
+		t.Run(name+"/candidate-probe", func(t *testing.T) {
+			planRaw := transitionPlan(t, records2()[:1])
+			objects, heads := &transitionObjects{}, &transitionHeads{}
+			runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+			request := transitionRequest(planRaw, objects, heads, runner)
+			committed, err := CoordinateProgramCTransition(context.Background(), request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := newTransitionFaultContext()
+			gets := objects.gets
+			objects.onGet = func(selector string) {
+				if selector == committed.ReceiptSelector {
+					t.Fatal("stored v4 candidate was probed after cancellation on historical-v3 candidate")
+				}
+				ctx.fail(contextErr)
+			}
+			puts, swaps := objects.puts, heads.cas
+			_, err = verifyProgramCTransitionCompletion(ctx, request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+			if !errors.Is(err, contextErr) || objects.puts != puts || heads.cas != swaps || objects.gets != gets+1 {
+				t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_PROBE_CANCELLATION err=%v want=%v puts=%d/%d swaps=%d/%d gets=%d/%d", err, contextErr, objects.puts, puts, heads.cas, swaps, objects.gets, gets+1)
+			}
+		})
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionAcceptsHistoricalV3OnlyFullChain(t *testing.T) {
+	planRaw := transitionPlan(t, records2())
+	plan, err := decodeProgramCTransitionPlan(planRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects, heads := &transitionObjects{m: map[string][]byte{}}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	bound := ProgramCTransitionRequest{WorkflowKey: request.WorkflowKey, HeadKey: request.HeadKey, Bindings: request.Bindings, Objects: objects, Runner: runner}
+	reconstructed := programCTransitionHead{SchemaVersion: programCTransitionHeadVersion, WorkflowKey: request.WorkflowKey, HeadKey: request.HeadKey, Authority: 0, State: "ABSENT", Bindings: request.Bindings, ConstituentCount: len(plan.Records), ClaimOrdinal: -1}
+	var terminalRaw []byte
+	for _, record := range plan.Records {
+		claim := reconstructed
+		claim.Generation++
+		claim.State = "CLAIMED"
+		claim.ClaimOrdinal = record.Ordinal
+		claim.ClaimGeneration = claim.Generation
+		claim.ClaimSelector = reconstructed.Selector
+		claim.ClaimPublicationSelector = record.PublicationSelector
+		claim.ClaimConstituentSelector = record.ConstituentSelector
+		claim.ReceiptSelector = ""
+		if _, err = transitionSelector(&claim); err != nil {
+			t.Fatal(err)
+		}
+		computed, computeErr := transitionComputeReceipt(context.Background(), bound, claim, record)
+		if computeErr != nil {
+			t.Fatal(computeErr)
+		}
+		historical := computed.receipt
+		historical.SchemaVersion = programCTransitionReceiptVersionV3
+		historicalRaw, marshalErr := json.Marshal(historical)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		historicalSelector := transitionDigest(historicalRaw)
+		objects.m[historicalSelector] = historicalRaw
+		linked := claim
+		linked.Generation++
+		linked.ReceiptSelector = historicalSelector
+		if _, err = transitionSelector(&linked); err != nil {
+			t.Fatal(err)
+		}
+		committed := linked
+		committed.Generation++
+		committed.State = "COMMITTED"
+		committed.CommittedPrefix = record.Ordinal + 1
+		terminalRaw, err = transitionSelector(&committed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reconstructed = committed
+	}
+	heads.raw = bytes.Clone(terminalRaw)
+	puts, swaps := objects.puts, heads.cas
+	verified, inventory, err := verifyProgramCTransitionReceiptInventory(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, planRaw, objects, heads, runner)
+	wantHead := censussourcecontinuation.HeadRevision{Generation: reconstructed.Generation, Selector: reconstructed.Selector}
+	if err != nil || verified.Status != ProgramCTransitionComplete || verified.Head != wantHead || len(inventory) != len(plan.Records) || !bytes.Equal(heads.raw, terminalRaw) {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_HISTORICAL_V3_FULL_CHAIN result=%+v want_head=%+v entries=%d terminal_equal=%t err=%v", verified, wantHead, len(inventory), bytes.Equal(heads.raw, terminalRaw), err)
+	}
+	for ordinal, entry := range inventory {
+		if entry.ordinal != ordinal || entry.value.SchemaVersion != programCTransitionReceiptVersionV3 {
+			t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_HISTORICAL_V3_ENTRY ordinal=%d entry=%+v", ordinal, entry)
+		}
+	}
+	if objects.puts != puts || heads.cas != swaps {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_HISTORICAL_V3_READ_ONLY puts=%d/%d swaps=%d/%d", objects.puts, puts, heads.cas, swaps)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionRejectsProductionTestSeam(t *testing.T) {
+	source := &AuthoritativeProgramCTransitionPlanSource{VerifyPublication: func(string, captureset.ExactBytesAuthority) (captureset.Manifest, error) {
+		return captureset.Manifest{}, nil
+	}}
+	_, err := VerifyProgramCTransitionCompletion(context.Background(), ProgramCTransitionVerificationRequest{PlanSource: source})
+	if !errors.Is(err, ErrInvalidProgramCTransition) {
+		t.Fatalf("ASSERT_PROGRAM_C_VERIFY_PRODUCTION_SEAM_REJECTED err=%v", err)
+	}
+}
+
+func TestVerifyProgramCTransitionCompletionRejectsFinalHeadMismatch(t *testing.T) {
+	planRaw := transitionPlan(t, records2())
+	objects, heads := &transitionObjects{}, &transitionHeads{}
+	runner := &transitionRunner{outcome: "COMPLETE", result: transitionResultBytes("STABLE")}
+	request := transitionRequest(planRaw, objects, heads, runner)
+	first, err := CoordinateProgramCTransition(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Expected = first.Head
+	if _, err = CoordinateProgramCTransition(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	var terminal programCTransitionHead
+	if err = transitionStrict(heads.raw, &terminal); err != nil {
+		t.Fatal(err)
+	}
+	terminal.ReceiptSelector = first.ReceiptSelector
+	heads.raw, _ = transitionSelector(&terminal)
+	puts, swaps := objects.puts, heads.cas
+	_, err = verifyProgramCTransitionCompletion(context.Background(), request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, objects, heads, runner)
+	if !errors.Is(err, ErrInvalidProgramCTransition) || objects.puts != puts || heads.cas != swaps {
+		t.Fatalf("ASSERT_PROGRAM_C_RECEIPT_INVENTORY_FINAL_HEAD_MISMATCH_REJECTED err=%v puts=%d/%d swaps=%d/%d", err, objects.puts, puts, heads.cas, swaps)
 	}
 }
 

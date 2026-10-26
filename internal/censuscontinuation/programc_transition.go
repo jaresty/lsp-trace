@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strings"
 
 	"lsp-trace/internal/captureset"
@@ -342,6 +343,82 @@ func transitionPut(ctx context.Context, s censussourcecontinuation.ImmutableStor
 	return k, nil
 }
 
+type programCTransitionReceiptComputation struct {
+	receipt  programCTransitionReceipt
+	nativeV5 []byte
+	outcomes []programc.Outcome
+}
+
+type programCTransitionReceiptInventoryEntry struct {
+	ordinal          int
+	selector         string
+	canonicalReceipt []byte
+	value            programCTransitionReceipt
+	nativeV5         []byte
+	outcomes         []programc.Outcome
+}
+
+func transitionComputeReceipt(ctx context.Context, r ProgramCTransitionRequest, claim programCTransitionHead, record ProgramCTransitionPlanRecord) (programCTransitionReceiptComputation, error) {
+	receipt := programCTransitionReceipt{SchemaVersion: programCTransitionReceiptVersion, WorkflowKey: r.WorkflowKey, HeadKey: r.HeadKey, Authority: 0, Bindings: r.Bindings, ConstituentCount: claim.ConstituentCount, Ordinal: record.Ordinal, ReceiptOrdinal: record.ReceiptOrdinal, PublicationByteLength: record.PublicationByteLength, BatchOrdinal: record.BatchOrdinal, PublicationSelector: record.PublicationSelector, ConstituentSelector: record.ConstituentSelector, ClaimGeneration: claim.ClaimGeneration, ClaimSelector: claim.ClaimSelector, InstabilitySchema: programc.InstabilityVersionV2, InstabilityClaimCeiling: programc.InstabilityClaimCeilingV2}
+	input, runErr := r.Runner.Resolve(ctx, record.PublicationSelector, record.ConstituentSelector)
+	failureStage := ProgramCTransitionFailureStage("")
+	if runErr != nil {
+		failureStage = ProgramCTransitionFailureResolve
+	}
+	var outcomes []programc.Outcome
+	if runErr == nil {
+		for _, seed := range []uint64{1, 1, 1, 2, 2, 2} {
+			o, f := r.Runner.Compute(input, seed)
+			if f != nil || (o.Outcome != "COMPLETE" && o.Outcome != "EMPTY") {
+				failureStage = ProgramCTransitionFailureCompute
+				if f != nil {
+					runErr = f
+				} else {
+					runErr = errors.New("program c run neither COMPLETE nor EMPTY")
+				}
+				break
+			}
+			if len(outcomes) > 0 && o.Outcome != outcomes[0].Outcome {
+				failureStage = ProgramCTransitionFailureCompute
+				runErr = errors.New("mixed program c outcomes")
+				break
+			}
+			outcomes = append(outcomes, o)
+		}
+	}
+	if runErr == nil {
+		receipt.ProgramCOutcome = outcomes[0].Outcome
+		receipt.ResultBytes, runErr = r.Runner.Instability(outcomes, r.Bindings)
+		if runErr != nil {
+			failureStage = ProgramCTransitionFailureInstabilityBuild
+			receipt.ResultBytes = nil
+		} else if runErr = r.Runner.ValidateInstability(receipt.ResultBytes, outcomes, r.Bindings); runErr != nil {
+			failureStage = ProgramCTransitionFailureInstabilityValidate
+			receipt.ResultBytes = nil
+		}
+	}
+	if runErr != nil {
+		receipt.Outcome = "FAILED"
+		receipt.FailureStage = failureStage
+		receipt.Failure = runErr.Error()
+	} else if schemaVersion, claimCeiling, outcome, metaErr := transitionResultMetadata(receipt.ResultBytes); metaErr != nil {
+		return programCTransitionReceiptComputation{}, ErrInvalidProgramCTransition
+	} else {
+		receipt.Outcome = "SUCCEEDED"
+		receipt.InstabilitySchema = schemaVersion
+		receipt.InstabilityClaimCeiling = claimCeiling
+		if schemaVersion == programc.InstabilityVersionV3 {
+			if outcome != "INCOMPLETE" {
+				return programCTransitionReceiptComputation{}, ErrInvalidProgramCTransition
+			}
+			receipt.Disposition = "COMMITTED_INCOMPLETE_MATCHING_RESOURCE"
+		}
+		receipt.ResultSHA256 = transitionSHA(receipt.ResultBytes)
+		receipt.ResultByteLength = len(receipt.ResultBytes)
+	}
+	return programCTransitionReceiptComputation{receipt: receipt, nativeV5: input, outcomes: outcomes}, nil
+}
+
 func CoordinateProgramCTransition(ctx context.Context, r ProgramCTransitionRequest) (ProgramCTransitionResult, error) {
 	if ctx == nil || r.Objects == nil || r.Heads == nil || r.Runner == nil || r.PlanSource == nil || r.WorkflowKey == "" || r.HeadKey == "" {
 		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
@@ -409,63 +486,11 @@ func CoordinateProgramCTransition(ctx context.Context, r ProgramCTransitionReque
 	if out == censussourcecontinuation.CASNotCommitted {
 		return transitionResult(h, ProgramCTransitionConflict, programCTransitionReceipt{}), nil
 	}
-	receipt := programCTransitionReceipt{SchemaVersion: programCTransitionReceiptVersion, WorkflowKey: r.WorkflowKey, HeadKey: r.HeadKey, Authority: 0, Bindings: r.Bindings, ConstituentCount: h.ConstituentCount, Ordinal: record.Ordinal, ReceiptOrdinal: record.ReceiptOrdinal, PublicationByteLength: record.PublicationByteLength, BatchOrdinal: record.BatchOrdinal, PublicationSelector: record.PublicationSelector, ConstituentSelector: record.ConstituentSelector, ClaimGeneration: claim.ClaimGeneration, ClaimSelector: claim.ClaimSelector, InstabilitySchema: programc.InstabilityVersionV2, InstabilityClaimCeiling: programc.InstabilityClaimCeilingV2}
-	input, runErr := r.Runner.Resolve(ctx, record.PublicationSelector, record.ConstituentSelector)
-	failureStage := ProgramCTransitionFailureStage("")
-	if runErr != nil {
-		failureStage = ProgramCTransitionFailureResolve
+	computed, e := transitionComputeReceipt(ctx, r, claim, record)
+	if e != nil {
+		return ProgramCTransitionResult{}, e
 	}
-	var outcomes []programc.Outcome
-	if runErr == nil {
-		for _, seed := range []uint64{1, 1, 1, 2, 2, 2} {
-			o, f := r.Runner.Compute(input, seed)
-			if f != nil || (o.Outcome != "COMPLETE" && o.Outcome != "EMPTY") {
-				failureStage = ProgramCTransitionFailureCompute
-				if f != nil {
-					runErr = f
-				} else {
-					runErr = errors.New("program c run neither COMPLETE nor EMPTY")
-				}
-				break
-			}
-			if len(outcomes) > 0 && o.Outcome != outcomes[0].Outcome {
-				failureStage = ProgramCTransitionFailureCompute
-				runErr = errors.New("mixed program c outcomes")
-				break
-			}
-			outcomes = append(outcomes, o)
-		}
-	}
-	if runErr == nil {
-		receipt.ProgramCOutcome = outcomes[0].Outcome
-		receipt.ResultBytes, runErr = r.Runner.Instability(outcomes, r.Bindings)
-		if runErr != nil {
-			failureStage = ProgramCTransitionFailureInstabilityBuild
-			receipt.ResultBytes = nil
-		} else if runErr = r.Runner.ValidateInstability(receipt.ResultBytes, outcomes, r.Bindings); runErr != nil {
-			failureStage = ProgramCTransitionFailureInstabilityValidate
-			receipt.ResultBytes = nil
-		}
-	}
-	if runErr != nil {
-		receipt.Outcome = "FAILED"
-		receipt.FailureStage = failureStage
-		receipt.Failure = runErr.Error()
-	} else if schemaVersion, claimCeiling, outcome, metaErr := transitionResultMetadata(receipt.ResultBytes); metaErr != nil {
-		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
-	} else {
-		receipt.Outcome = "SUCCEEDED"
-		receipt.InstabilitySchema = schemaVersion
-		receipt.InstabilityClaimCeiling = claimCeiling
-		if schemaVersion == programc.InstabilityVersionV3 {
-			if outcome != "INCOMPLETE" {
-				return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
-			}
-			receipt.Disposition = "COMMITTED_INCOMPLETE_MATCHING_RESOURCE"
-		}
-		receipt.ResultSHA256 = transitionSHA(receipt.ResultBytes)
-		receipt.ResultByteLength = len(receipt.ResultBytes)
-	}
+	receipt := computed.receipt
 	receiptRaw, _ := json.Marshal(receipt)
 	receiptSelector, e := transitionPut(ctx, r.Objects, receiptRaw)
 	if e != nil {
@@ -493,44 +518,152 @@ func CoordinateProgramCTransition(ctx context.Context, r ProgramCTransitionReque
 // VerifyProgramCTransitionCompletion proves terminal Program C custody without
 // advancing, retrying, republishing, or accepting caller-authored status fields.
 func VerifyProgramCTransitionCompletion(ctx context.Context, request ProgramCTransitionVerificationRequest) (ProgramCTransitionResult, error) {
-	if request.PlanSource == nil {
+	if request.PlanSource == nil || request.PlanSource.VerifyPublication != nil {
 		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
 	}
-	return verifyProgramCTransitionCompletion(ctx, request.WorkflowKey, request.HeadKey, request.Bindings, request.PlanSource, request.Objects, request.Heads)
+	planRaw, err := request.PlanSource.Load(ctx)
+	if err != nil {
+		return ProgramCTransitionResult{}, err
+	}
+	runner := NewProgramCProductionRunner(request.PlanSource)
+	result, _, err := verifyProgramCTransitionReceiptInventory(ctx, request.WorkflowKey, request.HeadKey, request.Bindings, planRaw, request.Objects, request.Heads, runner)
+	return result, err
 }
 
-func verifyProgramCTransitionCompletion(ctx context.Context, workflowKey, headKey string, bindings ProgramCTransitionBindings, planSource ProgramCTransitionPlanSource, objects censussourcecontinuation.ImmutableStore, heads censussourcecontinuation.HeadStore) (ProgramCTransitionResult, error) {
-	if ctx == nil || workflowKey == "" || headKey == "" || planSource == nil || objects == nil || heads == nil {
+func verifyProgramCTransitionCompletion(ctx context.Context, workflowKey, headKey string, bindings ProgramCTransitionBindings, planSource ProgramCTransitionPlanSource, objects censussourcecontinuation.ImmutableStore, heads censussourcecontinuation.HeadStore, runner ProgramCTransitionRunner) (ProgramCTransitionResult, error) {
+	if planSource == nil {
 		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
 	}
 	planRaw, err := planSource.Load(ctx)
 	if err != nil {
 		return ProgramCTransitionResult{}, err
 	}
+	result, _, err := verifyProgramCTransitionReceiptInventory(ctx, workflowKey, headKey, bindings, planRaw, objects, heads, runner)
+	return result, err
+}
+
+func verifyProgramCTransitionReceiptInventory(ctx context.Context, workflowKey, headKey string, bindings ProgramCTransitionBindings, planRaw []byte, objects censussourcecontinuation.ImmutableStore, heads censussourcecontinuation.HeadStore, runner ProgramCTransitionRunner) (ProgramCTransitionResult, []programCTransitionReceiptInventoryEntry, error) {
+	if ctx == nil || workflowKey == "" || headKey == "" || objects == nil || heads == nil || runner == nil {
+		return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+	}
 	plan, err := decodeProgramCTransitionPlan(planRaw)
 	if err != nil || !transitionValidBindings(bindings, plan, planRaw) || len(plan.Records) == 0 {
-		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+		return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
 	}
-	raw, err := heads.Load(ctx, headKey)
+	terminalRaw, err := heads.Load(ctx, headKey)
 	if err != nil {
-		return ProgramCTransitionResult{}, err
+		return ProgramCTransitionResult{}, nil, err
 	}
-	var value programCTransitionHead
-	bound := ProgramCTransitionRequest{WorkflowKey: workflowKey, HeadKey: headKey, Bindings: bindings}
-	if transitionStrict(raw, &value) != nil || value.SchemaVersion != programCTransitionHeadVersion || transitionValidateHead(value, bound, len(plan.Records)) != nil {
-		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	var terminal programCTransitionHead
+	bound := ProgramCTransitionRequest{WorkflowKey: workflowKey, HeadKey: headKey, Bindings: bindings, Objects: objects, Runner: runner}
+	if transitionStrict(terminalRaw, &terminal) != nil || terminal.SchemaVersion != programCTransitionHeadVersion || transitionValidateHead(terminal, bound, len(plan.Records)) != nil || terminal.State != "COMMITTED" || terminal.CommittedPrefix != len(plan.Records) {
+		return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
 	}
-	copyValue := value
-	canonical, err := transitionSelector(&copyValue)
-	if err != nil || !bytes.Equal(canonical, raw) || value.State != "COMMITTED" || value.CommittedPrefix != len(plan.Records) {
-		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+	terminalCopy := terminal
+	terminalCanonical, err := transitionSelector(&terminalCopy)
+	if err != nil || !bytes.Equal(terminalCanonical, terminalRaw) {
+		return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
 	}
-	bound.Objects = objects
-	receipt, err := transitionLoadReceipt(ctx, bound, value, plan)
-	if err != nil || receipt.Outcome != "SUCCEEDED" {
-		return ProgramCTransitionResult{}, ErrInvalidProgramCTransition
+
+	reconstructed := programCTransitionHead{SchemaVersion: programCTransitionHeadVersion, WorkflowKey: workflowKey, HeadKey: headKey, Authority: 0, State: "ABSENT", Bindings: bindings, ConstituentCount: len(plan.Records), ClaimOrdinal: -1}
+	inventory := make([]programCTransitionReceiptInventoryEntry, 0, len(plan.Records))
+	var reconstructedRaw []byte
+	for _, record := range plan.Records {
+		if err := ctx.Err(); err != nil {
+			return ProgramCTransitionResult{}, nil, err
+		}
+		current := censussourcecontinuation.HeadRevision{Generation: reconstructed.Generation, Selector: reconstructed.Selector}
+		claim := reconstructed
+		claim.Generation++
+		claim.State = "CLAIMED"
+		claim.ClaimOrdinal = record.Ordinal
+		claim.ClaimGeneration = claim.Generation
+		claim.ClaimSelector = current.Selector
+		claim.ClaimPublicationSelector = record.PublicationSelector
+		claim.ClaimConstituentSelector = record.ConstituentSelector
+		claim.ReceiptSelector = ""
+		if _, err = transitionSelector(&claim); err != nil {
+			return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+		}
+		computed, computeErr := transitionComputeReceipt(ctx, bound, claim, record)
+		if contextErr := ctx.Err(); contextErr != nil {
+			return ProgramCTransitionResult{}, nil, contextErr
+		}
+		if computeErr != nil {
+			if errors.Is(computeErr, context.Canceled) || errors.Is(computeErr, context.DeadlineExceeded) {
+				return ProgramCTransitionResult{}, nil, computeErr
+			}
+			return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+		}
+		if computed.receipt.Outcome != "SUCCEEDED" {
+			return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+		}
+		candidates := []programCTransitionReceipt{computed.receipt}
+		if computed.receipt.InstabilitySchema == programc.InstabilityVersionV2 {
+			historical := computed.receipt
+			historical.SchemaVersion = programCTransitionReceiptVersionV3
+			candidates = append([]programCTransitionReceipt{historical}, candidates...)
+		}
+		matches := 0
+		var selected programCTransitionReceiptInventoryEntry
+		var linked programCTransitionHead
+		for _, candidate := range candidates {
+			candidateRaw, marshalErr := json.Marshal(candidate)
+			if marshalErr != nil {
+				return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+			}
+			selector := transitionSHA(candidateRaw)
+			stored, getErr := objects.Get(ctx, selector)
+			if getErr != nil {
+				if errors.Is(getErr, context.Canceled) || errors.Is(getErr, context.DeadlineExceeded) {
+					return ProgramCTransitionResult{}, nil, getErr
+				}
+				if contextErr := ctx.Err(); contextErr != nil {
+					return ProgramCTransitionResult{}, nil, contextErr
+				}
+				if errors.Is(getErr, os.ErrNotExist) {
+					continue
+				}
+				return ProgramCTransitionResult{}, nil, getErr
+			}
+			if contextErr := ctx.Err(); contextErr != nil {
+				return ProgramCTransitionResult{}, nil, contextErr
+			}
+			candidateLinked := claim
+			candidateLinked.Generation++
+			candidateLinked.ReceiptSelector = selector
+			if _, err = transitionSelector(&candidateLinked); err != nil {
+				return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+			}
+			value, loadErr := transitionDecodeReceipt(stored, selector, bound, candidateLinked, plan)
+			if loadErr != nil || !bytes.Equal(stored, candidateRaw) {
+				return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+			}
+			matches++
+			selected = programCTransitionReceiptInventoryEntry{ordinal: record.Ordinal, selector: selector, canonicalReceipt: bytes.Clone(stored), value: value, nativeV5: bytes.Clone(computed.nativeV5), outcomes: append([]programc.Outcome(nil), computed.outcomes...)}
+			linked = candidateLinked
+		}
+		if matches != 1 {
+			return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+		}
+		committed := linked
+		committed.Generation++
+		committed.State = "COMMITTED"
+		committed.CommittedPrefix = record.Ordinal + 1
+		reconstructedRaw, err = transitionSelector(&committed)
+		if err != nil {
+			return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+		}
+		inventory = append(inventory, selected)
+		reconstructed = committed
 	}
-	return transitionResult(value, ProgramCTransitionComplete, receipt), nil
+	if !bytes.Equal(reconstructedRaw, terminalRaw) {
+		return ProgramCTransitionResult{}, nil, ErrInvalidProgramCTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return ProgramCTransitionResult{}, nil, err
+	}
+	return transitionResult(terminal, ProgramCTransitionComplete, inventory[len(inventory)-1].value), inventory, nil
 }
 
 func transitionValidateResult(raw []byte) error {
@@ -563,7 +696,14 @@ func transitionResultMetadata(raw []byte) (string, string, string, error) {
 }
 func transitionLoadReceipt(ctx context.Context, r ProgramCTransitionRequest, h programCTransitionHead, p ProgramCTransitionPlan) (programCTransitionReceipt, error) {
 	raw, e := r.Objects.Get(ctx, h.ReceiptSelector)
-	if e != nil || transitionSHA(raw) != h.ReceiptSelector {
+	if e != nil {
+		return programCTransitionReceipt{}, ErrInvalidProgramCTransition
+	}
+	return transitionDecodeReceipt(raw, h.ReceiptSelector, r, h, p)
+}
+
+func transitionDecodeReceipt(raw []byte, selector string, r ProgramCTransitionRequest, h programCTransitionHead, p ProgramCTransitionPlan) (programCTransitionReceipt, error) {
+	if transitionSHA(raw) != selector {
 		return programCTransitionReceipt{}, ErrInvalidProgramCTransition
 	}
 	var x programCTransitionReceipt

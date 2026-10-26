@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -173,7 +174,13 @@ func readExactProgramCInput(ctx context.Context, in ExactProgramCTransitionInput
 		return nil, ErrInvalidProgramCTransition
 	}
 	raw, err := in.Reader.ReadBounded(ctx, in.ByteLength)
-	if err != nil || int64(len(raw)) != in.ByteLength || transitionSHA(raw) != in.SHA256 {
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		return nil, ErrInvalidProgramCTransition
+	}
+	if int64(len(raw)) != in.ByteLength || transitionSHA(raw) != in.SHA256 {
 		return nil, ErrInvalidProgramCTransition
 	}
 	return raw, nil
