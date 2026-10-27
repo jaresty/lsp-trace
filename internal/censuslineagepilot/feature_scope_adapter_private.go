@@ -464,9 +464,19 @@ func (a *scopeRuntimeAdapter) OutgoingCalls(ctx context.Context, item lsp.CallHi
 	return out, null, err
 }
 
-// Native acquisition can reuse the same guarded transport; directional custody
-// is explicitly unavailable (WireClient's default refusal), never synthesized.
+// Native acquisition defaults to guarded ordinary transport. Directional custody
+// remains unavailable unless the package-private native opt-in is selected.
 func (a *scopeRuntimeAdapter) nativeClient() acquisition.Client {
+	return a.nativeClientPrivate(false)
+}
+
+// Explicit package-local opt-in only. The acquisition producer owns the real
+// reservation in ctx and its terminal release; this adapter never creates one.
+func (a *scopeRuntimeAdapter) nativeDirectionalClientPrivate() acquisition.Client {
+	return a.nativeClientPrivate(true)
+}
+
+func (a *scopeRuntimeAdapter) nativeClientPrivate(directional bool) acquisition.Client {
 	// This per-client normalization cache is only accessed under invocationMu.
 	// It preserves all supported symbol fields after WireClient has independently
 	// completed its own strict validation, without invoking lsp's custom decoder.
@@ -482,6 +492,9 @@ func (a *scopeRuntimeAdapter) nativeClient() acquisition.Client {
 		}
 		return raw, err
 	})
+	if directional {
+		c.SetDirectionalPrivate(a.nativeDirectionalRoundTripLocked)
+	}
 	return acquisition.WithDocumentSupply(scopeNativeClient{adapter: a, wire: c, symbols: func() []lsp.DocumentSymbol { return normalizedSymbols }}, func(ctx context.Context, id acquisition.AcquisitionContext, l acquisition.Locator) (acquisition.Supply, error) {
 		if id.SessionID != a.identity.SessionID || id.Generation != a.identity.Generation {
 			return acquisition.Supply{}, ErrInvalid
