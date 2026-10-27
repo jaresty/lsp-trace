@@ -4,15 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"runtime/trace"
 
 	"lsp-trace/internal/acquisitionauthority"
 	"lsp-trace/internal/acquisitionengine"
+	"lsp-trace/internal/censuslineagepilot"
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
+	"lsp-trace/sessionruntime"
 )
 
 const privateCensusBatchRoute = "private-census-batch"
@@ -45,6 +49,39 @@ type PlannedBatchResult struct {
 }
 
 func ExecutePlannedBatch(ctx context.Context, runtime Runtime, request PlannedBatchRequest) (PlannedBatchResult, *operation.Failure) {
+	return executePlannedBatch(ctx, runtime, request, nil, nil)
+}
+
+// ExecuteScopedPlannedBatchPrivate owns the sole reservation through authority
+// verification, guarded acquisition, V5 capture and detached result construction.
+// An unattached reservation has no Manager custody; Release(false) is not success.
+func ExecuteScopedPlannedBatchPrivate(ctx context.Context, manager *sessionruntime.Manager, request PlannedBatchRequest, selection *censuslineagepilot.ScopedBatchSelectionPrivate) (out PlannedBatchResult, failure *operation.Failure) {
+	if ctx == nil || manager == nil || selection == nil {
+		return out, &operation.Failure{Code: operation.FailureInvalidInput, Err: fmt.Errorf("concrete scoped manager and selection required")}
+	}
+	if _, exists := directionalraw.FromContext(ctx); exists {
+		return out, &operation.Failure{Code: operation.FailureInvalidInput, Err: fmt.Errorf("foreign directional reservation forbidden")}
+	}
+	reservation := directionalraw.NewReservation(request.RequestID)
+	defer func() {
+		attached := reservation.Attached()
+		released := reservation.Release()
+		if !attached || !released {
+			// Preserve the original failure, including cancellation and parse failures.
+			if failure == nil || attached {
+				var original error
+				if failure != nil {
+					original = failure
+				}
+				failure = &operation.Failure{Code: operation.FailureInternal, Err: errors.Join(original, fmt.Errorf("scoped directional terminal unavailable (attached=%t released=%t)", attached, released))}
+			}
+			out = PlannedBatchResult{}
+		}
+	}()
+	return executePlannedBatch(reservation.Context(ctx), manager, request, manager, selection)
+}
+
+func executePlannedBatch(ctx context.Context, runtime Runtime, request PlannedBatchRequest, scopedManager *sessionruntime.Manager, selection *censuslineagepilot.ScopedBatchSelectionPrivate) (PlannedBatchResult, *operation.Failure) {
 	fail := func(code string, err error) (PlannedBatchResult, *operation.Failure) {
 		return PlannedBatchResult{}, &operation.Failure{Code: code, Err: err}
 	}
@@ -93,7 +130,13 @@ func ExecutePlannedBatch(ctx context.Context, runtime Runtime, request PlannedBa
 		plannedBatchInvalidInputTrace(ctx, "seed_authority")
 		return fail(operation.FailureInvalidInput, err)
 	}
-	result, failure := acquisitionengine.ExecuteAuthorized(ctx, runtime, op, privateCensusBatchRoute, authority, nil, binding)
+	var result operation.Result
+	var failure *operation.Failure
+	if scopedManager != nil {
+		result, failure = acquisitionengine.ExecuteScopedAuthorizedPrivate(ctx, scopedManager, op, authority, binding, selection)
+	} else {
+		result, failure = acquisitionengine.ExecuteAuthorized(ctx, runtime, op, privateCensusBatchRoute, authority, nil, binding)
+	}
 	if failure != nil {
 		return PlannedBatchResult{}, failure
 	}

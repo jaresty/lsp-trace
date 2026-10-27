@@ -18,6 +18,7 @@ import (
 	"lsp-trace/internal/acquisition/sessionclient"
 	"lsp-trace/internal/acquisitionauthority"
 	"lsp-trace/internal/acquisitionmanifest"
+	"lsp-trace/internal/censuslineagepilot"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
@@ -46,7 +47,11 @@ type Runtime interface {
 	RoundTrip(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
 	Records() []sessionruntime.Record
 }
-type Executor struct{ runtime Runtime }
+type Executor struct {
+	runtime         Runtime
+	scopedManager   *sessionruntime.Manager
+	scopedSelection *censuslineagepilot.ScopedBatchSelectionPrivate
+}
 
 type CustodyReceipt struct {
 	Provenance    seedbinding.CustodyMode `json:"provenance"`
@@ -72,6 +77,15 @@ func ExecuteOrdinary(ctx context.Context, runtime Runtime, op operation.Request)
 // reconstructs all externally observable binding fields from the actual call.
 func ExecuteAuthorized(ctx context.Context, runtime Runtime, op operation.Request, route string, seed acquisitionauthority.SeedAuthority, prepared *acquisitionauthority.PreparedSourceCapability, binding acquisitionauthority.Binding) (operation.Result, *operation.Failure) {
 	return (&Executor{runtime: runtime}).execute(ctx, op, route, seed, prepared, binding)
+}
+
+// ExecuteScopedAuthorizedPrivate is concrete-only: it cannot select a caller
+// client through Runtime assertions. Existing authority consumption stays shared.
+func ExecuteScopedAuthorizedPrivate(ctx context.Context, manager *sessionruntime.Manager, op operation.Request, seed acquisitionauthority.SeedAuthority, binding acquisitionauthority.Binding, selection *censuslineagepilot.ScopedBatchSelectionPrivate) (operation.Result, *operation.Failure) {
+	if manager == nil || selection == nil {
+		return operation.Result{}, &operation.Failure{Code: operation.FailureInvalidInput, Err: fmt.Errorf("concrete scoped manager and selection required")}
+	}
+	return (&Executor{runtime: manager, scopedManager: manager, scopedSelection: selection}).execute(ctx, op, "private-census-batch", seed, nil, binding)
 }
 
 type Target = acquisitionmanifest.Target
@@ -442,7 +456,7 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 	if binding, ok := e.runtime.(interface {
 		SeedBindingRequested(string, uint64) bool
 		AdmitSeedBinding(context.Context, string, uint64, time.Time, int, int64) seedbinding.ValidationResult
-	}); ok && binding.SeedBindingRequested(id, generation) {
+	}); ok && e.scopedSelection == nil && binding.SeedBindingRequested(id, generation) {
 		if req.Limits.MaxRequests < 1 {
 			return fail(string(session.ResourceExhausted), fmt.Errorf("semantic seed admission requires one shared acquisition request"))
 		}
@@ -472,20 +486,40 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 		actualBinding.Input = bytes.Clone(op.Input)
 		actualBinding.PublicationRoot = op.PublicationRoot
 		actualBinding.ArtifactStore = op.ArtifactStore
-		grant, consumeErr := acquisitionauthority.ConsumeSeedAuthority(seedAuthority, actualBinding)
-		if consumeErr != nil {
-			return fail("OUTPUT_VALIDATION_FAILED", consumeErr)
+		if e.scopedSelection == nil {
+			grant, consumeErr := acquisitionauthority.ConsumeSeedAuthority(seedAuthority, actualBinding)
+			if consumeErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", consumeErr)
+			}
+			custodyReceipt = &CustodyReceipt{Provenance: grant.Provenance, Authenticated: grant.Authenticated, HostReceiptID: grant.HostReceiptID}
+			if grant.RetainSeedSpec {
+				explicitSeedSpec = grant.SeedSpec
+			}
+		}
+		authorityBinding = actualBinding
+	}
+	if wantsV5 && custodyReceipt == nil && e.scopedSelection == nil {
+		return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("graph-provenance v5 requires closed seed custody provenance"))
+	}
+	var result acquisition.Result
+	var client acquisition.Client
+	if e.scopedSelection == nil {
+		client = sessionclient.New(e.runtime)
+	}
+	if e.scopedSelection != nil {
+		if capability != nil || e.scopedManager == nil || route != "private-census-batch" || op.Name != SliceV3 || !wantsV5 || wantsSnapshot || grouped {
+			return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("incompatible scoped acquisition capabilities"))
+		}
+		var grant acquisitionauthority.SeedGrant
+		result, grant, err = censuslineagepilot.AcquireScopedBatchPrivate(ctx, e.scopedManager, e.scopedSelection, seedAuthority, authorityBinding, req)
+		if err != nil {
+			return fail("OUTPUT_VALIDATION_FAILED", err)
 		}
 		custodyReceipt = &CustodyReceipt{Provenance: grant.Provenance, Authenticated: grant.Authenticated, HostReceiptID: grant.HostReceiptID}
 		if grant.RetainSeedSpec {
 			explicitSeedSpec = grant.SeedSpec
 		}
-		authorityBinding = actualBinding
 	}
-	if wantsV5 && custodyReceipt == nil {
-		return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("graph-provenance v5 requires closed seed custody provenance"))
-	}
-	client := sessionclient.New(e.runtime)
 	if capability != nil {
 		preparedValue, consumeErr := acquisitionauthority.ConsumePreparedSource(*capability, authorityBinding)
 		if consumeErr != nil {
@@ -513,7 +547,9 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 			return acquisition.Supply{URI: prepared.URI, LanguageID: prepared.LanguageID, Observation: observation}, nil
 		})
 	}
-	result, err := acquisition.Acquire(ctx, client, req)
+	if e.scopedSelection == nil {
+		result, err = acquisition.Acquire(ctx, client, req)
+	}
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}

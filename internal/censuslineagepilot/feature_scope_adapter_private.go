@@ -476,6 +476,21 @@ func (a *scopeRuntimeAdapter) nativeDirectionalClientPrivate() acquisition.Clien
 	return a.nativeClientPrivate(true)
 }
 
+func (a *scopeRuntimeAdapter) nativeSupplyPrivate(ctx context.Context, id acquisition.AcquisitionContext, l acquisition.Locator) (acquisition.Supply, error) {
+	if id.SessionID != a.identity.SessionID || id.Generation != a.identity.Generation {
+		return acquisition.Supply{}, ErrInvalid
+	}
+	for _, f := range a.files {
+		if f.URI == l.URI && (l.LanguageID == "" || l.LanguageID == f.LanguageID) {
+			if err := a.Supply(ctx, f); err != nil {
+				return acquisition.Supply{}, err
+			}
+			return acquisition.Supply{URI: f.URI, LanguageID: f.LanguageID}, nil
+		}
+	}
+	return acquisition.Supply{}, ErrInvalid
+}
+
 func (a *scopeRuntimeAdapter) nativeClientPrivate(directional bool) acquisition.Client {
 	// This per-client normalization cache is only accessed under invocationMu.
 	// It preserves all supported symbol fields after WireClient has independently
@@ -495,18 +510,5 @@ func (a *scopeRuntimeAdapter) nativeClientPrivate(directional bool) acquisition.
 	if directional {
 		c.SetDirectionalPrivate(a.nativeDirectionalRoundTripLocked)
 	}
-	return acquisition.WithDocumentSupply(scopeNativeClient{adapter: a, wire: c, symbols: func() []lsp.DocumentSymbol { return normalizedSymbols }}, func(ctx context.Context, id acquisition.AcquisitionContext, l acquisition.Locator) (acquisition.Supply, error) {
-		if id.SessionID != a.identity.SessionID || id.Generation != a.identity.Generation {
-			return acquisition.Supply{}, ErrInvalid
-		}
-		for _, f := range a.files {
-			if f.URI == l.URI && (l.LanguageID == "" || l.LanguageID == f.LanguageID) {
-				if err := a.Supply(ctx, f); err != nil {
-					return acquisition.Supply{}, err
-				}
-				return acquisition.Supply{URI: f.URI, LanguageID: f.LanguageID}, nil
-			}
-		}
-		return acquisition.Supply{}, ErrInvalid
-	})
+	return acquisition.WithDocumentSupply(scopeNativeClient{adapter: a, wire: c, symbols: func() []lsp.DocumentSymbol { return normalizedSymbols }}, a.nativeSupplyPrivate)
 }
