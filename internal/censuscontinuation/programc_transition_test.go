@@ -26,12 +26,16 @@ import (
 type transitionObjects struct {
 	m          map[string][]byte
 	getErr     map[string]error
+	putErr     error
 	onGet      func(string)
 	puts, gets int
 }
 
 func (s *transitionObjects) Put(_ context.Context, b []byte) (string, error) {
 	s.puts++
+	if s.putErr != nil {
+		return "", s.putErr
+	}
 	if s.m == nil {
 		s.m = map[string][]byte{}
 	}
@@ -56,11 +60,15 @@ func (s *transitionObjects) Get(_ context.Context, k string) ([]byte, error) {
 
 type transitionHeads struct {
 	raw                     []byte
+	loadErr                 error
 	loads, cas, uncertainAt int
 }
 
 func (s *transitionHeads) Load(context.Context, string) ([]byte, error) {
 	s.loads++
+	if s.loadErr != nil {
+		return nil, s.loadErr
+	}
 	return bytes.Clone(s.raw), nil
 }
 func (s *transitionHeads) CompareAndSwap(_ context.Context, _ string, e censussourcecontinuation.HeadRevision, b []byte) censussourcecontinuation.CASResult {
