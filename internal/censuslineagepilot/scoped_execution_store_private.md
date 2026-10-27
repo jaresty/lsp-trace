@@ -44,27 +44,67 @@ production filesystem support, producer authentication, or protection against a
 same-user attacker. Injected faults establish error/receipt handling, not real disk
 failure rates or recovery.
 
-## Adapter boundary and remaining prerequisite
+## Root-topology preflight and adapter boundary
 
-`newScopedExecutionStorePrivate` binds the existing private owner's three admitted
-output identities and coordinator-derived selector. Every store operation rechecks
-all three borrowed roots and identities; selector substitution fails before root IO.
-The existing owner still binds input pins, executable/session/workspace and fixed
-policy as provenance only. Files and a new owner cannot reconstruct a lost Pending.
+`preflightScopedExecutionRootsPrivate(ctx, restart, exactInputPaths, outputRoots)`
+privately mints an opaque, invocation-local `scopedExecutionTopologyPrivate`.
+The retained reader now records its three actual admitted directory identities in
+its private result, not caller assertions. Preflight reconstructs **read-only
+ObservedRoot** wrappers from the exact primary, backup and journal paths the reader
+opens, matches each live descriptor identity to those pins and the retained head,
+and retains them until proof Close. No write wrapper is opened on input, and no
+second bundle walk, URI rebasing or source-workspace policy is introduced.
 
-This adapter is NOT live-qualified. It rejects identical output identities and
-closed/replaced capabilities, but does not establish ancestor-disjoint topology among
-outputs or against input roots. The retained-reader result does not retain live input
-capabilities or their actual paths; ContentRetentionRoot exposes identity equality,
-not an ancestor relation. A future bounded registration/topology preflight must
-establish that relation without a raw-root/FD escape hatch or unsupported same-user
-attacker claim. Do not connect a live entrypoint or output retention until then.
+`publication.CheckRetentionRootTopologyPrivate` is a narrow checking helper, not a
+proof/authority constructor. It compares all three output roots mutually and each
+against **all three input roots**, rejecting equality and ancestry in either
+direction. It holds a bounded chain of no-follow component descriptors from `/`,
+matches the final component to the exact admitted descriptor, compares device/inode
+identities through `os.SameFile`, then rechecks every parent/name edge. This reuses
+publication's existing no-follow opening layer; source-freeze's specialized file
+observation is not substituted for retained-root admission. The 256-component bound
+per root fails closed. Output paths under `/tmp` or `/private/tmp` are forbidden;
+existing publication root admission is not relaxed. Temporary source checkouts
+remain valid under the unchanged source-reading policy.
+
+`newScopedExecutionStorePrivate(ctx, owner, outputRoots, topology)` **requires** the
+matching opaque proof. Output capabilities/ordered identities and the owner's
+input-head/scope/metadata pins must match it before opening the coordinator journal.
+Construction and every Load/CAS validate all live roots, identities and exact paths
+again, so a replaced/retired root, swapped path, mixed proof, or consumed proof fails
+closed before journal IO. The store-agnostic test interface cannot construct a
+production proof. There is no exported arbitrary-proof constructor or serialization.
+Files and a new owner cannot reconstruct a lost Pending; provenance remains
+executable/session/workspace/fixed-policy evidence only.
+
+**Lifetime contract: NONCONCURRENT borrowed roots.** The whole future invocation
+owns its output roots and must finish **all** owner/store calls, close stores, close
+the topology proof's owned read-only input wrappers, then close outputs. No sharing
+of wrappers across concurrent invocations, concurrent use/Close, or asynchronous
+Close is supported. Independent invocations must open independent wrappers; they may
+still contend atomically on the same coordinator namespace. Topology proof does
+**not** change the borrowed-root API contract or supply a root lease. Close errors
+are preserved, and consumed proof capabilities cannot be resurrected from copies.
+
+These are safe-boundary identity/topology observations, not an atomic namespace
+snapshot, resumable authority, arbitrary same-user deletion/rename protection,
+power-loss durability, or permission to execute. The adapter is **NOT
+live-qualified**. Live entrypoint wiring and output retention/budget remain
+**Pending**; no real retained roots or live entrypoint are exercised by this unit.
 
 ## Verification limits
 
-Normal, race and vet checks cover publication and censuslineagepilot, including old
-guards. Linux code is cross-compiled on the Darwin host, not runtime-tested here.
-Unsupported-platform production packages and publication tests are cross-compiled;
-the pilot's existing untagged scoped_execution_claim_review_private_test.go prevents
-Windows pilot test compilation because its fixtures are Darwin/Linux-only. That
-legacy file is not changed. No new protocol-wide Bar formal coverage is claimed.
+This topology unit passed normal and race runs of publication and censuslineagepilot
+on Darwin (905 tests per run), focused topology/store tests (112), vet, gofmt and
+`git diff --check`. Two narrowly targeted implementation reductions were observed
+failing their own guards (`overlap admitted` and `stale proof admitted`), restored,
+and observed passing. This is not complete Bar formal coverage: no exhaustive
+assertion-by-assertion mutation/adequacy fixed point is claimed. No Linux runtime or
+unsupported-platform qualification is claimed by this unit. Disposable owned home-directory
+fixtures exercise disjoint roots, separately opened identical inodes, both ancestry
+directions for every output pair and every input/output role, no-follow symlink
+components, path swaps before preflight/store/operations, mixed proofs, consumed or
+closed roots, and joined close faults. Recursive input-tree snapshots assert no
+preflight/store-input writes. A controlled during-traversal rename/symlink test
+checks descriptor-edge revalidation and all owned handle closes. These tests are
+not a claim of mount-alias runtime qualification or concurrent namespace immunity.

@@ -17,7 +17,16 @@ func (r *ContentRetentionRoot) DirectoryIdentity() (RetentionDirectoryIdentity, 
 	if err := r.ValidatePrivate(); err != nil {
 		return RetentionDirectoryIdentity{}, err
 	}
-	v := reflect.ValueOf(r.observed.root.info.Sys())
+	return r.observed.DirectoryIdentity()
+}
+
+// DirectoryIdentity returns only the identity of this exact admitted read-only
+// root descriptor. It neither opens a write wrapper nor authenticates a path.
+func (r *ObservedRoot) DirectoryIdentity() (RetentionDirectoryIdentity, error) {
+	if err := r.ValidatePrivate(); err != nil {
+		return RetentionDirectoryIdentity{}, err
+	}
+	v := reflect.ValueOf(r.root.info.Sys())
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}

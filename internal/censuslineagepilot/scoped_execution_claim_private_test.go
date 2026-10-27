@@ -72,12 +72,13 @@ func (s *executionClaimMemoryPrivate) CompareAbsent(ctx context.Context, selecto
 }
 
 type executionClaimFixturePrivate struct {
-	restart    scopeRestartResult
-	roots      [3]*publication.ContentRetentionRoot
-	workspace  string
-	session    censusacquisition.SessionIdentity
-	revision   string
-	inputPaths [3]string
+	restart     scopeRestartResult
+	roots       [3]*publication.ContentRetentionRoot
+	workspace   string
+	session     censusacquisition.SessionIdentity
+	revision    string
+	inputPaths  [3]string
+	outputPaths [3]string
 }
 
 func executionClaimFixture(t *testing.T) executionClaimFixturePrivate {
@@ -87,9 +88,9 @@ func executionClaimFixture(t *testing.T) executionClaimFixturePrivate {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, b, _, _ := retentionRoots(t)
-	c, _, _, _ := retentionRoots(t)
-	return executionClaimFixturePrivate{restart, [3]*publication.ContentRetentionRoot{a, b, c}, scope.Selection().Workspace, censusacquisition.SessionIdentity{SessionID: "fixture-exact-session", Generation: 1}, strings.Repeat("a", 40), input.paths}
+	a, b, ap, bp := retentionRoots(t)
+	c, _, cp, _ := retentionRoots(t)
+	return executionClaimFixturePrivate{restart: restart, roots: [3]*publication.ContentRetentionRoot{a, b, c}, workspace: scope.Selection().Workspace, session: censusacquisition.SessionIdentity{SessionID: "fixture-exact-session", Generation: 1}, revision: strings.Repeat("a", 40), inputPaths: input.paths, outputPaths: [3]string{ap, bp, cp}}
 }
 func (f executionClaimFixturePrivate) owner(t *testing.T) *scopedExecutionClaimOwnerPrivate {
 	t.Helper()

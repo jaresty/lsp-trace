@@ -15,7 +15,8 @@ import (
 const scopedExecutionClaimSchemaPrivate = "lsp-trace.scoped-execution-claim.private.v1"
 const scopedExecutionClaimLimitPrivate = 16 << 10
 
-// Store-agnostic qualification seam ONLY. No production adapter is installed.
+// Store-agnostic qualification seam ONLY. The concrete private adapter requires
+// its own opaque root-topology preflight; this interface cannot mint that proof.
 // Load must return nil,nil only for affirmative absence. CompareAbsent must make
 // one absent-predecessor CAS, never retry publication, and return the concrete
 // publication receipt/error shape. A future adapter needs a separate narrow
@@ -122,9 +123,11 @@ func (o *scopedExecutionClaimOwnerPrivate) ownsPending(p *scopedExecutionPending
 
 // Requires an opaque retained-reader result, revalidates its entire terminal
 // receipt chain in memory, and derives every input pin rather than trusting DTOs.
-// Root capabilities are borrowed; callers retain ownership and must close them.
-// This checks admitted identities and identity aliases, not ancestor topology or
-// an ongoing root lease. The real adapter and broader output preflight are pending.
+// Root capabilities are borrowed, NONCONCURRENT with use or Close; the whole
+// future invocation retains ownership and closes only after ALL calls finish.
+// No sharing or asynchronous Close. This store-agnostic owner checks identities,
+// not ancestor topology or an ongoing lease. The concrete store additionally
+// requires matching private topology proof; live wiring/output budgets are pending.
 func newScopedExecutionClaimPrivate(ctx context.Context, restart scopeRestartResult, executableRevision string, session censusacquisition.SessionIdentity, workspace string, roots [3]*publication.ContentRetentionRoot) (*scopedExecutionClaimOwnerPrivate, error) {
 	if ctx == nil || restart.state == nil || !featureScopeRevision.MatchString(executableRevision) || session.Validate() != nil || len(session.SessionID) > 1024 || !utf8.ValidString(session.SessionID) || len(workspace) > 4096 || !utf8.ValidString(workspace) {
 		return nil, ErrInvalid

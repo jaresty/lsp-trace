@@ -15,9 +15,24 @@ import (
 	"lsp-trace/internal/publication"
 )
 
+func executionTopologyProofPrivate(t *testing.T, f executionClaimFixturePrivate) *scopedExecutionTopologyPrivate {
+	t.Helper()
+	p, err := preflightScopedExecutionRootsPrivate(context.Background(), f.restart, f.inputPaths, f.roots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := p.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return p
+}
+
 func realExecutionStorePrivate(t *testing.T, f executionClaimFixturePrivate, o *scopedExecutionClaimOwnerPrivate) *scopedExecutionStorePrivate {
 	t.Helper()
-	s, err := newScopedExecutionStorePrivate(context.Background(), o, f.roots)
+	p := executionTopologyProofPrivate(t, f)
+	s, err := newScopedExecutionStorePrivate(context.Background(), o, f.roots, p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,8 +68,23 @@ func TestScopedExecutionStorePrivateClaimAndRestart(t *testing.T) {
 }
 func TestScopedExecutionStorePrivateTwoOwners(t *testing.T) {
 	f := executionClaimFixture(t)
-	a, b := f.owner(t), f.owner(t)
-	stores := []*scopedExecutionStorePrivate{realExecutionStorePrivate(t, f, a), realExecutionStorePrivate(t, f, b)}
+	// Independent invocations open independent borrowed-root capabilities. The
+	// compare-absent namespace is shared, not the nonconcurrent wrappers.
+	other := f
+	for i, path := range f.outputPaths {
+		r, err := publication.OpenContentRetentionRoot(context.Background(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		other.roots[i] = r
+		t.Cleanup(func() {
+			if err := r.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	a, b := f.owner(t), other.owner(t)
+	stores := []*scopedExecutionStorePrivate{realExecutionStorePrivate(t, f, a), realExecutionStorePrivate(t, other, b)}
 	var wg sync.WaitGroup
 	results := make(chan scopedExecutionClaimResultPrivate, 2)
 	for i, o := range []*scopedExecutionClaimOwnerPrivate{a, b} {

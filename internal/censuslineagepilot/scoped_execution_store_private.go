@@ -7,22 +7,23 @@ import (
 	"lsp-trace/internal/publication"
 )
 
-// Minimal private adapter, NOT live-qualified. Roots are borrowed and checked
-// before each operation. It binds an already-created owner's provenance to the
-// coordinator journal, but grants no Manager/readiness authority. Ancestor
-// topology preflight is a separate outstanding unit: the retained-reader result
-// keeps identities, not live input capabilities/paths. Do not wire this to a
-// live entrypoint until that preflight is available.
+// Minimal private adapter, NOT live-qualified. Roots and topology are borrowed
+// and checked before construction and every operation. The whole future
+// invocation owns roots and closes them only AFTER all calls and stores finish.
+// No sharing/concurrent use/asynchronous Close: topology does not alter the
+// borrowed-root API contract. No Manager/readiness or output-budget authority.
 type scopedExecutionStorePrivate struct {
 	journal    *publication.ScopedExecutionJournalPrivate
 	selector   string
 	roots      [3]*publication.ContentRetentionRoot
 	identities [3]publication.RetentionDirectoryIdentity
+	topology   *scopedExecutionTopologyPrivate
+	closed     bool
 }
 
 var _ scopedExecutionClaimStorePrivate = (*scopedExecutionStorePrivate)(nil)
 
-func newScopedExecutionStorePrivate(ctx context.Context, owner *scopedExecutionClaimOwnerPrivate, roots [3]*publication.ContentRetentionRoot) (*scopedExecutionStorePrivate, error) {
+func newScopedExecutionStorePrivate(ctx context.Context, owner *scopedExecutionClaimOwnerPrivate, roots [3]*publication.ContentRetentionRoot, topology *scopedExecutionTopologyPrivate) (*scopedExecutionStorePrivate, error) {
 	if ctx == nil || owner == nil || len(owner.raw) == 0 || len(owner.raw) > scopedExecutionClaimLimitPrivate {
 		return nil, ErrInvalid
 	}
@@ -43,7 +44,14 @@ func newScopedExecutionStorePrivate(ctx context.Context, owner *scopedExecutionC
 	if owner.selector != "feature-scope-execution-head-private-v1-"+key[7:]+".json" {
 		return nil, ErrInvalid
 	}
-	s := &scopedExecutionStorePrivate{selector: owner.selector, roots: roots, identities: head.Binding.OutputRoots}
+	if topology == nil || topology.state == nil {
+		return nil, ErrInvalid
+	}
+	proof := topology.state
+	if roots != proof.outputs || head.Binding.OutputRoots != proof.outputIDs || head.Binding.InputHead != proof.head || head.Binding.Scope != proof.scope || head.Binding.Metadata != proof.metadata {
+		return nil, ErrInvalid
+	}
+	s := &scopedExecutionStorePrivate{selector: owner.selector, roots: roots, identities: head.Binding.OutputRoots, topology: topology}
 	if err := s.validate(ctx, owner.selector); err != nil {
 		return nil, err
 	}
@@ -55,11 +63,17 @@ func newScopedExecutionStorePrivate(ctx context.Context, owner *scopedExecutionC
 	return s, nil
 }
 func (s *scopedExecutionStorePrivate) validate(ctx context.Context, selector string) error {
-	if ctx == nil || s == nil || selector != s.selector {
+	if ctx == nil || s == nil || s.closed || selector != s.selector {
 		return ErrInvalid
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if err := s.topology.validate(ctx); err != nil {
+		return err
+	}
+	if s.topology.state.outputs != s.roots || s.topology.state.outputIDs != s.identities {
+		return ErrInvalid
 	}
 	for i, root := range s.roots {
 		id, err := root.DirectoryIdentity()
@@ -93,6 +107,7 @@ func (s *scopedExecutionStorePrivate) Close() error {
 	if s == nil {
 		return nil
 	}
+	s.closed = true
 	j := s.journal
 	s.journal = nil
 	if j != nil {

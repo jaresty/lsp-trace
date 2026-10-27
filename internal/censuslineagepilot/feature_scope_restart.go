@@ -67,6 +67,8 @@ type scopeRestartState struct {
 	scope          featureScope
 	head, metadata []byte
 	linked         [][]byte
+	// Exact identities observed by this reader, not caller-supplied root DTOs.
+	roots [3]publication.RetentionDirectoryIdentity
 }
 
 func (r scopeRestartResult) Scope() featureScope {
@@ -329,6 +331,6 @@ func readRetainedFeatureScopeWithOps(ctx context.Context, paths [3]string, locat
 	if err = ctx.Err(); err != nil {
 		return out, err
 	}
-	out = scopeRestartResult{&scopeRestartState{scope: scope, head: bytes.Clone(head), metadata: bytes.Clone(metadata), linked: linked}}
+	out = scopeRestartResult{&scopeRestartState{scope: scope, head: bytes.Clone(head), metadata: bytes.Clone(metadata), linked: linked, roots: binding.Roots}}
 	return out, nil
 }

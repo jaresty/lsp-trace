@@ -14,6 +14,7 @@ import (
 func TestScopedExecutionStorePrivateBindingRefusals(t *testing.T) {
 	f := executionClaimFixture(t)
 	o := f.owner(t)
+	proof := executionTopologyProofPrivate(t, f)
 	for _, kind := range []string{"alias", "roles", "nil", "closed", "selector"} {
 		t.Run(kind, func(t *testing.T) {
 			roots := f.roots
@@ -35,7 +36,7 @@ func TestScopedExecutionStorePrivateBindingRefusals(t *testing.T) {
 				owner.selector = "feature-scope-execution-head-private-v1-" + strings.Repeat("f", 64) + ".json"
 				roots = [3]*publication.ContentRetentionRoot{}
 			}
-			store, err := newScopedExecutionStorePrivate(context.Background(), owner, roots)
+			store, err := newScopedExecutionStorePrivate(context.Background(), owner, roots, proof)
 			if store != nil || err == nil {
 				t.Fatal("substitution admitted")
 			}
