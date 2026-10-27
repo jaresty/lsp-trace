@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -43,6 +44,12 @@ type RetainedScopeGuardPrivate struct {
 	leaseToken *sessionLeaseToken
 	members    []RetainedScopeMemberPrivate
 	documents  map[string]openDocument
+}
+
+// MarshalJSON deliberately refuses capability serialization, including a zero
+// value. RoundTripRequest excludes the attachment independently.
+func (*RetainedScopeGuardPrivate) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("private retained scope capability is not serializable")
 }
 
 // MembersPrivate returns detached expectations, never Manager-owned byte slices.
@@ -180,6 +187,44 @@ func (m *Manager) BindRetainedScopePrivate(ctx context.Context, id string, gener
 	r.retainedScopePrivate = g
 	return g, ""
 }
+
+// CheckRetainedScopePrivate checks a bound capability without filesystem or wire
+// work. It grants no custody and is used by the fixed private frozen supplier.
+func (m *Manager) CheckRetainedScopePrivate(ctx context.Context, id string, generation uint64, g *RetainedScopeGuardPrivate) session.Failure {
+	if ctx == nil {
+		return session.LifecycleConflict
+	}
+	if f := contextFailure(ctx); f != "" {
+		return f
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if f := contextFailure(ctx); f != "" {
+		return f
+	}
+	r := m.sessions[id]
+	if r == nil {
+		return session.SessionNotFound
+	}
+	if generation != r.record.Generation {
+		return session.StaleGeneration
+	}
+	if r.record.State == session.Poisoned {
+		return session.SessionPoisoned
+	}
+	if m.closed || r.record.State != session.Ready || r.protocolOwned || r.lifecycleOwned || r.leaseClosing || !m.validSessionLeaseLocked(ctx, r) {
+		return session.LifecycleConflict
+	}
+	if g == nil || len(g.members) != 6 {
+		return DocumentSupplyUnavailable
+	}
+	params, _ := json.Marshal(map[string]any{"textDocument": map[string]string{"uri": g.members[0].URI}})
+	if !m.matchesRetainedScopePrivate(ctx, RoundTripRequest{SessionID: id, Generation: generation, Method: "textDocument/documentSymbol", Params: params, RetainedScopePrivate: g}, r) {
+		return DocumentSupplyUnavailable
+	}
+	return ""
+}
+
 func retainedScopeMethodPrivate(method string) bool {
 	switch method {
 	case "textDocument/documentSymbol", "textDocument/prepareCallHierarchy", "callHierarchy/incomingCalls", "callHierarchy/outgoingCalls":
