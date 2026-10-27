@@ -150,20 +150,20 @@ one-object storage slice below is separate.
 
 ## Exact blockers and smallest next edge
 
-Preparation and fixture-qualified one-object storage do not establish actual
-pilot primary/backup retention, hash-resume admission, a complete workflow
-storage/retention budget or workflow execution binding. They supply no
-Census evidence, ProgramC/instability admission, qualified Describe, a populated
-candidate inventory, independent usefulness judgment or stakeholder acceptance.
-The current historical preflight still returns MONITORING_NOT_QUALIFIED; no
-monitoring qualification, manifest/head transition or runtime admission is added.
+Preparation and fixture qualification do not establish actual pilot primary/
+backup retention or workflow execution admission. The additive coordinator below
+qualifies only private bundle storage, linked hash-resume and its finite logical
+budget. None of these units supplies Census evidence, ProgramC/instability
+admission, qualified Describe, a populated candidate inventory, independent
+usefulness judgment or stakeholder acceptance. The historical preflight remains
+unchanged and still returns MONITORING_NOT_QUALIFIED; the new private head does
+not add monitoring qualification or runtime admission.
 
-Smallest next integration edge: coordinate the finite plan using the one-object
-primitive below, preserving partial-publication evidence and all active references
-before any bundle-complete or resume admission. Bind that future workflow to its
-own complete storage budget and root-close accounting before connecting any
-acquisition executor. No public wiring or acquisition is authorized merely by
-this document.
+The private coordinator section below adds fixture-qualified finite-plan
+coordination and hash-resume verification. It does not connect an acquisition
+executor. The remaining edge is a separately admitted actual retention/acquisition
+run and its retention-expiry dependency policy; no public wiring or acquisition
+is authorized merely by this document.
 
 ## Additive private retention-plan slice
 
@@ -196,7 +196,9 @@ storage reservation. No write is possible through this plan-only API.
 
 `publication.ContentRetentionRoot` privately owns the exact capability returned
 by `OpenObservedRoot`. Construction writes nothing. `ObservedRoot` stays read-only;
-no Root, raw descriptor, arbitrary selector, CAS or directory-creation API escapes.
+no Root, raw descriptor, arbitrary selector or directory-creation API escapes.
+The later coordinator adds only fixed private head/attempt namespaces and a
+scalar directory-identity accessor; it does not broaden the one-object API.
 Only exact root-level lowercase SHA-256 content IDs and nonempty objects up to
 2 MiB are publishable. Current-user private no-follow admission is unchanged;
 fixture storage roots are outside temporary storage under test-owned home paths.
@@ -249,12 +251,11 @@ is not ambient pathname root reopening. The owner must separately close the
 roots, account for close errors, and not use them concurrently. Wrapper Close
 joins both owned capability-close errors and invalidates the capability.
 
-A future coordinator must budget the complete workflow, persist/account for
-partial publication and root-close outcomes, retain every unique object and all
-nine references (including retention metadata), and establish any whole-bundle
-completion/resume condition. This unit publishes no retention metadata, durable
-head, CAS or workflow transition; one-object success is never whole-bundle
-success. No acquisition or execution admission is supplied.
+The one-object unit itself publishes no retention metadata, durable head, CAS or
+workflow transition; one-object success is never whole-bundle success. The
+additive coordinator below supplies the separate bundle condition, reference
+metadata, finite budget and partial/close accounting. No acquisition or execution
+admission is supplied by either unit.
 
 Independence means separately read/hash-verified copies, not separate administrative
 or disaster domains. Authority remains zero; there is no monitoring, immutable
@@ -262,3 +263,81 @@ vault, unrestricted same-user attacker resistance, accepted inventory or complet
 workflow qualification. Metadata is finite active-reference accounting only:
 there is no expiry, automatic deletion, retention schedule execution or cleanup.
 The tests are fixture-only and do not acquire or retain actual pilot evidence.
+
+## Finite private bundle coordinator contract
+
+`newScopeBundleOwner` accepts only the opaque frozen scope and three exact,
+existing outside-tmp primary/backup/journal paths. It derives the plan and key;
+callers supply no ordinal, stage, raw plan, expected head, policy override or trust
+flag. Binding includes SHA-256 of the **raw scope manifest**, retention metadata,
+the repository policy version and all three admitted directory device/inode
+identities. Lookup within the journal uses frozen inputs/policy, not copy-root
+identities: a substituted copy root must find and reject the existing head instead
+of minting a new absent key. All directories must differ. Every invocation owns and closes its
+acquired capabilities; only scalar identities escape the publication wrapper.
+
+One advance invocation performs **at most one head CAS and one pair attempt**.
+ABSENT/READY(i) claims CLAIMED(i); only a fully verified, unequivocally committed
+CAS invoker executes the internally selected item. Data objects are first-reference
+ordered and deduplicated; metadata containing **all nine references** is a separate
+last item, never an added ordinal in the validated data plan. Object-root closes
+and their causes are recorded before publishing the immutable attempt receipt.
+The journal receipt is reopened and checked for exact bytes, digest and physical
+selector before the journal closes and a live, owner-bound pending capability is
+returned. A journal-close failure prevents that capability from escaping and is
+preserved in the partial result; its already-written receipt cannot authorize
+finalization. Publication and physical copies are not atomic head transitions.
+
+The **next** invocation consumes that exact capability, checks the reopened receipt
+and exact claim predecessor, reconstructs the complete linked prefix, verifies both
+copies and closes object roots before its one READY(i+1)/FAILED CAS. Unknown CAS or
+receipt publication outcomes produce INDETERMINATE_EXECUTION, never pair retry or
+recovery authority. CONFLICT requires the concrete primitive's empty noncommitted
+receipt plus an exclusively stale-predecessor error tree (bounded to 64 inspected
+nodes). Its NOT_COMMITTED outcome instead accompanies post-stage cancellation;
+neither that outcome alone nor a stale cause mixed with cancellation/other causes
+establishes conflict. Unknown, missing or contradictory return shapes fail closed
+as INDETERMINATE_EXECUTION. Known committed flags preserve the exact replacement
+revision and CAS evidence on every error, never becoming conflict. Conflicting
+claims perform no pair effects. Known commit
+revisions and copy/receipt observations survive errors and cancellation. A close
+failure after a known CAS commit preserves that revision but fails the returned
+status closed; it does not claim nothing committed.
+
+**Crash gap:** a fresh owner finding CLAIMED without the live pending capability
+returns INDETERMINATE_EXECUTION without scanning receipts, reading copy objects,
+writing, retrying or discovering/finalizing an orphan. Even a physically complete
+orphan receipt is not recovery authority. This intentionally sacrifices automatic
+crash recovery to prevent duplicate execution. No source-continuation coordinator
+is called. There is no generic workflow engine or internal advance loop.
+
+Heads and attempts have new strict canonical private schemas and distinct fixed
+root-level namespaces (`feature-scope-bundle-head-private-v1-<key>.json` and
+`feature-scope-bundle-attempt-private-v1-<sha256>.json`). Receipt links are logical
+SHA-256 IDs resolving only in that attempt namespace; publication receipts retain
+the exact physical selector. Duplicate/unknown/trailing/noncanonical wire values,
+empty persisted heads, overflow and inconsistent reconstructed predecessors reject.
+Reopen follows only head-linked receipts and verifies exact primary/backup bytes,
+including metadata, without consulting checkout contents or historical candidates.
+Returned wire accessors deep-copy bytes, including partial linked observations.
+
+Repository policy reserves the whole finite run before effects: at most ten pair
+items/receipts and twenty head transitions, with a 64 MiB logical byte ceiling.
+Reservation includes both copies, metadata, largest-object staging and 32 × 64 KiB
+for bounded receipts/head staging/lock overhead. Per-owner work is conservatively
+reserved as 24 × (64 × nine-reference-plus-metadata bytes + 128 × 64 KiB), capped
+at 16 GiB of byte-processing work. Every advance, including read-only observations,
+consumes one checked work reservation; an owner admits at most 24 calls. These are
+upper-bound logical reservations, not measured CPU work or filesystem free-space
+promises. Generation/item bounds constrain persisted evidence growth across owners;
+read-only work is bounded per invocation and owner, not a global quota against
+unlimited creation of new owners. No automatic retry, deletion or expiry occurs.
+CAS cooperative lock waits and the one receipt-cleanup publication have a fixed
+five-second cancellation deadline which callers cannot raise. Cancellation checks
+do not promise interruption of arbitrary filesystem I/O.
+
+RETAINED_INPUT_BUNDLE means only exact two-copy observations plus linked receipts:
+authority **0**, accepted **false**, identity **UNRESOLVED**, completeness **UNKNOWN**.
+It supplies no runtime, monitoring, Census, adaptive5 or production admission.
+Expiry remains a later dependency-safe policy. All qualification here is disposable
+fixture evidence, not acquisition or retention of actual pilot inputs.

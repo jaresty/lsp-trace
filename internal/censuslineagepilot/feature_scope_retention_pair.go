@@ -131,6 +131,26 @@ func retainScopeObjectWithOps(ctx context.Context, plan scopeRetentionPlan, ordi
 	if ordinal < 0 || ordinal >= len(plan.state.objects) {
 		return out, ErrInvalid
 	}
+	return retainScopePairBytes(ctx, plan.state.objects[ordinal], Digest(plan.state.metadata), ordinal, primary, backup, ops)
+}
+
+// Metadata is a separate final item, never an extra ordinal in the validated plan.
+func retainScopeMetadata(ctx context.Context, plan scopeRetentionPlan, primary, backup *publication.ContentRetentionRoot) (scopeRetentionAttempt, error) {
+	if err := validateScopeRetentionPlan(plan, scopeRetentionByteCeiling, scopeRetentionWorkCeiling); err != nil {
+		return scopeRetentionAttempt{phase: "PREFLIGHT"}, err
+	}
+	return retainScopePairBytes(ctx, scopeRetentionObject{Digest(plan.state.metadata), plan.metadataBytes()}, Digest(plan.state.metadata), -1, primary, backup, defaultScopeRetentionOps())
+}
+
+func retainScopePairBytes(ctx context.Context, obj scopeRetentionObject, referencesDigest string, ordinal int, primary, backup *publication.ContentRetentionRoot, ops scopeRetentionOps) (out scopeRetentionAttempt, err error) {
+	out.phase = "PREFLIGHT"
+	out.primary.outcome, out.backup.outcome = "NOT_ATTEMPTED", "NOT_ATTEMPTED"
+	if ctx == nil || ops.publish == nil || ops.read == nil {
+		return out, ErrInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
 	same, err := primary.SameDirectory(backup)
 	if err != nil {
 		return out, err
@@ -138,7 +158,6 @@ func retainScopeObjectWithOps(ctx context.Context, plan scopeRetentionPlan, ordi
 	if same {
 		return out, ErrInvalid
 	}
-	obj := plan.state.objects[ordinal]
 	verify := func(root *publication.ContentRetentionRoot) error {
 		raw, e := ops.read(ctx, root, obj.digest, int64(len(obj.raw)))
 		if e != nil {
@@ -213,6 +232,6 @@ func retainScopeObjectWithOps(ctx context.Context, plan scopeRetentionPlan, ordi
 		}
 	}
 	out.phase = "OBJECT_COPIES_VERIFIED"
-	out.verified = scopeObjectVerification{&scopeObjectVerificationState{obj.digest, Digest(plan.state.metadata), uint64(len(obj.raw)), ordinal, 0}}
+	out.verified = scopeObjectVerification{&scopeObjectVerificationState{obj.digest, referencesDigest, uint64(len(obj.raw)), ordinal, 0}}
 	return out, nil
 }

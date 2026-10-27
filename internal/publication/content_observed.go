@@ -36,8 +36,16 @@ type contentReadOps struct {
 func (r *Root) ReadContentObserved(ctx context.Context, contentID string, limit int64) ([]byte, error) {
 	return r.readContentObserved(ctx, contentID, limit, contentReadOps{lstat: statObservedContent, open: openObservedContent})
 }
-func (r *Root) readContentObserved(ctx context.Context, id string, limit int64, ops contentReadOps) (raw []byte, err error) {
-	if ctx == nil || !observedContentID.MatchString(id) || limit < 1 || limit == math.MaxInt64 {
+func (r *Root) readContentObserved(ctx context.Context, id string, limit int64, ops contentReadOps) ([]byte, error) {
+	if !observedContentID.MatchString(id) {
+		return nil, ErrContentObservation
+	}
+	return r.readObservedFile(ctx, id, limit, ops, true)
+}
+
+// Internal root-level selector observation; callers must validate the namespace.
+func (r *Root) readObservedFile(ctx context.Context, id string, limit int64, ops contentReadOps, contentAddressed bool) (raw []byte, err error) {
+	if ctx == nil || limit < 1 || limit == math.MaxInt64 {
 		return nil, ErrContentObservation
 	}
 	if err = ctx.Err(); err != nil {
@@ -123,7 +131,7 @@ func (r *Root) readContentObserved(ctx context.Context, id string, limit int64, 
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	if fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) != id {
+	if contentAddressed && fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) != id {
 		return nil, ErrContentObservation
 	}
 	return raw, nil

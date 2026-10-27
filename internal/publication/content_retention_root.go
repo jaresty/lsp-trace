@@ -13,8 +13,10 @@ import (
 const ContentRetentionObjectLimit int64 = 2 << 20
 
 // ContentRetentionRoot owns an admitted capability without exposing Root, raw
-// descriptors, arbitrary selectors, CAS, or directory creation. Not concurrent
-// with Close or other use. Construction performs no writes.
+// descriptors, arbitrary selectors, or directory creation. The additive scope
+// bundle methods admit only their fixed private head/attempt namespaces, not a
+// general CAS store. Not concurrent with Close or other use. Construction writes
+// nothing.
 type ContentRetentionRoot struct{ observed *ObservedRoot }
 
 func OpenContentRetentionRoot(ctx context.Context, path string) (*ContentRetentionRoot, error) {
