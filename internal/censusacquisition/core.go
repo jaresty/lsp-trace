@@ -17,8 +17,8 @@ import (
 	"runtime"
 	"strings"
 
-	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/acquisitionmanifest"
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusenumerationprojection"
@@ -182,17 +182,17 @@ type BatchRequest struct {
 	CanonicalSeedsV2            []byte
 }
 
-func (b BatchRequest) AcquisitionManifest(limits acquisitionops.Limits) acquisitionops.Manifest {
-	ts := make([]acquisitionops.Target, len(b.Targets))
+func (b BatchRequest) AcquisitionManifest(limits acquisitionmanifest.Limits) acquisitionmanifest.Manifest {
+	ts := make([]acquisitionmanifest.Target, len(b.Targets))
 	for i, t := range b.Targets {
 		line, ch := t.Position().Line, t.Position().Character
 		down, up := b.DownDepth, b.UpDepth
 		id := batchTargetID(i, t)
-		ts[i] = acquisitionops.Target{ID: id, Locator: acquisition.Locator{URI: t.URI, Line: &line, Character: &ch, LanguageID: t.LanguageID}, DownDepth: &down, UpDepth: &up}
+		ts[i] = acquisitionmanifest.Target{ID: id, Locator: acquisition.Locator{URI: t.URI, Line: &line, Character: &ch, LanguageID: t.LanguageID}, DownDepth: &down, UpDepth: &up}
 	}
-	requiredTargets := make([]acquisitionops.Target, len(ts)-1)
+	requiredTargets := make([]acquisitionmanifest.Target, len(ts)-1)
 	copy(requiredTargets, ts[1:])
-	return acquisitionops.Manifest{SchemaVersion: acquisitionops.ManifestVersion, CoordinateConvention: "zero-based-session", Root: ts[0], RequiredTargets: requiredTargets, Limits: limits}
+	return acquisitionmanifest.Manifest{SchemaVersion: acquisitionmanifest.ManifestVersion, CoordinateConvention: "zero-based-session", Root: ts[0], RequiredTargets: requiredTargets, Limits: limits}
 }
 
 type AcquiredV5 struct {

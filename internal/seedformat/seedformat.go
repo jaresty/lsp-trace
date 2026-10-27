@@ -15,15 +15,15 @@ import (
 	"regexp"
 	"strings"
 
-	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/acquisitionmanifest"
 	"lsp-trace/internal/strictjson"
 )
 
 const (
 	Version              = "lsp-trace.seeds.v2"
 	CoordinateConvention = "one-based"
-	MaxInputBytes        = acquisitionops.MaxInputBytes
+	MaxInputBytes        = acquisitionmanifest.MaxInputBytes
 	MaxSeeds             = 64
 	MaxDepth             = 64
 	PositionType         = "position"
@@ -355,7 +355,7 @@ func resolvePath(workspace, name string) (string, error) {
 
 type TranslateOptions struct {
 	Workspace       string
-	Limits          acquisitionops.Limits
+	Limits          acquisitionmanifest.Limits
 	TopmostSiblings bool
 }
 
@@ -384,8 +384,8 @@ func WithEffectiveDepths(file File) []Seed {
 
 // Translate creates a slice acquisition manifest. It preserves seed order by
 // mapping the first seed to Root and each later seed to RequiredTargets.
-func Translate(file File, options TranslateOptions) (acquisitionops.Manifest, error) {
-	var out acquisitionops.Manifest
+func Translate(file File, options TranslateOptions) (acquisitionmanifest.Manifest, error) {
+	var out acquisitionmanifest.Manifest
 	if err := Validate(file, options.Workspace); err != nil {
 		return out, err
 	}
@@ -393,7 +393,7 @@ func Translate(file File, options TranslateOptions) (acquisitionops.Manifest, er
 		return out, err
 	}
 	used := map[string]bool{}
-	targets := make([]acquisitionops.Target, len(file.Seeds))
+	targets := make([]acquisitionmanifest.Target, len(file.Seeds))
 	for i, seed := range file.Seeds {
 		id := seed.Label()
 		if i == 0 {
@@ -408,11 +408,11 @@ func Translate(file File, options TranslateOptions) (acquisitionops.Manifest, er
 		}
 		targets[i] = target
 	}
-	required := make([]acquisitionops.Target, len(targets)-1)
+	required := make([]acquisitionmanifest.Target, len(targets)-1)
 	copy(required, targets[1:])
-	out = acquisitionops.Manifest{SchemaVersion: acquisitionops.ManifestVersion, CoordinateConvention: "zero-based-session", Root: targets[0], RequiredTargets: required, Limits: options.Limits, Expansion: acquisitionops.Expansion{TopmostSiblings: options.TopmostSiblings}}
-	if _, err := out.Request(acquisitionops.Slice); err != nil {
-		return acquisitionops.Manifest{}, err
+	out = acquisitionmanifest.Manifest{SchemaVersion: acquisitionmanifest.ManifestVersion, CoordinateConvention: "zero-based-session", Root: targets[0], RequiredTargets: required, Limits: options.Limits, Expansion: acquisitionmanifest.Expansion{TopmostSiblings: options.TopmostSiblings}}
+	if _, err := out.Request(acquisitionmanifest.Slice); err != nil {
+		return acquisitionmanifest.Manifest{}, err
 	}
 	return out, nil
 }
@@ -434,7 +434,7 @@ func collisionSafeID(label string, used map[string]bool) string {
 	}
 }
 
-func translateSeed(seed Seed, defaults Defaults, workspace, id string) (acquisitionops.Target, error) {
+func translateSeed(seed Seed, defaults Defaults, workspace, id string) (acquisitionmanifest.Target, error) {
 	down, up := defaults.DownDepth, defaults.UpDepth
 	base := seed
 	if seed.Type == SliceType {
@@ -457,25 +457,25 @@ func translateSeed(seed Seed, defaults Defaults, workspace, id string) (acquisit
 	case PositionType:
 		absolute, err := resolvePath(workspace, base.Position.Path)
 		if err != nil {
-			return acquisitionops.Target{}, err
+			return acquisitionmanifest.Target{}, err
 		}
 		line, character := uint32(base.Position.Line-1), uint32(base.Position.Column-1)
 		locator = acquisition.Locator{URI: (&url.URL{Scheme: "file", Path: absolute}).String(), Line: &line, Character: &character}
 	case SymbolType:
 		absolute, err := resolvePath(workspace, base.Symbol.Path)
 		if err != nil {
-			return acquisitionops.Target{}, err
+			return acquisitionmanifest.Target{}, err
 		}
 		locator = acquisition.Locator{URI: (&url.URL{Scheme: "file", Path: absolute}).String(), Symbol: base.Symbol.Symbol}
 	default:
-		return acquisitionops.Target{}, errors.New("untranslatable seed type")
+		return acquisitionmanifest.Target{}, errors.New("untranslatable seed type")
 	}
-	return acquisitionops.Target{ID: id, Locator: locator, DownDepth: ptrInt(*down), UpDepth: ptrInt(*up)}, nil
+	return acquisitionmanifest.Target{ID: id, Locator: locator, DownDepth: ptrInt(*down), UpDepth: ptrInt(*up)}, nil
 }
 
 func ptrInt(value int) *int { return &value }
 
-func requireLimits(l acquisitionops.Limits) error {
+func requireLimits(l acquisitionmanifest.Limits) error {
 	if l.MaxNodes == nil || l.MaxRequests == nil || l.MaxEvidenceBytes == nil || l.MaxPathWork == nil || l.TimeoutMS == nil || l.RequestTimeoutMS == nil || l.MaxResponseBytes == nil || l.MaxMessages == nil {
 		return errors.New("all acquisition global limits must be caller-supplied")
 	}
