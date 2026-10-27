@@ -27,7 +27,7 @@ framework behavior, generated behavior and external relationships outside these
 four files remain explicitly tagged frontier/context gaps. Context bytes do not
 expand the nomination set. Neither labels nor reachable code silently enlarge it.
 
-The implementation prepares inputs in memory only. It reads all six known files;
+The scope-freezing implementation prepares inputs in memory only. It reads all six known files;
 missing, empty, nonregular, symlinked, substituted, oversized or cancelled evidence
 fails closed with no bundle. Source roots may be `/private/tmp`; durable output
 roots must not be temporary. The private policy is **2 MiB per file, 8 MiB total,
@@ -144,20 +144,121 @@ Comprehensive actor monitoring or a privileged vault is **not a prerequisite**
 for this prospective practical model. It makes **no monitoring-qualified claim**
 and no claim to resist arbitrary deletion by another process with the same user
 privileges. Backups and replay detect/recover bounded evidence loss; they do not
-prove protection from an unrestricted same-user actor. This helper performs none
-of these retention, backup, expiration, deletion or cleanup operations.
+prove protection from an unrestricted same-user actor. Scope freezing performs none
+of these retention, backup, expiration, deletion or cleanup operations; the additive
+one-object storage slice below is separate.
 
 ## Exact blockers and smallest next edge
 
-Implemented preparation does not supply durable primary/backup retention,
-hash-resume admission, a storage/retention budget, workflow execution binding,
+Preparation and fixture-qualified one-object storage do not establish actual
+pilot primary/backup retention, hash-resume admission, a complete workflow
+storage/retention budget or workflow execution binding. They supply no
 Census evidence, ProgramC/instability admission, qualified Describe, a populated
 candidate inventory, independent usefulness judgment or stakeholder acceptance.
 The current historical preflight still returns MONITORING_NOT_QUALIFIED; no
 monitoring qualification, manifest/head transition or runtime admission is added.
 
-Smallest next edge: privately bind the returned exact scope/source/selection/plan
-bytes to a durable outside-tmp content-addressed primary plus independently
-verified backup receipt under this prospective policy. Test reopen/hash-resume
-and budget/dependency refusal before connecting any acquisition executor. No
-public wiring or acquisition is authorized merely by this document.
+Smallest next integration edge: coordinate the finite plan using the one-object
+primitive below, preserving partial-publication evidence and all active references
+before any bundle-complete or resume admission. Bind that future workflow to its
+own complete storage budget and root-close accounting before connecting any
+acquisition executor. No public wiring or acquisition is authorized merely by
+this document.
+
+## Additive private retention-plan slice
+
+`deriveScopeRetentionPlan` now derives a read-only, opaque plan from the exact
+in-memory fixed scope. It checks source lengths and raw-byte hashes, fixed roles,
+canonical selection/partition linkage and the complete canonical scope manifest.
+It does not reopen source paths or authenticate the caller-asserted revision.
+Malformed, zero and inconsistent forged scopes return no plan. Private package
+state is not an authentication boundary against code running inside the package.
+
+References are ordered: the six actual source bodies in `featureScopePaths`
+order, then selection, partition plan and scope manifest. All nine references
+remain in active dependency metadata, including all six roles when source bytes
+are identical. Only raw-byte storage identity is deduplicated, in first-reference
+order; equal digests also require exact byte equality. Every storage digest is
+SHA-256 of the exact raw object, **not** the domain-separated `ManifestDigest`.
+Returned metadata, references and object bodies are owned copies.
+
+The repository-owned logical ceiling is 64 MiB, with a separate 512 MiB
+byte-processing work ceiling. The reservation is twice (unique object bytes +
+64 KiB bounded metadata + largest object staging allowance). Work reserves thirty-two
+times the nine-reference input bytes plus two metadata allowances. The arithmetic
+is checked for overflow. Available budgets may only restrict these ceilings;
+equality is admitted and shortage returns no plan. These conservative bounds
+cover this finite source/input slice, not future captures, receipts or rounds.
+They are **not filesystem free-space promises**, elapsed-time bounds or a global
+storage reservation. No write is possible through this plan-only API.
+
+### Additive one-object pair storage
+
+`publication.ContentRetentionRoot` privately owns the exact capability returned
+by `OpenObservedRoot`. Construction writes nothing. `ObservedRoot` stays read-only;
+no Root, raw descriptor, arbitrary selector, CAS or directory-creation API escapes.
+Only exact root-level lowercase SHA-256 content IDs and nonempty objects up to
+2 MiB are publishable. Current-user private no-follow admission is unchanged;
+fixture storage roots are outside temporary storage under test-owned home paths.
+
+Reads use the already-existing **close-aware** `ReadContentObserved`, not the older
+`ReadVerifiedBoundFile`. It checks 0600, regular/single-link/current-owner custody,
+no-follow identity, bounds, hash and all file closes. The old reader is unchanged
+and is not a blocker for this unit.
+
+`retainScopeObject` selects one internal storage ordinal from the opaque plan.
+Before writing it re-derives the complete plan, checks both available budgets,
+validates both roots and rejects the same opened directory identity, including
+separately opened aliases. Primary and backup publication are **two independent
+storage operations**, not an atomic workflow transition. Outcomes distinguish
+NOT_ATTEMPTED, INDETERMINATE, NAMESPACE_COMMITTED, EXISTING_UNVERIFIED and
+EXISTING_VERIFIED. Committed receipts survive every later error, including
+cancellation. No rollback, deletion or automatic retry occurs.
+
+`PublishBoundFile` receipts separately record namespace commit, directory sync,
+close and late verification. A new publication qualifies for subsequent reads
+only when all statuses are successful; a nil error alone is insufficient. The
+existing directory-sync status explicitly says `NO_CRASH_GUARANTEE`; this unit
+does not strengthen that into an unconditional crash-durability promise. Existing
+targets are close-aware read/hash/exact-byte verified **before** invoking Publish;
+known-equal preexisting objects receive EXISTING_VERIFIED without publication.
+Only confirmed os.ErrNotExist admits an absent-object write; other read errors,
+including absence joined with close/cancellation errors, fail closed.
+
+After an attempted Publish, **every ErrExist fails closed**, even when a competitor
+installed equal bytes. There is no success-producing readback on that error path.
+The unchanged Darwin/Linux legacy primitive can discard a precommit duplicated-
+parent close failure on late EEXIST, so even pure ErrExist cannot qualify that
+attempt. Missing receipts remain INDETERMINATE, backup is not attempted after a
+primary failure, and earlier committed receipts are preserved. This is a stop,
+not safe-retry admission; a later orchestrator must not silently reinterpret an
+uncertain attempt as retryable. No retry, rollback, deletion or overwrite occurs.
+
+The regression chain uses real publication hooks to insert an equal competitor
+after confirmed absence and inject the duplicated-parent close failure (source
+close succeeds), observing the legacy pure ErrExist with no receipt. Separate
+pair tests feed that same pure error after competitor insertion and require no
+verified-copy evidence, no readback and no retry. Legacy publication APIs and
+primitive semantics are deliberately unchanged.
+
+After both operations, the helper closes/reopens object handles twice on **both
+exact pinned roots**, checks hashes, lengths and exact bytes, then returns opaque
+per-object verified-copy evidence with authority zero and the exact reference
+metadata digest. Root capabilities remain pinned and borrowed throughout; this
+is not ambient pathname root reopening. The owner must separately close the
+roots, account for close errors, and not use them concurrently. Wrapper Close
+joins both owned capability-close errors and invalidates the capability.
+
+A future coordinator must budget the complete workflow, persist/account for
+partial publication and root-close outcomes, retain every unique object and all
+nine references (including retention metadata), and establish any whole-bundle
+completion/resume condition. This unit publishes no retention metadata, durable
+head, CAS or workflow transition; one-object success is never whole-bundle
+success. No acquisition or execution admission is supplied.
+
+Independence means separately read/hash-verified copies, not separate administrative
+or disaster domains. Authority remains zero; there is no monitoring, immutable
+vault, unrestricted same-user attacker resistance, accepted inventory or complete
+workflow qualification. Metadata is finite active-reference accounting only:
+there is no expiry, automatic deletion, retention schedule execution or cleanup.
+The tests are fixture-only and do not acquire or retain actual pilot evidence.
