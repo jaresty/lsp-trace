@@ -138,6 +138,71 @@ type MechanicsInputV2 struct {
 	CommunityMembers             []string
 }
 
+type MechanicsCommonInputV2 struct {
+	WorkflowKey                  string
+	TerminalProgramCHeadSelector string
+	ReceiptSelector              string
+	ReceiptOrdinal               int
+	ConstituentOrdinal           int
+	PublicationSelector          string
+	ConstituentSelector          string
+	Source                       programc.SourceBinding
+	ProgramCAlgorithmVersion     string
+}
+
+type MechanicsContextInputV2 struct {
+	RunID                   string
+	Seed                    uint64
+	ReplayOrdinal           uint8
+	CommunityOrdinal        int
+	CommunityArtifactSHA256 string
+	CommunityMembers        []string
+}
+
+type MechanicsSourceCountsV2 struct {
+	SeedGroups       uint64
+	Memberships      uint64
+	GroupOccurrences uint64
+}
+
+type preparedMechanicsValidityV2 struct {
+	marker              byte
+	state               *preparedMechanicsStateV2
+	contractIdentity    string
+	custodyIdentity     string
+	receiptSelector     string
+	constituentSelector string
+	sourceSHA256        string
+	algorithmVersion    string
+	executionBundleID   string
+}
+
+type preparedMechanicsStateV2 struct {
+	validity            *preparedMechanicsValidityV2
+	contract            AdapterContractDTOv2
+	custody             CustodyIdentityDTO
+	receiptSelector     string
+	constituentSelector string
+	bundleID            string
+	evidence            []EvidenceIdentityDTO
+	seedGroups          []SeedGroupIdentityDTOv2
+	sourceCounts        MechanicsSourceCountsV2
+}
+
+// PreparedMechanicsV2 is an opaque constituent-scoped immutable mechanics input.
+// Its zero value and values assembled without PrepareMechanicsV2 are invalid.
+type PreparedMechanicsV2 struct {
+	state    *preparedMechanicsStateV2
+	validity *preparedMechanicsValidityV2
+}
+
+func (p PreparedMechanicsV2) SourceCounts() MechanicsSourceCountsV2 {
+	if !validPreparedMechanicsV2(p) {
+		return MechanicsSourceCountsV2{}
+	}
+	return p.state.sourceCounts
+}
+
 // MechanicsV2 is an immutable private prequalification carrier. Its zero value is invalid.
 type MechanicsV2 struct {
 	dto       MechanicsIdentityDTOv2
@@ -154,13 +219,74 @@ func NewMechanicsV2(in MechanicsInputV2) (MechanicsV2, error) {
 	if in.ReplayOrdinal < 1 || in.ReplayOrdinal > 3 || (in.Seed != 1 && in.Seed != 2) || in.RunID != fmt.Sprintf("seed-%020d-replay-%d", in.Seed, in.ReplayOrdinal) {
 		return MechanicsV2{}, fmt.Errorf("invalid v2 mechanics run identity")
 	}
+	prepared, err := prepareMechanicsV2(mechanicsCommonInputV2(in), sourceBytes, graphV5Bytes)
+	if err != nil {
+		return MechanicsV2{}, err
+	}
+	return constructPreparedMechanicsV2(prepared, mechanicsContextInputV2(in))
+}
+
+func PrepareMechanicsV2(in MechanicsCommonInputV2) (PreparedMechanicsV2, error) {
+	sourceBytes := in.Source.InputBytes()
+	graphV5Bytes := in.Source.GraphV5Bytes()
+	if !validMechanicsCommonInputV2(in, sourceBytes, graphV5Bytes) {
+		return PreparedMechanicsV2{}, fmt.Errorf("invalid v2 mechanics input")
+	}
+	return prepareMechanicsV2(in, sourceBytes, graphV5Bytes)
+}
+
+func NewPreparedMechanicsV2(prepared PreparedMechanicsV2, in MechanicsContextInputV2) (MechanicsV2, error) {
+	if !validPreparedMechanicsV2(prepared) {
+		return MechanicsV2{}, fmt.Errorf("invalid prepared v2 mechanics")
+	}
+	if err := validateMechanicsContextInputV2(in); err != nil {
+		return MechanicsV2{}, err
+	}
+	return constructPreparedMechanicsV2(prepared, in)
+}
+
+func NewPreparedMechanicsBatchV2(prepared PreparedMechanicsV2, inputs []MechanicsContextInputV2) ([]MechanicsV2, error) {
+	if !validPreparedMechanicsV2(prepared) {
+		return nil, fmt.Errorf("invalid prepared v2 mechanics")
+	}
+	for _, in := range inputs {
+		if err := validateMechanicsContextInputV2(in); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]MechanicsV2, len(inputs))
+	for i, in := range inputs {
+		item, err := constructPreparedMechanicsV2(prepared, in)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = item
+	}
+	return out, nil
+}
+
+func validMechanicsCommonInputV2(in MechanicsCommonInputV2, sourceBytes, graphV5Bytes []byte) bool {
+	return in.WorkflowKey != "" && validDigest(in.TerminalProgramCHeadSelector) && validDigest(in.ReceiptSelector) && in.ReceiptOrdinal > 0 && in.ConstituentOrdinal >= 0 && in.PublicationSelector != "" && in.ConstituentSelector != "" && validProgramCSourceBinding(in.Source, sourceBytes, graphV5Bytes) && in.ProgramCAlgorithmVersion != "" && validateStringCapV2(in)
+}
+
+func validateMechanicsContextInputV2(in MechanicsContextInputV2) error {
+	if in.CommunityOrdinal < 0 || !validDigest(in.CommunityArtifactSHA256) || !strictStrings(in.CommunityMembers) || !validateStringCapV2(in) {
+		return fmt.Errorf("invalid v2 mechanics input")
+	}
+	if in.ReplayOrdinal < 1 || in.ReplayOrdinal > 3 || (in.Seed != 1 && in.Seed != 2) || in.RunID != fmt.Sprintf("seed-%020d-replay-%d", in.Seed, in.ReplayOrdinal) {
+		return fmt.Errorf("invalid v2 mechanics run identity")
+	}
+	return nil
+}
+
+func prepareMechanicsV2(in MechanicsCommonInputV2, sourceBytes, graphV5Bytes []byte) (PreparedMechanicsV2, error) {
 	view, err := graph.NewNativeV5RepresentativeView(graphV5Bytes)
 	if err != nil || view.ExecutionBundleID() != in.Source.ExecutionBundleID {
-		return MechanicsV2{}, fmt.Errorf("invalid v2 mechanics source binding")
+		return PreparedMechanicsV2{}, fmt.Errorf("invalid v2 mechanics source binding")
 	}
 	contract, err := newAdapterContractV2(in.ProgramCAlgorithmVersion)
 	if err != nil {
-		return MechanicsV2{}, err
+		return PreparedMechanicsV2{}, err
 	}
 	bundleID := view.ExecutionBundleID()
 	custody := CustodyIdentityDTO{
@@ -173,36 +299,71 @@ func NewMechanicsV2(in MechanicsInputV2) (MechanicsV2, error) {
 	}
 	custody.Identity, err = hashIdentity(custodyDomain, custody)
 	if err != nil {
-		return MechanicsV2{}, err
+		return PreparedMechanicsV2{}, err
 	}
 	evidence, err := buildEvidence(view, in.ConstituentSelector, in.ReceiptSelector)
 	if err != nil {
-		return MechanicsV2{}, err
+		return PreparedMechanicsV2{}, err
 	}
 	groups, err := buildSeedGroupsV2(view, evidence)
 	if err != nil {
-		return MechanicsV2{}, err
+		return PreparedMechanicsV2{}, err
 	}
+	counts := MechanicsSourceCountsV2{SeedGroups: uint64(len(groups))}
+	for _, group := range groups {
+		counts.Memberships += uint64(len(group.Memberships))
+		counts.GroupOccurrences += uint64(len(group.OccurrenceIDs))
+	}
+	validity := &preparedMechanicsValidityV2{
+		marker: 1, contractIdentity: contract.Identity, custodyIdentity: custody.Identity,
+		receiptSelector: in.ReceiptSelector, constituentSelector: in.ConstituentSelector,
+		sourceSHA256: custody.NativeV5SHA256, algorithmVersion: contract.ProgramCAlgorithmVersion,
+		executionBundleID: bundleID,
+	}
+	state := &preparedMechanicsStateV2{
+		validity: validity, contract: contract, custody: custody,
+		receiptSelector: in.ReceiptSelector, constituentSelector: in.ConstituentSelector,
+		bundleID: bundleID, evidence: append([]EvidenceIdentityDTO{}, evidence...),
+		seedGroups: cloneSeedGroupsV2(groups), sourceCounts: counts,
+	}
+	validity.state = state
+	return PreparedMechanicsV2{state: state, validity: validity}, nil
+}
+
+func validPreparedMechanicsV2(prepared PreparedMechanicsV2) bool {
+	state, validity := prepared.state, prepared.validity
+	return state != nil && validity != nil && validity.marker == 1 && state.validity == validity && validity.state == state &&
+		validity.contractIdentity == state.contract.Identity && validity.custodyIdentity == state.custody.Identity &&
+		validity.receiptSelector == state.receiptSelector && validity.constituentSelector == state.constituentSelector &&
+		validity.sourceSHA256 == state.custody.NativeV5SHA256 && validity.algorithmVersion == state.contract.ProgramCAlgorithmVersion &&
+		validity.executionBundleID == state.bundleID && validDigest(state.contract.Identity) && validDigest(state.custody.Identity) &&
+		validDigest(state.receiptSelector) && state.constituentSelector != "" && state.bundleID != "" && state.evidence != nil &&
+		state.seedGroups != nil && len(state.seedGroups) > 0 && state.sourceCounts.SeedGroups == uint64(len(state.seedGroups))
+}
+
+func constructPreparedMechanicsV2(prepared PreparedMechanicsV2, in MechanicsContextInputV2) (MechanicsV2, error) {
+	state := prepared.state
 	context := SelectionContextIdentityDTOv2{
-		SchemaVersion: SelectionContextSchemaVersionV2, AdapterContractSHA256: contract.Identity,
-		CustodyIdentity: custody.Identity, ConstituentSelector: in.ConstituentSelector,
-		ExecutionBundleID: bundleID, RunID: in.RunID, Seed: in.Seed,
+		SchemaVersion: SelectionContextSchemaVersionV2, AdapterContractSHA256: state.contract.Identity,
+		CustodyIdentity: state.custody.Identity, ConstituentSelector: state.constituentSelector,
+		ExecutionBundleID: state.bundleID, RunID: in.RunID, Seed: in.Seed,
 		ReplayOrdinal: in.ReplayOrdinal, CommunityOrdinal: in.CommunityOrdinal,
 		CommunityArtifactSHA256: in.CommunityArtifactSHA256,
 		CommunityMembers:        append([]string{}, in.CommunityMembers...),
-		SeedGroups:              cloneSeedGroupsV2(groups),
+		SeedGroups:              cloneSeedGroupsV2(state.seedGroups),
 	}
+	var err error
 	context.Identity, err = hashIdentity(contextDomainV2, context)
 	if err != nil {
 		return MechanicsV2{}, err
 	}
 	dto := MechanicsIdentityDTOv2{
 		SchemaVersion: MechanicsSchemaVersionV2, Profile: ProfileCallsOnlyFrozenCensusV1,
-		AdapterContractSHA256: contract.Identity, CustodyIdentity: custody.Identity,
-		ReceiptSelector: in.ReceiptSelector, RunID: in.RunID, Seed: in.Seed,
+		AdapterContractSHA256: state.contract.Identity, CustodyIdentity: state.custody.Identity,
+		ReceiptSelector: state.receiptSelector, RunID: in.RunID, Seed: in.Seed,
 		ReplayOrdinal: in.ReplayOrdinal, CommunityOrdinal: in.CommunityOrdinal,
 		CommunityArtifactSHA256: in.CommunityArtifactSHA256,
-		Evidence:                append([]EvidenceIdentityDTO{}, evidence...),
+		Evidence:                append([]EvidenceIdentityDTO{}, state.evidence...),
 		CommunityMembers:        append([]string{}, in.CommunityMembers...),
 		SelectionContext:        context, Authority: 0, Accepted: false,
 	}
@@ -218,6 +379,24 @@ func NewMechanicsV2(in MechanicsInputV2) (MechanicsV2, error) {
 		return MechanicsV2{}, err
 	}
 	return MechanicsV2{dto: cloneMechanicsDTOv2(dto), canonical: append([]byte{}, canonical...), trusted: true}, nil
+}
+
+func mechanicsCommonInputV2(in MechanicsInputV2) MechanicsCommonInputV2 {
+	return MechanicsCommonInputV2{
+		WorkflowKey: in.WorkflowKey, TerminalProgramCHeadSelector: in.TerminalProgramCHeadSelector,
+		ReceiptSelector: in.ReceiptSelector, ReceiptOrdinal: in.ReceiptOrdinal,
+		ConstituentOrdinal: in.ConstituentOrdinal, PublicationSelector: in.PublicationSelector,
+		ConstituentSelector: in.ConstituentSelector, Source: in.Source,
+		ProgramCAlgorithmVersion: in.ProgramCAlgorithmVersion,
+	}
+}
+
+func mechanicsContextInputV2(in MechanicsInputV2) MechanicsContextInputV2 {
+	return MechanicsContextInputV2{
+		RunID: in.RunID, Seed: in.Seed, ReplayOrdinal: in.ReplayOrdinal,
+		CommunityOrdinal: in.CommunityOrdinal, CommunityArtifactSHA256: in.CommunityArtifactSHA256,
+		CommunityMembers: append([]string{}, in.CommunityMembers...),
+	}
 }
 
 func (m MechanicsV2) Valid() bool {

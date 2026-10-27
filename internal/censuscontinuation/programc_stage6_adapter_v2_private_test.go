@@ -2,17 +2,48 @@ package censuscontinuation
 
 import (
 	"math"
+	"os"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/programc"
 )
 
+func TestProgramCStage6AdapterV2PreparedMechanicsAndScalarAccountingShape(t *testing.T) {
+	adapterRaw, err := os.ReadFile("programc_stage6_adapter_v2_private.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := string(adapterRaw)
+	adaptStart := strings.Index(adapter, "func adaptProgramCStage6InventoryEntryV2(")
+	adaptEnd := strings.Index(adapter, "func programCV2ValidateCardinalities(")
+	if adaptStart < 0 || adaptEnd <= adaptStart {
+		t.Fatal("ASSERT_PROGRAM_C_STAGE6_V2_PREPARED_MECHANICS missing adapter function")
+	}
+	adapt := adapter[adaptStart:adaptEnd]
+	prepareAt := strings.Index(adapt, "programcrepresentative.PrepareMechanicsV2(")
+	outerAt := strings.LastIndex(adapt, "programCV2CheckedOuterWork(")
+	runAt := strings.LastIndex(adapt, "programCV2CheckedRunSourceWork(")
+	batchAt := strings.Index(adapt, "programcrepresentative.NewPreparedMechanicsBatchV2(")
+	if strings.Count(adapt, "programcrepresentative.PrepareMechanicsV2(") != 1 || strings.Count(adapt, "programcrepresentative.NewPreparedMechanicsBatchV2(") != 1 || strings.Contains(adapt, "programcrepresentative.NewMechanicsV2(") || prepareAt < 0 || outerAt < prepareAt || runAt < outerAt || batchAt < runAt || !strings.Contains(adapter, "seedGroupCount uint64") {
+		t.Fatalf("ASSERT_PROGRAM_C_STAGE6_V2_PREPARED_MECHANICS prepare=%d outer=%d run=%d batch=%d", prepareAt, outerAt, runAt, batchAt)
+	}
+
+	preflightRaw, err := os.ReadFile("programc_v2_preflight_private.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preflight := string(preflightRaw)
+	if !strings.Contains(preflight, "programCV2CheckedMultiply(uint64(len(adapted.mechanics)), adapted.seedGroupCount)") || strings.Contains(preflight, "mechanics.SelectionContext().SeedGroups") {
+		t.Fatal("ASSERT_PROGRAM_C_V2_SCALAR_G_ACCOUNTING")
+	}
+}
+
 func TestProgramCStage6AdapterV2MultiSeedComplete(t *testing.T) {
 	entry := programCQualificationMultiSeedEntryFixture(t, 5)
 	got, err := adaptProgramCStage6InventoryEntryV2("workflow", "sha256:"+strings.Repeat("f", 64), entry)
-	if err != nil || got.classification != programCStage6Complete {
-		t.Fatalf("ASSERT_PROGRAM_C_STAGE6_V2_COMPLETE err=%v class=%q", err, got.classification)
+	if err != nil || got.classification != programCStage6Complete || got.seedGroupCount != 5 {
+		t.Fatalf("ASSERT_PROGRAM_C_STAGE6_V2_COMPLETE err=%v class=%q seed_groups=%d", err, got.classification, got.seedGroupCount)
 	}
 	want := 0
 	for _, outcome := range entry.outcomes {
@@ -44,7 +75,7 @@ func TestProgramCStage6AdapterV2EmptyAndResourceProduceNoMechanics(t *testing.T)
 		}
 		programCStage6RecanonicalizeEntry(t, &entry)
 		got, err := adaptProgramCStage6InventoryEntryV2("workflow", "sha256:"+strings.Repeat("f", 64), entry)
-		if err != nil || got.classification != programCStage6Empty || len(got.mechanics) != 0 {
+		if err != nil || got.classification != programCStage6Empty || len(got.mechanics) != 0 || got.seedGroupCount != 0 {
 			t.Fatalf("ASSERT_PROGRAM_C_STAGE6_V2_EMPTY_ZERO_MECHANICS got=%+v err=%v", got, err)
 		}
 	})
@@ -55,7 +86,7 @@ func TestProgramCStage6AdapterV2EmptyAndResourceProduceNoMechanics(t *testing.T)
 		entry.value.InstabilityClaimCeiling = programc.InstabilityClaimCeilingV3
 		programCStage6RecanonicalizeEntry(t, &entry)
 		got, err := adaptProgramCStage6InventoryEntryV2("workflow", "sha256:"+strings.Repeat("f", 64), entry)
-		if err != nil || got.classification != programCStage6ResourceIncomplete || len(got.mechanics) != 0 {
+		if err != nil || got.classification != programCStage6ResourceIncomplete || len(got.mechanics) != 0 || got.seedGroupCount != 0 {
 			t.Fatalf("ASSERT_PROGRAM_C_STAGE6_V2_RESOURCE_ZERO_MECHANICS got=%+v err=%v", got, err)
 		}
 	})

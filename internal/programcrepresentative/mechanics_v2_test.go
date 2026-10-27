@@ -575,7 +575,7 @@ func mechanicsV2FiveKindInput(t *testing.T) programcrepresentative.MechanicsInpu
 	return mechanicsV2InputFromResult(t, result)
 }
 
-func mechanicsV2Input(t *testing.T, seedCount int) programcrepresentative.MechanicsInputV2 {
+func mechanicsV2Input(t testing.TB, seedCount int) programcrepresentative.MechanicsInputV2 {
 	t.Helper()
 	node := func(name string, line uint32) graph.Node {
 		r := graph.Range{Start: graph.Position{Line: line}, End: graph.Position{Line: line, Character: 2}}
@@ -605,7 +605,7 @@ func mechanicsV2Input(t *testing.T, seedCount int) programcrepresentative.Mechan
 	return mechanicsV2InputFromResult(t, result)
 }
 
-func mechanicsV2InputFromResult(t *testing.T, result graph.Result) programcrepresentative.MechanicsInputV2 {
+func mechanicsV2InputFromResult(t testing.TB, result graph.Result) programcrepresentative.MechanicsInputV2 {
 	t.Helper()
 	native, err := json.Marshal(result)
 	if err != nil {
@@ -677,7 +677,7 @@ func digestMechanicsV2(raw []byte) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
-func completeDispatchMembershipsV2(t *testing.T, raw []byte) []byte {
+func completeDispatchMembershipsV2(t testing.TB, raw []byte) []byte {
 	t.Helper()
 	var envelope struct {
 		ExecutionBundleID     string                       `json:"execution_bundle_id"`

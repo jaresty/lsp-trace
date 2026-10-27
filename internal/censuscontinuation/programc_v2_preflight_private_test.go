@@ -3,13 +3,21 @@ package censuscontinuation
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"lsp-trace/internal/censussourceassembly"
 	"lsp-trace/internal/censussourcecontinuation"
 	"lsp-trace/internal/programc"
+	"lsp-trace/internal/programcrepresentative"
+	"lsp-trace/internal/publication"
 )
 
 func TestProgramCV2ImmutableHeadPreflightJointNearLimitSuccess(t *testing.T) {
@@ -233,6 +241,205 @@ func cloneProgramCV2ObjectMap(in map[string][]byte) map[string][]byte {
 		out[selector] = bytes.Clone(raw)
 	}
 	return out
+}
+
+const programCV2PreflightQualificationOptInEnv = "LSP_TRACE_ADR0014_V2_PREFLIGHT_QUALIFY"
+
+func TestADR0014FrozenCorpusMultiSeedV2PreflightQualification(t *testing.T) {
+	if os.Getenv(programCV2PreflightQualificationOptInEnv) != "1" {
+		t.Skip("set LSP_TRACE_ADR0014_V2_PREFLIGHT_QUALIFY=1 with the exact receipt, ledger, and retained state")
+	}
+	receiptPath := os.Getenv("LSP_TRACE_PROGRAM_C_RECEIPT")
+	ledgerPath := os.Getenv("LSP_TRACE_PROGRAM_C_LEDGER")
+	stateDir := os.Getenv("LSP_TRACE_PROGRAM_C_RETAINED_STATE")
+	if receiptPath == "" || ledgerPath == "" || stateDir == "" {
+		t.Fatal("ASSERT_ADR0014_V2_PREFLIGHT_EXACT_INPUT missing exact frozen input")
+	}
+
+	receipt, err := programCV2ExactInput(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledger, err := programCV2ExactInput(ledgerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.SHA256 != "sha256:ecc4a9280e1b3896de6c9799485bc642111e4140ccfc0f458e03e6e25441a751" || receipt.ByteLength != 201291 || ledger.SHA256 != "sha256:2fe7d6d4713e29b85dfeb73b5d9bdf5b7edec39d2cc317f9588d414a0c372bee" || ledger.ByteLength != 236389 {
+		t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_EXACT_INPUT receipt=%s/%d ledger=%s/%d", receipt.SHA256, receipt.ByteLength, ledger.SHA256, ledger.ByteLength)
+	}
+	stateBefore, err := snapshotProgramCV2RetainedState(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	source := &AuthoritativeProgramCTransitionPlanSource{Receipt: receipt, Ledger: ledger}
+	planRaw, err := source.Load(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := ProgramCTransitionBindings{
+		RepositoryCommit: strings.Repeat("a", 40), RepositoryTree: strings.Repeat("b", 40),
+		FrozenCorpusSHA256: "sha256:" + strings.Repeat("c", 64), CensusReceiptSHA256: receipt.SHA256, LedgerSHA256: ledger.SHA256,
+		AlgorithmVersion: "leiden/v1", Seeds: [2]uint64{1, 2}, ReplaysPerSeed: 3,
+		ParametersSHA256: "sha256:" + strings.Repeat("d", 64), ResourcePolicySHA256: "sha256:" + strings.Repeat("e", 64),
+		PlanSHA256: transitionSHA(planRaw),
+	}
+	root, err := publication.OpenRoot(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects, err := censussourceassembly.NewObjects(root)
+	if err != nil {
+		_ = root.Close()
+		t.Fatal(err)
+	}
+	heads, err := censussourceassembly.NewHeadsWithParser(root, programCV2MeasurementHeadNS, ParseProgramCTransitionHeadRevision)
+	if err != nil {
+		_ = root.Close()
+		t.Fatal(err)
+	}
+	readOnlyObjects := &programCV2ReadOnlyObjects{inner: objects}
+	readOnlyHeads := &programCV2ReadOnlyHeads{inner: heads}
+
+	started := time.Now()
+	got, preflightErr := preflightFrozenProgramCMultiSeedV2(context.Background(), ProgramCTransitionVerificationRequest{
+		WorkflowKey: "production-workflow", HeadKey: "production-workflow", Bindings: bindings,
+		PlanSource: source, Objects: readOnlyObjects, Heads: readOnlyHeads,
+	})
+	runtime := time.Since(started).Round(time.Millisecond)
+	closeErr := root.Close()
+	stateAfter, snapshotErr := snapshotProgramCV2RetainedState(stateDir)
+	if preflightErr != nil {
+		t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_SUCCESS err=%v", preflightErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("close retained state: %v", closeErr)
+	}
+	if snapshotErr != nil {
+		t.Fatal(snapshotErr)
+	}
+
+	if got.transition.Status != ProgramCTransitionComplete || got.transition.CommittedPrefix != 395 || got.transition.ConstituentCount != 395 || got.transition.Head.Selector == "" {
+		t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_TERMINAL_RECONSTRUCTION transition=%+v", got.transition)
+	}
+	if len(got.adaptations) != 395 || got.accounting.completeConstituents != 268 || got.accounting.emptyConstituents != 2 || got.accounting.resourceIncompleteConstituents != 125 || got.accounting.eligibleRunCommunityResultsD != 15537 || got.accounting.seedGroupResultsG != 530232 {
+		t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_ACCOUNTING adaptations=%d accounting=%+v", len(got.adaptations), got.accounting)
+	}
+	var mechanicsCount uint64
+	for ordinal, adaptation := range got.adaptations {
+		switch adaptation.classification {
+		case programCStage6Complete:
+			if len(adaptation.mechanics) == 0 {
+				t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_COMPLETE_MECHANICS ordinal=%d empty", ordinal)
+			}
+			pairs := make(map[string]struct{}, len(adaptation.mechanics))
+			for mechanicsOrdinal, mechanics := range adaptation.mechanics {
+				dto := mechanics.DTO()
+				pair := fmt.Sprintf("%s/%d", dto.RunID, dto.CommunityOrdinal)
+				if !mechanics.Valid() || !mechanics.Trusted() || dto.RunID == "" {
+					t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_COMPLETE_MECHANICS ordinal=%d mechanics=%d dto=%+v", ordinal, mechanicsOrdinal, dto)
+				}
+				if _, duplicate := pairs[pair]; duplicate {
+					t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_RUN_COMMUNITY_BIJECTION ordinal=%d pair=%s", ordinal, pair)
+				}
+				pairs[pair] = struct{}{}
+			}
+			mechanicsCount += uint64(len(adaptation.mechanics))
+		case programCStage6Empty, programCStage6ResourceIncomplete:
+			if len(adaptation.mechanics) != 0 {
+				t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_EXCLUDED_MECHANICS ordinal=%d classification=%s mechanics=%d", ordinal, adaptation.classification, len(adaptation.mechanics))
+			}
+		default:
+			t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_CLASSIFICATION ordinal=%d classification=%s", ordinal, adaptation.classification)
+		}
+	}
+	if mechanicsCount != 15537 {
+		t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_MECHANICS_D got=%d", mechanicsCount)
+	}
+	if readOnlyHeads.loads != 1 || readOnlyObjects.puts != 0 || readOnlyHeads.cas != 0 {
+		t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_READ_ONLY loads=%d puts=%d cas=%d", readOnlyHeads.loads, readOnlyObjects.puts, readOnlyHeads.cas)
+	}
+	if !reflect.DeepEqual(stateBefore, stateAfter) {
+		t.Fatal("ASSERT_ADR0014_V2_PREFLIGHT_STATE_BYTES_UNCHANGED mismatch")
+	}
+	resultType := reflect.TypeOf(got)
+	for i := 0; i < resultType.NumField(); i++ {
+		name := strings.ToLower(resultType.Field(i).Name)
+		if strings.Contains(name, "subject") || strings.Contains(name, "artifact") || strings.Contains(name, "evidence") {
+			t.Fatalf("ASSERT_ADR0014_V2_PREFLIGHT_PREQUALIFICATION_ONLY field=%s", resultType.Field(i).Name)
+		}
+	}
+
+	t.Log("ASSERT_ADR0014_V2_PREFLIGHT_EXACT_INPUT PASS")
+	t.Log("ASSERT_ADR0014_V2_PREFLIGHT_TERMINAL_RECONSTRUCTION PASS")
+	t.Log("ASSERT_ADR0014_V2_PREFLIGHT_RUN_COMMUNITY_BIJECTION PASS")
+	t.Log("ASSERT_ADR0014_V2_PREFLIGHT_READ_ONLY PASS")
+	t.Log("ASSERT_ADR0014_V2_PREFLIGHT_STATE_BYTES_UNCHANGED PASS")
+	t.Log("ASSERT_ADR0014_V2_PREFLIGHT_PREQUALIFICATION_ONLY PASS")
+	t.Logf("ADR0014_V2_PREFLIGHT_QUALIFICATION runtime=%s adaptations=%d complete=%d empty=%d resource_incomplete=%d D=%d G=%d loads=%d puts=%d cas=%d", runtime, len(got.adaptations), got.accounting.completeConstituents, got.accounting.emptyConstituents, got.accounting.resourceIncompleteConstituents, got.accounting.eligibleRunCommunityResultsD, got.accounting.seedGroupResultsG, readOnlyHeads.loads, readOnlyObjects.puts, readOnlyHeads.cas)
+}
+
+type programCV2RetainedStateFile struct {
+	ByteLength int64
+	SHA256     [sha256.Size]byte
+}
+
+func snapshotProgramCV2RetainedState(root string) (map[string]programCV2RetainedStateFile, error) {
+	snapshot := make(map[string]programCV2RetainedStateFile)
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+			return fmt.Errorf("retained state contains non-regular file: %s", path)
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		snapshot[filepath.ToSlash(relative)] = programCV2RetainedStateFile{ByteLength: int64(len(raw)), SHA256: sha256.Sum256(raw)}
+		return nil
+	})
+	return snapshot, err
+}
+
+func TestProgramCV2DiagnosticFailuresRemainZeroAndTyped(t *testing.T) {
+	t.Run("mechanics", func(t *testing.T) {
+		err := validateProgramCV2Mechanics(17, []programcrepresentative.MechanicsV2{{}})
+		if err == nil || !errors.Is(err, ErrInvalidProgramCTransition) || !strings.Contains(err.Error(), "category=mechanics-valid ordinal=17 mechanics_index=0") {
+			t.Fatalf("ASSERT_PROGRAM_C_V2_MECHANICS_DIAGNOSTIC err=%v", err)
+		}
+	})
+	accounting := programCV2PreflightAccounting{
+		completeConstituents: 1, eligibleRunCommunityResultsD: 7, seedGroupResultsG: 11,
+	}
+	tests := []struct {
+		name     string
+		expected programCV2ExpectedAccounting
+		want     string
+	}{
+		{"eligible run communities", programCV2ExpectedAccounting{eligibleRunCommunityResultsD: 8, seedGroupResultsG: 11}, "category=eligible-run-community-count observed=7 expected=8"},
+		{"seed groups", programCV2ExpectedAccounting{eligibleRunCommunityResultsD: 7, seedGroupResultsG: 12}, "category=seed-group-count observed=11 expected=12"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateProgramCV2FinalAccounting(accounting, 1, tc.expected)
+			if err == nil || !errors.Is(err, ErrInvalidProgramCTransition) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ASSERT_PROGRAM_C_V2_ACCOUNTING_DIAGNOSTIC err=%v", err)
+			}
+			got := programCV2PreflightResult{}
+			if got.transition != (ProgramCTransitionResult{}) || got.adaptations != nil || got.accounting != (programCV2PreflightAccounting{}) {
+				t.Fatalf("ASSERT_PROGRAM_C_V2_DIAGNOSTIC_ZERO_RESULT got=%+v", got)
+			}
+		})
+	}
 }
 
 func TestProgramCV2FrozenAccountingConstants(t *testing.T) {

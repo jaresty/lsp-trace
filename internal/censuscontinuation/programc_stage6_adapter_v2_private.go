@@ -23,6 +23,7 @@ const (
 type programCStage6AdaptationV2 struct {
 	classification programCStage6Classification
 	mechanics      []programcrepresentative.MechanicsV2
+	seedGroupCount uint64
 }
 
 type programCV2WorkInput struct {
@@ -92,7 +93,22 @@ func adaptProgramCStage6InventoryEntryV2(workflowKey, terminalHeadSelector strin
 	if err != nil {
 		return zero, ErrInvalidProgramCTransition
 	}
-	mechanics := make([]programcrepresentative.MechanicsV2, 0)
+	prepared, err := programcrepresentative.PrepareMechanicsV2(programcrepresentative.MechanicsCommonInputV2{
+		WorkflowKey: workflowKey, TerminalProgramCHeadSelector: terminalHeadSelector,
+		ReceiptSelector: entry.selector, ReceiptOrdinal: entry.value.ReceiptOrdinal,
+		ConstituentOrdinal: entry.ordinal, PublicationSelector: entry.value.PublicationSelector,
+		ConstituentSelector: entry.value.ConstituentSelector, Source: source,
+		ProgramCAlgorithmVersion: entry.value.Bindings.AlgorithmVersion,
+	})
+	if err != nil {
+		return zero, ErrInvalidProgramCTransition
+	}
+	counts := prepared.SourceCounts()
+	sourceCounts := programCV2WorkInput{
+		seedGroups: counts.SeedGroups, memberships: counts.Memberships,
+		groupOccurrences: counts.GroupOccurrences,
+	}
+	contexts := []programcrepresentative.MechanicsContextInputV2{}
 	for runOrdinal, outcome := range outcomes {
 		communities := uint64(len(outcome.Communities))
 		occurrences := uint64(len(outcome.Projection.Occurrences))
@@ -114,36 +130,7 @@ func adaptProgramCStage6InventoryEntryV2(workflowKey, terminalHeadSelector strin
 		}
 		replayOrdinal := uint8(runOrdinal%3 + 1)
 		runID := fmt.Sprintf("seed-%020d-replay-%d", outcome.Seed, replayOrdinal)
-		var sourceCounts programCV2WorkInput
-		runMechanics := make([]programcrepresentative.MechanicsV2, 0, len(outcome.Communities))
 		for communityOrdinal, community := range outcome.Communities {
-			item, buildErr := programcrepresentative.NewMechanicsV2(programcrepresentative.MechanicsInputV2{
-				WorkflowKey: workflowKey, TerminalProgramCHeadSelector: terminalHeadSelector,
-				ReceiptSelector: entry.selector, ReceiptOrdinal: entry.value.ReceiptOrdinal,
-				ConstituentOrdinal: entry.ordinal, PublicationSelector: entry.value.PublicationSelector,
-				ConstituentSelector: entry.value.ConstituentSelector, Source: source,
-				ProgramCAlgorithmVersion: entry.value.Bindings.AlgorithmVersion,
-				RunID:                    runID, Seed: outcome.Seed, ReplayOrdinal: replayOrdinal,
-				CommunityOrdinal: communityOrdinal, CommunityArtifactSHA256: communityDigests[runOrdinal],
-				CommunityMembers: append([]string{}, community.Members...),
-			})
-			if buildErr != nil {
-				return zero, ErrInvalidProgramCTransition
-			}
-			if communityOrdinal == 0 {
-				context := item.SelectionContext()
-				sourceCounts.seedGroups = uint64(len(context.SeedGroups))
-				for _, group := range context.SeedGroups {
-					sourceCounts.memberships, err = programCV2CheckedAdd(sourceCounts.memberships, uint64(len(group.Memberships)))
-					if err != nil {
-						return zero, ErrInvalidProgramCTransition
-					}
-					sourceCounts.groupOccurrences, err = programCV2CheckedAdd(sourceCounts.groupOccurrences, uint64(len(group.OccurrenceIDs)))
-					if err != nil {
-						return zero, ErrInvalidProgramCTransition
-					}
-				}
-			}
 			work := sourceCounts
 			work.communities = communities
 			work.compositionOccurrences = occurrences
@@ -152,7 +139,11 @@ func adaptProgramCStage6InventoryEntryV2(workflowKey, terminalHeadSelector strin
 			if _, err = programCV2CheckedOuterWork(work); err != nil {
 				return zero, ErrInvalidProgramCTransition
 			}
-			runMechanics = append(runMechanics, item)
+			contexts = append(contexts, programcrepresentative.MechanicsContextInputV2{
+				RunID: runID, Seed: outcome.Seed, ReplayOrdinal: replayOrdinal,
+				CommunityOrdinal: communityOrdinal, CommunityArtifactSHA256: communityDigests[runOrdinal],
+				CommunityMembers: append([]string{}, community.Members...),
+			})
 		}
 		runWork := sourceCounts
 		runWork.communities = communities
@@ -161,9 +152,14 @@ func adaptProgramCStage6InventoryEntryV2(workflowKey, terminalHeadSelector strin
 		if _, err = programCV2CheckedRunSourceWork(runWork); err != nil {
 			return zero, ErrInvalidProgramCTransition
 		}
-		mechanics = append(mechanics, runMechanics...)
 	}
-	return programCStage6AdaptationV2{classification: programCStage6Complete, mechanics: mechanics}, nil
+	mechanics, err := programcrepresentative.NewPreparedMechanicsBatchV2(prepared, contexts)
+	if err != nil {
+		return zero, ErrInvalidProgramCTransition
+	}
+	return programCStage6AdaptationV2{
+		classification: programCStage6Complete, mechanics: mechanics, seedGroupCount: counts.SeedGroups,
+	}, nil
 }
 
 func programCV2ValidateCardinalities(in programCV2WorkInput) error {

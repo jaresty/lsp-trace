@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"lsp-trace/internal/censussourcecontinuation"
+	"lsp-trace/internal/programcrepresentative"
 )
 
 const (
@@ -73,6 +74,9 @@ func finalizeProgramCMultiSeedV2Preflight(ctx context.Context, transition Progra
 		}
 		switch adapted.classification {
 		case programCStage6Complete:
+			if adapted.seedGroupCount == 0 {
+				return programCV2PreflightResult{}, ErrInvalidProgramCTransition
+			}
 			accounting.completeConstituents, err = programCV2CheckedAdd(accounting.completeConstituents, 1)
 			if err != nil {
 				return programCV2PreflightResult{}, err
@@ -81,17 +85,19 @@ func finalizeProgramCMultiSeedV2Preflight(ctx context.Context, transition Progra
 			if err != nil {
 				return programCV2PreflightResult{}, err
 			}
-			for _, mechanics := range adapted.mechanics {
-				if !mechanics.Valid() || !mechanics.Trusted() {
-					return programCV2PreflightResult{}, ErrInvalidProgramCTransition
-				}
-				accounting.seedGroupResultsG, err = programCV2CheckedAdd(accounting.seedGroupResultsG, uint64(len(mechanics.SelectionContext().SeedGroups)))
-				if err != nil {
-					return programCV2PreflightResult{}, err
-				}
+			if err := validateProgramCV2Mechanics(entry.ordinal, adapted.mechanics); err != nil {
+				return programCV2PreflightResult{}, err
+			}
+			seedGroupResults, multiplyErr := programCV2CheckedMultiply(uint64(len(adapted.mechanics)), adapted.seedGroupCount)
+			if multiplyErr != nil {
+				return programCV2PreflightResult{}, multiplyErr
+			}
+			accounting.seedGroupResultsG, err = programCV2CheckedAdd(accounting.seedGroupResultsG, seedGroupResults)
+			if err != nil {
+				return programCV2PreflightResult{}, err
 			}
 		case programCStage6Empty:
-			if len(adapted.mechanics) != 0 {
+			if len(adapted.mechanics) != 0 || adapted.seedGroupCount != 0 {
 				return programCV2PreflightResult{}, ErrInvalidProgramCTransition
 			}
 			accounting.emptyConstituents, err = programCV2CheckedAdd(accounting.emptyConstituents, 1)
@@ -99,7 +105,7 @@ func finalizeProgramCMultiSeedV2Preflight(ctx context.Context, transition Progra
 				return programCV2PreflightResult{}, err
 			}
 		case programCStage6ResourceIncomplete:
-			if len(adapted.mechanics) != 0 {
+			if len(adapted.mechanics) != 0 || adapted.seedGroupCount != 0 {
 				return programCV2PreflightResult{}, ErrInvalidProgramCTransition
 			}
 			accounting.resourceIncompleteConstituents, err = programCV2CheckedAdd(accounting.resourceIncompleteConstituents, 1)
@@ -114,9 +120,34 @@ func finalizeProgramCMultiSeedV2Preflight(ctx context.Context, transition Progra
 	if err := ctx.Err(); err != nil {
 		return programCV2PreflightResult{}, err
 	}
-	constituents, err := programCV2CheckedSum(accounting.completeConstituents, accounting.emptyConstituents, accounting.resourceIncompleteConstituents)
-	if err != nil || constituents != uint64(len(inventory)) || accounting.eligibleRunCommunityResultsD != expected.eligibleRunCommunityResultsD || accounting.seedGroupResultsG != expected.seedGroupResultsG {
-		return programCV2PreflightResult{}, ErrInvalidProgramCTransition
+	if err := validateProgramCV2FinalAccounting(accounting, len(inventory), expected); err != nil {
+		return programCV2PreflightResult{}, err
 	}
 	return programCV2PreflightResult{transition: transition, adaptations: adaptations, accounting: accounting}, nil
+}
+
+func validateProgramCV2Mechanics(ordinal int, mechanics []programcrepresentative.MechanicsV2) error {
+	for mechanicsIndex, item := range mechanics {
+		if !item.Valid() || !item.Trusted() {
+			return fmt.Errorf("Program C multi-seed v2 preflight: category=mechanics-valid ordinal=%d mechanics_index=%d: %w", ordinal, mechanicsIndex, ErrInvalidProgramCTransition)
+		}
+	}
+	return nil
+}
+
+func validateProgramCV2FinalAccounting(accounting programCV2PreflightAccounting, inventoryLength int, expected programCV2ExpectedAccounting) error {
+	constituents, err := programCV2CheckedSum(accounting.completeConstituents, accounting.emptyConstituents, accounting.resourceIncompleteConstituents)
+	if err != nil {
+		return fmt.Errorf("Program C multi-seed v2 preflight: category=constituent-count-overflow: %w", err)
+	}
+	if constituents != uint64(inventoryLength) {
+		return fmt.Errorf("Program C multi-seed v2 preflight: category=constituent-count observed=%d expected=%d complete=%d empty=%d resource_incomplete=%d: %w", constituents, inventoryLength, accounting.completeConstituents, accounting.emptyConstituents, accounting.resourceIncompleteConstituents, ErrInvalidProgramCTransition)
+	}
+	if accounting.eligibleRunCommunityResultsD != expected.eligibleRunCommunityResultsD {
+		return fmt.Errorf("Program C multi-seed v2 preflight: category=eligible-run-community-count observed=%d expected=%d: %w", accounting.eligibleRunCommunityResultsD, expected.eligibleRunCommunityResultsD, ErrInvalidProgramCTransition)
+	}
+	if accounting.seedGroupResultsG != expected.seedGroupResultsG {
+		return fmt.Errorf("Program C multi-seed v2 preflight: category=seed-group-count observed=%d expected=%d: %w", accounting.seedGroupResultsG, expected.seedGroupResultsG, ErrInvalidProgramCTransition)
+	}
+	return nil
 }
