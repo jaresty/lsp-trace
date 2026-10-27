@@ -50,3 +50,60 @@ neither monitoring-qualified, durable-sealed, Census-complete nor runtime-admitt
 The immutable v1 pilot manifest/head wires, reopen behavior and source-plan
 behavior are unchanged. Later runner and monitor work must establish their own
 dependency and admission contracts; input validation is not a substitute.
+
+## Additive production read-only preflight phase
+
+`Preflight` adds a filesystem adapter without changing `ObserveInputs` or the
+immutable pilot wires. Its request contains an existing durable root,
+workflow/lineage labels, and exactly two content-addressed comparison references
+for `SOURCE_SELECTION` and `PARTITION_PLAN`. No manifest, plan DTO, expected head
+revision, trusted boolean, or execution policy is accepted. The root must pass
+`ValidateDurableRoot`, but this pathname check grants no acquisition authority.
+`publication.OpenObservedRoot` independently binds the same clean-absolute-path,
+no-symlink and `/private/tmp` exclusion policy to descriptor-traversed acquisition.
+On Linux and macOS it starts from an owned `/` descriptor and opens each directory
+component relative to its pinned parent with
+`O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC`. The final descriptor must identify a private
+current-user directory. An ancestor replaced by a symlink between the initial
+check and acquisition is rejected, including aliases into `/private/tmp`.
+
+The opaque read-only `ObservedRoot` retains that exact admitted descriptor. To
+reuse existing bounded content-read logic it also acquires an `os.Root` via the
+pathname, but accepts that secondary capability only if its descriptor-reported
+identity exactly equals the traversed root identity, before any content read.
+This is not a before/after pathname check, and uses no `/dev/fd` assumptions.
+Changing the path to a different directory during secondary acquisition rejects
+and closes both capabilities. Rename after successful admission does not redirect
+reads: observation uses only the pinned capabilities.
+
+Every owned intermediate directory is closed after the next acquisition;
+failures close every remaining acquired capability and join all cleanup errors.
+Handles returned alongside an acquisition error are also closed. The successful
+root is owned by preflight, borrowed by its input adapter, and closed before
+returning; either root-capability close failure invalidates all result state.
+Existing `OpenRoot` and other committed publication API behavior is unchanged.
+
+The additive `Root.ReadContentObserved` admits only one canonical lowercase
+`sha256:<64 hex>` basename directly beneath that pinned root. On Linux and macOS
+it opens descriptor-relative with `O_NOFOLLOW`, `O_CLOEXEC`, and `O_NONBLOCK`
+(the latter avoids a substituted FIFO blocking at open). Other platforms fail
+closed. It checks regular 0600 current-user/single-link metadata, pre/open/post
+identity and metadata, exact byte length and content digest, and propagates read
+and file-close failures with no bytes returned. This establishes only the digest
+and length of the bytes actually read under the checked custody conditions. It
+does not establish file immutability, a continuous coverage interval, or that the
+file will remain unchanged after observation. There is no selector traversal,
+root creation, chmod, cleanup, write, ambient checkout fallback, or root-path
+reopen during observation. Existing publication read APIs are unchanged.
+
+The adapter uses repository-owned byte/file ceilings and passes actual observed
+bytes through `ObserveInputs` for full canonical selection/plan coherence.
+Explicit context is required; cancellation is checked before reads, between read
+calls, and at safe validation/return boundaries. Regular-file reads are bounded
+in bytes, not in elapsed time: arbitrary blocked kernel I/O is not promised to be
+interruptible. Callers must not concurrently close a borrowed root capability.
+
+The opaque result reports authority zero and `MONITORING_NOT_QUALIFIED`. It does
+not create a manifest, call Put/CAS/Coordinate, execute Census, seal durability,
+or admit runtime execution. The eventual mutating monitored runner must still
+qualify its probe, receipt, publication, and monitoring dependencies separately.
