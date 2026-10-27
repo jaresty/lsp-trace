@@ -263,6 +263,9 @@ type Request struct {
 // RoundTripRequest describes one transport-neutral JSON-RPC transaction against
 // an exact session generation.
 type RoundTripRequest struct {
+	// Private Manager-owned equality guard; never serialized or inferred from flags.
+	RetainedScopePrivate *RetainedScopeGuardPrivate `json:"-"`
+
 	directionalV5 *privateDirectionalCallV5
 	SessionID     string
 	Generation    uint64
@@ -486,6 +489,19 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		m.mu.Unlock()
 		return DocumentResult{Failure: session.LifecycleConflict, LifecycleSubcause: subcause}
 	}
+	if r.retainedScopePrivate != nil {
+		m.mu.Unlock()
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
+	// Exclude binding while a preparation may read checkout bytes. The counter
+	// spans both the source read and final supply installation, including errors.
+	r.retainedScopePreparing++
+	preparing := r
+	defer func() {
+		m.mu.Lock()
+		preparing.retainedScopePreparing--
+		m.mu.Unlock()
+	}()
 	workspace := filepath.Clean(r.record.Profile.Workspace().String())
 	registeredWorkspace := r.record.Profile.Workspace().String()
 	configured := r.languageID
@@ -884,6 +900,12 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.ToolNotImplemented}, callHierarchyLayer1GenericRefusalRuntimeGate, session.ToolNotImplemented)
 	}
 	requestStarted := m.now()
+	if req.RetainedScopePrivate != nil {
+		if !eligibleRetainedScopeRequestPrivate(req) {
+			return RoundTripResult{Failure: DocumentSupplyUnavailable}
+		}
+		req.Params = append(json.RawMessage(nil), req.Params...)
+	}
 	if req.ExpectedOwnedDocument != nil {
 		// Use pre-lock copies for both the source guard and owned write; caller
 		// mutation while a response is pending cannot change either identity.
@@ -916,6 +938,10 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			return RoundTripResult{Failure: session.RequestTimeout}
 		}
 		req.Deadline = effective
+	}
+	if !m.matchesRetainedScopePrivate(parent, req, r) {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: DocumentSupplyUnavailable}
 	}
 	if req.ExpectedOwnedDocument != nil && !matchesOwnedDocument(req, r.documents) {
 		m.mu.Unlock()
@@ -1797,6 +1823,8 @@ type runtimeSession struct {
 	metadata               SessionMetadata
 	languageID             string
 	documents              map[string]openDocument
+	retainedScopePrivate   *RetainedScopeGuardPrivate
+	retainedScopePreparing int
 	seedSources            map[string][]byte
 	seedBinding            *seedbinding.Manifest
 	custodyProvenance      seedbinding.CustodyMode
@@ -3307,6 +3335,9 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Generation: completed.Generation, State: session.Initializing, Start: start})
 	r.retired = nil
 	r.pending, r.requests, r.documents, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), make(map[string]openDocument), 0, false, false
+	// The existing explicit successor-generation boundary retires the old
+	// capability; it never recovers or rebinds a failed invocation.
+	r.retainedScopePrivate = nil
 	r.seedAdmittedGeneration = 0
 	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
 	m.observe(operation.SessionID, completed.Generation, "initialization", session.Initializing, "")
