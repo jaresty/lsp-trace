@@ -37,13 +37,17 @@ type RetainedScopeMemberPrivate struct {
 // pointer preserves it; copying the pointed-to struct creates an invalid token.
 // It has no wire representation, trust flag, or caller-controlled enable switch.
 type RetainedScopeGuardPrivate struct {
-	manager    *Manager
-	session    *runtimeSession
-	generation uint64
-	leaseNonce uint64
-	leaseToken *sessionLeaseToken
-	members    []RetainedScopeMemberPrivate
-	documents  map[string]openDocument
+	manager            *Manager
+	session            *runtimeSession
+	generation         uint64
+	leaseNonce         uint64
+	leaseToken         *sessionLeaseToken
+	members            []RetainedScopeMemberPrivate
+	documents          map[string]openDocument
+	diagnostics        []RetainedScopeDiagnosticPrivate
+	diagnosticOverflow bool
+	diagnosticOrdinal  uint64
+	diagnosticBytes    int
 }
 
 // MarshalJSON deliberately refuses capability serialization, including a zero
@@ -219,7 +223,10 @@ func (m *Manager) CheckRetainedScopePrivate(ctx context.Context, id string, gene
 		return DocumentSupplyUnavailable
 	}
 	params, _ := json.Marshal(map[string]any{"textDocument": map[string]string{"uri": g.members[0].URI}})
-	if !m.matchesRetainedScopePrivate(ctx, RoundTripRequest{SessionID: id, Generation: generation, Method: "textDocument/documentSymbol", Params: params, RetainedScopePrivate: g}, r) {
+	req := RoundTripRequest{SessionID: id, Generation: generation, Method: "textDocument/documentSymbol", Params: params, RetainedScopePrivate: g}
+	reason, class := m.retainedScopeMatchReasonPrivate(ctx, req, r)
+	if reason != "ACCEPTED" {
+		m.observeRetainedScopePrivate(g, r, "CHECK", "NONE", class, reason)
 		return DocumentSupplyUnavailable
 	}
 	return ""
@@ -351,26 +358,65 @@ func retainedScopeRequestURIPrivate(req RoundTripRequest) (string, bool) {
 
 // Called with Manager.mu held, before any pending request or write allocation.
 func (m *Manager) matchesRetainedScopePrivate(ctx context.Context, req RoundTripRequest, r *runtimeSession) bool {
+	reason, class := m.retainedScopeMatchReasonPrivate(ctx, req, r)
+	method := req.Method
+	if !retainedScopeMethodPrivate(method) {
+		method = "OTHER"
+	}
+	m.observeRetainedScopePrivate(req.RetainedScopePrivate, r, "ADMISSION", method, class, reason)
+	return reason == "ACCEPTED"
+}
+
+// Called only with Manager.mu held. Keep the latest bounded observations so a
+// late refusal cannot disappear behind successful requests. Overflow discloses
+// discarded prefix events. Successful Check calls are not attempted requests.
+func (m *Manager) observeRetainedScopePrivate(g *RetainedScopeGuardPrivate, r *runtimeSession, phase, method, class, reason string) {
+	if g == nil || r.retainedScopePrivate != g || g.manager != m || g.session != r {
+		return
+	}
+	g.diagnosticOrdinal++
+	event := RetainedScopeDiagnosticPrivate{phase, method, g.diagnosticOrdinal, class, reason}
+	encoded, _ := json.Marshal(event)
+	for len(g.diagnostics) > 0 && (len(g.diagnostics) >= 64 || g.diagnosticBytes+len(encoded)+1 > 8000) {
+		old, _ := json.Marshal(g.diagnostics[0])
+		g.diagnosticBytes -= len(old) + 1
+		g.diagnostics = g.diagnostics[1:]
+		g.diagnosticOverflow = true
+	}
+	g.diagnostics = append(g.diagnostics, event)
+	g.diagnosticBytes += len(encoded) + 1
+}
+
+func (m *Manager) retainedScopeMatchReasonPrivate(ctx context.Context, req RoundTripRequest, r *runtimeSession) (string, string) {
 	g := req.RetainedScopePrivate
 	if g == nil {
-		return r.retainedScopePrivate == nil || !retainedScopeMethodPrivate(req.Method)
+		if r.retainedScopePrivate == nil || !retainedScopeMethodPrivate(req.Method) {
+			return "ACCEPTED", "INVALID"
+		}
+		return "CAPABILITY_MISSING", "INVALID"
 	}
 	if r.retainedScopePrivate != g || g.manager != m || g.session != r || g.generation != req.Generation || g.leaseNonce != r.leaseNonce || g.leaseToken != r.leaseToken || r.lifecycleOwned || r.leaseClosing || m.closed || !m.validSessionLeaseLocked(ctx, r) {
-		return false
+		return "CAPABILITY_MISMATCH", "INVALID"
 	}
 	uri, ok := retainedScopeRequestURIPrivate(req)
 	if !ok {
-		return false
+		return "REQUEST_DTO_INVALID", "INVALID"
 	}
 	if _, ok = g.documents[uri]; !ok {
-		return false
+		return "URI_OUTSIDE_FROZEN", "FROZEN_EXTERNAL"
+	}
+	class := "CONTEXT"
+	for _, member := range g.members {
+		if member.URI == uri && member.Role == RetainedScopeNominationPrivate {
+			class = "NOMINATION"
+		}
 	}
 	for _, member := range g.members {
 		current, ok := r.documents[member.URI]
 		bound := g.documents[member.URI]
 		if !ok || !validRetainedScopeDocumentPrivate(current, member, req.SessionID, req.Generation) || current.version != bound.version || current.languageID != bound.languageID || current.digest != bound.digest || current.supply.Method != bound.supply.Method || !bytes.Equal(current.supply.Params, bound.supply.Params) || !bytes.Equal(current.supply.Content, bound.supply.Content) {
-			return false
+			return "FROZEN_STATE_MISMATCH", class
 		}
 	}
-	return true
+	return "ACCEPTED", class
 }

@@ -12,6 +12,7 @@ import (
 	"lsp-trace/internal/acquisitionmanifest"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/sessionruntime"
 )
@@ -116,6 +117,46 @@ func (f *ScopedBatchFixturePrivate) Fault(kind string) {
 		}
 	}
 }
+
+// ProducerEndpointPrivate changes only fake wire responses, never Manager state
+// or public client eligibility. The returned item is passed to the real native
+// producer and guarded directional transport without repair.
+func (f *ScopedBatchFixturePrivate) ProducerEndpointPrivate(kind string) {
+	f.child.mu.Lock()
+	defer f.child.mu.Unlock()
+	f.child.response = func(m lspwire.Message) json.RawMessage {
+		if m.Method == "textDocument/prepareCallHierarchy" {
+			raw, _ := json.Marshal([]any{scopeAdapterItem(f.Nomination.URI)})
+			return raw
+		}
+		if kind == "malformed" {
+			return json.RawMessage(`[{"name":"missing fields"}]`)
+		}
+		uri := f.Nomination.URI
+		if kind == "context" {
+			uri = f.ContextURI
+		}
+		if kind == "external" {
+			uri = "file:///offline-external.go"
+		}
+		var value any = []any{}
+		if m.Method == "callHierarchy/incomingCalls" {
+			value = []lsp.CallHierarchyIncomingCall{{From: scopeAdapterItem(uri), FromRanges: []lsp.Range{}}}
+		}
+		if m.Method == "callHierarchy/outgoingCalls" {
+			value = []lsp.CallHierarchyOutgoingCall{{To: scopeAdapterItem(uri), FromRanges: []lsp.Range{}}}
+		}
+		raw, _ := json.Marshal(value)
+		return raw
+	}
+}
+func (f *ScopedBatchFixturePrivate) DiagnosticsPrivate() ([]sessionruntime.RetainedScopeDiagnosticPrivate, bool) {
+	return f.Manager.RetainedScopeDiagnosticsPrivate(f.adapter.guard)
+}
+func (f *ScopedBatchFixturePrivate) RequestsPrivate() []lspwire.Message {
+	return semanticMessages(f.child)
+}
+
 func (f *ScopedBatchFixturePrivate) Traffic() (semantic, preparations int) {
 	for _, m := range f.child.snapshot() {
 		switch m.Method {
