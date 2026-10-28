@@ -61,7 +61,11 @@ func (p Projection) Source() SourceBinding {
 	if p.state == nil || p.state.self != p.state {
 		return SourceBinding{}
 	}
-	return p.state.source
+	s := p.state.source
+	s.raw = bytes.Clone(s.raw)
+	s.native = bytes.Clone(s.native)
+	s.manifest = bytes.Clone(s.manifest)
+	return s
 }
 
 type Outcome struct {

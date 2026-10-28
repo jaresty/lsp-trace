@@ -4,6 +4,7 @@ package censuslineagepilot_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -28,6 +29,42 @@ func checkRetainedPartialProgramCPrivate(t *testing.T, proof pilot.DerivedRetain
 	b, failure := derivedc.Compute(proof, 42)
 	if failure != nil || !reflect.DeepEqual(a, b) {
 		t.Fatal("ASSERT_PRIVATE_DETERMINISTIC", failure)
+	}
+	assessment, err := derivedc.ComputeInstabilityPrivate(context.Background(), p, []uint64{42, 43, 44, 45, 46, 47})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawAssessment, _ := json.Marshal(assessment)
+	if err := derivedc.ValidateInstabilityPrivate(context.Background(), p, assessment, rawAssessment); err != nil {
+		t.Fatal(err)
+	}
+	if assessment.ExpectedRuns != 6 || len(assessment.Runs) != 6 || assessment.ExpectedPairs != 15 || len(assessment.Pairs) != 15 || assessment.BlockedPairs != 15 || assessment.Outcome != "RESOURCE_INCOMPLETE" || assessment.IndependentSources != 1 {
+		t.Fatalf("assessment accounting: %+v", assessment)
+	}
+	for _, mutate := range []func(*derivedc.InstabilityPrivate){
+		func(x *derivedc.InstabilityPrivate) { x.Seeds[0] = 99 },
+		func(x *derivedc.InstabilityPrivate) { x.Runs = x.Runs[:5] },
+		func(x *derivedc.InstabilityPrivate) { x.Pairs = x.Pairs[:14] },
+		func(x *derivedc.InstabilityPrivate) { x.PolicySHA256 = "forged" },
+		func(x *derivedc.InstabilityPrivate) { x.Runs[0].Partition.Communities = nil },
+	} {
+		var changed derivedc.InstabilityPrivate
+		_ = json.Unmarshal(rawAssessment, &changed)
+		mutate(&changed)
+		raw, _ := json.Marshal(changed)
+		if derivedc.ValidateInstabilityPrivate(context.Background(), p, assessment, raw) == nil {
+			t.Fatal("accepted mutation")
+		}
+	}
+	for _, seeds := range [][]uint64{{42, 42}, {1, 2, 3, 4, 5, 6, 7}} {
+		if _, err := derivedc.ComputeInstabilityPrivate(context.Background(), p, seeds); err == nil {
+			t.Fatal("invalid seeds")
+		}
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := derivedc.ComputeInstabilityPrivate(cancelled, p, []uint64{42, 43}); err == nil {
+		t.Fatal("cancel")
 	}
 	m := a.Source.Manifest()
 	if a.ComputationAdmission != derivedc.Admission || a.ProfileID != derivedc.ProfileID || a.ProfileID == programc.ProfileID || a.ProfileDigest != derivedc.ProfileDigest || a.Math.Outcome != "COMPLETE" || a.Math.Seed != 42 || a.Math.LogicalDigest == "" || len(a.Math.Communities) == 0 || len(a.Projection.NodeIdentities) != 27 || len(a.Projection.Occurrences) != 3 || len(a.Projection.PairWeights) != 3 {
