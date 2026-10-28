@@ -111,25 +111,55 @@ func sameScopedBatchBindingPrivate(a, b acquisitionauthority.Binding) bool {
 // after verified grant comparison the shared selection is spent before Acquire.
 // The producer retains the reservation through capture and detached serialization.
 func AcquireScopedBatchPrivate(ctx context.Context, manager *sessionruntime.Manager, selection *ScopedBatchSelectionPrivate, authority acquisitionauthority.SeedAuthority, actual acquisitionauthority.Binding, req acquisition.Request) (acquisition.Result, acquisitionauthority.SeedGrant, error) {
-	var result acquisition.Result
+	result, grant, _, err := closedAcquireScopedPrivate(ctx, manager, selection, authority, actual, req, false)
+	return result, grant, err
+}
+
+// AcquireScopedPartialInspectionPrivate owns its real reservation through source
+// capture and returns only detached inspection bytes, never a client or permit.
+// It does not participate in the existing V5/Core completion path.
+func AcquireScopedPartialInspectionPrivate(ctx context.Context, manager *sessionruntime.Manager, selection *ScopedBatchSelectionPrivate, authority acquisitionauthority.SeedAuthority, actual acquisitionauthority.Binding, req acquisition.Request) (out []byte, canonicalSeeds []byte, err error) {
+	if ctx == nil || manager == nil || selection == nil {
+		return nil, nil, ErrInvalid
+	}
+	if _, exists := directionalraw.FromContext(ctx); exists {
+		return nil, nil, ErrInvalid
+	}
+	reservation := directionalraw.NewReservation(actual.RequestID)
+	defer func() {
+		attached := reservation.Attached()
+		released := reservation.Release()
+		if err == nil && (!attached || !released) {
+			out, canonicalSeeds = nil, nil
+			err = ErrInvalid
+		}
+	}()
 	var grant acquisitionauthority.SeedGrant
+	_, grant, out, err = closedAcquireScopedPrivate(reservation.Context(ctx), manager, selection, authority, actual, req, true)
+	if err == nil {
+		canonicalSeeds = bytes.Clone(grant.SeedSpec)
+	}
+	return out, canonicalSeeds, err
+}
+
+func closedAcquireScopedPrivate(ctx context.Context, manager *sessionruntime.Manager, selection *ScopedBatchSelectionPrivate, authority acquisitionauthority.SeedAuthority, actual acquisitionauthority.Binding, req acquisition.Request, partial bool) (result acquisition.Result, grant acquisitionauthority.SeedGrant, artifact []byte, err error) {
 	if ctx == nil || manager == nil || selection == nil || selection.state == nil {
-		return result, grant, ErrInvalid
+		return result, grant, nil, ErrInvalid
 	}
 	if len(actual.Input) == 0 || len(actual.Input) > acquisitionmanifest.MaxInputBytes {
-		return result, grant, ErrInvalid
+		return result, grant, nil, ErrInvalid
 	}
 	actual.Input = bytes.Clone(actual.Input)
 	s := selection.state
 	s.mu.Lock()
 	if s.spent || s.manager != manager || s.adapter == nil || s.adapter.manager != manager || s.guard == nil || s.adapter.guard != s.guard || !sameScopedBatchBindingPrivate(actual, s.binding) || s.lifetime == nil {
 		s.mu.Unlock()
-		return result, grant, ErrInvalid
+		return result, grant, nil, ErrInvalid
 	}
 	reservation, ok := directionalraw.FromContext(ctx)
 	if !ok || reservation.IdentityPrivate() != actual.RequestID || reservation.Closed() || reservation.Attached() {
 		s.mu.Unlock()
-		return result, grant, ErrInvalid
+		return result, grant, nil, ErrInvalid
 	}
 	expected, err := validateScopedBatchBindingPrivate(s.adapter, s.binding)
 	if err == nil {
@@ -158,7 +188,18 @@ func AcquireScopedBatchPrivate(ctx context.Context, manager *sessionruntime.Mana
 	}
 	if err != nil {
 		s.mu.Unlock()
-		return result, grant, err
+		return result, grant, nil, err
+	}
+	var boundSource *graphprovenance.BoundSourcePrivateV1
+	if partial {
+		boundSource, err = graphprovenance.BindSourcePrivateV1(ctx, manager, s.guard, actual.SessionID, actual.Generation, actual.Workspace)
+		if err == nil {
+			expected.FrozenQueryURIsPrivate, err = boundSource.FrozenQueryDeclarationPrivate(ctx)
+		}
+		if err != nil {
+			s.mu.Unlock()
+			return result, grant, nil, err
+		}
 	}
 	grant, err = acquisitionauthority.ConsumeSeedAuthority(authority, actual)
 	if err == nil && (grant.Provenance != seedbinding.CallerAssertedLocal || grant.Authenticated || grant.HostReceiptID != "" || !grant.RetainSeedSpec || !bytes.Equal(grant.SeedSpec, s.seeds)) {
@@ -166,7 +207,7 @@ func AcquireScopedBatchPrivate(ctx context.Context, manager *sessionruntime.Mana
 	}
 	if err != nil {
 		s.mu.Unlock()
-		return result, acquisitionauthority.SeedGrant{}, err
+		return result, acquisitionauthority.SeedGrant{}, nil, err
 	}
 	s.spent = true
 	s.mu.Unlock()
@@ -181,10 +222,16 @@ func AcquireScopedBatchPrivate(ctx context.Context, manager *sessionruntime.Mana
 	if err == nil {
 		err = client.check(opCtx)
 	}
-	if err != nil {
-		return acquisition.Result{}, acquisitionauthority.SeedGrant{}, err
+	if err == nil && partial {
+		artifact, err = graphprovenance.CaptureSourceWithholdingPrivateV1(opCtx, result, boundSource)
+		if err == nil {
+			err = client.check(opCtx)
+		}
 	}
-	return result, grant, nil
+	if err != nil {
+		return acquisition.Result{}, acquisitionauthority.SeedGrant{}, nil, err
+	}
+	return result, grant, artifact, nil
 }
 
 // Private and revocable even inside this package. No exported operation returns

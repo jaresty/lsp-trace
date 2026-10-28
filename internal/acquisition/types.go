@@ -95,6 +95,10 @@ type Request struct {
 	RequiredTargets []Target           `json:"required_targets"`
 	Limits          Limits             `json:"limits"`
 	TopmostSiblings bool               `json:"topmost_siblings,omitempty"`
+	// Restrict-only declaration, populated by the closed private owner after
+	// Manager/source-policy equality validation. Never decoded from public input.
+	// Arrays copy with Request: callers cannot mutate a retained slice in flight.
+	FrozenQueryURIsPrivate [6]string `json:"-"`
 }
 
 // Client must be bound to Request.Context, enforce wire byte/message limits and

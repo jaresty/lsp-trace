@@ -62,7 +62,7 @@ func ValidateRequest(r Request) error {
 			return errors.New("depth must be between zero and 64")
 		}
 	}
-	return nil
+	return r.validateFrozenQueryPrivate()
 }
 func canonicalURI(raw string) bool {
 	u, e := url.Parse(raw)
@@ -869,7 +869,12 @@ func (c *runner) traverse(d Direction) {
 				limit = t.Requested.DownDepth
 			}
 			e := Expansion{NodeID: q.id, Depth: q.depth}
-			if q.depth >= limit {
+			if !c.result.Request.queryAllowedPrivate(c.items[q.id].URI) {
+				e.Status = Frontier
+				e.Reason = FrozenQueryStopPrivate
+				out.FrontierIDs = append(out.FrontierIDs, q.id)
+				c.result.Graph.Frontier = append(c.result.Graph.Frontier, c.frozenBoundaryPrivate(t.Requested.ID, q.id, d))
+			} else if q.depth >= limit {
 				e.Status = Frontier
 				out.FrontierIDs = append(out.FrontierIDs, q.id)
 			} else {

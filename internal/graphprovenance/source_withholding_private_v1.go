@@ -64,6 +64,9 @@ type SourceWithholdingPrivateV1 struct {
 	ReplayAdmitted     bool       `json:"replay_admitted"`
 	Partial            bool       `json:"partial"`
 	WithheldCount      int        `json:"withheld_count"`
+	// Private-only declaration switch. Membership is the existing source policy,
+	// not a second independently supplied allowlist. No replay admission follows.
+	FrozenQueryScope bool `json:"frozen_query_scope,omitempty"`
 }
 
 func sourceHashPrivateV1(b []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(b)) }
@@ -180,6 +183,14 @@ func ParseSourceWithholdingPrivateV1(raw []byte) (SourceWithholdingPrivateV1, er
 	if le != nil || re != nil || !bytes.Equal(left, right) {
 		return SourceWithholdingPrivateV1{}, errors.New("private source missing/noncanonical fields")
 	}
+	if e.FrozenQueryScope {
+		if err := e.Policy.validate(); err != nil {
+			return SourceWithholdingPrivateV1{}, err
+		}
+		for i, member := range e.Policy.Members {
+			e.Evidence.Acquisition.Request.FrozenQueryURIsPrivate[i] = member.URI
+		}
+	}
 	if err = validateSourceWithholdingPrivateV1(e); err != nil {
 		return SourceWithholdingPrivateV1{}, err
 	}
@@ -285,6 +296,22 @@ func validateSourceWithholdingPrivateV1(e SourceWithholdingPrivateV1) error {
 	return nil
 }
 
+// FrozenQueryDeclarationPrivate returns detached restrict-only metadata after a
+// current Manager lease check. It is not a client, grant or allowlist constructor.
+func (b *BoundSourcePrivateV1) FrozenQueryDeclarationPrivate(ctx context.Context) ([6]string, error) {
+	var declaration [6]string
+	if ctx == nil || b == nil || b.self != b || b.manager == nil || b.guard == nil {
+		return declaration, errors.New("private source bound capability required")
+	}
+	if failure := b.manager.CheckRetainedScopePrivate(ctx, b.policy.SessionID, b.policy.Generation, b.guard); failure != "" {
+		return declaration, fmt.Errorf("private query capability expired: %s", failure)
+	}
+	for i, member := range b.policy.Members {
+		declaration[i] = member.URI
+	}
+	return declaration, nil
+}
+
 func CaptureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result, b *BoundSourcePrivateV1) ([]byte, error) {
 	return captureBoundSourceWithholdingPrivateV1(ctx, r, b, readSourcePrivateV1)
 }
@@ -297,6 +324,12 @@ func captureBoundSourceWithholdingPrivateV1(ctx context.Context, r acquisition.R
 	}
 	if failure := b.manager.CheckRetainedScopePrivate(ctx, b.policy.SessionID, b.policy.Generation, b.guard); failure != "" {
 		return nil, fmt.Errorf("private source capability expired: %s", failure)
+	}
+	if r.Request.FrozenQueryURIsPrivate != [6]string{} {
+		declaration, err := b.FrozenQueryDeclarationPrivate(ctx)
+		if err != nil || r.Request.FrozenQueryURIsPrivate != declaration {
+			return nil, errors.New("private query/source policy mismatch")
+		}
 	}
 	return captureSourceWithholdingPrivateV1(ctx, r, b.policy, b.expected, read)
 }
@@ -398,7 +431,7 @@ func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result
 	if err = bindV2(&s); err != nil {
 		return nil, err
 	}
-	e := SourceWithholdingPrivateV1{SchemaVersion: VersionSourceWithholdingPrivateV1, Policy: p, Evidence: s, SourceCompleteness: "UNKNOWN", Partial: true, WithheldCount: withheld}
+	e := SourceWithholdingPrivateV1{SchemaVersion: VersionSourceWithholdingPrivateV1, Policy: p, Evidence: s, SourceCompleteness: "UNKNOWN", Partial: true, WithheldCount: withheld, FrozenQueryScope: r.Request.FrozenQueryURIsPrivate != [6]string{}}
 	encoded, err := json.Marshal(e)
 	if err != nil {
 		return nil, err

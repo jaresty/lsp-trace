@@ -165,6 +165,13 @@ func ValidateResult(r Result) error {
 					if e.RequestID != "" || !has(out.FrontierIDs, e.NodeID) {
 						return errors.New("frontier request claim")
 					}
+					if e.Reason == FrozenQueryStopPrivate {
+						if !r.Request.frozenQueryPrivate() || r.Request.queryAllowedPrivate(nodes[e.NodeID].URI) {
+							return errors.New("false private query policy frontier")
+						}
+					} else if e.Reason != "" {
+						return errors.New("unknown frontier reason")
+					}
 					continue
 				}
 				rec, ok := records[e.RequestID]

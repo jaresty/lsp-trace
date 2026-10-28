@@ -72,8 +72,22 @@ func validateTargetJoins(r Result, records map[string]RequestRecord) error {
 				limit = t.Requested.DownDepth
 			}
 			for _, e := range d.Expansions {
-				if e.Status == Frontier && e.Depth != limit {
-					return errors.New("frontier depth mismatch")
+				if e.Status == Frontier {
+					if e.Reason == FrozenQueryStopPrivate {
+						// A scope frontier is independent of depth, but only for an
+						// actual retained endpoint outside the declared exact six.
+						outside := false
+						for _, n := range r.Graph.Nodes {
+							if n.ID == e.NodeID {
+								outside = r.Request.frozenQueryPrivate() && !r.Request.queryAllowedPrivate(n.URI)
+							}
+						}
+						if !outside {
+							return errors.New("false private policy frontier membership")
+						}
+					} else if e.Depth != limit {
+						return errors.New("frontier depth mismatch")
+					}
 				}
 				if e.Status != Frontier && e.Depth >= limit {
 					return errors.New("expanded beyond depth")

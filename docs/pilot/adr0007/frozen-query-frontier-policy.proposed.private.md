@@ -26,7 +26,51 @@ The private producer no longer uses the historical `source.ReadRegularInputBound
 
 Expected-content equality remains a drift check, **not** the security gate against forbidden target access. FD-identity spies test equal/different-byte file and directory aliases, including replacement between pinning/opening. Tests also cover replacement after an actual Manager capability bind, retired/replaced roots, metadata changes, bounded allocation, cancellation and joined faults. The initial equal-byte capture fixture failed on the old private reader; removing `O_NOFOLLOW` from the repaired reader caused actual forbidden-directory/leaf-FD observations, and restoring it returned those guards to GREEN. Historical V2 still follows a contained source symlink in its explicit compatibility fixture; no historical source reader is changed. Descriptor pinning and safe-boundary checks do not establish arbitrary same-user namespace atomicity, time-bounded filesystem I/O or authenticated point-in-time analyzed source.
 
-Every private envelope explicitly declares partial=true, source completeness UNKNOWN, accepted=false, authority=0, replay_admitted=false. No policy artifact is added to the native replay manifest. Existing public/default producers, V5 source admission and omission refusal remain unchanged. This unit is test-captured and unactivated: scheduler frontier enforcement, preparation/supply/projection integration, native V5 private-carrier wiring, and inspect/filter transport dispatch are still pending. Thus the whole six-file pipeline, useful end-to-end partial inspection, Census wrapper completion and policy-aware replay are **not** claimed implemented. Fake-Manager tests exercise binding and lease expiry without a live server or real retained-root writes.
+Every private envelope explicitly declares partial=true, source completeness UNKNOWN, accepted=false, authority=0, replay_admitted=false. No policy artifact is added to the native replay manifest. Existing public/default producers, V5 source admission and omission refusal remain unchanged. This source-contract unit remains private and unactivated in public/default paths. The connected deterministic checkpoint below now exercises scheduler enforcement, actual guarded preparation/supply and this private capture through existing inspection/filter functions; public transport dispatch, the 25-target workload, Census wrapper completion and policy-aware replay remain unclaimed. Fake-Manager tests exercise binding and lease expiry without a live server or real retained-root writes.
+
+## Connected deterministic checkpoint — implementation evidence, NOT acceptance
+
+The additive closed `censuslineagepilot.AcquireScopedPartialInspectionPrivate` operation now consumes the original opaque seed authority once, checks the existing selection/session/input binding, and derives a copied `[6]string` restrict-only declaration from the **same Manager-bound source capability** before calling acquisition. There is no arbitrary-list constructor, callback grant, replacement Runtime, reusable client, or public CLI activation. Tampered query declarations, foreign sessions/managers, changed budgets, context nomination and copied guards are refused before acquisition. Ordinary `AcquireScopedBatchPrivate` and the existing planned-batch completion gates are unchanged in behavior.
+
+The partial owner creates a real directional reservation and retains it and the Manager lease context through `CaptureSourceWithholdingPrivateV1` and final lifetime checks; successful return requires actual attachment and release. It returns only detached private source-envelope bytes plus the exact consumed canonical-seed bytes. It does not create a new V5 carrier or register a public format. The private envelope's optional `frozen_query_scope` marker restores the in-memory restrict-only declaration **from its existing six-member source policy** for consistency validation; old unscoped private bytes omit it. No independently supplied second membership list is accepted. Public V1/V2 contracts, pins, historical source reading, native serialization, and V5 omission refusal are unchanged.
+
+Coordinator scheduling stops an outside-set endpoint before the query, even when that endpoint is the incoming start. It emits native `Graph.Frontier` / `EXTERNAL_URI`, with a truthful `external-to-frozen-queryset` message carrying direction, target and real originating request observations. There is no fabricated request, response or successful-empty result. Existing endpoint/CALLS retention and Slice incoming starts are preserved. Result validation independently checks outside membership and reconstructs the actual retained event sequence; ordinary depth-only frontier constraints remain intact. This is local consistency validation, not a policy-aware replay facility or replay-admission claim.
+
+### Actual product checkpoint
+
+`TestScopedPartialInspectionConnectedPrivate` uses the existing disposable restart fixture and actual Manager fake wire, retained six-file guard, opaque authority, reservation, source capability, private source reader/capture/parser, and **existing** `inspection.ProjectAllSeeds` → `filter.ProjectPairwise` engines. No whole-producer stub substitutes for the operation. All four fixed nomination paths are checked against `fixtureScopePaths` and exercised; context files are not nominated. The fake response retains duplicate endpoint elements in original response order, their opaque data and both lexical source bindings; ordinary request/relation observation coalescing and canonical CALLS merging are preserved.
+
+The root reports A→outside-B with a call occurrence. Both the outgoing boundary and incoming(B) boundary survive native capture and inspection. No B query or substituted incoming(A) occurs. B has a metadata-only `POLICY_WITHHELD` source row, retained in the original private carrier alongside the graph-derived views. Neither inspection/filter engine reads or hydrates source, and neither is modified to pretend its native projection transports source-capture rows. The carrier is reparsed after both views to check that the graph and withholding count remain intact.
+
+Abridged **actual existing-filter output** for root versus peer1 (reference counts, not feature identities):
+
+```json
+{
+  "projection_kind": "SEED_EVIDENCE_COMPARISON",
+  "support_contribution": 0,
+  "global_boundary": {
+    "truncated": false,
+    "traversal_complete": false,
+    "source_graph_complete": "UNKNOWN"
+  },
+  "accounting": {
+    "requested_seed_count": 4,
+    "nodes": {"shared_reference_count": 0, "left_only_reference_count": 2, "right_only_reference_count": 1},
+    "call_relations": {"shared_reference_count": 0, "left_only_reference_count": 1, "right_only_reference_count": 0}
+  }
+}
+```
+
+Why incomplete: incoming(B) was policy-stopped; incoming(A) was not substituted or observed. Source closure is UNKNOWN; authority=0, accepted=false, replay_admitted=false, feature identity UNRESOLVED. Filter explicitly excludes FEATURE_IDENTITY, COVERAGE, RUNTIME_BEHAVIOR and ACCEPTANCE claims. Engine bounded-traversal completion, Core admission, Program C, semantic acceptance and replay were not exercised or force-passed.
+
+### Verification and remaining qualification edges
+
+- Normal and race runs passed for acquisition, graphprovenance, censuslineagepilot, inspection, filter, acquisitionengine, acquisitionorchestration and sessionruntime; vet passed for the same set. Selected CLI inspect/filter/schema/default/legacy tests and schema tests passed. `git diff --check` passed. No repository-wide or live-server confidence is implied. Initial concurrent 120-second normal/race harness runs timed out without reported assertion failure; serialized reruns with a 600-second bound passed.
+- Scheduler counterfactual: disabling only the scope-stop branch made `ASSERT_FROZEN_QUERY_NO_EXTERNAL_OR_RESEED` fail with `in:B`; restoration returned the fixture to PASS. Additional focused tests cover inside-context querying, zero-declaration compatibility, finite request exhaustion and forged policy/origin/direction consistency claims.
+- **Four fake targets, not 25 runtime targets.** The existing disposable source fixture contains one synthetic Query identity per nomination file, not the real 25 symbol definitions. Canonical bytes for those four explicit seeds are preserved exactly; manufacturing 25 aliases would not establish the requested real workload. No 25-target completion is claimed.
+- The connected case invokes the actual no-follow source reader and retains the withheld outside leaf, but **does not install a cross-package FD spy**. Existing source-reader FD/alias tests passed in the affected-package suites; connected-case alias/FD-spy qualification remains an explicit edge, not an inferred result. No production-global test hook was added.
+- Context querying is directly covered by the coordinator fixture; a second connected Manager case for inside-context expansion remains unexercised. Source-capability equality and immutable declaration paths are covered by preflight, existing source-capability tests and exact byte policy binding, without a new authority framework.
+- Public CLI paths/defaults are untouched. This checkpoint is a private/test-visible read-only inspection bridge, not a CLI dispatch release. Independent parent review is still required before any commit. No commit or push performed; no live/server/sentinel execution, real-root writes, Program C, admission, replay or semantic acceptance performed.
 
 ## Product recommendation and first useful unit
 
