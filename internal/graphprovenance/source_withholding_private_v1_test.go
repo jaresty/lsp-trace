@@ -81,8 +81,13 @@ func TestSourceWithholdingPrivateV1Capture(t *testing.T) {
 		if row.URI == p.WorkspaceURI+"/z.go" && (row.Status != PolicyWithheldPrivateV1 || row.Content != nil || row.CanonicalReceipt != nil) {
 			t.Fatal("ASSERT_PRIVATE_NO_SOURCE_CLAIM")
 		}
-		if row.URI == "file:///outside-frozen-private.go" && row.Status != "OUTSIDE_SCOPE" {
-			t.Fatal("ASSERT_PRIVATE_WORKSPACE_DISTINCTION")
+		if row.URI == "file:///outside-frozen-private.go" {
+			if row.Status != "OUTSIDE_SCOPE" || row.Path != "" || len(row.Content) != 0 || row.Supply != nil {
+				t.Fatal("ASSERT_PRIVATE_WORKSPACE_DISTINCTION")
+			}
+			if reads["outside-frozen-private.go"] != 0 || reads[""] != 0 || e.Evidence.CaptureBudget.Attempts != 6 {
+				t.Fatal("ASSERT_PRIVATE_OUTSIDE_ZERO_READS")
+			}
 		}
 	}
 	if !e.Partial || e.Accepted || e.Authority != 0 || e.ReplayAdmitted || e.SourceCompleteness != "UNKNOWN" {

@@ -134,6 +134,8 @@ type scopedPartialReportPrivate struct {
 	SourceCompleteness string `json:"source_completeness"`
 	CanonicalComplete  bool   `json:"canonical_complete"`
 	WithheldCount      int    `json:"policy_withheld_count"`
+	// Optional private observation accounting, not a source-carrier wire change.
+	SourceDispositionCounts map[string]int `json:"source_disposition_counts,omitempty"`
 }
 
 func executeScopedPartialRehearsalPrivate(ctx context.Context, h *pilot.ScopedRehearsalPrivate, m *sessionruntime.Manager, cfg pilot.ScopedRehearsalConfigPrivate) (report scopedPartialReportPrivate, err error) {
@@ -169,7 +171,7 @@ func executeScopedPartialRehearsalPrivate(ctx context.Context, h *pilot.ScopedRe
 	retain("configuration", configRaw)
 	retain("input-observation", h.InputObservation())
 	var discovery censusacquisition.Discovery
-	var requestRaw, artifact, views []byte
+	var requestRaw, artifact, views, sourceFailureObservation []byte
 	operationErr := m.WithReadySessionLease(ctx, sessionruntime.SessionLeaseRequest{SessionID: cfg.Session.SessionID, Generation: cfg.Session.Generation, Workspace: cfg.Workspace}, func(leased context.Context) error {
 		defer func() {
 			events, overflow, available := h.Diagnostics()
@@ -222,6 +224,13 @@ func executeScopedPartialRehearsalPrivate(ctx context.Context, h *pilot.ScopedRe
 		var seeds []byte
 		artifact, seeds, e = h.AcquirePartialPrivate(leased, m, batch)
 		if e != nil {
+			var captureFailure *pilot.ScopedPartialCaptureFailurePrivate
+			if errors.As(e, &captureFailure) {
+				report.SourceDispositionCounts = captureFailure.StatusCounts
+				report.WithheldCount = captureFailure.StatusCounts[graphprovenance.PolicyWithheldPrivateV1]
+				// Eligible bounded failure metadata only; never a successful artifact.
+				sourceFailureObservation, _ = json.Marshal(captureFailure)
+			}
 			return e
 		}
 		if !bytes.Equal(seeds, batch.CanonicalSeedsV2) {
@@ -233,6 +242,10 @@ func executeScopedPartialRehearsalPrivate(ctx context.Context, h *pilot.ScopedRe
 		carrier, e := graphprovenance.ParseSourceWithholdingPrivateV1(artifact)
 		if e != nil {
 			return e
+		}
+		report.SourceDispositionCounts = map[string]int{}
+		for _, capture := range carrier.Evidence.Captures {
+			report.SourceDispositionCounts[capture.Status]++
 		}
 		report.WithheldCount = carrier.WithheldCount
 		report.CanonicalComplete = carrier.Evidence.Acquisition.Graph.Summary.Complete
@@ -280,6 +293,9 @@ func executeScopedPartialRehearsalPrivate(ctx context.Context, h *pilot.ScopedRe
 	}
 	if len(requestRaw) > 0 {
 		retain("canonical-request-seeds", requestRaw)
+	}
+	if len(sourceFailureObservation) > 0 {
+		retain("source-failure-observation", sourceFailureObservation)
 	}
 	if len(artifact) > 0 {
 		retain("bounded-partial-artifact", artifact)
@@ -426,8 +442,36 @@ func TestScopedPartialRehearsalRetainedFailuresPrivate(t *testing.T) {
 					}
 				}
 			}
-			if fault == "source-alias" && artifactFound {
-				t.Fatal("ASSERT_ALIAS_ZERO_ARTIFACT")
+			if fault == "source-alias" {
+				if artifactFound {
+					t.Fatal("ASSERT_ALIAS_ZERO_ARTIFACT")
+				}
+				var captureFailure *pilot.ScopedPartialCaptureFailurePrivate
+				if !errors.As(e, &captureFailure) || (captureFailure.Status != "UNREADABLE" && captureFailure.Status != "NONREGULAR") || captureFailure.RowOrdinal < 0 || report.SourceDispositionCounts[captureFailure.Status] != 1 || !strings.Contains(report.Failure, "status="+captureFailure.Status+" row_ordinal=") {
+					t.Fatal("ASSERT_ALIAS_PRECISE_CLOSED_FAILURE", report.Failure)
+				}
+				found := false
+				for _, r := range report.Records {
+					if r.Name == "source-failure-observation" && r.Verified {
+						primary, readErr := os.ReadFile(filepath.Join(cfg.OutputRoots[0], r.ID))
+						backup, backupErr := os.ReadFile(filepath.Join(cfg.OutputRoots[1], r.ID))
+						expected, _ := json.Marshal(captureFailure)
+						if readErr != nil || backupErr != nil || !bytes.Equal(primary, backup) || !bytes.Equal(primary, expected) || pilot.Digest(primary) != r.ID {
+							t.Fatal("ASSERT_ALIAS_FAILURE_PAIRED_METADATA")
+						}
+						total := 0
+						for _, n := range captureFailure.StatusCounts {
+							total += n
+						}
+						if total != 6 {
+							t.Fatal("ASSERT_FAILURE_ALL_ROWS_ACCOUNTED", total)
+						}
+						found = true
+					}
+				}
+				if !found {
+					t.Fatal("ASSERT_ALIAS_FAILURE_OBSERVATION")
+				}
 			}
 			live, _, _, _, general, occupied := m.DirectionalAccountingPrivate()
 			active, closed, started, released := m.DirectionalGenericTerminalPrivate()
@@ -494,6 +538,8 @@ func TestScopedPartialRehearsalEmptyFailureAndPurposePrivate(t *testing.T) {
 			h, m, cfg, f := pilot.NewScopedPartialRehearsalFixturePrivate(t)
 			if fault == "wrong-purpose" {
 				cfg.Schema = "lsp-trace.scoped-rehearsal.private.v2"
+			} else if fault == "provider-budget" {
+				pilot.ArmScopedPartialAcquisitionBudgetFailurePrivate(f)
 			} else {
 				f.Fault(fault)
 			}

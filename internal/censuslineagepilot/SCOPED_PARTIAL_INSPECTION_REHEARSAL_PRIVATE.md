@@ -79,9 +79,15 @@ supervision implementation; no alternate starter is introduced.
    its planned batch with Core.Run's actual acquisition argument.
 5. Mint the existing Manager-bound guard/selection, seed authority and real
    reservation, then call AcquireScopedPartialInspectionPrivate once.
-6. Parse the private source-withholding carrier. Deliberate POLICY_WITHHELD is
-   partial evidence; an ordinary no-follow capture failure returns no successful
-   artifact. Source alias refusal happens after genuine reservation release.
+6. Parse the closed private source-withholding carrier before classifying rows.
+   READABLE and deliberate POLICY_WITHHELD are distinct from lexical zero-read
+   source boundaries: OUTSIDE_SCOPE, VIRTUAL_URI and INVALID_URI are accepted
+   only when motivated by RelativeURI for that validated row. They are not
+   fabricated readable/withheld sources. Ordinary UNREADABLE, MISSING,
+   NONREGULAR, BYTE_LIMIT_EXCEEDED, CANCELLED and BUDGET_EXCEEDED still refuse
+   a successful artifact. Source alias refusal follows genuine reservation release.
+   Its typed diagnostic contains only the first failing closed status, zero-based
+   capture row ordinal and all-row status counts; never URI/source/parameters.
 7. Existing inspection.ProjectAllSeeds + accounting validation and
    filter.ProjectPairwise compare the first two original canonical target labels
    (self-pair for a single target). Context-only nodes never nominate targets.
@@ -93,8 +99,10 @@ supervision implementation; no alternate starter is introduced.
 Successful record plan (exactly eight objects, no recursive outcome receipt):
 configuration, input-observation, claim, discovery, canonical-request-seeds,
 bounded-partial-artifact, inspection-filter-views, outcome. Failed attempts retain
-available bounded pieces; primary-only/uncertain receipts remain visible and
-cannot be rolled back. No retry follows a partial publication.
+available bounded pieces, including source-failure-observation metadata when
+closed capture classification fails (not the raw carrier or successful partial
+artifact). This replaces an otherwise absent artifact slot, never increases the
+object budget. Primary-only/uncertain receipts remain visible and cannot be rolled back. No retry follows a partial publication.
 
 Limits unchanged: 2 MiB/object, 16 MiB/8 objects total, 32 MiB two-copy staging,
 256 MiB read/hash work and 256 KiB terminal reserve. Request/discovery/view
@@ -113,6 +121,10 @@ readable captures, not as evidence of an external query or a fabricated response
 `lsp-trace.scoped-partial-inspection-observation.private.v1` embeds the existing
 report fields and adds `purpose:PARTIAL_INSPECTION`, `core_admission:NOT_ATTEMPTED`,
 `source_completeness:UNKNOWN`, `canonical_complete` and `policy_withheld_count`.
+The optional `source_disposition_counts` observation histogram counts each
+validated capture status separately, including OUTSIDE_SCOPE versus
+POLICY_WITHHELD versus READABLE. There is no closed observation wire parser;
+this does not change the closed private source carrier or old source schemas.
 `outcome` is PARTIAL_INSPECTION_RETAINED only when acquisition, views and paired
 retention succeed; EMPTY requires successful zero discovery; failures remain
 INDETERMINATE with failure/receipt details. core_admitted_constituents is always
@@ -138,6 +150,22 @@ no incoming reseed of root A. Artifact has CALLS=3, frontier=2, readable capture
 POLICY_WITHHELD=1 (six total captures). All eight objects are read/hash-verified
 from both fresh roots. Existing source alias, resource, claim, supply, topology,
 retention and diagnostics contracts remain separate qualification surfaces.
+
+The additional outside-workspace endpoint fixture uses a lexical URI only:
+no external file is created. The actual closed producer, parser, existing views
+and paired retention run with five readable captures, one OUTSIDE_SCOPE,
+zero POLICY_WITHHELD, five capture attempts, and unchanged 104 semantic requests
+and six supplies. Source completeness stays UNKNOWN; canonical graph incomplete.
+The graph-provenance injected-reader test separately observes zero outside reads.
+
+## Historical live failure boundary
+
+The previously authorized single live attempt is spent and must not be rerun.
+Its immutable generic failure (`partial inspection ordinary source capture failed`)
+did not retain a closed capture status. Historical cause remains CAUSE_UNKNOWN;
+this deterministic OUTSIDE_SCOPE counterexample does not identify that cause.
+Nothing here modifies the historical output or authorizes retry, new roots,
+configuration changes, server execution or a larger budget.
 
 Fake/race/vet success is not future live qualification. Independent review and
 parent commit remain pending; only the parent may decide to commit this work.

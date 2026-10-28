@@ -375,18 +375,55 @@ func (h *ScopedRehearsalPrivate) AcquirePartialPrivate(ctx context.Context, m *s
 	if err != nil {
 		return nil, nil, err
 	}
-	carrier, err := graphprovenance.ParseSourceWithholdingPrivateV1(raw)
-	if err != nil {
+	if err := validateScopedPartialSourcesPrivate(raw); err != nil {
 		return nil, nil, err
 	}
-	// Policy withholding is intentional. An ordinary no-follow capture failure is
-	// a public rehearsal failure, not a retained successful inspection artifact.
-	for _, capture := range carrier.Evidence.Captures {
-		if capture.Status != "READABLE" && capture.Status != graphprovenance.PolicyWithheldPrivateV1 {
-			return nil, nil, errors.New("partial inspection ordinary source capture failed")
+	return raw, seeds, nil
+}
+
+// Test-binary-only diagnostic. Status and ordinal come only from a fully parsed
+// closed carrier; no URI, path, source content or LSP parameters enter this error.
+// Counts cover every capture, including rows after the first failure.
+type ScopedPartialCaptureFailurePrivate struct {
+	Status       string         `json:"status"`
+	RowOrdinal   int            `json:"row_ordinal"`
+	StatusCounts map[string]int `json:"source_disposition_counts"`
+}
+
+func (e *ScopedPartialCaptureFailurePrivate) Error() string {
+	return fmt.Sprintf("partial inspection ordinary source capture failed: status=%s row_ordinal=%d", e.Status, e.RowOrdinal)
+}
+
+func validateScopedPartialSourcesPrivate(raw []byte) error {
+	carrier, err := graphprovenance.ParseSourceWithholdingPrivateV1(raw)
+	if err != nil {
+		return err
+	}
+	counts := map[string]int{}
+	var failure *ScopedPartialCaptureFailurePrivate
+	for ordinal, capture := range carrier.Evidence.Captures {
+		counts[capture.Status]++
+		if scopedPartialSourceAcceptedPrivate(carrier.Evidence.WorkspaceURI, capture) {
+			continue
+		}
+		if failure == nil {
+			failure = &ScopedPartialCaptureFailurePrivate{Status: capture.Status, RowOrdinal: ordinal, StatusCounts: counts}
 		}
 	}
-	return raw, seeds, nil
+	if failure != nil {
+		return failure
+	}
+	return nil
+}
+
+// Called only after the closed private carrier parser has validated all rows,
+// identities and accounting. Never accepts a caller-selected receipt as evidence.
+func scopedPartialSourceAcceptedPrivate(workspace string, capture graphprovenance.Receipt) bool {
+	_, boundary := graphprovenance.RelativeURI(workspace, capture.URI)
+	if boundary != "" {
+		return capture.Status == boundary
+	}
+	return capture.Status == "READABLE" || capture.Status == graphprovenance.PolicyWithheldPrivateV1
 }
 
 func (h *ScopedRehearsalPrivate) Retain(ctx context.Context, name string, raw []byte) ScopedRehearsalRecordPrivate {

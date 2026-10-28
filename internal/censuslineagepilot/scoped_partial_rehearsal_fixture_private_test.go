@@ -20,6 +20,28 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
+// Arm the existing one-over wire-message fault only after discovery. The four
+// nomination prepares themselves succeed; the first acquisition request fails.
+// The shared provider-budget fixture uses 64 (at cap), not an actual overflow.
+func ArmScopedPartialAcquisitionBudgetFailurePrivate(f *ScopedBatchFixturePrivate) {
+	f.Fault("rehearsal-empty-directions")
+	f.child.mu.Lock()
+	response := f.child.response
+	prepares := 0
+	f.child.response = func(msg lspwire.Message) json.RawMessage {
+		if msg.Method == "textDocument/prepareCallHierarchy" {
+			prepares++
+			if prepares == 4 {
+				f.child.mu.Lock()
+				f.child.notifications = 65
+				f.child.mu.Unlock()
+			}
+		}
+		return response(msg)
+	}
+	f.child.mu.Unlock()
+}
+
 // Reuse the reviewed exact table. Noncallable symbols preserve its original
 // census ordinals without adding targets, preparation requests or seed inputs.
 func NewScopedPartialExact25RehearsalFixturePrivate(t *testing.T, faults ...string) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
@@ -36,6 +58,10 @@ func NewScopedPartialExact25RehearsalFixturePrivate(t *testing.T, faults ...stri
 	}
 	contextURI := uri(fixtureScopePaths[5])
 	outside := uri("outside.go")
+	if len(faults) > 0 && faults[0] == "outside-workspace" {
+		// Lexical URI only: never create or read this outside-workspace path.
+		outside = (&url.URL{Scheme: "file", Path: filepath.Join(filepath.Dir(cfg.Workspace), "uncaptured-outside.go")}).String()
+	}
 	f.ContextURI = contextURI
 	f.child.mu.Lock()
 	f.child.response = func(msg lspwire.Message) json.RawMessage {
