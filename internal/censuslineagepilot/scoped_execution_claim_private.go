@@ -14,6 +14,7 @@ import (
 
 const scopedExecutionClaimSchemaPrivate = "lsp-trace.scoped-execution-claim.private.v1"
 const scopedExecutionClaimSchemaV2Private = "lsp-trace.scoped-execution-claim.private.v2"
+const scopedExecutionClaimSchemaV3Private = "lsp-trace.scoped-execution-claim.private.v3"
 const scopedExecutionClaimLimitPrivate = 16 << 10
 
 // Store-agnostic qualification seam ONLY. The concrete private adapter requires
@@ -36,6 +37,8 @@ type scopedExecutionPolicyPrivate struct {
 	MaxTargets int    `json:"max_targets"`
 	// Omitted only for historical v1 canonical bytes; v1's fixed limit is 128.
 	MaxSymbols int `json:"max_symbols,omitempty"`
+	// Explicit only for the prospective partial v2 policy; historical bytes omit it.
+	SerializedArtifactBytes int `json:"serialized_artifact_bytes,omitempty"`
 }
 
 func scopedExecutionPolicyFixedPrivate() scopedExecutionPolicyPrivate {
@@ -50,6 +53,10 @@ func scopedExecutionPartialInspectionPolicyPrivate() scopedExecutionPolicyPrivat
 	return scopedExecutionPolicyPrivate{Name: "one-partial-inspection-private-v1", DownDepth: 1, UpDepth: 1, MaxTargets: 63, MaxSymbols: 256}
 }
 
+func scopedExecutionPartialInspectionPolicyV2Private() scopedExecutionPolicyPrivate {
+	return scopedExecutionPolicyPrivate{Name: "one-partial-inspection-private-v2", DownDepth: 1, UpDepth: 1, MaxTargets: 63, MaxSymbols: 256, SerializedArtifactBytes: 4 << 20}
+}
+
 // No caller-selected numeric budgets. Only these exact fixed policies exist.
 func (p scopedExecutionPolicyPrivate) claimSchema() (string, error) {
 	switch p {
@@ -57,6 +64,8 @@ func (p scopedExecutionPolicyPrivate) claimSchema() (string, error) {
 		return scopedExecutionClaimSchemaPrivate, nil
 	case scopedExecutionPolicyV2Private(), scopedExecutionPartialInspectionPolicyPrivate():
 		return scopedExecutionClaimSchemaV2Private, nil
+	case scopedExecutionPartialInspectionPolicyV2Private():
+		return scopedExecutionClaimSchemaV3Private, nil
 	default:
 		return "", ErrInvalid
 	}
@@ -67,7 +76,7 @@ func (p scopedExecutionPolicyPrivate) discoveryLimits() (censusacquisition.Disco
 		return censusacquisition.DiscoveryLimits{}, err
 	}
 	n := 128
-	if p == scopedExecutionPolicyV2Private() || p == scopedExecutionPartialInspectionPolicyPrivate() {
+	if p != scopedExecutionPolicyFixedPrivate() {
 		n = p.MaxSymbols
 	}
 	return censusacquisition.DiscoveryLimits{MaxFiles: 4, MaxSymbols: n, MaxDepth: 64, MaxStringBytes: 1 << 20}, nil

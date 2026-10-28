@@ -42,10 +42,20 @@ func (r *ContentRetentionRoot) SameDirectory(other *ContentRetentionRoot) (bool,
 	return os.SameFile(r.observed.root.info, other.observed.root.info), nil
 }
 func (r *ContentRetentionRoot) Read(ctx context.Context, id string, limit int64) ([]byte, error) {
+	return r.readFixedContent(ctx, id, limit, ContentRetentionObjectLimit)
+}
+
+// ReadPartialInspectionV2Private is the fixed prospective private output profile,
+// not a new input-object ceiling or caller-selected storage budget.
+func (r *ContentRetentionRoot) ReadPartialInspectionV2Private(ctx context.Context, id string, limit int64) ([]byte, error) {
+	return r.readFixedContent(ctx, id, limit, 4<<20)
+}
+
+func (r *ContentRetentionRoot) readFixedContent(ctx context.Context, id string, limit, ceiling int64) ([]byte, error) {
 	if err := r.ValidatePrivate(); err != nil {
 		return nil, err
 	}
-	if limit < 1 || limit > ContentRetentionObjectLimit {
+	if limit < 1 || limit > ceiling {
 		return nil, ErrContentObservation
 	}
 	return r.observed.ReadContentObserved(ctx, id, limit)
@@ -55,6 +65,16 @@ func (r *ContentRetentionRoot) Read(ctx context.Context, id string, limit int64)
 // inspected even when err is nonnil; cancellation cannot erase a known commit.
 // DirectorySyncComplete reports its existing NO_CRASH_GUARANTEE qualification.
 func (r *ContentRetentionRoot) Publish(ctx context.Context, id string, raw []byte) (*BoundFileReceipt, error) {
+	return r.publishFixedContent(ctx, id, raw, ContentRetentionObjectLimit)
+}
+
+// PublishPartialInspectionV2Private preserves the same no-replace, close-aware
+// receipt semantics with a fixed 4 MiB serialized output ceiling only.
+func (r *ContentRetentionRoot) PublishPartialInspectionV2Private(ctx context.Context, id string, raw []byte) (*BoundFileReceipt, error) {
+	return r.publishFixedContent(ctx, id, raw, 4<<20)
+}
+
+func (r *ContentRetentionRoot) publishFixedContent(ctx context.Context, id string, raw []byte, ceiling int64) (*BoundFileReceipt, error) {
 	if ctx == nil {
 		return nil, ErrContentObservation
 	}
@@ -64,7 +84,7 @@ func (r *ContentRetentionRoot) Publish(ctx context.Context, id string, raw []byt
 	if err := r.ValidatePrivate(); err != nil {
 		return nil, err
 	}
-	if len(raw) == 0 || int64(len(raw)) > ContentRetentionObjectLimit || !observedContentID.MatchString(id) || fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) != id {
+	if len(raw) == 0 || int64(len(raw)) > ceiling || !observedContentID.MatchString(id) || fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) != id {
 		return nil, ErrContentObservation
 	}
 	// Own the expected bytes across verifier callbacks.

@@ -7,6 +7,11 @@ for this change. Independent wiring/configuration review must precede a separate
 parent-user authorization boundary. A future reviewed clean commit containing
 this wiring is required; the starting HEAD is not the future executable pin.
 
+Prospective budget successor: [SCOPED_PARTIAL_BUDGET_V2_PRIVATE.md](SCOPED_PARTIAL_BUDGET_V2_PRIVATE.md)
+adds config v4 / partial policy v2 with an explicit fixed 4 MiB serialized ceiling.
+The v3 template and 2 MiB policy below remain historical-version semantics, not
+silently increased defaults; the successor does not authorize another live run.
+
 ## Closed purpose and configuration
 
 Use the exact canonical v2 configuration layout documented in
@@ -14,8 +19,8 @@ Use the exact canonical v2 configuration layout documented in
 `lsp-trace.scoped-rehearsal.private.v3`. This selects only
 `one-partial-inspection-private-v1`: 256 enumerated symbols, four nomination files,
 six frozen source supplies, depth 64, at most 63 targets, down/up 1/1. V1/v2 bytes,
-policies and defaults are unchanged. The old full-constituent driver refuses v3;
-the partial driver refuses v1/v2 and mismatched config/claim bindings.
+policies and defaults are unchanged. The old full-constituent driver refuses v3/v4;
+the partial driver accepts only v3/v4 and refuses v1/v2 and mismatched config/claim bindings.
 
 The policy-bearing claim reuses the strict v2 claim layout. Its distinct policy
 name changes the bound claim digest; the topology proof/store selector remains

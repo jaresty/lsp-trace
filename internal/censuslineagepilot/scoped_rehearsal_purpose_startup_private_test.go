@@ -17,7 +17,7 @@ import (
 // One test-only boundary for both entrypoints, immediately after strict parsing.
 // The continuation contains all root/runtime/protocol/claim/semantic operations.
 func scopedRehearsalPurposeBeforeStartupPrivate(cfg pilot.ScopedRehearsalConfigPrivate, partial bool, startup func()) error {
-	allowed := (!partial && (cfg.Schema == "lsp-trace.scoped-rehearsal.private.v1" || cfg.Schema == "lsp-trace.scoped-rehearsal.private.v2")) || (partial && cfg.Schema == partialConfigSchemaPrivate)
+	allowed := (!partial && (cfg.Schema == "lsp-trace.scoped-rehearsal.private.v1" || cfg.Schema == "lsp-trace.scoped-rehearsal.private.v2")) || (partial && scopedPartialConfigSchemaPrivate(cfg.Schema))
 	if !allowed {
 		return errors.New("private rehearsal purpose/configuration mismatch before startup")
 	}
@@ -27,7 +27,7 @@ func scopedRehearsalPurposeBeforeStartupPrivate(cfg pilot.ScopedRehearsalConfigP
 
 func TestScopedRehearsalPurposeBeforeStartupPrivate(t *testing.T) {
 	for _, partial := range []bool{false, true} {
-		for _, schema := range []string{"lsp-trace.scoped-rehearsal.private.v1", "lsp-trace.scoped-rehearsal.private.v2", partialConfigSchemaPrivate, "", "lsp-trace.scoped-rehearsal.private.v4"} {
+		for _, schema := range []string{"lsp-trace.scoped-rehearsal.private.v1", "lsp-trace.scoped-rehearsal.private.v2", partialConfigSchemaPrivate, partialConfigSchemaV2Private, "", "lsp-trace.scoped-rehearsal.private.v5"} {
 			name := "full/"
 			if partial {
 				name = "partial/"
@@ -35,7 +35,7 @@ func TestScopedRehearsalPurposeBeforeStartupPrivate(t *testing.T) {
 			t.Run(name+schema, func(t *testing.T) {
 				roots, starter, protocol, claim, semantic := 0, 0, 0, 0, 0
 				err := scopedRehearsalPurposeBeforeStartupPrivate(pilot.ScopedRehearsalConfigPrivate{Schema: schema}, partial, func() { roots++; starter++; protocol++; claim++; semantic++ })
-				allowed := (!partial && (schema == "lsp-trace.scoped-rehearsal.private.v1" || schema == "lsp-trace.scoped-rehearsal.private.v2")) || (partial && schema == partialConfigSchemaPrivate)
+				allowed := (!partial && (schema == "lsp-trace.scoped-rehearsal.private.v1" || schema == "lsp-trace.scoped-rehearsal.private.v2")) || (partial && (schema == partialConfigSchemaPrivate || schema == partialConfigSchemaV2Private))
 				if !allowed {
 					if err == nil || roots != 0 || starter != 0 || protocol != 0 || claim != 0 || semantic != 0 {
 						t.Fatalf("ASSERT_WRONG_PURPOSE_ZERO_STARTUP roots=%d starter=%d protocol=%d claim=%d semantic=%d err=%v", roots, starter, protocol, claim, semantic, err)

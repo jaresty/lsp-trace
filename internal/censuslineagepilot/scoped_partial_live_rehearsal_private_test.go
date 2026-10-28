@@ -29,6 +29,11 @@ import (
 )
 
 const partialConfigSchemaPrivate = "lsp-trace.scoped-rehearsal.private.v3"
+const partialConfigSchemaV2Private = "lsp-trace.scoped-rehearsal.private.v4"
+
+func scopedPartialConfigSchemaPrivate(schema string) bool {
+	return schema == partialConfigSchemaPrivate || schema == partialConfigSchemaV2Private
+}
 
 func scopedPartialEnvironmentPrivate(get func(string) string) (string, bool, error) {
 	switch get("LSP_TRACE_PARTIAL_INSPECTION_REHEARSAL") {
@@ -143,7 +148,7 @@ func executeScopedPartialRehearsalPrivate(ctx context.Context, h *pilot.ScopedRe
 		Output                                                                           pilot.ScopedRehearsalBudgetPrivate
 		LifetimeSeconds, RequestSeconds, Requests, CaptureBytes, Messages, ResponseBytes int
 	}{cfg.Budget, 30, 5, 256, 8 << 20, 64, 2 << 20}, Diagnostics: &scopedTerminalDiagnosticsPrivate{Events: []sessionruntime.RetainedScopeDiagnosticPrivate{}}}, Purpose: "PARTIAL_INSPECTION", Admission: "NOT_ATTEMPTED", SourceCompleteness: "UNKNOWN"}
-	if cfg.Schema != partialConfigSchemaPrivate || !h.MatchesConfigPrivate(cfg) {
+	if !scopedPartialConfigSchemaPrivate(cfg.Schema) || !h.MatchesConfigPrivate(cfg) {
 		return report, errors.New("partial purpose configuration/claim mismatch")
 	}
 	report.DiscoveryPolicy, err = cfg.DiscoveryPolicyObservationPrivate()

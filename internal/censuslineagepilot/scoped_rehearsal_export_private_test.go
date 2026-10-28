@@ -48,6 +48,25 @@ func ScopedRehearsalBudgetFixedPrivate() ScopedRehearsalBudgetPrivate {
 	return ScopedRehearsalBudgetPrivate{scopedRehearsalArtifactPrivate, scopedRehearsalTotalPrivate, scopedRehearsalObjectsPrivate, 2 * scopedRehearsalTotalPrivate, 16 * scopedRehearsalTotalPrivate}
 }
 
+// Fixed prospective variation; aggregate, count, staging and read/hash are
+// independent ceilings, not Objects multiplied by ArtifactBytes.
+func ScopedRehearsalBudgetPartialV2Private() ScopedRehearsalBudgetPrivate {
+	b := ScopedRehearsalBudgetFixedPrivate()
+	b.ArtifactBytes = 4 << 20
+	return b
+}
+
+func (c ScopedRehearsalConfigPrivate) fixedBudget() ScopedRehearsalBudgetPrivate {
+	if c.Schema == "lsp-trace.scoped-rehearsal.private.v4" {
+		return ScopedRehearsalBudgetPartialV2Private()
+	}
+	return ScopedRehearsalBudgetFixedPrivate()
+}
+
+func (c ScopedRehearsalConfigPrivate) partialPurpose() bool {
+	return c.Schema == "lsp-trace.scoped-rehearsal.private.v3" || c.Schema == "lsp-trace.scoped-rehearsal.private.v4"
+}
+
 type ScopedRehearsalConfigPrivate struct {
 	Schema               string                                    `json:"schema"`
 	InputRoots           [3]string                                 `json:"input_roots"`
@@ -87,6 +106,8 @@ func (c ScopedRehearsalConfigPrivate) executionPolicy() (scopedExecutionPolicyPr
 		return scopedExecutionPolicyV2Private(), nil
 	case "lsp-trace.scoped-rehearsal.private.v3":
 		return scopedExecutionPartialInspectionPolicyPrivate(), nil
+	case "lsp-trace.scoped-rehearsal.private.v4":
+		return scopedExecutionPartialInspectionPolicyV2Private(), nil
 	default:
 		return scopedExecutionPolicyPrivate{}, ErrInvalid
 	}
@@ -121,7 +142,7 @@ func (c ScopedRehearsalConfigPrivate) validate(outsideTmp bool) error {
 	if _, err := c.executionPolicy(); err != nil {
 		return err
 	}
-	if !c.Locator.valid() || !featureScopeRevision.MatchString(c.CodeHEAD) || c.Session.Validate() != nil || c.Budget != ScopedRehearsalBudgetFixedPrivate() || len(c.Args) > 16 || len(c.Environment) == 0 || len(c.Environment) > 32 {
+	if !c.Locator.valid() || !featureScopeRevision.MatchString(c.CodeHEAD) || c.Session.Validate() != nil || c.Budget != c.fixedBudget() || len(c.Args) > 16 || len(c.Environment) == 0 || len(c.Environment) > 32 {
 		return ErrInvalid
 	}
 	for _, p := range append(append([]string{c.Workspace, c.Server}, c.InputRoots[:]...), c.OutputRoots[:]...) {
@@ -345,7 +366,7 @@ func (h *ScopedRehearsalPrivate) AcquirePartialPrivate(ctx context.Context, m *s
 	if err = h.check(ctx); err != nil {
 		return nil, nil, err
 	}
-	if h.owner == nil || h.config.Schema != "lsp-trace.scoped-rehearsal.private.v3" || m != h.manager || b.Session != h.config.Session || len(b.Targets) == 0 || len(b.Targets) > 63 || b.DownDepth != 1 || b.UpDepth != 1 {
+	if h.owner == nil || !h.config.partialPurpose() || m != h.manager || b.Session != h.config.Session || len(b.Targets) == 0 || len(b.Targets) > 63 || b.DownDepth != 1 || b.UpDepth != 1 {
 		return nil, nil, ErrInvalid
 	}
 	selection, err := h.Mint(ctx, b.BatchID, ScopedPartialManifestPrivate(b), b.CanonicalSeedsV2)
@@ -436,7 +457,7 @@ func (h *ScopedRehearsalPrivate) Retain(ctx context.Context, name string, raw []
 		ceiling = scopedRehearsalTotalPrivate
 		count = scopedRehearsalObjectsPrivate
 	}
-	if len(raw) == 0 || len(raw) > scopedRehearsalArtifactPrivate || len(h.records) >= count || len(raw) > ceiling-h.retainedBytes {
+	if len(raw) == 0 || len(raw) > h.config.fixedBudget().ArtifactBytes || len(h.records) >= count || len(raw) > ceiling-h.retainedBytes {
 		r.Error = "private serialized output budget exceeded"
 		return r
 	}
@@ -445,6 +466,14 @@ func (h *ScopedRehearsalPrivate) Retain(ctx context.Context, name string, raw []
 	ops := h.retentionOps
 	if ops.publish == nil && ops.read == nil {
 		ops = defaultScopeRetentionOps()
+		if h.config.Schema == "lsp-trace.scoped-rehearsal.private.v4" {
+			ops.publish = func(ctx context.Context, r *publication.ContentRetentionRoot, id string, raw []byte) (*publication.BoundFileReceipt, error) {
+				return r.PublishPartialInspectionV2Private(ctx, id, raw)
+			}
+			ops.read = func(ctx context.Context, r *publication.ContentRetentionRoot, id string, limit int64) ([]byte, error) {
+				return r.ReadPartialInspectionV2Private(ctx, id, limit)
+			}
+		}
 	}
 	attempt, err := retainScopePairBytes(ctx, scopeRetentionObject{Digest(raw), raw}, Digest(h.owner.raw), len(h.records), h.roots[0], h.roots[1], ops)
 	r.Phase = attempt.phase
@@ -541,12 +570,18 @@ func NewScopedPartialRehearsalFixturePrivate(t *testing.T) (*ScopedRehearsalPriv
 	return newScopedRehearsalFixturePrivate(t, "lsp-trace.scoped-rehearsal.private.v3")
 }
 
+func NewScopedPartialBudgetV2RehearsalFixturePrivate(t *testing.T) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+	t.Helper()
+	return newScopedRehearsalFixturePrivate(t, "lsp-trace.scoped-rehearsal.private.v4")
+}
+
 func newScopedRehearsalFixturePrivate(t *testing.T, schema string, setup ...func(string)) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
 	t.Helper()
 	restart, m, id, child, paths, loc := adapterFixtureWithRestartPathsAndServerPrivate(t, "/fixture/server", setup...)
 	a, b, ap, bp := retentionRoots(t)
 	c, _, cp, _ := retentionRoots(t)
 	cfg := ScopedRehearsalConfigPrivate{Schema: schema, InputRoots: paths, Locator: loc, OutputRoots: [3]string{ap, bp, cp}, Workspace: restart.Scope().Selection().Workspace, CodeHEAD: strings.Repeat("a", 40), Session: id, TrustDomain: "test", Profile: "go", EnvironmentReference: "local", Server: "/fixture/server", Environment: []string{"PATH=/fixture/no-exec"}, Budget: ScopedRehearsalBudgetFixedPrivate()}
+	cfg.Budget = cfg.fixedBudget()
 	for i, r := range [3]*publication.ContentRetentionRoot{a, b, c} {
 		var e error
 		cfg.OutputIdentities[i], e = r.DirectoryIdentity()
