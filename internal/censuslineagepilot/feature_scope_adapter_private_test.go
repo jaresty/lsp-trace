@@ -128,6 +128,15 @@ func (c *scopeAdapterChild) serve() {
 }
 func adapterFixture(t *testing.T) (scopeRestartResult, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild) {
 	t.Helper()
+	r, m, id, child, _, _ := adapterFixtureWithRestartPathsPrivate(t)
+	return r, m, id, child
+}
+func adapterFixtureWithRestartPathsPrivate(t *testing.T) (scopeRestartResult, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild, [3]string, scopeRestartLocator) {
+	t.Helper()
+	return adapterFixtureWithRestartPathsAndServerPrivate(t, "")
+}
+func adapterFixtureWithRestartPathsAndServerPrivate(t *testing.T, server string) (scopeRestartResult, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild, [3]string, scopeRestartLocator) {
+	t.Helper()
 	// Disposable retained fixtures exercise the actual read-only reconstruction;
 	// no caller DTO or fabricated scopeRestartResult substitutes for the reader.
 	owner, _, locator := restartFixture(t, false)
@@ -150,7 +159,7 @@ func adapterFixture(t *testing.T) (scopeRestartResult, *sessionruntime.Manager, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := m.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated), LanguageID: "go"})
+	start := m.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated), LanguageID: "go", Process: managedprocess.Spec{Path: server, Dir: manifest.Root}})
 	if start.Failure != "" {
 		t.Fatal(start)
 	}
@@ -159,7 +168,7 @@ func adapterFixture(t *testing.T) (scopeRestartResult, *sessionruntime.Manager, 
 	if !ok || r.Failure != "" {
 		t.Fatal(r, ok)
 	}
-	return restart, m, censusacquisition.SessionIdentity{SessionID: start.SessionID, Generation: start.Generation}, child
+	return restart, m, censusacquisition.SessionIdentity{SessionID: start.SessionID, Generation: start.Generation}, child, owner.paths, locator
 }
 func semanticMessages(c *scopeAdapterChild) []lspwire.Message {
 	out := []lspwire.Message{}

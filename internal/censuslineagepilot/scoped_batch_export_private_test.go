@@ -83,6 +83,23 @@ func (f *ScopedBatchFixturePrivate) Fault(kind string) {
 		f.child.response = func(lspwire.Message) json.RawMessage { return json.RawMessage(`[{"name":"missing fields"}]`) }
 	case "provider-budget":
 		f.child.notifications = 64
+	case "rehearsal-empty-directions", "rehearsal-empty-discovery":
+		f.child.response = func(m lspwire.Message) json.RawMessage {
+			if m.Method == "textDocument/documentSymbol" && kind == "rehearsal-empty-directions" {
+				return json.RawMessage(`[{"name":"Query","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":1,"character":0}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":5}}}]`)
+			}
+			if m.Method == "textDocument/prepareCallHierarchy" {
+				var p struct {
+					TextDocument struct {
+						URI string `json:"uri"`
+					} `json:"textDocument"`
+				}
+				_ = json.Unmarshal(m.Params, &p)
+				raw, _ := json.Marshal([]any{scopeAdapterItem(p.TextDocument.URI)})
+				return raw
+			}
+			return json.RawMessage(`[]`)
+		}
 	case "empty-directions":
 		f.child.response = func(m lspwire.Message) json.RawMessage {
 			if m.Method == "textDocument/prepareCallHierarchy" {
