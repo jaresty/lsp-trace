@@ -58,13 +58,14 @@ type scopeRuntimeAdapter struct {
 	deadline  time.Time
 	// invocationMu spans Manager transport, accounting, and ALL typed validation.
 	// No callback under it may reenter an adapter invocation.
-	invocationMu             sync.Mutex
-	mu                       sync.Mutex
-	omittedExternal          uint64
-	afterResponsePrivateTest func() // nil outside package-local barrier fixtures
-	beforeInvokePrivateTest  func() // nil outside package-local lock-attempt fixtures
-	requests, captured       int
-	terminal                 error
+	invocationMu                    sync.Mutex
+	mu                              sync.Mutex
+	omittedExternal                 uint64
+	afterResponsePrivateTest        func()                    // nil outside package-local barrier fixtures
+	beforePartialCapturePrivateTest func(*acquisition.Result) // nil outside owned metadata fixtures
+	beforeInvokePrivateTest         func()                    // nil outside package-local lock-attempt fixtures
+	requests, captured              int
+	terminal                        error
 }
 
 // Constructor accepts only the read-only restart result, never raw expectations.

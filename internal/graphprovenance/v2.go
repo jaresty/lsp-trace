@@ -495,7 +495,11 @@ func CaptureV2(ctx context.Context, r acquisition.Result, workspace string) ([]b
 	return append(encoded, '\n'), nil
 }
 
-func checkResultV2(e EvidenceV2) error {
+func checkResultV2(e EvidenceV2) error { return checkResultV2Profile(e, false) }
+
+// Only the explicit private source profile supplies retained process metadata.
+// All row, preflight and deterministic acquisition checks below remain shared.
+func checkResultV2Profile(e EvidenceV2, private bool) error {
 	r := e.Acquisition
 	rows := len(r.Graph.Nodes) + len(r.Graph.Edges) + len(r.Requests) + len(r.Supplies) + len(r.EdgeObservations)
 	for _, t := range r.Targets {
@@ -524,7 +528,16 @@ func checkResultV2(e EvidenceV2) error {
 	}
 	// This scan covers normalized raw params/responses and hierarchical symbols
 	// before ValidateResult invokes recursive historical decoding/replay.
-	raw, err := json.Marshal(e)
+	var raw []byte
+	var err error
+	if private {
+		raw, err = marshalSourceEvidencePrivateV1(e)
+		if err == nil {
+			r.Graph, err = graph.DecodeNativeV3(e.GraphBytes)
+		}
+	} else {
+		raw, err = json.Marshal(e)
+	}
 	if err != nil {
 		return err
 	}
@@ -564,14 +577,19 @@ func validateV2Profile(e EvidenceV2, policy *SourcePolicyPrivateV1) error {
 	if _, err = schema.Validate(e.GraphBytes, "v3"); err != nil {
 		return err
 	}
-	native, err := json.Marshal(e.Acquisition.Graph)
+	var native []byte
+	if policy != nil {
+		native, err = graph.MarshalWithRetainedProcessContextPrivate(e.Acquisition.Graph, e.GraphBytes)
+	} else {
+		native, err = json.Marshal(e.Acquisition.Graph)
+	}
 	if err != nil {
 		return err
 	}
 	if !bytes.Equal(native, e.GraphBytes) || e.GraphDigest != digest(VersionV2+":graph", e.GraphBytes) {
 		return errors.New("V2 graph bytes/digest mismatch")
 	}
-	if err = checkResultV2(e); err != nil {
+	if err = checkResultV2Profile(e, policy != nil); err != nil {
 		return err
 	}
 	wanted, err := suppliesV2(e.Acquisition, e.WorkspaceURI)

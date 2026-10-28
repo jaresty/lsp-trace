@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/acquisitionauthority"
 	"lsp-trace/internal/acquisitionmanifest"
 	"lsp-trace/internal/censusacquisition"
@@ -28,6 +29,19 @@ type ScopedBatchFixturePrivate struct {
 	ContextURI string
 	adapter    *scopeRuntimeAdapter
 	child      *scopeAdapterChild
+}
+
+// SetNonDefaultRetainedContextPrivate supplies fixed synthetic acquisition
+// metadata before the actual private capture. It observes no verifier process.
+func (h *ScopedRehearsalPrivate) SetNonDefaultRetainedContextPrivate() {
+	h.nondefaultContextPrivateTest = true
+}
+func setNonDefaultRetainedContextPrivate(a *scopeRuntimeAdapter) {
+	a.beforePartialCapturePrivateTest = func(r *acquisition.Result) {
+		r.Graph.Invocation.Server.Environment = map[string]string{"FIXTURE_TOKEN": "not-a-real-secret"}
+		r.Graph.Invocation.EffectiveEnvironment = []string{"FIXTURE_TOKEN=not-a-real-secret", "PATH=/fixture/frozen-bin"}
+		r.Graph.Invocation.WorkingDirectory = "/fixture/original-cwd"
+	}
 }
 
 func WithScopedBatchFixturePrivate(t *testing.T, run func(context.Context, *ScopedBatchFixturePrivate), setup ...func(string)) {

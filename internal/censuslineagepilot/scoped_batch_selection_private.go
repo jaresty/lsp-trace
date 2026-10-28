@@ -223,6 +223,9 @@ func closedAcquireScopedPrivate(ctx context.Context, manager *sessionruntime.Man
 		err = client.check(opCtx)
 	}
 	if err == nil && partial {
+		if s.adapter.beforePartialCapturePrivateTest != nil {
+			s.adapter.beforePartialCapturePrivateTest(&result)
+		}
 		artifact, err = graphprovenance.CaptureSourceWithholdingPrivateV1(opCtx, result, boundSource)
 		if err == nil {
 			err = client.check(opCtx)

@@ -8,16 +8,21 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/censusacquisition"
 	pilot "lsp-trace/internal/censuslineagepilot"
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/schema"
 )
+
+func zeroDerivedPrivate[T any](_ T) T { var z T; return z }
 
 func TestRetainedPartialVerifierSourcePinPrivate(t *testing.T) {
 	raw, e := os.ReadFile("retained_partial_qualification_private.go")
@@ -30,7 +35,16 @@ func TestRetainedPartialVerifierSourcePinPrivate(t *testing.T) {
 }
 
 func TestRetainedPartialQualificationPrivate(t *testing.T) {
+	testRetainedPartialQualificationPrivate(t, false)
+}
+func TestRetainedPartialQualificationNonDefaultContextPrivate(t *testing.T) {
+	testRetainedPartialQualificationPrivate(t, true)
+}
+func testRetainedPartialQualificationPrivate(t *testing.T, nondefault bool) {
 	h, m, cfg, f := pilot.NewScopedPartialExact25V4RehearsalFixturePrivate(t)
+	if nondefault {
+		h.SetNonDefaultRetainedContextPrivate()
+	}
 	report, e := executeScopedPartialRehearsalPrivate(context.Background(), h, m, cfg)
 	if e != nil {
 		t.Fatal(e)
@@ -104,6 +118,181 @@ func TestRetainedPartialQualificationPrivate(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	t.Run("derived-private-native-input", func(t *testing.T) {
+		budget := pilot.RetainedPartialDerivationBudgetPrivate{MaxInputBytes: 8 << 20, MaxOutputBytes: 8 << 20, MaxWorkBytes: 2 << 30}
+		derived, err := pilot.DeriveRetainedPartialNativePrivate(context.Background(), q, pins, budget)
+		if err != nil {
+			t.Fatal("ASSERT_ACTUAL_DERIVED_NATIVE_INPUT", err)
+		}
+		parsed, err := pilot.ParseDerivedRetainedPartialNativePrivate(derived.Bytes())
+		if err != nil {
+			t.Fatal("ASSERT_PRIVATE_MANIFEST_VALIDATES", err)
+		}
+		manifest := parsed.Manifest
+		if manifest.Profile != pilot.DerivedRetainedPartialPrivateV1 || manifest.Status != "VALIDATED_PRIVATE_INPUT_MANIFEST" || manifest.ProgramCAdmission != "NOT_PROGRAM_C_ADMITTED" || manifest.ReplayAdmitted || manifest.OriginalNativeV5IdentityClaimed || manifest.Accepted || manifest.Authority != 0 || manifest.CanonicalComplete || !manifest.Partial || manifest.SourceCompleteness != "UNKNOWN" || manifest.FeatureIdentity != "UNRESOLVED" || manifest.Targets != 25 || manifest.SourcePolicySHA256 == "" || manifest.CanonicalSeedsSHA256 == "" || len(manifest.SourcePolicy.Members) != 6 || manifest.OriginalAcquisitionGraphSHA256 == manifest.CanonicalNativeGraphSHA256 || pilot.Digest(parsed.NativeGraph) != manifest.CanonicalNativeGraphSHA256 {
+			t.Fatal("ASSERT_DERIVED_LINEAGE_AND_CEILINGS")
+		}
+		policyBytes, _ := json.Marshal(manifest.SourcePolicy)
+		if manifest.Origin != "DERIVED_RETAINED_INSPECTION" || pilot.Digest(policyBytes) != manifest.SourcePolicySHA256 || pilot.Digest(manifest.CanonicalSeeds) != manifest.CanonicalSeedsSHA256 || manifest.SourceCarrierSHA256 != pilot.Digest(original[5]) || manifest.CallerAssertedCodeHEAD != cfg.CodeHEAD || manifest.VerifierSourcePin != pins.VerifierSourceSHA256 || manifest.ProviderCommand != cfg.Server || manifest.SessionID != cfg.Session.SessionID || manifest.Generation != cfg.Session.Generation {
+			t.Fatal("ASSERT_EXACT_PRIVATE_INPUT_BINDINGS")
+		}
+		carrier, err := graphprovenance.ParseSourceWithholdingPrivateV1(parsed.Records[5])
+		if err != nil || carrier.ReplayAdmitted || manifest.WithheldCount != carrier.WithheldCount || !bytes.Equal(parsed.Records[5], original[5]) || !bytes.Equal(parsed.Records[4], original[4]) || !bytes.Equal(parsed.Records[6], original[6]) {
+			t.Fatal("ASSERT_SOURCE_RAW_BINDINGS_PRESERVED", err)
+		}
+		// Compare original full native metadata, not Result's narrower decode model.
+		type nativePreservedFields struct {
+			ProcessContext    graph.ProcessContext   `json:"process_context"`
+			ExecutionBundleID string                 `json:"execution_bundle_id"`
+			Nodes             []graph.Node           `json:"nodes"`
+			Edges             []graph.Edge           `json:"edges"`
+			Targets           []string               `json:"targets"`
+			Frontier          []graph.Boundary       `json:"frontier"`
+			Terminals         []graph.Boundary       `json:"terminals"`
+			Seeds             []graph.SeedResult     `json:"seeds"`
+			Memberships       []graph.SeedMembership `json:"seed_memberships"`
+			Slice             *graph.SliceEvidence   `json:"slice"`
+			EvidenceReceipt   *graph.EvidenceReceipt `json:"evidence_receipt"`
+		}
+		var sourceFields, derivedFields nativePreservedFields
+		if json.Unmarshal(carrier.Evidence.GraphBytes, &sourceFields) != nil || json.Unmarshal(parsed.NativeGraph, &derivedFields) != nil {
+			t.Fatal("full native projection decode")
+		}
+		if nondefault && (sourceFields.ProcessContext.EffectiveEnvironmentVariableCount != 2 || len(sourceFields.ProcessContext.Environment) != 1 || sourceFields.ProcessContext.Environment[0].Name != "FIXTURE_TOKEN") {
+			t.Fatal("ASSERT_ACTUAL_CAPTURE_NONDEFAULT_CONTEXT")
+		}
+		if !reflect.DeepEqual(sourceFields.ProcessContext, derivedFields.ProcessContext) {
+			t.Fatal("ASSERT_QUALIFIED_RETAINED_PROCESS_CONTEXT_EXACT")
+		}
+		// Workspace/provider enrichment changes only execution-bundle references;
+		// CALLS and membership IDs and all occurrence/order/endpoint fields stay exact.
+		for i := range sourceFields.Edges {
+			sourceFields.Edges[i].ExecutionBundleID = derivedFields.ExecutionBundleID
+		}
+		for i := range sourceFields.Memberships {
+			sourceFields.Memberships[i].ExecutionBundleID = derivedFields.ExecutionBundleID
+		}
+		sourceFields.ExecutionBundleID = derivedFields.ExecutionBundleID
+		if !reflect.DeepEqual(sourceFields, derivedFields) {
+			t.Fatal("ASSERT_QUALIFIED_NATIVE_FULL_FIELDS_PRESERVED")
+		}
+		if detected, err := schema.ValidateFor(parsed.NativeGraph, schema.FamilyGraph, "v5"); err != nil || detected != graph.SchemaVersionV5 {
+			t.Fatal("ASSERT_DERIVED_GRAPH_V5_SCHEMA", err)
+		}
+		native, err := graph.DecodeNativeV3(parsed.NativeGraph)
+		if err != nil || native.SchemaVersion != graph.SchemaVersionV5 || native.Summary.Complete || native.Invocation.Expansion.TopmostSiblings || native.Invocation.Expansion.TopmostSiblingOutcome != graph.TopmostSiblingNotRequested || len(native.SiblingCandidates) != 0 || !reflect.DeepEqual(native.Invocation.Seeds, carrier.Evidence.Acquisition.Graph.Invocation.Seeds) || !reflect.DeepEqual(native.Targets, carrier.Evidence.Acquisition.Graph.Targets) || len(native.Nodes) != manifest.Nodes || len(native.Edges) != manifest.Calls {
+			t.Fatal("ASSERT_NATIVE_TYPED_PROJECTION_PRESERVES_TARGETS", err)
+		}
+		nativeSites := 0
+		for _, edge := range native.Edges {
+			nativeSites += len(edge.CallSites)
+		}
+		if nativeSites != manifest.CallSites {
+			t.Fatal("ASSERT_NATIVE_OCCURRENCES_PRESERVED")
+		}
+		if _, err = graphprovenance.ValidateFor(derived.Bytes(), graphprovenance.Family, "v5"); err == nil {
+			t.Fatal("ASSERT_ORDINARY_V5_STAYS_CLOSED")
+		}
+		if _, err = graphprovenance.CaptureV5(derived.NativeGraphBytes(), cfg.Session.SessionID, cfg.Session.Generation, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}, &carrier.Evidence); err == nil || err.Error() != "V5 source snapshot must be admitted provenance v2" {
+			t.Fatal("ASSERT_OLD_SOURCE_GATE_STAYS_CLOSED")
+		}
+		second, err := pilot.DeriveRetainedPartialNativePrivate(context.Background(), q, pins, budget)
+		if err != nil || !bytes.Equal(derived.Bytes(), second.Bytes()) {
+			t.Fatal("ASSERT_DERIVATION_DETERMINISTIC", err)
+		}
+		mutated := derived.Bytes()
+		mutated[0] = 'x'
+		mutated = derived.NativeGraphBytes()
+		mutated[0] = 'x'
+		mutated = derived.ManifestBytes()
+		mutated[0] = 'x'
+		parsed.Manifest.SourcePolicy.Members[0].URI = "changed"
+		parsed.Manifest.CanonicalSeeds[0] = 'x'
+		parsed.Records[5][0] = 'x'
+		if !bytes.Equal(derived.Bytes(), second.Bytes()) {
+			t.Fatal("ASSERT_DERIVED_ACCESSORS_DETACHED")
+		}
+		zero := zeroDerivedPrivate(q)
+		if _, err = pilot.DeriveRetainedPartialNativePrivate(context.Background(), zero, pins, budget); err == nil {
+			t.Fatal("ASSERT_ZERO_QUALIFIER_REFUSED")
+		}
+		if err = json.Unmarshal(q.ReportBytes(), &zero); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = pilot.DeriveRetainedPartialNativePrivate(context.Background(), zero, pins, budget); err == nil {
+			t.Fatal("ASSERT_DECODED_QUALIFIER_REFUSED")
+		}
+		wrongPins := pins
+		wrongPins.CodeHEAD = strings.Repeat("b", 40)
+		if _, err = pilot.DeriveRetainedPartialNativePrivate(context.Background(), q, wrongPins, budget); err == nil {
+			t.Fatal("ASSERT_MIXED_PINS_REFUSED")
+		}
+		for _, field := range []string{"input", "output", "work"} {
+			b := budget
+			switch field {
+			case "input":
+				b.MaxInputBytes = 1
+			case "output":
+				b.MaxOutputBytes = 1
+			case "work":
+				b.MaxWorkBytes = 1
+			}
+			if _, err = pilot.DeriveRetainedPartialNativePrivate(context.Background(), q, pins, b); err == nil {
+				t.Fatal("ASSERT_DERIVATION_BUDGET", field)
+			}
+		}
+		for _, field := range []string{"scope", "policy", "seed", "graph", "lineage", "provider", "code", "bundle-proof", "record"} {
+			t.Run("substitution-"+field, func(t *testing.T) {
+				p, err := pilot.ParseDerivedRetainedPartialNativePrivate(second.Bytes())
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch field {
+				case "scope":
+					p.Manifest.SourcePolicy.Members[0].URI += "x"
+				case "policy":
+					p.Manifest.SourcePolicySHA256 = pilot.Digest([]byte("wrong"))
+				case "seed":
+					p.Manifest.CanonicalSeeds[0] = 'x'
+				case "graph":
+					p.NativeGraph[0] = 'x'
+				case "lineage":
+					p.Manifest.OriginalAcquisitionGraphSHA256 = p.Manifest.CanonicalNativeGraphSHA256
+				case "provider":
+					p.Manifest.ProviderCommand += "x"
+				case "code":
+					p.Manifest.CallerAssertedCodeHEAD = strings.Repeat("b", 40)
+				case "bundle-proof":
+					p.QualificationReport[0] = 'x'
+				case "record":
+					p.Records[2][0] = 'x'
+				}
+				raw, _ := json.Marshal(p)
+				if _, err = pilot.ParseDerivedRetainedPartialNativePrivate(raw); err == nil {
+					t.Fatal("ASSERT_PRIVATE_INPUT_SUBSTITUTION_REFUSED", field)
+				}
+			})
+		}
+		for _, kind := range []string{"unknown", "duplicate", "case", "missing", "oversize"} {
+			raw := second.Bytes()
+			switch kind {
+			case "unknown":
+				raw = append([]byte(`{"extra":0,`), raw[1:]...)
+			case "duplicate":
+				raw = append([]byte(`{"schema":"x",`), raw[1:]...)
+			case "case":
+				raw = bytes.Replace(raw, []byte(`"schema"`), []byte(`"Schema"`), 1)
+			case "missing":
+				raw = bytes.Replace(raw, []byte(`"authority":0,`), nil, 1)
+			case "oversize":
+				raw = make([]byte, pilot.MaxDerivedRetainedPartialPrivateBytes+1)
+			}
+			if _, err = pilot.ParseDerivedRetainedPartialNativePrivate(raw); err == nil {
+				t.Fatal("ASSERT_STRICT_PRIVATE_ENVELOPE", kind)
+			}
+		}
+		t.Logf("ASSERT_ACTUAL_DERIVED_NATIVE_INPUT bytes=%d graph=%d targets=%d nodes=%d calls=%d sites=%d withheld=%d requests=%d", len(second.Bytes()), len(second.NativeGraphBytes()), manifest.Targets, manifest.Nodes, manifest.Calls, manifest.CallSites, manifest.WithheldCount, manifest.Requests)
+	})
 	if _, ok := any(q).(acquisition.Client); ok {
 		t.Fatal("ASSERT_NO_NATIVE_CLIENT")
 	}
@@ -326,6 +515,22 @@ func TestRetainedPartialQualificationPrivate(t *testing.T) {
 	cancel()
 	if bad, e := pilot.QualifyRetainedPartialNativePrivate(cancelled, in); e == nil || len(bad.ReportBytes()) != 0 {
 		t.Fatal("ASSERT_CANCELLATION_NO_QUALIFICATION")
+	}
+	// A sealed snapshot owns bytes, not readers: even closed borrowed roots cannot
+	// cause derivation to re-read source, recover a claim, or reacquire anything.
+	for _, root := range inputs {
+		if err := root.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, root := range outputs {
+		if err := root.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	closedDerived, err := pilot.DeriveRetainedPartialNativePrivate(context.Background(), q, pins, pilot.RetainedPartialDerivationBudgetPrivate{MaxInputBytes: 8 << 20, MaxOutputBytes: 8 << 20, MaxWorkBytes: 2 << 30})
+	if err != nil || len(closedDerived.NativeGraphBytes()) == 0 {
+		t.Fatal("ASSERT_DERIVATION_HAS_NO_BORROWED_READER_IO", err)
 	}
 	after, prepAfter := f.Traffic()
 	if before != after || prepares != prepAfter {

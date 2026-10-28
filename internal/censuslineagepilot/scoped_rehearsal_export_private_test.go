@@ -83,20 +83,21 @@ func (c ScopedRehearsalConfigPrivate) validate(outsideTmp bool) error {
 // topology admission all precede initialization or semantic traffic. It creates
 // no roots and never opens the input bundle's mutation interfaces.
 type ScopedRehearsalPrivate struct {
-	config        ScopedRehearsalConfigPrivate
-	restart       scopeRestartResult
-	roots         [3]*publication.ContentRetentionRoot
-	topology      *scopedExecutionTopologyPrivate
-	store         *scopedExecutionStorePrivate
-	owner         *scopedExecutionClaimOwnerPrivate
-	pending       *scopedExecutionPendingPrivate
-	adapter       *scopeRuntimeAdapter
-	manager       *sessionruntime.Manager
-	used          bool
-	claimResult   scopedExecutionClaimResultPrivate
-	retainedBytes int
-	records       []ScopedRehearsalRecordPrivate
-	retentionOps  scopeRetentionOps // nil functions select real storage; package-local fault fixtures only
+	config                       ScopedRehearsalConfigPrivate
+	restart                      scopeRestartResult
+	roots                        [3]*publication.ContentRetentionRoot
+	topology                     *scopedExecutionTopologyPrivate
+	store                        *scopedExecutionStorePrivate
+	owner                        *scopedExecutionClaimOwnerPrivate
+	pending                      *scopedExecutionPendingPrivate
+	adapter                      *scopeRuntimeAdapter
+	manager                      *sessionruntime.Manager
+	used                         bool
+	claimResult                  scopedExecutionClaimResultPrivate
+	retainedBytes                int
+	nondefaultContextPrivateTest bool
+	records                      []ScopedRehearsalRecordPrivate
+	retentionOps                 scopeRetentionOps // nil functions select real storage; package-local fault fixtures only
 }
 
 func OpenScopedRehearsalPrivate(ctx context.Context, c ScopedRehearsalConfigPrivate) (h *ScopedRehearsalPrivate, err error) {
@@ -172,6 +173,9 @@ func (h *ScopedRehearsalPrivate) Bind(ctx context.Context, m *sessionruntime.Man
 	}
 	h.adapter, _, err = newScopeRuntimeAdapterWithPolicyPrivate(ctx, h.restart, m, h.config.Session, policy)
 	h.manager = m
+	if err == nil && h.nondefaultContextPrivateTest {
+		setNonDefaultRetainedContextPrivate(h.adapter)
+	}
 	return claim, err
 }
 

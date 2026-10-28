@@ -48,7 +48,17 @@ type exactRetainedPartialQualificationInput struct {
 	input  [3]*publication.ContentRetentionRoot
 	output [2]*publication.ContentRetentionRoot
 }
-type opaqueRetainedPartialNativeQualification struct{ report []byte }
+type opaqueRetainedPartialNativeQualification struct {
+	report   []byte
+	evidence *retainedPartialQualifiedEvidence
+}
+
+// Only a successful full qualification creates this immutable shared state.
+// Copies share its identity, not mutable graphs, borrowed roots or live authority.
+type retainedPartialQualifiedEvidence struct {
+	self    *retainedPartialQualifiedEvidence
+	records [8][]byte
+}
 
 // ReportBytes is detached inspection metadata. The type has no admission,
 // publication, transition-plan, client, receipt or runtime capability methods.
@@ -420,7 +430,12 @@ func QualifyRetainedPartialNativePrivate(ctx context.Context, in ExactRetainedPa
 	if e != nil || len(reportRaw) > 32<<10 {
 		return out, ErrInvalid
 	}
-	return opaqueRetainedPartialNativeQualification{reportRaw}, nil
+	sealed := &retainedPartialQualifiedEvidence{}
+	for i := range raw {
+		sealed.records[i] = bytes.Clone(raw[i])
+	}
+	sealed.self = sealed
+	return opaqueRetainedPartialNativeQualification{report: reportRaw, evidence: sealed}, nil
 }
 
 func canonicalEqualPartial(raw []byte, v any) bool {

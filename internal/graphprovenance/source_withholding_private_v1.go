@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/graph"
 	"lsp-trace/sessionruntime"
 )
 
@@ -386,8 +387,14 @@ func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result
 	if err != nil {
 		return nil, err
 	}
+	// Keep the observed native document separately from its runtime projection.
+	// Census/ValidateResult consume that projection, never reconstructed secrets.
+	r.Graph, err = graph.DecodeNativeV3(raw)
+	if err != nil {
+		return nil, err
+	}
 	s := EvidenceV2{SchemaVersion: VersionSourceWithholdingPrivateV1, Policy: PolicySourceWithholdingPrivateV1, GraphBytes: raw, GraphDigest: digest(VersionV2+":graph", raw), WorkspaceURI: p.WorkspaceURI, AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Acquisition: r, Captures: []Receipt{}, Supplies: []SupplyReceiptV2{}, Bindings: []BindingV2{}}
-	if err = checkResultV2(s); err != nil {
+	if err = checkResultV2Profile(s, true); err != nil {
 		return nil, err
 	}
 	if r.Request.Context.SessionID != p.SessionID || r.Request.Context.Generation != p.Generation {
