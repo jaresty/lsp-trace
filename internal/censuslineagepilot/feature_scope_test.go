@@ -19,7 +19,7 @@ var fixtureScopePaths = []string{"cmd/lsp-trace/filter_command.go", "cmd/lsp-tra
 
 const fixtureRevision = "8436b4ea25f24f73b1aebb71c63918b61f4ad274"
 
-func scopeFixture(t *testing.T) string {
+func scopeFixture(t *testing.T, setup ...func(string)) string {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -33,6 +33,9 @@ func scopeFixture(t *testing.T) string {
 		if err := os.WriteFile(f, []byte("package fixture // "+p+"\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	for _, prepare := range setup {
+		prepare(root) // Owned fixture content is finalized before any freeze/binding.
 	}
 	return root
 }

@@ -13,9 +13,9 @@ import (
 	"testing"
 )
 
-func retentionFixture(t *testing.T, equal bool) featureScope {
+func retentionFixture(t *testing.T, equal bool, setup ...func(string)) featureScope {
 	t.Helper()
-	root := scopeFixture(t)
+	root := scopeFixture(t, setup...)
 	if equal {
 		for _, path := range featureScopePaths() {
 			if err := os.WriteFile(filepath.Join(root, path), []byte("package fixture\n"), 0644); err != nil {

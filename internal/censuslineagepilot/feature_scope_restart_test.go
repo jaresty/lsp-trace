@@ -29,9 +29,9 @@ func restartLocator(t *testing.T, o *scopeBundleOwner, final scopeBundleResult) 
 	}
 	return scopeRestartLocator{h.Key, restartPin(final.head), restartPin(o.item(o.plan.state.references[8].Object).raw), restartPin(o.plan.metadataBytes())}
 }
-func restartFixture(t *testing.T, equal bool) (*scopeBundleOwner, featureScope, scopeRestartLocator) {
+func restartFixture(t *testing.T, equal bool, setup ...func(string)) (*scopeBundleOwner, featureScope, scopeRestartLocator) {
 	t.Helper()
-	o, s := bundleFixture(t, equal)
+	o, s := bundleFixture(t, equal, setup...)
 	f := runBundle(t, o)
 	return o, s, restartLocator(t, o, f)
 }

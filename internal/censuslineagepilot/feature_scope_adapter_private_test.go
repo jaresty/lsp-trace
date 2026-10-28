@@ -135,11 +135,11 @@ func adapterFixtureWithRestartPathsPrivate(t *testing.T) (scopeRestartResult, *s
 	t.Helper()
 	return adapterFixtureWithRestartPathsAndServerPrivate(t, "")
 }
-func adapterFixtureWithRestartPathsAndServerPrivate(t *testing.T, server string) (scopeRestartResult, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild, [3]string, scopeRestartLocator) {
+func adapterFixtureWithRestartPathsAndServerPrivate(t *testing.T, server string, setup ...func(string)) (scopeRestartResult, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild, [3]string, scopeRestartLocator) {
 	t.Helper()
 	// Disposable retained fixtures exercise the actual read-only reconstruction;
 	// no caller DTO or fabricated scopeRestartResult substitutes for the reader.
-	owner, _, locator := restartFixture(t, false)
+	owner, _, locator := restartFixture(t, false, setup...)
 	restart, err := readRetainedFeatureScope(context.Background(), owner.paths, locator)
 	if err != nil {
 		t.Fatal(err)

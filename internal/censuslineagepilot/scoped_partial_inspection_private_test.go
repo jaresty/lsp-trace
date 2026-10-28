@@ -65,12 +65,31 @@ func TestScopedPartialInspectionPreflightPrivate(t *testing.T) {
 func TestScopedPartialInspectionConnectedPrivate(t *testing.T) {
 	for _, scenario := range []string{"outside-only", "inside-context", "alias-file-equal", "alias-file-different", "alias-directory-equal", "alias-directory-different"} {
 		t.Run(scenario, func(t *testing.T) {
-			testScopedPartialInspectionConnectedPrivate(t, scenario)
+			testScopedPartialInspectionConnectedPrivate(t, scenario, false)
 		})
 	}
 }
 
-func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) {
+func TestScopedPartialInspectionExact25ConnectedPrivate(t *testing.T) {
+	testScopedPartialInspectionConnectedPrivate(t, "inside-context", true)
+}
+
+func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string, exact25 bool) {
+	var setup []func(string)
+	expectedSource := map[string][]byte{}
+	if exact25 {
+		setup = append(setup, func(root string) {
+			// Finalize six ordinary mock files before freeze, supply, or guard binding.
+			// These deterministic bytes are not historical source.
+			for _, path := range fixtureScopePaths {
+				content := []byte("package fixture\n" + strings.Repeat("// deterministic owned mock padding ................................\n", 301))
+				expectedSource[path] = content
+				if err := os.WriteFile(filepath.Join(root, path), content, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+		})
+	}
 	insideContext := scenario != "outside-only"
 	alias := strings.HasPrefix(scenario, "alias-")
 	WithScopedBatchFixturePrivate(t, func(ctx context.Context, f *ScopedBatchFixturePrivate) {
@@ -88,7 +107,8 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 				TextDocument struct {
 					URI string `json:"uri"`
 				} `json:"textDocument"`
-				Item lsp.CallHierarchyItem `json:"item"`
+				Item     lsp.CallHierarchyItem `json:"item"`
+				Position lsp.Position          `json:"position"`
 			}
 			if err := json.Unmarshal(m.Params, &p); err != nil {
 				t.Fatal(err)
@@ -97,7 +117,22 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 			var v any = []any{}
 			switch m.Method {
 			case "textDocument/prepareCallHierarchy":
-				v = []lsp.CallHierarchyItem{scopeAdapterItem(p.TextDocument.URI)}
+				item := scopeAdapterItem(p.TextDocument.URI)
+				if exact25 {
+					matched := false
+					for _, row := range partialInspectionExact25 {
+						if p.TextDocument.URI == (&url.URL{Scheme: "file", Path: filepath.Join(f.Workspace, row.path)}).String() && p.Position.Line == row.line && p.Position.Character == row.character {
+							item.Name = row.id
+							item.Range = lsp.Range{Start: lsp.Position{Line: row.line}, End: lsp.Position{Line: row.line, Character: 64}}
+							item.SelectionRange = lsp.Range{Start: p.Position, End: lsp.Position{Line: row.line, Character: row.character + 1}}
+							matched = true
+						}
+					}
+					if !matched {
+						t.Errorf("ASSERT_EXACT25_PREPARE_POSITION: %s %+v", p.TextDocument.URI, p.Position)
+					}
+				}
+				v = []lsp.CallHierarchyItem{item}
 			case "callHierarchy/outgoingCalls":
 				if p.Item.URI == files[0].URI {
 					if alias {
@@ -164,10 +199,32 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 			targets = append(targets, acquisitionmanifest.Target{ID: id, Locator: acquisition.Locator{URI: file.URI, Line: &zero, Character: &zero, LanguageID: "go"}, DownDepth: &one, UpDepth: &one})
 			seeds = append(seeds, seedformat.Seed{Type: seedformat.PositionType, Position: &seedformat.Position{Label: id, Path: file.Path, Line: 1, Column: 1}})
 		}
+		if exact25 {
+			targets, seeds = nil, nil
+			for _, row := range partialInspectionExact25 {
+				line, character := row.line, row.character
+				uri := (&url.URL{Scheme: "file", Path: filepath.Join(f.Workspace, row.path)}).String()
+				targets = append(targets, acquisitionmanifest.Target{ID: row.id, Locator: acquisition.Locator{URI: uri, Line: &line, Character: &character, LanguageID: "go"}, DownDepth: &one, UpDepth: &one})
+				seeds = append(seeds, seedformat.Seed{Type: seedformat.PositionType, Position: &seedformat.Position{Label: row.id, Path: row.path, Line: uint64(row.line) + 1, Column: uint64(row.character) + 1}})
+				lines := bytes.Split(expectedSource[row.path], []byte("\n"))
+				if int(row.line) >= len(lines) || int(row.character)+1 > len(lines[row.line]) {
+					t.Fatalf("ASSERT_EXACT25_MOCK_POSITION_AVAILABLE: %+v", row)
+				}
+			}
+		}
 		manifest := acquisitionmanifest.Manifest{SchemaVersion: acquisitionmanifest.ManifestVersion, CoordinateConvention: "zero-based-session", Root: targets[0], RequiredTargets: targets[1:]}
+		if exact25 {
+			// Test-only bounded headroom for race instrumentation across 75 requests.
+			// Target coordinates, depths, expansion and canonical seed bytes stay exact.
+			timeout, requestTimeout := 25000, 5000
+			manifest.Limits.TimeoutMS, manifest.Limits.RequestTimeoutMS = &timeout, &requestTimeout
+		}
 		seedBytes, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Defaults: seedformat.Defaults{DownDepth: &one, UpDepth: &one}, Seeds: seeds}, f.Workspace)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if exact25 && fmt.Sprintf("%x", sha256.Sum256(seedBytes)) != partialInspectionExact25SeedSHA {
+			t.Fatalf("ASSERT_EXACT25_CANONICAL_SEED_HASH: %x", sha256.Sum256(seedBytes))
 		}
 		selection, binding, err := f.Mint(ctx, "partial-inspection-fixture", manifest, seedBytes)
 		if err != nil {
@@ -188,6 +245,7 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 		if err != nil {
 			t.Fatal(err)
 		}
+		assertPartialInspectionReleasedPrivate(t, f) // Returned carrier is detached after genuine release.
 		if !bytes.Equal(retainedSeeds, seedBytes) {
 			t.Fatal("ASSERT_PARTIAL_CONNECTED_CANONICAL_SEEDS")
 		}
@@ -197,7 +255,7 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 		}
 		r := envelope.Evidence.Acquisition
 		for i, target := range r.Targets {
-			if target.Requested.ID != targets[i].ID || target.Requested.Locator.URI != files[i].URI || target.Requested.Locator.URI == f.ContextURI || target.Resolution.Status != acquisition.Resolved {
+			if target.Requested.ID != targets[i].ID || target.Requested.Locator.URI != targets[i].Locator.URI || target.Requested.Locator.URI == f.ContextURI || target.Resolution.Status != acquisition.Resolved {
 				t.Fatalf("ASSERT_PARTIAL_CONNECTED_TARGET_ORDER_AND_NOMINATION: %d %+v", i, target)
 			}
 		}
@@ -230,7 +288,7 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 		if !secondElementBound {
 			t.Fatal("ASSERT_PARTIAL_CONNECTED_LEXICAL_DUPLICATE_BINDING")
 		}
-		if !envelope.FrozenQueryScope || !envelope.Partial || envelope.Authority != 0 || envelope.Accepted || envelope.ReplayAdmitted || envelope.SourceCompleteness != "UNKNOWN" || r.Graph.Summary.Complete || len(r.Graph.Edges) != wantEdges || len(r.Graph.Edges[0].CallSites) != 1 || len(r.Targets) != 4 {
+		if !envelope.FrozenQueryScope || !envelope.Partial || envelope.Authority != 0 || envelope.Accepted || envelope.ReplayAdmitted || envelope.SourceCompleteness != "UNKNOWN" || r.Graph.Summary.Complete || len(r.Graph.Edges) != wantEdges || len(r.Graph.Edges[0].CallSites) != 1 || len(r.Targets) != len(targets) {
 			t.Fatal("ASSERT_PARTIAL_CONNECTED_RETAINED_CEILING")
 		}
 		wantStarts := 1
@@ -265,6 +323,9 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 			for _, row := range envelope.Evidence.Captures {
 				if row.URI == f.ContextURI {
 					expected := []byte("package fixture // " + fixtureScopePaths[5] + "\n")
+					if exact25 {
+						expected = expectedSource[fixtureScopePaths[5]]
+					}
 					if alias {
 						// Actual no-follow capture refusal, not an FD-level no-open spy.
 						wantStatus := "NONREGULAR"
@@ -316,7 +377,7 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		comparison, err := filter.ProjectPairwise(projectionBytes, "root", "peer1")
+		comparison, err := filter.ProjectPairwise(projectionBytes, "root", targets[1].ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -345,10 +406,110 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 		if projection.Accounting.Truncated || projection.Accounting.TraversalComplete || projection.Accounting.SourceGraphComplete != "UNKNOWN" || comparison.GlobalBoundary.Truncated || comparison.GlobalBoundary.TraversalComplete || comparison.GlobalBoundary.SourceGraphComplete != "UNKNOWN" {
 			t.Fatalf("ASSERT_PARTIAL_CONNECTED_COVERAGE_CEILING: inspection=%+v filter=%+v", projection.Accounting, comparison.GlobalBoundary)
 		}
-		if comparison.Accounting.RequestedSeedCount != 4 || comparison.Accounting.SuccessfulSeedCount != 4 || comparison.Accounting.FailedSeedCount != 0 || len(comparison.Partitions.CallRelations.LeftOnly) != wantEdges || len(comparison.Partitions.CallRelations.Shared) != 0 || len(comparison.Partitions.CallRelations.RightOnly) != 0 {
+		if comparison.Accounting.RequestedSeedCount != len(targets) || comparison.Accounting.SuccessfulSeedCount != len(targets) || comparison.Accounting.FailedSeedCount != 0 || len(comparison.Partitions.CallRelations.LeftOnly) != wantEdges || len(comparison.Partitions.CallRelations.Shared) != 0 || len(comparison.Partitions.CallRelations.RightOnly) != 0 {
 			t.Fatalf("ASSERT_PARTIAL_CONNECTED_REFERENCE_CLASSIFICATION: %s", out)
 		}
-		t.Logf("PRODUCT_CHECKPOINT: four deterministic nominated targets; scenario=%s retained CALLS=%d (root-only references), frontier=2; incoming(B) policy-stopped, never incoming(A); outside source POLICY_WITHHELD; existing inspect/filter reference comparison:\n%s", scenario, wantEdges, out)
+		if exact25 {
+			if len(r.Targets) != 25 {
+				t.Fatalf("ASSERT_EXACT25_TARGET_COUNT: got=%d want=25", len(r.Targets))
+			}
+			identities := map[string]bool{}
+			for i, target := range r.Targets {
+				want, _ := json.Marshal(targets[i])
+				got, _ := json.Marshal(target.Requested)
+				if !bytes.Equal(got, want) || identities[target.Resolution.Identity.ID] {
+					t.Fatalf("ASSERT_EXACT25_ORDER_COORDINATES_DISTINCT: index=%d got=%s want=%s", i, got, want)
+				}
+				identities[target.Resolution.Identity.ID] = true
+			}
+			traffic := map[string]int{}
+			outgoingByLabel, incomingByLabel := map[string]int{}, map[string]int{}
+			for _, msg := range f.RequestsPrivate() {
+				traffic[msg.Method]++
+				if strings.HasPrefix(msg.Method, "callHierarchy/") {
+					var params struct {
+						Item lsp.CallHierarchyItem `json:"item"`
+					}
+					if err := json.Unmarshal(msg.Params, &params); err != nil {
+						t.Fatal(err)
+					}
+					if msg.Method == "callHierarchy/outgoingCalls" {
+						outgoingByLabel[params.Item.Name]++
+					} else {
+						incomingByLabel[params.Item.Name]++
+					}
+				}
+			}
+			for i, row := range partialInspectionExact25 {
+				wantIncoming := 1
+				if i == 0 {
+					wantIncoming = 0
+				}
+				if outgoingByLabel[row.id] != 1 || incomingByLabel[row.id] != wantIncoming {
+					t.Fatalf("ASSERT_EXACT25_METHOD_START_IDENTITIES: %s outgoing=%d incoming=%d", row.id, outgoingByLabel[row.id], incomingByLabel[row.id])
+				}
+			}
+			if len(outgoingByLabel) != 25 || len(incomingByLabel) != 25 || incomingByLabel["Query"] != 1 {
+				t.Fatalf("ASSERT_EXACT25_CONTEXT_ONLY_EXTRA_START: outgoing=%v incoming=%v", outgoingByLabel, incomingByLabel)
+			}
+			opens := map[string]int{}
+			for _, msg := range f.child.snapshot() {
+				if msg.Method != "textDocument/didOpen" {
+					continue
+				}
+				var params struct {
+					TextDocument struct{ URI, Text string } `json:"textDocument"`
+				}
+				if err := json.Unmarshal(msg.Params, &params); err != nil {
+					t.Fatal(err)
+				}
+				u, err := url.Parse(params.TextDocument.URI)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rel, err := filepath.Rel(f.Workspace, u.Path)
+				if err != nil || expectedSource[rel] == nil || !bytes.Equal([]byte(params.TextDocument.Text), expectedSource[rel]) {
+					t.Fatalf("ASSERT_EXACT25_SIX_SUPPLIES_FROZEN_BYTES: %s", params.TextDocument.URI)
+				}
+				opens[rel]++
+			}
+			if len(opens) != 6 {
+				t.Fatalf("ASSERT_EXACT25_SIX_SUPPLIES: %v", opens)
+			}
+			for path, count := range opens {
+				if count != 1 {
+					t.Fatalf("ASSERT_EXACT25_SUPPLY_ONCE: %s %d", path, count)
+				}
+			}
+			if traffic["textDocument/prepareCallHierarchy"] != 25 || traffic["callHierarchy/outgoingCalls"] != 25 || traffic["callHierarchy/incomingCalls"] != 25 || traffic["textDocument/documentSymbol"] != 0 || len(calls) != 75 {
+				t.Fatalf("ASSERT_EXACT25_FINITE_TRAFFIC: %v calls=%d", traffic, len(calls))
+			}
+			for _, target := range r.Targets[1:] {
+				if len(target.Incoming.StartIDs) != 1 || target.Incoming.StartIDs[0] != target.Resolution.Identity.ID {
+					t.Fatalf("ASSERT_EXACT25_EMPTY_OUTGOING_STARTS_SELF: %+v", target.Incoming)
+				}
+			}
+			readable := 0
+			for _, capture := range envelope.Evidence.Captures {
+				if capture.URI == outside {
+					continue
+				}
+				u, err := url.Parse(capture.URI)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rel, err := filepath.Rel(f.Workspace, u.Path)
+				if err != nil || expectedSource[rel] == nil || capture.Status != "READABLE" || !bytes.Equal(capture.Content, expectedSource[rel]) {
+					t.Fatalf("ASSERT_EXACT25_FRESH_SOURCE_CAPTURE: %s status=%s", capture.URI, capture.Status)
+				}
+				readable++
+			}
+			if readable != 5 || len(envelope.Evidence.Captures) != 6 {
+				t.Fatalf("ASSERT_EXACT25_SOURCE_COUNTS: readable=%d total=%d", readable, len(envelope.Evidence.Captures))
+			}
+			t.Logf("EXACT25_CHECKPOINT: targets=25 distinct=%d seed_sha256=%x prepare=25 outgoing=25 incoming=25 documentSymbol=0; readable=5 withheld=1; CALLS=3 frontier=2 root-only=3 shared=0 right-only=0", len(identities), sha256.Sum256(retainedSeeds))
+		}
+		t.Logf("PRODUCT_CHECKPOINT: deterministic nominated targets; scenario=%s retained CALLS=%d (root-only references), frontier=2; incoming(B) policy-stopped, never incoming(A); outside source POLICY_WITHHELD; existing inspect/filter reference comparison:\n%s", scenario, wantEdges, out)
 		assertPartialInspectionReleasedPrivate(t, f)
 		before, prepBefore := f.Traffic()
 		if _, _, err := AcquireScopedPartialInspectionPrivate(ctx, f.Manager, selection, authority, binding, req); err == nil {
@@ -358,7 +519,7 @@ func testScopedPartialInspectionConnectedPrivate(t *testing.T, scenario string) 
 		if before != after || prepBefore != prepAfter {
 			t.Fatal("ASSERT_PARTIAL_CONNECTED_ONE_SHOT_NO_TRAFFIC")
 		}
-	})
+	}, setup...)
 }
 
 func assertPartialInspectionReleasedPrivate(t *testing.T, f *ScopedBatchFixturePrivate) {

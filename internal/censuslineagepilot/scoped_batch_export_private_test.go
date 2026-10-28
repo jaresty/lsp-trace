@@ -30,9 +30,9 @@ type ScopedBatchFixturePrivate struct {
 	child      *scopeAdapterChild
 }
 
-func WithScopedBatchFixturePrivate(t *testing.T, run func(context.Context, *ScopedBatchFixturePrivate)) {
+func WithScopedBatchFixturePrivate(t *testing.T, run func(context.Context, *ScopedBatchFixturePrivate), setup ...func(string)) {
 	t.Helper()
-	restart, m, id, child := adapterFixture(t)
+	restart, m, id, child, _, _ := adapterFixtureWithRestartPathsAndServerPrivate(t, "", setup...)
 	err := m.WithReadySessionLease(context.Background(), sessionruntime.SessionLeaseRequest{SessionID: id.SessionID, Generation: id.Generation, Workspace: restart.Scope().Selection().Workspace}, func(ctx context.Context) error {
 		a, _, err := newScopeRuntimeAdapter(ctx, restart, m, id)
 		if err != nil {

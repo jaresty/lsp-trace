@@ -18,7 +18,7 @@ import (
 	"lsp-trace/internal/publication"
 )
 
-func bundleFixture(t *testing.T, equal bool) (*scopeBundleOwner, featureScope) {
+func bundleFixture(t *testing.T, equal bool, setup ...func(string)) (*scopeBundleOwner, featureScope) {
 	t.Helper()
 	p, b, pp, bp := retentionRoots(t)
 	if err := errors.Join(p.Close(), b.Close()); err != nil {
@@ -28,7 +28,7 @@ func bundleFixture(t *testing.T, equal bool) (*scopeBundleOwner, featureScope) {
 	if err := os.Mkdir(jp, 0700); err != nil {
 		t.Fatal(err)
 	}
-	scope := retentionFixture(t, equal)
+	scope := retentionFixture(t, equal, setup...)
 	owner, err := newScopeBundleOwner(scope, pp, bp, jp)
 	if err != nil {
 		t.Fatal(err)
