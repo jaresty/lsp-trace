@@ -136,8 +136,16 @@ rejection, budgets, detached accessors, repeated deterministic output, old V5
 rejection, and derivation after all borrowed readers have been closed. Existing
 fixture traffic counters must remain unchanged.
 
-A compatible private Program C consumer / source seam still needs separate
-qualification. Stage-2 broader admission, composition, Describe and full-pipeline
-claims remain pending. This producer is not registered in ordinary native V5,
-public MCP/CLI dispatch, or Program C admission. Independent review and parent
-integration are still required; no commit or publication is performed here.
+The separate `internal/retainedpartialprogramc` adapter now consumes the concrete
+constructor-sealed derived result and revalidates this closed envelope before
+projecting/computing. Its distinct private profile is
+`DERIVED_RETAINED_PARTIAL_CALLS_PRIVATE_V1`; its own qualified computation binding
+is `PRIVATE_COMPUTATION_QUALIFIED`. This does **not** change this producer manifest's
+`NOT_PROGRAM_C_ADMITTED` field or grant ordinary Program C admission. See
+[`../retainedpartialprogramc/PRIVATE.md`](../retainedpartialprogramc/PRIVATE.md).
+
+Stage-2 authoritative plan bridging, instability, broader admission, composition,
+Describe and full-pipeline claims remain pending. This producer is not registered
+in ordinary native V5, public MCP/CLI dispatch, or ordinary Program C admission.
+Independent review and parent integration are still required; no commit or
+publication is performed here.

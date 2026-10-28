@@ -532,6 +532,7 @@ func testRetainedPartialQualificationPrivate(t *testing.T, nondefault bool) {
 	if err != nil || len(closedDerived.NativeGraphBytes()) == 0 {
 		t.Fatal("ASSERT_DERIVATION_HAS_NO_BORROWED_READER_IO", err)
 	}
+	checkRetainedPartialProgramCPrivate(t, closedDerived)
 	after, prepAfter := f.Traffic()
 	if before != after || prepares != prepAfter {
 		t.Fatal("ASSERT_OFFLINE_ZERO_TRAFFIC")

@@ -93,7 +93,29 @@ type DerivedRetainedPartialNativeInputPrivate struct {
 	Records [8][]byte `json:"records"`
 }
 
-type opaqueDerivedRetainedPartialNativePrivate struct{ raw []byte }
+// DerivedRetainedPartialNativePrivate names the existing producer-only value.
+// Copies share immutable producer state; JSON decoding cannot create that state.
+// This alias adds no constructor and is not an admission or replay capability.
+type DerivedRetainedPartialNativePrivate = opaqueDerivedRetainedPartialNativePrivate
+
+type derivedRetainedPartialSealPrivate struct {
+	self *derivedRetainedPartialSealPrivate
+	raw  []byte
+}
+type opaqueDerivedRetainedPartialNativePrivate struct {
+	raw  []byte
+	seal *derivedRetainedPartialSealPrivate
+}
+
+// ReadDerivedRetainedPartialNativePrivate returns detached bytes only from an
+// actual producer result. The closed parser independently checks consistency;
+// parsing or copying exported DTOs cannot mint this producer lineage.
+func ReadDerivedRetainedPartialNativePrivate(r DerivedRetainedPartialNativePrivate) ([]byte, error) {
+	if r.seal == nil || r.seal.self != r.seal || len(r.raw) == 0 || !bytes.Equal(r.raw, r.seal.raw) {
+		return nil, ErrInvalid
+	}
+	return bytes.Clone(r.seal.raw), nil
+}
 
 func (r opaqueDerivedRetainedPartialNativePrivate) Bytes() []byte { return bytes.Clone(r.raw) }
 func (r opaqueDerivedRetainedPartialNativePrivate) NativeGraphBytes() []byte {
@@ -153,7 +175,9 @@ func DeriveRetainedPartialNativePrivate(ctx context.Context, q opaqueRetainedPar
 	if err = ctx.Err(); err != nil {
 		return out, err
 	}
-	return opaqueDerivedRetainedPartialNativePrivate{raw: raw}, nil
+	seal := &derivedRetainedPartialSealPrivate{raw: bytes.Clone(raw)}
+	seal.self = seal
+	return opaqueDerivedRetainedPartialNativePrivate{raw: raw, seal: seal}, nil
 }
 
 // ParseDerivedRetainedPartialNativePrivate is a CLOSED consistency parser, NOT a

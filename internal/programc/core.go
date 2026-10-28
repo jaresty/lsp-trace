@@ -215,12 +215,47 @@ func Project(input []byte) (Projection, *Failure) {
 	if err := json.Unmarshal(exact, &doc); err != nil {
 		return Projection{}, &Failure{Code: CodeInvalidProvenance, Message: err.Error()}
 	}
+	p, failure := projectNativeCalls(doc)
+	if failure != nil {
+		return Projection{}, failure
+	}
+	inputSum := sha256.Sum256(input)
+	callRole := ""
+	if doc.EvidenceReceipt != nil {
+		for _, relation := range doc.EvidenceReceipt.Relations {
+			if relation.RelationKind == "CALL_RELATION" {
+				callRole = relation.EvidenceRole
+				break
+			}
+		}
+	}
+	binding := SourceBinding{
+		inputBytes: append([]byte(nil), input...), graphV5Bytes: append([]byte(nil), exact...),
+		InputLength: len(input), InputSHA256: "sha256:" + hex.EncodeToString(inputSum[:]),
+		GraphV5Length: len(exact), GraphV5SHA256: envelope.GraphV5SHA256,
+		EnvelopeSchemaVersion: envelope.SchemaVersion, GraphSchemaID: envelope.GraphV5SchemaID, GraphSchemaVersion: doc.SchemaVersion,
+		SessionID: envelope.SessionID, Generation: envelope.Generation, ExecutionBundleID: doc.ExecutionBundleID,
+		SemanticReceipt:   SemanticReceipt{doc.TraceReceipt.ReceiptVersion, doc.TraceReceipt.SemanticCommitmentDigest, doc.TraceReceipt.DigestScope},
+		DiagnosticsStatus: envelope.Diagnostics.Status, DiagnosticsOmittedRecords: envelope.Diagnostics.OmittedRecords, DiagnosticsEvictedRecords: envelope.Diagnostics.EvictedRecords,
+		Completeness:      SourceCompleteness{doc.Summary.TraversalComplete, doc.Summary.SourceGraphComplete, doc.Summary.CompletenessScope, doc.Summary.Truncated},
+		CallEvidenceClass: doc.EvidenceSemantics.CallEdges.EvidenceClass, CallEvidenceRole: callRole,
+		sensitivity: doc.SensitivityPolicy, replayManifest: doc.ReplayInputManifest, semantics: doc.EvidenceSemantics, bundleIdentity: doc.Identity,
+	}
+	if doc.EvidenceReceipt != nil {
+		binding.admissionReceipt = *doc.EvidenceReceipt
+	}
+	p.Source = binding
+	return p, nil
+}
+
+// projectNativeCalls is source-neutral math, not provenance admission. Callers
+// must validate their own envelope before attaching any source binding.
+func projectNativeCalls(doc native) (Projection, *Failure) {
 	if doc.EvidenceSemantics.CallEdges.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || doc.EvidenceSemantics.CallEdges.SupportContribution != 1 || (len(doc.Edges) != 0 && doc.EvidenceReceipt == nil) {
 		return Projection{}, &Failure{Code: CodeInvalidCalls, Message: "exact server-reported call-hierarchy semantics required"}
 	}
 	receipts := make(map[string]lgraph.EvidenceRelation)
 	if doc.EvidenceReceipt != nil {
-		receipts = make(map[string]lgraph.EvidenceRelation, len(doc.EvidenceReceipt.Relations))
 		for _, r := range doc.EvidenceReceipt.Relations {
 			receipts[r.RelationID] = r
 		}
@@ -248,32 +283,7 @@ func Project(input []byte) (Projection, *Failure) {
 	if language == "" && len(doc.Invocation.Seeds) == 1 {
 		language = doc.Invocation.Seeds[0].LanguageID
 	}
-	inputSum := sha256.Sum256(input)
-	callRole := ""
-	if doc.EvidenceReceipt != nil {
-		for _, relation := range doc.EvidenceReceipt.Relations {
-			if relation.RelationKind == "CALL_RELATION" {
-				callRole = relation.EvidenceRole
-				break
-			}
-		}
-	}
-	binding := SourceBinding{
-		inputBytes: append([]byte(nil), input...), graphV5Bytes: append([]byte(nil), exact...),
-		InputLength: len(input), InputSHA256: "sha256:" + hex.EncodeToString(inputSum[:]),
-		GraphV5Length: len(exact), GraphV5SHA256: envelope.GraphV5SHA256,
-		EnvelopeSchemaVersion: envelope.SchemaVersion, GraphSchemaID: envelope.GraphV5SchemaID, GraphSchemaVersion: doc.SchemaVersion,
-		SessionID: envelope.SessionID, Generation: envelope.Generation, ExecutionBundleID: doc.ExecutionBundleID,
-		SemanticReceipt:   SemanticReceipt{doc.TraceReceipt.ReceiptVersion, doc.TraceReceipt.SemanticCommitmentDigest, doc.TraceReceipt.DigestScope},
-		DiagnosticsStatus: envelope.Diagnostics.Status, DiagnosticsOmittedRecords: envelope.Diagnostics.OmittedRecords, DiagnosticsEvictedRecords: envelope.Diagnostics.EvictedRecords,
-		Completeness:      SourceCompleteness{doc.Summary.TraversalComplete, doc.Summary.SourceGraphComplete, doc.Summary.CompletenessScope, doc.Summary.Truncated},
-		CallEvidenceClass: doc.EvidenceSemantics.CallEdges.EvidenceClass, CallEvidenceRole: callRole,
-		sensitivity: doc.SensitivityPolicy, replayManifest: doc.ReplayInputManifest, semantics: doc.EvidenceSemantics, bundleIdentity: doc.Identity,
-	}
-	if doc.EvidenceReceipt != nil {
-		binding.admissionReceipt = *doc.EvidenceReceipt
-	}
-	p := Projection{NodeIdentities: ids, NodeIDs: nodeIDs, PairWeights: make(map[Pair]float64), Source: binding}
+	p := Projection{NodeIdentities: ids, NodeIDs: nodeIDs, PairWeights: make(map[Pair]float64)}
 	for _, edge := range doc.Edges {
 		r, ok := receipts[edge.RelationID]
 		if !ok || r.RelationKind != "CALL_RELATION" || r.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || r.EvidenceRole != "CALL_SUPPORT" || r.Direction != "CALLER_TO_CALLEE" || r.SupportContribution != 1 || r.CallerNodeID != edge.CallerNodeID || r.CalleeNodeID != edge.CalleeNodeID || len(edge.CallSites) == 0 {
@@ -358,6 +368,14 @@ func ComputeComposite(a programcadmission.CompositeProjectionAdmission, seed uin
 }
 
 func computeProjection(p Projection, seed uint64, source SourceBinding, compositeSource programcadmission.CompositeSourceBinding, claimCeiling string) (Outcome, *Failure) {
+	math, failure := partitionMath(p, seed)
+	if failure != nil {
+		return Outcome{}, failure
+	}
+	return Outcome{Outcome: math.Outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: math.Algorithm, Resolution: math.Resolution, Seed: math.Seed, Communities: math.Communities, LogicalDigest: math.LogicalDigest, ClaimCeiling: claimCeiling, Projection: p, Source: source, CompositeSource: programcadmission.CloneCompositeSourceBinding(compositeSource)}, nil
+}
+
+func partitionMath(p Projection, seed uint64) (PartitionMathPrivate, *Failure) {
 	outcome := "COMPLETE"
 	canonical := make([]Community, 0, len(p.NodeIdentities))
 	seen := make(map[string]bool, len(p.NodeIdentities))
@@ -366,7 +384,7 @@ func computeProjection(p Projection, seed uint64, source SourceBinding, composit
 	} else {
 		g, err := projectionGraph(p)
 		if err != nil {
-			return Outcome{}, &Failure{Code: CodeComputation, Message: err.Error()}
+			return PartitionMathPrivate{}, &Failure{Code: CodeComputation, Message: err.Error()}
 		}
 		var reduced community.ReducedGraph
 		func() {
@@ -378,7 +396,7 @@ func computeProjection(p Projection, seed uint64, source SourceBinding, composit
 			reduced = community.Leiden(g, 1, rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
 		}()
 		if reduced == nil {
-			return Outcome{}, &Failure{Code: CodeComputation, Message: "Gonum Leiden computation failed"}
+			return PartitionMathPrivate{}, &Failure{Code: CodeComputation, Message: "Gonum Leiden computation failed"}
 		}
 		for _, members := range reduced.Communities() {
 			if len(members) == 0 {
@@ -388,7 +406,7 @@ func computeProjection(p Projection, seed uint64, source SourceBinding, composit
 			for _, n := range members {
 				id := n.ID()
 				if id < 0 || int(id) >= len(p.NodeIdentities) || seen[p.NodeIdentities[id]] {
-					return Outcome{}, &Failure{Code: CodeComputation, Message: "Gonum Leiden returned invalid partition"}
+					return PartitionMathPrivate{}, &Failure{Code: CodeComputation, Message: "Gonum Leiden returned invalid partition"}
 				}
 				member := p.NodeIdentities[id]
 				seen[member] = true
@@ -404,7 +422,7 @@ func computeProjection(p Projection, seed uint64, source SourceBinding, composit
 		}
 	}
 	sort.Slice(canonical, func(i, j int) bool { return compareStrings(canonical[i].Members, canonical[j].Members) < 0 })
-	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: claimCeiling, Projection: p, Source: source, CompositeSource: programcadmission.CloneCompositeSourceBinding(compositeSource)}, nil
+	return PartitionMathPrivate{Outcome: outcome, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical)}, nil
 }
 
 func logicalDigest(c []Community) string {
