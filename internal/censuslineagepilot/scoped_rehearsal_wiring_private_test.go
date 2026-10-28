@@ -91,6 +91,9 @@ func TestScopedRehearsalWiringUncertainClaimPrivate(t *testing.T) {
 	if err == nil {
 		t.Fatal("uncertain owner replay")
 	}
+	if events, overflow, available := h.Diagnostics(); available || overflow || len(events) != 0 {
+		t.Fatal("claim failure before guard must be unavailable")
+	}
 	semantic, _ := f.Traffic()
 	if semantic != 0 {
 		t.Fatal("uncertain attempt semantic")
@@ -107,6 +110,9 @@ func TestScopedRehearsalWiringSixSupplyDriftsPrivate(t *testing.T) {
 			err := m.WithReadySessionLease(context.Background(), sessionruntime.SessionLeaseRequest{SessionID: cfg.Session.SessionID, Generation: cfg.Session.Generation, Workspace: cfg.Workspace}, func(ctx context.Context) error { _, e := h.Bind(ctx, m); return e })
 			if err == nil {
 				t.Fatal("ASSERT_REHEARSAL_SUPPLY_DRIFT_REFUSED")
+			}
+			if events, overflow, available := h.Diagnostics(); available || overflow || len(events) != 0 {
+				t.Fatal("adapter failure before guard must be unavailable")
 			}
 			semantic, _ := f.Traffic()
 			if semantic != 0 {

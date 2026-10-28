@@ -84,9 +84,9 @@ func (f *ScopedBatchFixturePrivate) Fault(kind string) {
 		f.child.response = func(lspwire.Message) json.RawMessage { return json.RawMessage(`[{"name":"missing fields"}]`) }
 	case "provider-budget":
 		f.child.notifications = 64
-	case "rehearsal-empty-directions", "rehearsal-empty-discovery":
+	case "rehearsal-empty-directions", "rehearsal-empty-discovery", "rehearsal-external":
 		f.child.response = func(m lspwire.Message) json.RawMessage {
-			if m.Method == "textDocument/documentSymbol" && kind == "rehearsal-empty-directions" {
+			if m.Method == "textDocument/documentSymbol" && kind != "rehearsal-empty-discovery" {
 				return json.RawMessage(`[{"name":"Query","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":1,"character":0}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":5}}}]`)
 			}
 			if m.Method == "textDocument/prepareCallHierarchy" {
@@ -98,6 +98,19 @@ func (f *ScopedBatchFixturePrivate) Fault(kind string) {
 				_ = json.Unmarshal(m.Params, &p)
 				raw, _ := json.Marshal([]any{scopeAdapterItem(p.TextDocument.URI)})
 				return raw
+			}
+			if kind == "rehearsal-external" {
+				var value any
+				switch m.Method {
+				case "callHierarchy/incomingCalls":
+					value = []lsp.CallHierarchyIncomingCall{{From: scopeAdapterItem("file:///offline-external.go"), FromRanges: []lsp.Range{}}}
+				case "callHierarchy/outgoingCalls":
+					value = []lsp.CallHierarchyOutgoingCall{{To: scopeAdapterItem("file:///offline-external.go"), FromRanges: []lsp.Range{}}}
+				}
+				if value != nil {
+					raw, _ := json.Marshal(value)
+					return raw
+				}
 			}
 			return json.RawMessage(`[]`)
 		}

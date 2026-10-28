@@ -15,10 +15,22 @@ type RetainedScopeDiagnosticPrivate struct {
 // is explicit; observations neither mint authority nor change guard eligibility.
 // The caller must already hold the exact Manager-minted capability.
 func (m *Manager) RetainedScopeDiagnosticsPrivate(g *RetainedScopeGuardPrivate) ([]RetainedScopeDiagnosticPrivate, bool) {
+	events, overflow, _ := m.RetainedScopeDiagnosticSnapshotPrivate(g)
+	return events, overflow
+}
+
+// RetainedScopeDiagnosticSnapshotPrivate additionally distinguishes unavailable
+// from an available empty snapshot. Identity, not frozen-state equality, governs
+// observation access: a state mismatch must remain observable. No Check, wire
+// operation, eligibility change, or diagnostic event is caused by this read.
+func (m *Manager) RetainedScopeDiagnosticSnapshotPrivate(g *RetainedScopeGuardPrivate) (events []RetainedScopeDiagnosticPrivate, overflow, available bool) {
+	if m == nil {
+		return nil, false, false
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if g == nil || g.manager != m || g.session == nil || g.session.retainedScopePrivate != g {
-		return nil, false
+		return nil, false, false
 	}
-	return append([]RetainedScopeDiagnosticPrivate(nil), g.diagnostics...), g.diagnosticOverflow
+	return append([]RetainedScopeDiagnosticPrivate(nil), g.diagnostics...), g.diagnosticOverflow, true
 }

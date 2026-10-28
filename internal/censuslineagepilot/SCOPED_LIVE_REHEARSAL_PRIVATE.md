@@ -144,6 +144,37 @@ Absent sentinel skips. Every other nonempty sentinel rejects. Run only this
 named test when opted in: the older `retain-inputs` rehearsal has a different
 sentinel contract and is deliberately not invoked by this command.
 
+## Prospective terminal observation v3 (private diagnostic wiring)
+
+Future execution with the unchanged v2 configuration/resource policy writes
+`lsp-trace.scoped-rehearsal-observation.private.v3`. The v2 observation description
+above documents the earlier encoding; existing v2 artifacts are not reinterpreted
+or rewritten. No historical outcome reader/parser is installed by this bridge.
+V1 still emits its original fieldset and schema, with no diagnostics field.
+
+The existing terminal outcome object gains `diagnostics` containing exactly
+`available`, `events`, and `overflow`. Events are detached Manager-owned closed
+observations (`p` phase, `m` method, `o` ordinal, `u` URI class, `r` reason), not
+caller inputs. The existing Manager cap is 64 events and 8000 event bytes including
+separators; array/envelope overhead keeps the complete diagnostics value below
+8192 bytes. There is no raw URI, source content, credential, capability, seed, or
+custody claim. Existing output, total-byte and eight-object budgets are unchanged;
+no ninth object is allocated. Public failure text/error chains remain separate.
+
+A deferred snapshot inside the READY lease callback runs before callback return,
+including Bind and producer failure paths, and before store/proof close. Identity
+validation permits observing a frozen-state mismatch without running another
+Check. Missing adapter/guard or rejected capability identity is explicitly
+unavailable; a valid empty snapshot is available with zero events. Empty is not
+exoneration and overflow explicitly means a discarded prefix. `CHECK`/`NONE`
+observations do not imply a wire request; `ADMISSION` observations do not prove
+request effects or server analysis. Successful admissions may also be events.
+
+Local fake-wire fixtures qualify this transfer and retained primary/backup hashes,
+not either spent attempt's 25-target DTO or the unknown actual live cause. No live
+run is authorized: independent review, a clean commit and a fresh config/root are
+still prerequisites. Neither historical attempt may be replayed.
+
 ## Claim, acquisition and retention
 
 The topology-backed execution store occupies a separate coordinator namespace.

@@ -144,6 +144,15 @@ func validateScopedStartupPrivate(ctx context.Context, m *sessionruntime.Manager
 	return metadata, nil
 }
 
+// Closed Manager observations only; no URI, authority, seed, or custody input.
+// At most 64 closed events plus this fixed envelope fit within 8 KiB.
+// Empty is not exoneration; overflow is an explicitly incomplete observation.
+type scopedTerminalDiagnosticsPrivate struct {
+	Available bool                                            `json:"available"`
+	Events    []sessionruntime.RetainedScopeDiagnosticPrivate `json:"events"`
+	Overflow  bool                                            `json:"overflow"`
+}
+
 type scopedLiveReportPrivate struct {
 	Schema                string                                         `json:"schema"`
 	Authority             int                                            `json:"authority"`
@@ -160,6 +169,7 @@ type scopedLiveReportPrivate struct {
 	EffectiveBudget       any                                            `json:"effective_budget"`
 	Records               []pilot.ScopedRehearsalRecordPrivate           `json:"records"`
 	DiscoveryPolicy       *pilot.ScopedDiscoveryPolicyObservationPrivate `json:"discovery_policy,omitempty"`
+	Diagnostics           *scopedTerminalDiagnosticsPrivate              `json:"diagnostics,omitempty"`
 	// This receipt lives OUTSIDE the immutable outcome object; no recursive receipt.
 	OutcomeReceipt *pilot.ScopedRehearsalRecordPrivate `json:"outcome_receipt,omitempty"`
 }
@@ -227,6 +237,10 @@ func executeScopedRehearsalPrivate(ctx context.Context, h *pilot.ScopedRehearsal
 		Output                                                                           pilot.ScopedRehearsalBudgetPrivate
 		LifetimeSeconds, RequestSeconds, Requests, CaptureBytes, Messages, ResponseBytes int
 	}{cfg.Budget, 30, 5, 256, 8 << 20, 64, 2 << 20}}
+	if cfg.Schema == "lsp-trace.scoped-rehearsal.private.v2" {
+		report.Schema = "lsp-trace.scoped-rehearsal-observation.private.v3"
+		report.Diagnostics = &scopedTerminalDiagnosticsPrivate{Events: []sessionruntime.RetainedScopeDiagnosticPrivate{}}
+	}
 	if !h.MatchesConfigPrivate(cfg) {
 		return report, errors.New("private rehearsal configuration/claim policy mismatch")
 	}
@@ -235,7 +249,7 @@ func executeScopedRehearsalPrivate(ctx context.Context, h *pilot.ScopedRehearsal
 		return report, err
 	}
 	if report.DiscoveryPolicy != nil {
-		report.Schema = "lsp-trace.scoped-rehearsal-observation.private.v2"
+		report.Schema = "lsp-trace.scoped-rehearsal-observation.private.v3"
 	}
 	ready := m.BeginReadiness(ctx, cfg.Session.SessionID, cfg.Session.Generation, time.Now().Add(5*time.Second))
 	ready, found := m.WaitReadiness(ctx, ready.ID)
@@ -262,6 +276,19 @@ func executeScopedRehearsalPrivate(ctx context.Context, h *pilot.ScopedRehearsal
 	var projection censusacquisition.Projection
 	acquirer := &scopedLiveAcquirerPrivate{h: h, manager: m}
 	operationErr := m.WithReadySessionLease(ctx, sessionruntime.SessionLeaseRequest{SessionID: cfg.Session.SessionID, Generation: cfg.Session.Generation, Workspace: cfg.Workspace}, func(leased context.Context) error {
+		// Runs on every callback exit, including Bind/producer failures, before
+		// lease exit or subsequent capability reset. Collection cannot replace errors.
+		defer func() {
+			if report.Diagnostics != nil {
+				events, overflow, available := h.Diagnostics()
+				if available {
+					if events == nil {
+						events = []sessionruntime.RetainedScopeDiagnosticPrivate{}
+					}
+					report.Diagnostics = &scopedTerminalDiagnosticsPrivate{available, events, overflow}
+				}
+			}
+		}()
 		if err != nil {
 			return err
 		} // Output preflight failure never authorizes semantic traffic.
@@ -388,7 +415,7 @@ func TestScopedLiveRehearsalV2FakePrivate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Schema != "lsp-trace.scoped-rehearsal-observation.private.v2" || report.DiscoveryPolicy == nil || report.DiscoveryPolicy.Name != "one-native-v5-private-v2" || report.DiscoveryPolicy.MaxSymbols != 256 || report.DiscoveryPolicy.MaxFiles != 4 || report.DiscoveryPolicy.MaxDepth != 64 || report.DiscoveryPolicy.MaxTargets != 63 {
+	if report.Schema != "lsp-trace.scoped-rehearsal-observation.private.v3" || report.DiscoveryPolicy == nil || report.DiscoveryPolicy.Name != "one-native-v5-private-v2" || report.DiscoveryPolicy.MaxSymbols != 256 || report.DiscoveryPolicy.MaxFiles != 4 || report.DiscoveryPolicy.MaxDepth != 64 || report.DiscoveryPolicy.MaxTargets != 63 {
 		t.Fatalf("ASSERT_V2_OUTCOME_POLICY: %+v", report)
 	}
 	if report.Outcome != "ONE_CORE_ADMITTED_CONSTITUENT" || report.AcquireCalls != 1 || report.Constituents != 1 || report.OutcomeReceipt == nil || !report.OutcomeReceipt.Verified {

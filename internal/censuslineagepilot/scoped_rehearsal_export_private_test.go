@@ -360,6 +360,16 @@ func (h *ScopedRehearsalPrivate) Retain(ctx context.Context, name string, raw []
 	h.records = append(h.records, r)
 	return r
 }
+
+// Diagnostics is observation-only: no guard minting, checks, wire work, or claim
+// validation. Manager validates the existing capability and detaches the snapshot.
+func (h *ScopedRehearsalPrivate) Diagnostics() ([]sessionruntime.RetainedScopeDiagnosticPrivate, bool, bool) {
+	if h == nil || h.manager == nil || h.adapter == nil || h.adapter.guard == nil {
+		return nil, false, false
+	}
+	return h.manager.RetainedScopeDiagnosticSnapshotPrivate(h.adapter.guard)
+}
+
 func (h *ScopedRehearsalPrivate) ClaimObservation() []byte {
 	if !h.used {
 		return nil
