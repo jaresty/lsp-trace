@@ -46,12 +46,16 @@ func scopedExecutionPolicyV2Private() scopedExecutionPolicyPrivate {
 	return scopedExecutionPolicyPrivate{Name: "one-native-v5-private-v2", DownDepth: 1, UpDepth: 1, MaxTargets: 63, MaxSymbols: 256}
 }
 
-// No caller-selected numeric budgets. Only these two exact fixed policies exist.
+func scopedExecutionPartialInspectionPolicyPrivate() scopedExecutionPolicyPrivate {
+	return scopedExecutionPolicyPrivate{Name: "one-partial-inspection-private-v1", DownDepth: 1, UpDepth: 1, MaxTargets: 63, MaxSymbols: 256}
+}
+
+// No caller-selected numeric budgets. Only these exact fixed policies exist.
 func (p scopedExecutionPolicyPrivate) claimSchema() (string, error) {
 	switch p {
 	case scopedExecutionPolicyFixedPrivate():
 		return scopedExecutionClaimSchemaPrivate, nil
-	case scopedExecutionPolicyV2Private():
+	case scopedExecutionPolicyV2Private(), scopedExecutionPartialInspectionPolicyPrivate():
 		return scopedExecutionClaimSchemaV2Private, nil
 	default:
 		return "", ErrInvalid
@@ -63,7 +67,7 @@ func (p scopedExecutionPolicyPrivate) discoveryLimits() (censusacquisition.Disco
 		return censusacquisition.DiscoveryLimits{}, err
 	}
 	n := 128
-	if p == scopedExecutionPolicyV2Private() {
+	if p == scopedExecutionPolicyV2Private() || p == scopedExecutionPartialInspectionPolicyPrivate() {
 		n = p.MaxSymbols
 	}
 	return censusacquisition.DiscoveryLimits{MaxFiles: 4, MaxSymbols: n, MaxDepth: 64, MaxStringBytes: 1 << 20}, nil

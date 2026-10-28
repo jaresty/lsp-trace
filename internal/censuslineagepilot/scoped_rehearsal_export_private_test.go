@@ -7,6 +7,7 @@ package censuslineagepilot
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,12 +17,14 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/acquisitionauthority"
 	"lsp-trace/internal/acquisitionmanifest"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/seedbinding"
 	"lsp-trace/sessionruntime"
 )
 
@@ -82,6 +85,8 @@ func (c ScopedRehearsalConfigPrivate) executionPolicy() (scopedExecutionPolicyPr
 		return scopedExecutionPolicyFixedPrivate(), nil
 	case "lsp-trace.scoped-rehearsal.private.v2":
 		return scopedExecutionPolicyV2Private(), nil
+	case "lsp-trace.scoped-rehearsal.private.v3":
+		return scopedExecutionPartialInspectionPolicyPrivate(), nil
 	default:
 		return scopedExecutionPolicyPrivate{}, ErrInvalid
 	}
@@ -327,6 +332,63 @@ func (h *ScopedRehearsalPrivate) Mint(ctx context.Context, requestID string, man
 	b := acquisitionauthority.Binding{Operation: acquisitionmanifest.SliceV3, Route: "private-census-batch", RequestID: requestID, Workspace: h.config.Workspace, SessionID: h.config.Session.SessionID, Generation: h.config.Session.Generation, Input: raw}
 	return h.adapter.mintScopedBatchSelectionPrivate(ctx, b, seeds)
 }
+
+// ScopedPartialManifestPrivate fixes bounded headroom below the 30-second lease.
+// These are private observed caps, not public or caller-selected defaults.
+func ScopedPartialManifestPrivate(b censusacquisition.BatchRequest) acquisitionmanifest.Manifest {
+	total, request := 25000, 5000
+	return b.AcquisitionManifest(acquisitionmanifest.Limits{TimeoutMS: &total, RequestTimeoutMS: &request})
+}
+
+// Partial acquisition is test-only, purpose-closed, and never enters Core admission.
+func (h *ScopedRehearsalPrivate) AcquirePartialPrivate(ctx context.Context, m *sessionruntime.Manager, b censusacquisition.BatchRequest) (raw, seeds []byte, err error) {
+	if err = h.check(ctx); err != nil {
+		return nil, nil, err
+	}
+	if h.owner == nil || h.config.Schema != "lsp-trace.scoped-rehearsal.private.v3" || m != h.manager || b.Session != h.config.Session || len(b.Targets) == 0 || len(b.Targets) > 63 || b.DownDepth != 1 || b.UpDepth != 1 {
+		return nil, nil, ErrInvalid
+	}
+	selection, err := h.Mint(ctx, b.BatchID, ScopedPartialManifestPrivate(b), b.CanonicalSeedsV2)
+	if err != nil {
+		return nil, nil, err
+	}
+	binding := selection.state.binding
+	req, err := validateScopedBatchBindingPrivate(h.adapter, binding)
+	if err != nil {
+		return nil, nil, err
+	}
+	metadata, failure := m.Metadata(b.Session.SessionID, b.Session.Generation)
+	if failure != "" {
+		return nil, nil, ErrInvalid
+	}
+	req.Context = acquisition.AcquisitionContext{SessionID: b.Session.SessionID, Generation: b.Session.Generation, PositionEncoding: metadata.PositionEncoding}
+	identity, err := json.Marshal(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Context.ID = fmt.Sprintf("public-acquisition-v2:%x", sha256.Sum256(identity))
+	authority, err := acquisitionauthority.MintSeedAuthority(binding, b.CanonicalSeedsV2, seedbinding.CallerAssertedLocal, false, "", true)
+	if err != nil {
+		return nil, nil, err
+	}
+	raw, seeds, err = AcquireScopedPartialInspectionPrivate(ctx, m, selection, authority, binding, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	carrier, err := graphprovenance.ParseSourceWithholdingPrivateV1(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Policy withholding is intentional. An ordinary no-follow capture failure is
+	// a public rehearsal failure, not a retained successful inspection artifact.
+	for _, capture := range carrier.Evidence.Captures {
+		if capture.Status != "READABLE" && capture.Status != graphprovenance.PolicyWithheldPrivateV1 {
+			return nil, nil, errors.New("partial inspection ordinary source capture failed")
+		}
+	}
+	return raw, seeds, nil
+}
+
 func (h *ScopedRehearsalPrivate) Retain(ctx context.Context, name string, raw []byte) ScopedRehearsalRecordPrivate {
 	r := ScopedRehearsalRecordPrivate{Name: name, Bytes: len(raw)}
 	// Reserve one object and 256 KiB for the terminal immutable observation. Raw V5
@@ -437,9 +499,14 @@ func NewScopedRehearsalFixtureV2Private(t *testing.T) (*ScopedRehearsalPrivate, 
 	return newScopedRehearsalFixturePrivate(t, "lsp-trace.scoped-rehearsal.private.v2")
 }
 
-func newScopedRehearsalFixturePrivate(t *testing.T, schema string) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+func NewScopedPartialRehearsalFixturePrivate(t *testing.T) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
 	t.Helper()
-	restart, m, id, child, paths, loc := adapterFixtureWithRestartPathsAndServerPrivate(t, "/fixture/server")
+	return newScopedRehearsalFixturePrivate(t, "lsp-trace.scoped-rehearsal.private.v3")
+}
+
+func newScopedRehearsalFixturePrivate(t *testing.T, schema string, setup ...func(string)) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+	t.Helper()
+	restart, m, id, child, paths, loc := adapterFixtureWithRestartPathsAndServerPrivate(t, "/fixture/server", setup...)
 	a, b, ap, bp := retentionRoots(t)
 	c, _, cp, _ := retentionRoots(t)
 	cfg := ScopedRehearsalConfigPrivate{Schema: schema, InputRoots: paths, Locator: loc, OutputRoots: [3]string{ap, bp, cp}, Workspace: restart.Scope().Selection().Workspace, CodeHEAD: strings.Repeat("a", 40), Session: id, TrustDomain: "test", Profile: "go", EnvironmentReference: "local", Server: "/fixture/server", Environment: []string{"PATH=/fixture/no-exec"}, Budget: ScopedRehearsalBudgetFixedPrivate()}

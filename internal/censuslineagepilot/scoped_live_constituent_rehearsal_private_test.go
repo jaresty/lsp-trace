@@ -63,66 +63,70 @@ func TestScopedBatchLiveConstituentRehearsalPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
-	// cwd is the package directory in this test binary, not the retained workspace.
-	head, err := cmd.Output()
-	if err != nil || string(head) != cfg.CodeHEAD+"\n" {
-		t.Fatalf("exact executable checkout HEAD mismatch: %v", err)
-	}
-	for _, args := range [][]string{{"diff", "--quiet"}, {"diff", "--cached", "--quiet"}} {
-		if err := exec.CommandContext(ctx, "git", args...).Run(); err != nil {
-			t.Fatal("live rehearsal requires clean reviewed executable checkout:", err)
+	if err := scopedRehearsalPurposeBeforeStartupPrivate(cfg, false, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
+		// cwd is the package directory in this test binary, not the retained workspace.
+		head, err := cmd.Output()
+		if err != nil || string(head) != cfg.CodeHEAD+"\n" {
+			t.Fatalf("exact executable checkout HEAD mismatch: %v", err)
 		}
-	}
-	untracked, err := exec.CommandContext(ctx, "git", "ls-files", "--others", "--exclude-standard").Output()
-	if err != nil || len(untracked) != 0 {
-		t.Fatal("live rehearsal refuses untracked executable checkout", err)
-	}
-	// Every root/finite budget check precedes even protocol initialization.
-	h, err := pilot.OpenScopedRehearsalPrivate(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := h.Close(); err != nil {
-			t.Error("output close uncertainty:", err)
+		for _, args := range [][]string{{"diff", "--quiet"}, {"diff", "--cached", "--quiet"}} {
+			if err := exec.CommandContext(ctx, "git", args...).Run(); err != nil {
+				t.Fatal("live rehearsal requires clean reviewed executable checkout:", err)
+			}
 		}
-	}()
-	supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	m, err := sessionruntime.New(sessionruntime.Config{Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 1024, MaxOperations: 2}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		if err := m.Shutdown(context.Background()); err != nil {
-			t.Error("runtime shutdown uncertainty:", err)
+		untracked, err := exec.CommandContext(ctx, "git", "ls-files", "--others", "--exclude-standard").Output()
+		if err != nil || len(untracked) != 0 {
+			t.Fatal("live rehearsal refuses untracked executable checkout", err)
 		}
-	}()
-	v, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: cfg.TrustDomain, Workspace: cfg.Workspace, Profile: cfg.Profile, EnvironmentReference: cfg.EnvironmentReference})
-	if err != nil {
-		t.Fatal(err)
-	}
-	started := m.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(v), LanguageID: "go", Process: managedprocess.Spec{Path: cfg.Server, Args: cfg.Args, Dir: cfg.Workspace, Env: cfg.Environment}})
-	if started.Failure != "" || started.SessionID != cfg.Session.SessionID || started.Generation != cfg.Session.Generation {
-		t.Fatalf("exact session start mismatch: %+v", started)
-	}
-	ready := m.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(5*time.Second))
-	ready, ok := m.WaitReadiness(ctx, ready.ID)
-	if _, err := validateScopedStartupPrivate(ctx, m, cfg, ready, ok); err != nil {
-		t.Fatal(err)
-	}
-	report, err := executeScopedRehearsalPrivate(ctx, h, m, cfg)
-	output, encodeErr := json.Marshal(report)
-	if encodeErr != nil {
-		t.Fatal(encodeErr)
-	}
-	t.Log(string(output))
-	if err != nil {
+		// Every root/finite budget check precedes even protocol initialization.
+		h, err := pilot.OpenScopedRehearsalPrivate(ctx, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := h.Close(); err != nil {
+				t.Error("output close uncertainty:", err)
+			}
+		}()
+		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err := sessionruntime.New(sessionruntime.Config{Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 1024, MaxOperations: 2}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := m.Shutdown(context.Background()); err != nil {
+				t.Error("runtime shutdown uncertainty:", err)
+			}
+		}()
+		v, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: cfg.TrustDomain, Workspace: cfg.Workspace, Profile: cfg.Profile, EnvironmentReference: cfg.EnvironmentReference})
+		if err != nil {
+			t.Fatal(err)
+		}
+		started := m.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(v), LanguageID: "go", Process: managedprocess.Spec{Path: cfg.Server, Args: cfg.Args, Dir: cfg.Workspace, Env: cfg.Environment}})
+		if started.Failure != "" || started.SessionID != cfg.Session.SessionID || started.Generation != cfg.Session.Generation {
+			t.Fatalf("exact session start mismatch: %+v", started)
+		}
+		ready := m.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(5*time.Second))
+		ready, ok := m.WaitReadiness(ctx, ready.ID)
+		if _, err := validateScopedStartupPrivate(ctx, m, cfg, ready, ok); err != nil {
+			t.Fatal(err)
+		}
+		report, err := executeScopedRehearsalPrivate(ctx, h, m, cfg)
+		output, encodeErr := json.Marshal(report)
+		if encodeErr != nil {
+			t.Fatal(encodeErr)
+		}
+		t.Log(string(output))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -241,7 +245,7 @@ func executeScopedRehearsalPrivate(ctx context.Context, h *pilot.ScopedRehearsal
 		report.Schema = "lsp-trace.scoped-rehearsal-observation.private.v3"
 		report.Diagnostics = &scopedTerminalDiagnosticsPrivate{Events: []sessionruntime.RetainedScopeDiagnosticPrivate{}}
 	}
-	if !h.MatchesConfigPrivate(cfg) {
+	if (cfg.Schema != "lsp-trace.scoped-rehearsal.private.v1" && cfg.Schema != "lsp-trace.scoped-rehearsal.private.v2") || !h.MatchesConfigPrivate(cfg) {
 		return report, errors.New("private rehearsal configuration/claim policy mismatch")
 	}
 	report.DiscoveryPolicy, err = cfg.DiscoveryPolicyObservationPrivate()
