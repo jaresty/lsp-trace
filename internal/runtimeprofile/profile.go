@@ -86,6 +86,10 @@ func Validate(selector Selector) (ValidatedSelector, error) {
 	}, nil
 }
 
+// Workspace exposes only the canonical comparison value already established by
+// Validate; it does not resolve a profile, executable or filesystem resource.
+func (selector ValidatedSelector) Workspace() Workspace { return Workspace{value: selector.workspace} }
+
 func Resolve(selector ValidatedSelector) Profile {
 	workspace := Workspace{value: selector.workspace}
 	environment := EnvironmentReference{value: selector.environmentReference}

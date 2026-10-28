@@ -23,66 +23,12 @@ import (
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/publication"
-	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/sessionruntime"
 )
 
-const ScopedRehearsalConfigLimitPrivate = 32 << 10
-const scopedRehearsalArtifactPrivate = 2 << 20
-const scopedRehearsalTotalPrivate = 16 << 20
-const scopedRehearsalObjectsPrivate = 8
-
-// Fixed finite proposal, private observed policy, NOT public defaults. Two staging
-// copies and sixteen byte-equivalent read/hash passes are reserved before opening
-// the runtime (including both existing-object pre-reads and duplicate hashing).
-type ScopedRehearsalBudgetPrivate struct {
-	ArtifactBytes int `json:"artifact_bytes"`
-	TotalBytes    int `json:"total_bytes"`
-	Objects       int `json:"objects"`
-	StagingBytes  int `json:"staging_bytes"`
-	ReadHashBytes int `json:"read_hash_bytes"`
-}
-
-func ScopedRehearsalBudgetFixedPrivate() ScopedRehearsalBudgetPrivate {
-	return ScopedRehearsalBudgetPrivate{scopedRehearsalArtifactPrivate, scopedRehearsalTotalPrivate, scopedRehearsalObjectsPrivate, 2 * scopedRehearsalTotalPrivate, 16 * scopedRehearsalTotalPrivate}
-}
-
-// Fixed prospective variation; aggregate, count, staging and read/hash are
-// independent ceilings, not Objects multiplied by ArtifactBytes.
-func ScopedRehearsalBudgetPartialV2Private() ScopedRehearsalBudgetPrivate {
-	b := ScopedRehearsalBudgetFixedPrivate()
-	b.ArtifactBytes = 4 << 20
-	return b
-}
-
-func (c ScopedRehearsalConfigPrivate) fixedBudget() ScopedRehearsalBudgetPrivate {
-	if c.Schema == "lsp-trace.scoped-rehearsal.private.v4" {
-		return ScopedRehearsalBudgetPartialV2Private()
-	}
-	return ScopedRehearsalBudgetFixedPrivate()
-}
-
 func (c ScopedRehearsalConfigPrivate) partialPurpose() bool {
 	return c.Schema == "lsp-trace.scoped-rehearsal.private.v3" || c.Schema == "lsp-trace.scoped-rehearsal.private.v4"
-}
-
-type ScopedRehearsalConfigPrivate struct {
-	Schema               string                                    `json:"schema"`
-	InputRoots           [3]string                                 `json:"input_roots"`
-	Locator              scopeRestartLocator                       `json:"restart_locator"`
-	OutputRoots          [3]string                                 `json:"output_roots"`
-	OutputIdentities     [3]publication.RetentionDirectoryIdentity `json:"output_identities"`
-	Workspace            string                                    `json:"workspace"`
-	CodeHEAD             string                                    `json:"executable_head"`
-	Session              censusacquisition.SessionIdentity         `json:"session"`
-	TrustDomain          string                                    `json:"trust_domain"`
-	Profile              string                                    `json:"profile"`
-	EnvironmentReference string                                    `json:"environment_reference"`
-	Server               string                                    `json:"server"`
-	Args                 []string                                  `json:"args"`
-	Environment          []string                                  `json:"environment"`
-	Budget               ScopedRehearsalBudgetPrivate              `json:"budget"`
 }
 
 func ParseScopedRehearsalConfigPrivate(raw []byte) (c ScopedRehearsalConfigPrivate, err error) {
@@ -98,30 +44,9 @@ func ParseScopedRehearsalConfigPrivate(raw []byte) (c ScopedRehearsalConfigPriva
 	}
 	return c, c.validate(true)
 }
-func (c ScopedRehearsalConfigPrivate) executionPolicy() (scopedExecutionPolicyPrivate, error) {
-	switch c.Schema {
-	case "lsp-trace.scoped-rehearsal.private.v1":
-		return scopedExecutionPolicyFixedPrivate(), nil
-	case "lsp-trace.scoped-rehearsal.private.v2":
-		return scopedExecutionPolicyV2Private(), nil
-	case "lsp-trace.scoped-rehearsal.private.v3":
-		return scopedExecutionPartialInspectionPolicyPrivate(), nil
-	case "lsp-trace.scoped-rehearsal.private.v4":
-		return scopedExecutionPartialInspectionPolicyV2Private(), nil
-	default:
-		return scopedExecutionPolicyPrivate{}, ErrInvalid
-	}
-}
 
 // V2 observation only. V1 serialized reports omit this additive observation.
 // These are effective fixed resources, never caller-settable configuration.
-type ScopedDiscoveryPolicyObservationPrivate struct {
-	Name       string `json:"name"`
-	MaxSymbols int    `json:"max_symbols"`
-	MaxFiles   int    `json:"max_files"`
-	MaxDepth   int    `json:"max_depth"`
-	MaxTargets int    `json:"max_targets"`
-}
 
 func (c ScopedRehearsalConfigPrivate) DiscoveryPolicyObservationPrivate() (*ScopedDiscoveryPolicyObservationPrivate, error) {
 	p, err := c.executionPolicy()
@@ -139,49 +64,16 @@ func (c ScopedRehearsalConfigPrivate) DiscoveryPolicyObservationPrivate() (*Scop
 }
 
 func (c ScopedRehearsalConfigPrivate) validate(outsideTmp bool) error {
-	if _, err := c.executionPolicy(); err != nil {
+	if err := ValidateScopedRehearsalConfigPurePrivate(c); err != nil {
 		return err
 	}
-	if !c.Locator.valid() || !featureScopeRevision.MatchString(c.CodeHEAD) || c.Session.Validate() != nil || c.Budget != c.fixedBudget() || len(c.Args) > 16 || len(c.Environment) == 0 || len(c.Environment) > 32 {
-		return ErrInvalid
-	}
-	for _, p := range append(append([]string{c.Workspace, c.Server}, c.InputRoots[:]...), c.OutputRoots[:]...) {
-		if !filepath.IsAbs(p) || filepath.Clean(p) != p || len(p) > 4096 {
-			return ErrInvalid
-		}
-	}
-	for i, p := range c.OutputRoots {
-		if c.OutputIdentities[i].Inode == 0 {
-			return ErrInvalid
-		}
-		if outsideTmp {
+	if outsideTmp {
+		for _, p := range c.OutputRoots {
 			for _, temporary := range []string{"/tmp", "/private/tmp", "/var/tmp", "/private/var/tmp", "/var/folders", "/private/var/folders", filepath.Clean(os.TempDir())} {
 				if p == temporary || strings.HasPrefix(p, temporary+"/") {
 					return ErrInvalid
 				}
 			}
-		}
-	}
-	v, e := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: c.TrustDomain, Workspace: c.Workspace, Profile: c.Profile, EnvironmentReference: c.EnvironmentReference})
-	if e != nil || runtimeprofile.Resolve(v).Workspace().String() != c.Workspace {
-		return ErrInvalid
-	}
-	previous := ""
-	for _, entry := range c.Environment {
-		name, _, ok := strings.Cut(entry, "=")
-		if !ok || name == "" || name <= previous || strings.ContainsRune(entry, 0) || len(entry) > 4096 {
-			return ErrInvalid
-		}
-		for i, ch := range []byte(name) {
-			if !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '_' || (i > 0 && ch >= '0' && ch <= '9')) {
-				return ErrInvalid
-			}
-		}
-		previous = name
-	}
-	for _, arg := range c.Args {
-		if len(arg) > 4096 || strings.ContainsRune(arg, 0) {
-			return ErrInvalid
 		}
 	}
 	return nil
@@ -205,18 +97,6 @@ type ScopedRehearsalPrivate struct {
 	retainedBytes int
 	records       []ScopedRehearsalRecordPrivate
 	retentionOps  scopeRetentionOps // nil functions select real storage; package-local fault fixtures only
-}
-type ScopedRehearsalRecordPrivate struct {
-	Name           string                        `json:"name"`
-	ID             string                        `json:"id"`
-	Bytes          int                           `json:"bytes"`
-	Phase          string                        `json:"phase"`
-	Primary        string                        `json:"primary"`
-	Backup         string                        `json:"backup"`
-	PrimaryReceipt *publication.BoundFileReceipt `json:"primary_receipt,omitempty"`
-	BackupReceipt  *publication.BoundFileReceipt `json:"backup_receipt,omitempty"`
-	Verified       bool                          `json:"verified"`
-	Error          string                        `json:"error,omitempty"`
 }
 
 func OpenScopedRehearsalPrivate(ctx context.Context, c ScopedRehearsalConfigPrivate) (h *ScopedRehearsalPrivate, err error) {

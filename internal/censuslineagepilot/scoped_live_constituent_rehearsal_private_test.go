@@ -151,32 +151,9 @@ func validateScopedStartupPrivate(ctx context.Context, m *sessionruntime.Manager
 // Closed Manager observations only; no URI, authority, seed, or custody input.
 // At most 64 closed events plus this fixed envelope fit within 8 KiB.
 // Empty is not exoneration; overflow is an explicitly incomplete observation.
-type scopedTerminalDiagnosticsPrivate struct {
-	Available bool                                            `json:"available"`
-	Events    []sessionruntime.RetainedScopeDiagnosticPrivate `json:"events"`
-	Overflow  bool                                            `json:"overflow"`
-}
+type scopedTerminalDiagnosticsPrivate = pilot.ScopedTerminalDiagnosticsObservationPrivate
 
-type scopedLiveReportPrivate struct {
-	Schema                string                                         `json:"schema"`
-	Authority             int                                            `json:"authority"`
-	Accepted              bool                                           `json:"accepted"`
-	Completeness          string                                         `json:"completeness"`
-	FeatureIdentity       string                                         `json:"feature_identity"`
-	RevisionQualification string                                         `json:"revision_qualification"`
-	Outcome               string                                         `json:"outcome"`
-	AcquireCalls          int                                            `json:"acquire_calls"`
-	Constituents          int                                            `json:"core_admitted_constituents"`
-	Failure               string                                         `json:"failure,omitempty"`
-	CloseFailure          string                                         `json:"store_proof_close_failure,omitempty"`
-	Runtime               sessionruntime.SessionMetadata                 `json:"runtime"`
-	EffectiveBudget       any                                            `json:"effective_budget"`
-	Records               []pilot.ScopedRehearsalRecordPrivate           `json:"records"`
-	DiscoveryPolicy       *pilot.ScopedDiscoveryPolicyObservationPrivate `json:"discovery_policy,omitempty"`
-	Diagnostics           *scopedTerminalDiagnosticsPrivate              `json:"diagnostics,omitempty"`
-	// This receipt lives OUTSIDE the immutable outcome object; no recursive receipt.
-	OutcomeReceipt *pilot.ScopedRehearsalRecordPrivate `json:"outcome_receipt,omitempty"`
-}
+type scopedLiveReportPrivate = pilot.ScopedLiveOutcomeObservationPrivate
 
 type scopedLiveAcquirerPrivate struct {
 	h       *pilot.ScopedRehearsalPrivate

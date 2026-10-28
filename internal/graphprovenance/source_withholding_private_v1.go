@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/sessionruntime"
@@ -201,9 +202,10 @@ func ParseSourceWithholdingPrivateV1(raw []byte) (SourceWithholdingPrivateV1, er
 // just as in the historical preflight; its shape is not a policy/source carrier.
 func preflightSourceArraysPrivateV1(raw []byte) error {
 	type frame struct {
-		object, key bool
-		name        string
-		count       int
+		object, key  bool
+		name         string
+		count        int
+		policyMember bool
 	}
 	stack := []frame{}
 	d := json.NewDecoder(bytes.NewReader(raw))
@@ -225,6 +227,33 @@ func preflightSourceArraysPrivateV1(raw []byte) error {
 			top := &stack[len(stack)-1]
 			if top.object && top.key {
 				top.name = token.(string)
+				// encoding/json matches field names case-insensitively. Refuse its
+				// aliases BEFORE it can allocate typed policy/evidence arrays. Opaque
+				// LSP data is still skipped below, not recursively policy-validated.
+				for _, canonical := range []string{"source_policy", "evidence", "members", "captures", "supplies", "bindings", "requests", "targets", "required_targets", "edge_observations", "nodes", "edges", "seeds", "frontier", "records", "data"} {
+					if top.name != canonical && strings.EqualFold(top.name, canonical) {
+						return errors.New("private source noncanonical critical key")
+					}
+				}
+				if len(stack) == 1 {
+					switch top.name {
+					case "schema_version", "source_policy", "evidence", "source_completeness", "accepted", "authority", "replay_admitted", "partial", "withheld_count", "frozen_query_scope":
+					default:
+						return errors.New("private source unknown envelope key")
+					}
+				} else if len(stack) == 2 && stack[0].name == "source_policy" {
+					switch top.name {
+					case "schema_version", "workspace_uri", "session_id", "generation", "members":
+					default:
+						return errors.New("private source unknown policy key")
+					}
+				} else if top.policyMember {
+					switch top.name {
+					case "uri", "sha256", "role":
+					default:
+						return errors.New("private source unknown member key")
+					}
+				}
 				top.key = false
 				if top.name == "data" {
 					var opaque json.RawMessage
@@ -250,7 +279,8 @@ func preflightSourceArraysPrivateV1(raw []byte) error {
 			}
 		}
 		if delim, ok := token.(json.Delim); ok && (delim == '{' || delim == '[') {
-			stack = append(stack, frame{object: delim == '{', key: delim == '{', name: name})
+			member := delim == '{' && len(stack) == 3 && stack[0].name == "source_policy" && stack[1].name == "members" && !stack[2].object
+			stack = append(stack, frame{object: delim == '{', key: delim == '{', name: name, policyMember: member})
 		}
 	}
 }

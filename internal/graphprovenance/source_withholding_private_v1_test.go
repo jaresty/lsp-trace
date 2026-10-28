@@ -59,6 +59,34 @@ func withholdingFixturePrivateV1(t *testing.T) (acquisition.Result, SourcePolicy
 	}
 	return r, p, expected, root
 }
+func TestSourceWithholdingPrivateV1CanonicalKeyPreflight(t *testing.T) {
+	r, p, expected, _ := withholdingFixturePrivateV1(t)
+	raw, err := captureSourceWithholdingPrivateV1(context.Background(), r, p, expected, readSourcePrivateV1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseSourceWithholdingPrivateV1(raw); err != nil {
+		t.Fatal("ASSERT_PRIVATE_CANONICAL_SIX_VALID", err)
+	}
+	for _, tc := range []struct{ name, from, to string }{
+		{"members-case", `"members":`, `"Members":`},
+		{"policy-unknown", `"source_policy":{`, `"source_policy":{"unknown":[],`},
+		{"member-unknown", `"members":[{`, `"members":[{"unknown":[],`},
+		{"member-uri-case", `"uri":`, `"URI":`},
+		{"captures-case", `"captures":`, `"Captures":`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := bytes.Replace(raw, []byte(tc.from), []byte(tc.to), 1)
+			if bytes.Equal(raw, bad) {
+				t.Fatal("mutation did not change bytes")
+			}
+			if _, err := ParseSourceWithholdingPrivateV1(bad); err == nil {
+				t.Fatal("ASSERT_PRIVATE_CANONICAL_KEY_REFUSAL")
+			}
+		})
+	}
+}
+
 func TestSourceWithholdingPrivateV1Capture(t *testing.T) {
 	r, p, expected, root := withholdingFixturePrivateV1(t)
 	reads := map[string]int{}

@@ -20,6 +20,11 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
+// Test-only access to the actual producer contract with fixture temporary roots.
+func ValidateScopedRehearsalConfigFixturePrivate(c ScopedRehearsalConfigPrivate) error {
+	return c.validate(false)
+}
+
 // Arm the existing one-over wire-message fault only after discovery. The four
 // nomination prepares themselves succeed; the first acquisition request fails.
 // The shared provider-budget fixture uses 64 (at cap), not an actual overflow.
@@ -45,8 +50,16 @@ func ArmScopedPartialAcquisitionBudgetFailurePrivate(f *ScopedBatchFixturePrivat
 // Reuse the reviewed exact table. Noncallable symbols preserve its original
 // census ordinals without adding targets, preparation requests or seed inputs.
 func NewScopedPartialExact25RehearsalFixturePrivate(t *testing.T, faults ...string) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+	return newScopedPartialExact25WithSchemaPrivate(t, "lsp-trace.scoped-rehearsal.private.v3", faults...)
+}
+
+func NewScopedPartialExact25V4RehearsalFixturePrivate(t *testing.T) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+	return newScopedPartialExact25WithSchemaPrivate(t, "lsp-trace.scoped-rehearsal.private.v4")
+}
+
+func newScopedPartialExact25WithSchemaPrivate(t *testing.T, schema string, faults ...string) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
 	t.Helper()
-	h, m, cfg, f := newScopedRehearsalFixturePrivate(t, "lsp-trace.scoped-rehearsal.private.v3", func(root string) {
+	h, m, cfg, f := newScopedRehearsalFixturePrivate(t, schema, func(root string) {
 		for _, path := range fixtureScopePaths {
 			if e := os.WriteFile(filepath.Join(root, path), []byte("package fixture\n"+strings.Repeat("// deterministic owned mock padding ................................\n", 301)), 0600); e != nil {
 				t.Fatal(e)
