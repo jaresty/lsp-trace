@@ -539,10 +539,19 @@ func checkResultV2(e EvidenceV2) error {
 
 // ValidateV2 checks the typed envelope offline. No source or supplier is invoked.
 func ValidateV2(e EvidenceV2) error {
+	return validateV2Profile(e, nil)
+}
+
+// A nil private policy preserves the historical closed V2 gate exactly.
+func validateV2Profile(e EvidenceV2, policy *SourcePolicyPrivateV1) error {
 	if len(e.Captures) > MaxBindings || len(e.Bindings) > MaxBindings || len(e.Supplies) > 64 {
 		return errors.New("V2 source/census row limit")
 	}
-	if e.SchemaVersion != VersionV2 || e.Policy != PolicyV2 || e.AnalyzedVersion != Unverified || e.DependencyCompleteness != "UNKNOWN_INCOMPLETE" {
+	version, sourcePolicy := VersionV2, PolicyV2
+	if policy != nil {
+		version, sourcePolicy = VersionSourceWithholdingPrivateV1, PolicySourceWithholdingPrivateV1
+	}
+	if e.SchemaVersion != version || e.Policy != sourcePolicy || e.AnalyzedVersion != Unverified || e.DependencyCompleteness != "UNKNOWN_INCOMPLETE" {
 		return errors.New("V2 policy/ceiling mismatch")
 	}
 	root, err := url.Parse(e.WorkspaceURI)
@@ -580,7 +589,7 @@ func ValidateV2(e EvidenceV2) error {
 	if len(uris) != len(e.Captures) {
 		return errors.New("V2 missing/extra capture")
 	}
-	if err = validateCapturesV2(e, uris); err != nil {
+	if err = validateCapturesV2Profile(e, uris, policy); err != nil {
 		return err
 	}
 	rebuilt := e

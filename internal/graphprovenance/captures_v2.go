@@ -11,6 +11,10 @@ type CaptureBudgetV2 struct {
 }
 
 func validateCapturesV2(e EvidenceV2, uris []string) error {
+	return validateCapturesV2Profile(e, uris, nil)
+}
+
+func validateCapturesV2Profile(e EvidenceV2, uris []string, policy *SourcePolicyPrivateV1) error {
 	if e.CaptureBudget.RootStatus != "OPENED" && e.CaptureBudget.RootStatus != "UNAVAILABLE" {
 		return errors.New("V2 missing capture root outcome")
 	}
@@ -19,6 +23,12 @@ func validateCapturesV2(e EvidenceV2, uris []string) error {
 	for i, r := range e.Captures {
 		if r.URI != uris[i] || r.Classification != PostTraversal || r.Supply != nil {
 			return errors.New("V2 capture order/class mismatch")
+		}
+		if policy != nil && policy.withholds(e.WorkspaceURI, r.URI) {
+			if !validWithheldPrivateV1(e.WorkspaceURI, r) {
+				return errors.New("private policy withholding receipt mismatch")
+			}
+			continue
 		}
 		if err := validateReceiptV2(e.WorkspaceURI, r); err != nil {
 			return err
