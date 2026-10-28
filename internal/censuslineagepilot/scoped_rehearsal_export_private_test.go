@@ -76,8 +76,47 @@ func ParseScopedRehearsalConfigPrivate(raw []byte) (c ScopedRehearsalConfigPriva
 	}
 	return c, c.validate(true)
 }
+func (c ScopedRehearsalConfigPrivate) executionPolicy() (scopedExecutionPolicyPrivate, error) {
+	switch c.Schema {
+	case "lsp-trace.scoped-rehearsal.private.v1":
+		return scopedExecutionPolicyFixedPrivate(), nil
+	case "lsp-trace.scoped-rehearsal.private.v2":
+		return scopedExecutionPolicyV2Private(), nil
+	default:
+		return scopedExecutionPolicyPrivate{}, ErrInvalid
+	}
+}
+
+// V2 observation only. V1 serialized reports omit this additive observation.
+// These are effective fixed resources, never caller-settable configuration.
+type ScopedDiscoveryPolicyObservationPrivate struct {
+	Name       string `json:"name"`
+	MaxSymbols int    `json:"max_symbols"`
+	MaxFiles   int    `json:"max_files"`
+	MaxDepth   int    `json:"max_depth"`
+	MaxTargets int    `json:"max_targets"`
+}
+
+func (c ScopedRehearsalConfigPrivate) DiscoveryPolicyObservationPrivate() (*ScopedDiscoveryPolicyObservationPrivate, error) {
+	p, err := c.executionPolicy()
+	if err != nil {
+		return nil, err
+	}
+	if p == scopedExecutionPolicyFixedPrivate() {
+		return nil, nil
+	}
+	limits, err := p.discoveryLimits()
+	if err != nil {
+		return nil, err
+	}
+	return &ScopedDiscoveryPolicyObservationPrivate{p.Name, limits.MaxSymbols, limits.MaxFiles, limits.MaxDepth, p.MaxTargets}, nil
+}
+
 func (c ScopedRehearsalConfigPrivate) validate(outsideTmp bool) error {
-	if c.Schema != "lsp-trace.scoped-rehearsal.private.v1" || !c.Locator.valid() || !featureScopeRevision.MatchString(c.CodeHEAD) || c.Session.Validate() != nil || c.Budget != ScopedRehearsalBudgetFixedPrivate() || len(c.Args) > 16 || len(c.Environment) == 0 || len(c.Environment) > 32 {
+	if _, err := c.executionPolicy(); err != nil {
+		return err
+	}
+	if !c.Locator.valid() || !featureScopeRevision.MatchString(c.CodeHEAD) || c.Session.Validate() != nil || c.Budget != ScopedRehearsalBudgetFixedPrivate() || len(c.Args) > 16 || len(c.Environment) == 0 || len(c.Environment) > 32 {
 		return ErrInvalid
 	}
 	for _, p := range append(append([]string{c.Workspace, c.Server}, c.InputRoots[:]...), c.OutputRoots[:]...) {
@@ -189,7 +228,11 @@ func openScopedRehearsalPrivate(ctx context.Context, c ScopedRehearsalConfigPriv
 	if err != nil {
 		return h, err
 	}
-	h.owner, err = newScopedExecutionClaimPrivate(ctx, h.restart, c.CodeHEAD, c.Session, c.Workspace, h.roots)
+	policy, err := c.executionPolicy()
+	if err != nil {
+		return h, err
+	}
+	h.owner, err = newScopedExecutionClaimWithPolicyPrivate(ctx, h.restart, c.CodeHEAD, c.Session, c.Workspace, h.roots, policy)
 	if err != nil {
 		return h, err
 	}
@@ -203,6 +246,9 @@ func (h *ScopedRehearsalPrivate) Bind(ctx context.Context, m *sessionruntime.Man
 	if h == nil || h.used || m == nil {
 		return nil, ErrInvalid
 	}
+	if err := h.checkPolicy(); err != nil {
+		return nil, err
+	}
 	h.used = true
 	result, e := h.owner.claim(ctx, h.store)
 	h.claimResult = result
@@ -214,11 +260,45 @@ func (h *ScopedRehearsalPrivate) Bind(ctx context.Context, m *sessionruntime.Man
 	if err = h.check(ctx); err != nil {
 		return claim, err
 	}
-	h.adapter, _, err = newScopeRuntimeAdapter(ctx, h.restart, m, h.config.Session)
+	policy, e := h.config.executionPolicy()
+	if e != nil {
+		return claim, e
+	}
+	h.adapter, _, err = newScopeRuntimeAdapterWithPolicyPrivate(ctx, h.restart, m, h.config.Session, policy)
 	h.manager = m
 	return claim, err
 }
+
+// Match the supplied configuration before readiness, retention, claim or semantic
+// traffic. A schema change may not relabel a previously constructed owner.
+func (h *ScopedRehearsalPrivate) MatchesConfigPrivate(c ScopedRehearsalConfigPrivate) bool {
+	if h == nil || h.checkPolicy() != nil {
+		return false
+	}
+	a, e := json.Marshal(h.config)
+	b, f := json.Marshal(c)
+	return e == nil && f == nil && bytes.Equal(a, b)
+}
+
+func (h *ScopedRehearsalPrivate) checkPolicy() error {
+	if h == nil || h.owner == nil {
+		return ErrInvalid
+	}
+	policy, err := h.config.executionPolicy()
+	if err != nil {
+		return err
+	}
+	head, err := parseScopedExecutionHeadPrivate(h.owner.HeadBytes())
+	if err != nil || head.Binding.Policy != policy || (h.adapter != nil && h.adapter.policy != policy) {
+		return ErrInvalid
+	}
+	return nil
+}
+
 func (h *ScopedRehearsalPrivate) check(ctx context.Context) error {
+	if err := h.checkPolicy(); err != nil {
+		return err
+	}
 	if h == nil || h.owner == nil || !h.owner.ownsPending(h.pending) {
 		return ErrIndeterminateExecution
 	}
@@ -339,10 +419,20 @@ func (h *ScopedRehearsalPrivate) String() string {
 
 func NewScopedRehearsalFixturePrivate(t *testing.T) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
 	t.Helper()
+	return newScopedRehearsalFixturePrivate(t, "lsp-trace.scoped-rehearsal.private.v1")
+}
+
+func NewScopedRehearsalFixtureV2Private(t *testing.T) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+	t.Helper()
+	return newScopedRehearsalFixturePrivate(t, "lsp-trace.scoped-rehearsal.private.v2")
+}
+
+func newScopedRehearsalFixturePrivate(t *testing.T, schema string) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+	t.Helper()
 	restart, m, id, child, paths, loc := adapterFixtureWithRestartPathsAndServerPrivate(t, "/fixture/server")
 	a, b, ap, bp := retentionRoots(t)
 	c, _, cp, _ := retentionRoots(t)
-	cfg := ScopedRehearsalConfigPrivate{Schema: "lsp-trace.scoped-rehearsal.private.v1", InputRoots: paths, Locator: loc, OutputRoots: [3]string{ap, bp, cp}, Workspace: restart.Scope().Selection().Workspace, CodeHEAD: strings.Repeat("a", 40), Session: id, TrustDomain: "test", Profile: "go", EnvironmentReference: "local", Server: "/fixture/server", Environment: []string{"PATH=/fixture/no-exec"}, Budget: ScopedRehearsalBudgetFixedPrivate()}
+	cfg := ScopedRehearsalConfigPrivate{Schema: schema, InputRoots: paths, Locator: loc, OutputRoots: [3]string{ap, bp, cp}, Workspace: restart.Scope().Selection().Workspace, CodeHEAD: strings.Repeat("a", 40), Session: id, TrustDomain: "test", Profile: "go", EnvironmentReference: "local", Server: "/fixture/server", Environment: []string{"PATH=/fixture/no-exec"}, Budget: ScopedRehearsalBudgetFixedPrivate()}
 	for i, r := range [3]*publication.ContentRetentionRoot{a, b, c} {
 		var e error
 		cfg.OutputIdentities[i], e = r.DirectoryIdentity()

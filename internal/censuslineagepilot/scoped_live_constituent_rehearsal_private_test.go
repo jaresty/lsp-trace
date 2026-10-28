@@ -145,20 +145,21 @@ func validateScopedStartupPrivate(ctx context.Context, m *sessionruntime.Manager
 }
 
 type scopedLiveReportPrivate struct {
-	Schema                string                               `json:"schema"`
-	Authority             int                                  `json:"authority"`
-	Accepted              bool                                 `json:"accepted"`
-	Completeness          string                               `json:"completeness"`
-	FeatureIdentity       string                               `json:"feature_identity"`
-	RevisionQualification string                               `json:"revision_qualification"`
-	Outcome               string                               `json:"outcome"`
-	AcquireCalls          int                                  `json:"acquire_calls"`
-	Constituents          int                                  `json:"core_admitted_constituents"`
-	Failure               string                               `json:"failure,omitempty"`
-	CloseFailure          string                               `json:"store_proof_close_failure,omitempty"`
-	Runtime               sessionruntime.SessionMetadata       `json:"runtime"`
-	EffectiveBudget       any                                  `json:"effective_budget"`
-	Records               []pilot.ScopedRehearsalRecordPrivate `json:"records"`
+	Schema                string                                         `json:"schema"`
+	Authority             int                                            `json:"authority"`
+	Accepted              bool                                           `json:"accepted"`
+	Completeness          string                                         `json:"completeness"`
+	FeatureIdentity       string                                         `json:"feature_identity"`
+	RevisionQualification string                                         `json:"revision_qualification"`
+	Outcome               string                                         `json:"outcome"`
+	AcquireCalls          int                                            `json:"acquire_calls"`
+	Constituents          int                                            `json:"core_admitted_constituents"`
+	Failure               string                                         `json:"failure,omitempty"`
+	CloseFailure          string                                         `json:"store_proof_close_failure,omitempty"`
+	Runtime               sessionruntime.SessionMetadata                 `json:"runtime"`
+	EffectiveBudget       any                                            `json:"effective_budget"`
+	Records               []pilot.ScopedRehearsalRecordPrivate           `json:"records"`
+	DiscoveryPolicy       *pilot.ScopedDiscoveryPolicyObservationPrivate `json:"discovery_policy,omitempty"`
 	// This receipt lives OUTSIDE the immutable outcome object; no recursive receipt.
 	OutcomeReceipt *pilot.ScopedRehearsalRecordPrivate `json:"outcome_receipt,omitempty"`
 }
@@ -226,6 +227,16 @@ func executeScopedRehearsalPrivate(ctx context.Context, h *pilot.ScopedRehearsal
 		Output                                                                           pilot.ScopedRehearsalBudgetPrivate
 		LifetimeSeconds, RequestSeconds, Requests, CaptureBytes, Messages, ResponseBytes int
 	}{cfg.Budget, 30, 5, 256, 8 << 20, 64, 2 << 20}}
+	if !h.MatchesConfigPrivate(cfg) {
+		return report, errors.New("private rehearsal configuration/claim policy mismatch")
+	}
+	report.DiscoveryPolicy, err = cfg.DiscoveryPolicyObservationPrivate()
+	if err != nil {
+		return report, err
+	}
+	if report.DiscoveryPolicy != nil {
+		report.Schema = "lsp-trace.scoped-rehearsal-observation.private.v2"
+	}
 	ready := m.BeginReadiness(ctx, cfg.Session.SessionID, cfg.Session.Generation, time.Now().Add(5*time.Second))
 	ready, found := m.WaitReadiness(ctx, ready.ID)
 	var startupErr error
@@ -370,6 +381,89 @@ func TestScopedLiveRehearsalDefaultFakePrivate(t *testing.T) {
 	}
 	t.Log("ASSERT_REHEARSAL_ONE_ACTUAL_CORE: PASS")
 }
+func TestScopedLiveRehearsalV2FakePrivate(t *testing.T) {
+	h, m, cfg, f := pilot.NewScopedRehearsalFixtureV2Private(t)
+	f.Fault("rehearsal-empty-directions")
+	report, err := executeScopedRehearsalPrivate(context.Background(), h, m, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Schema != "lsp-trace.scoped-rehearsal-observation.private.v2" || report.DiscoveryPolicy == nil || report.DiscoveryPolicy.Name != "one-native-v5-private-v2" || report.DiscoveryPolicy.MaxSymbols != 256 || report.DiscoveryPolicy.MaxFiles != 4 || report.DiscoveryPolicy.MaxDepth != 64 || report.DiscoveryPolicy.MaxTargets != 63 {
+		t.Fatalf("ASSERT_V2_OUTCOME_POLICY: %+v", report)
+	}
+	if report.Outcome != "ONE_CORE_ADMITTED_CONSTITUENT" || report.AcquireCalls != 1 || report.Constituents != 1 || report.OutcomeReceipt == nil || !report.OutcomeReceipt.Verified {
+		t.Fatalf("ASSERT_V2_FAKE_CORE_CONSTITUENT: %+v", report)
+	}
+	// Each immutable outcome record links configuration and claim observations by
+	// exact digest. Read only this test's disposable outputs, never historical roots.
+	foundConfig, foundClaim := false, false
+	for _, r := range report.Records {
+		if !r.Verified {
+			t.Fatal("ASSERT_V2_PAIRED_RETENTION")
+		}
+		if r.Name != "configuration" && r.Name != "claim" {
+			continue
+		}
+		raw, e := os.ReadFile(filepath.Join(cfg.OutputRoots[0], r.ID))
+		if e != nil {
+			t.Fatal(e)
+		}
+		if pilot.Digest(raw) != r.ID {
+			t.Fatal("ASSERT_V2_RECORD_HASH")
+		}
+		if r.Name == "configuration" {
+			want, _ := json.Marshal(cfg)
+			if !bytes.Equal(raw, want) {
+				t.Fatal("ASSERT_V2_CONFIG_LINK")
+			}
+			foundConfig = true
+		} else {
+			var observation struct {
+				Head []byte `json:"head"`
+			}
+			if json.Unmarshal(raw, &observation) != nil {
+				t.Fatal("ASSERT_V2_CLAIM_OBSERVATION")
+			}
+			if !bytes.Contains(observation.Head, []byte(`"schema":"lsp-trace.scoped-execution-claim.private.v2"`)) || !bytes.Contains(observation.Head, []byte(`"name":"one-native-v5-private-v2"`)) || !bytes.Contains(observation.Head, []byte(`"max_symbols":256`)) {
+				t.Fatal("ASSERT_V2_CLAIM_LINK")
+			}
+			foundClaim = true
+		}
+	}
+	if !foundConfig || !foundClaim {
+		t.Fatal("ASSERT_V2_OUTCOME_CONFIG_CLAIM_LINKS")
+	}
+}
+
+func TestScopedLiveRehearsalV2FailureNotEmptyPrivate(t *testing.T) {
+	h, m, cfg, f := pilot.NewScopedRehearsalFixtureV2Private(t)
+	f.Fault("malformed")
+	report, err := executeScopedRehearsalPrivate(context.Background(), h, m, cfg)
+	if err == nil || report.Outcome != "INDETERMINATE" || report.AcquireCalls != 0 || report.Constituents != 0 || report.DiscoveryPolicy == nil || report.DiscoveryPolicy.MaxSymbols != 256 {
+		t.Fatalf("ASSERT_V2_FAILURE_NOT_EMPTY: %+v err=%v", report, err)
+	}
+}
+
+func TestScopedLiveRehearsalMixedConfigRefusedPrivate(t *testing.T) {
+	for _, v2 := range []bool{false, true} {
+		h, m, cfg, f := pilot.NewScopedRehearsalFixturePrivate(t)
+		if v2 {
+			h, m, cfg, f = pilot.NewScopedRehearsalFixtureV2Private(t)
+			cfg.Schema = "lsp-trace.scoped-rehearsal.private.v1"
+		} else {
+			cfg.Schema = "lsp-trace.scoped-rehearsal.private.v2"
+		}
+		report, err := executeScopedRehearsalPrivate(context.Background(), h, m, cfg)
+		if err == nil || report.AcquireCalls != 0 || report.Constituents != 0 || len(report.Records) != 0 {
+			t.Fatal("ASSERT_MIXED_CONFIG_REFUSED_BEFORE_RETENTION_CLAIM")
+		}
+		semantic, prepared := f.Traffic()
+		if semantic != 0 || prepared != 0 {
+			t.Fatal("ASSERT_MIXED_CONFIG_NO_SUPPLY_OR_SEMANTIC")
+		}
+	}
+}
+
 func TestScopedLiveRehearsalEmptyAndIncompletePrivate(t *testing.T) {
 	for _, kind := range []string{"rehearsal-empty-discovery", "malformed"} {
 		t.Run(kind, func(t *testing.T) {

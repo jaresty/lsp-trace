@@ -55,7 +55,10 @@ bounds, environment duplicates/unsorted names, and omitted process environment.
 The type is test-export-only; it is not a production construction API. Fields in
 canonical order:
 
-1. `schema`: `lsp-trace.scoped-rehearsal.private.v1`.
+1. `schema`: `lsp-trace.scoped-rehearsal.private.v1` (historical fixed 128-symbol
+   discovery) or explicit prospective `lsp-trace.scoped-rehearsal.private.v2`
+   (fixed 256-symbol discovery). All other config fields and canonical ordering
+   are identical; there is no caller-settable discovery budget or policy field.
 2. `input_roots`: exactly `[primary,backup,coordinator]` for the existing terminal
    retained bundle. No recursive scan or input rebuilding.
 3. `restart_locator`: exact `head_key`, `head`, `scope`, `metadata` from the existing
@@ -94,6 +97,39 @@ this proposal. Discovery/request serialized overflow is refused before Core
 acquisition/producer semantics respectively. The existing adapter remains 30 s,
 5 s/request, 256 requests, 64 messages, 2 MiB result cap, 8 MiB captured response
 budget. No budgets/retries are increased to make a run pass.
+
+### Prospective discovery policy v2 (source-qualified, live pending)
+
+The original v1 config, claim bytes and default adapter retain the fixed 128-symbol
+policy. V2 is an explicit, separate prospective choice, not repair or replay of a
+spent claim. Its claim schema is `lsp-trace.scoped-execution-claim.private.v2`, with
+request policy `one-native-v5-private-v2` and explicit `max_symbols:256`. V1 retains
+its original claim schema and request-policy bytes (no added field). Mixed config,
+claim or adapter policies, unknown versions, case aliases and numeric overrides
+are refused. The one-slot coordinator selector deliberately remains unchanged:
+changing policy cannot bypass a coordinator's existing spent claim.
+
+Both versions retain four nominated files, six source guards, depth 64, maximum
+63 acquisition targets, and the wire/time/request/retention bounds above. The
+symbol denominator includes nested and noncallable nodes, preserving enumeration
+order and duplicates; 256 is not a callable or target limit. At 257 enumerated
+nodes v2 still reports the omitted node and file as incomplete, never truncates to
+success. More than 63 prepared targets remains a separate refusal before Core.
+The native request/seed wire family is unchanged; retention receipts bind its
+configuration and policy-bearing claim source. V2 terminal observations use
+`lsp-trace.scoped-rehearsal-observation.private.v2` and explicitly report effective
+name, symbol/file/depth/target bounds in `discovery_policy`; v1 omits that field.
+
+Presumption: 256 is a finite prospective budget motivated by the read-only first
+attempt's 219 enumerated symbols, not evidence that all later preparations or
+native acquisition will succeed within unchanged bounds. Inspected historical
+causes were 91 `SYMBOL_LIMIT` ordinals 128–218 and one `CHILD_INCOMPLETE` for file
+ordinal 3, with no other cause code. Revision trigger: a fresh authorized event
+reveals another cause or a required budget beyond these fixed bounds. Stop and
+report it rather than expanding scope, manually seeding, retrying the spent claim,
+or changing historical artifacts. Generated fake tests are not new live custody.
+No later output roots/configuration or live attempt is authorized by these tests;
+those remain pending independent review.
 
 After independent review, the exact command is:
 

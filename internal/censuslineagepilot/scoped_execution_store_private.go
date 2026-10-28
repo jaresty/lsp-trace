@@ -1,6 +1,7 @@
 package censuslineagepilot
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 
@@ -15,6 +16,7 @@ import (
 type scopedExecutionStorePrivate struct {
 	journal    *publication.ScopedExecutionJournalPrivate
 	selector   string
+	claim      []byte // exact canonical policy-bearing candidate; never reconstructed
 	roots      [3]*publication.ContentRetentionRoot
 	identities [3]publication.RetentionDirectoryIdentity
 	topology   *scopedExecutionTopologyPrivate
@@ -30,8 +32,8 @@ func newScopedExecutionStorePrivate(ctx context.Context, owner *scopedExecutionC
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	var head scopedExecutionHeadPrivate
-	if err := json.Unmarshal(owner.raw, &head); err != nil {
+	head, err := parseScopedExecutionHeadPrivate(owner.raw)
+	if err != nil {
 		return nil, err
 	}
 	// A different canonical selector must not open a second absent slot in the
@@ -51,7 +53,7 @@ func newScopedExecutionStorePrivate(ctx context.Context, owner *scopedExecutionC
 	if roots != proof.outputs || head.Binding.OutputRoots != proof.outputIDs || head.Binding.InputHead != proof.head || head.Binding.Scope != proof.scope || head.Binding.Metadata != proof.metadata {
 		return nil, ErrInvalid
 	}
-	s := &scopedExecutionStorePrivate{selector: owner.selector, roots: roots, identities: head.Binding.OutputRoots, topology: topology}
+	s := &scopedExecutionStorePrivate{selector: owner.selector, claim: bytes.Clone(owner.raw), roots: roots, identities: head.Binding.OutputRoots, topology: topology}
 	if err := s.validate(ctx, owner.selector); err != nil {
 		return nil, err
 	}
@@ -98,6 +100,9 @@ func (s *scopedExecutionStorePrivate) Load(ctx context.Context, selector string)
 	return s.journal.Load(ctx)
 }
 func (s *scopedExecutionStorePrivate) CompareAbsent(ctx context.Context, selector string, raw []byte) (*publication.CompareAndReplaceReceipt, error) {
+	if s == nil || !bytes.Equal(raw, s.claim) {
+		return nil, ErrInvalid
+	}
 	if err := s.validate(ctx, selector); err != nil {
 		return nil, err
 	}

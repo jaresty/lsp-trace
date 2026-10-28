@@ -13,6 +13,7 @@ import (
 )
 
 const scopedExecutionClaimSchemaPrivate = "lsp-trace.scoped-execution-claim.private.v1"
+const scopedExecutionClaimSchemaV2Private = "lsp-trace.scoped-execution-claim.private.v2"
 const scopedExecutionClaimLimitPrivate = 16 << 10
 
 // Store-agnostic qualification seam ONLY. The concrete private adapter requires
@@ -33,10 +34,51 @@ type scopedExecutionPolicyPrivate struct {
 	DownDepth  int    `json:"down_depth"`
 	UpDepth    int    `json:"up_depth"`
 	MaxTargets int    `json:"max_targets"`
+	// Omitted only for historical v1 canonical bytes; v1's fixed limit is 128.
+	MaxSymbols int `json:"max_symbols,omitempty"`
 }
 
 func scopedExecutionPolicyFixedPrivate() scopedExecutionPolicyPrivate {
-	return scopedExecutionPolicyPrivate{"one-native-v5-private-v1", 1, 1, 63}
+	return scopedExecutionPolicyPrivate{Name: "one-native-v5-private-v1", DownDepth: 1, UpDepth: 1, MaxTargets: 63}
+}
+
+func scopedExecutionPolicyV2Private() scopedExecutionPolicyPrivate {
+	return scopedExecutionPolicyPrivate{Name: "one-native-v5-private-v2", DownDepth: 1, UpDepth: 1, MaxTargets: 63, MaxSymbols: 256}
+}
+
+// No caller-selected numeric budgets. Only these two exact fixed policies exist.
+func (p scopedExecutionPolicyPrivate) claimSchema() (string, error) {
+	switch p {
+	case scopedExecutionPolicyFixedPrivate():
+		return scopedExecutionClaimSchemaPrivate, nil
+	case scopedExecutionPolicyV2Private():
+		return scopedExecutionClaimSchemaV2Private, nil
+	default:
+		return "", ErrInvalid
+	}
+}
+
+func (p scopedExecutionPolicyPrivate) discoveryLimits() (censusacquisition.DiscoveryLimits, error) {
+	if _, err := p.claimSchema(); err != nil {
+		return censusacquisition.DiscoveryLimits{}, err
+	}
+	n := 128
+	if p == scopedExecutionPolicyV2Private() {
+		n = p.MaxSymbols
+	}
+	return censusacquisition.DiscoveryLimits{MaxFiles: 4, MaxSymbols: n, MaxDepth: 64, MaxStringBytes: 1 << 20}, nil
+}
+
+func parseScopedExecutionHeadPrivate(raw []byte) (h scopedExecutionHeadPrivate, err error) {
+	if len(raw) == 0 || len(raw) > scopedExecutionClaimLimitPrivate || scopeBundleStrict(raw, &h) != nil {
+		return h, ErrInvalid
+	}
+	schema, e := h.Binding.Policy.claimSchema()
+	canonical, marshalErr := json.Marshal(h)
+	if e != nil || marshalErr != nil || h.Schema != schema || !bytes.Equal(raw, canonical) || h.State != "CLAIMED" || h.Authority != 0 || h.Accepted || h.Completeness != "UNKNOWN" || h.FeatureIdentity != "UNRESOLVED" || h.RevisionQualification != "CALLER_ASSERTED_NOT_AUTHENTICATED" {
+		return h, ErrInvalid
+	}
+	return h, nil
 }
 
 type scopedExecutionBindingPrivate struct {
@@ -129,6 +171,14 @@ func (o *scopedExecutionClaimOwnerPrivate) ownsPending(p *scopedExecutionPending
 // not ancestor topology or an ongoing lease. The concrete store additionally
 // requires matching private topology proof; live wiring/output budgets are pending.
 func newScopedExecutionClaimPrivate(ctx context.Context, restart scopeRestartResult, executableRevision string, session censusacquisition.SessionIdentity, workspace string, roots [3]*publication.ContentRetentionRoot) (*scopedExecutionClaimOwnerPrivate, error) {
+	return newScopedExecutionClaimWithPolicyPrivate(ctx, restart, executableRevision, session, workspace, roots, scopedExecutionPolicyFixedPrivate())
+}
+
+func newScopedExecutionClaimWithPolicyPrivate(ctx context.Context, restart scopeRestartResult, executableRevision string, session censusacquisition.SessionIdentity, workspace string, roots [3]*publication.ContentRetentionRoot, policy scopedExecutionPolicyPrivate) (*scopedExecutionClaimOwnerPrivate, error) {
+	schema, policyErr := policy.claimSchema()
+	if policyErr != nil {
+		return nil, policyErr
+	}
 	if ctx == nil || restart.state == nil || !featureScopeRevision.MatchString(executableRevision) || session.Validate() != nil || len(session.SessionID) > 1024 || !utf8.ValidString(session.SessionID) || len(workspace) > 4096 || !utf8.ValidString(workspace) {
 		return nil, ErrInvalid
 	}
@@ -162,7 +212,7 @@ func newScopedExecutionClaimPrivate(ctx context.Context, restart scopeRestartRes
 		InputHead:          scopeRestartBlob{Digest(headRaw), uint64(len(headRaw))},
 		Scope:              scopeRestartBlob{h.Binding.Scope, uint64(len(restart.state.scope.ManifestBytes()))},
 		Metadata:           scopeRestartBlob{h.Binding.Metadata, uint64(len(restart.state.metadata))},
-		ExecutableRevision: executableRevision, SessionID: session.SessionID, Generation: session.Generation, Workspace: workspace, Policy: scopedExecutionPolicyFixedPrivate(),
+		ExecutableRevision: executableRevision, SessionID: session.SessionID, Generation: session.Generation, Workspace: workspace, Policy: policy,
 	}
 	for i, root := range roots {
 		if root == nil {
@@ -187,7 +237,7 @@ func newScopedExecutionClaimPrivate(ctx context.Context, restart scopeRestartRes
 		}
 		b.OutputRoots[i] = id
 	}
-	raw, err := json.Marshal(scopedExecutionHeadPrivate{Schema: scopedExecutionClaimSchemaPrivate, State: "CLAIMED", Binding: b, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", RevisionQualification: "CALLER_ASSERTED_NOT_AUTHENTICATED"})
+	raw, err := json.Marshal(scopedExecutionHeadPrivate{Schema: schema, State: "CLAIMED", Binding: b, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", RevisionQualification: "CALLER_ASSERTED_NOT_AUTHENTICATED"})
 	if err != nil || len(raw) > scopedExecutionClaimLimitPrivate {
 		return nil, ErrInvalid
 	}

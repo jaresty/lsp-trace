@@ -54,6 +54,7 @@ type scopeRuntimeAdapter struct {
 	files     censusacquisition.StaticFiles
 	workspace string
 	metadata  sessionruntime.SessionMetadata
+	policy    scopedExecutionPolicyPrivate
 	deadline  time.Time
 	// invocationMu spans Manager transport, accounting, and ALL typed validation.
 	// No callback under it may reenter an adapter invocation.
@@ -69,6 +70,13 @@ type scopeRuntimeAdapter struct {
 // Constructor accepts only the read-only restart result, never raw expectations.
 // The supplied context must remain inside the existing Manager lease lifetime.
 func newScopeRuntimeAdapter(ctx context.Context, restart scopeRestartResult, manager *sessionruntime.Manager, identity censusacquisition.SessionIdentity) (*scopeRuntimeAdapter, scopeBindingObservation, error) {
+	return newScopeRuntimeAdapterWithPolicyPrivate(ctx, restart, manager, identity, scopedExecutionPolicyFixedPrivate())
+}
+
+func newScopeRuntimeAdapterWithPolicyPrivate(ctx context.Context, restart scopeRestartResult, manager *sessionruntime.Manager, identity censusacquisition.SessionIdentity, policy scopedExecutionPolicyPrivate) (*scopeRuntimeAdapter, scopeBindingObservation, error) {
+	if _, err := policy.discoveryLimits(); err != nil {
+		return nil, scopeBindingObservation{}, err
+	}
 	fail := func(err error) (*scopeRuntimeAdapter, scopeBindingObservation, error) {
 		return nil, scopeBindingObservation{}, err
 	}
@@ -106,7 +114,7 @@ func newScopeRuntimeAdapter(ctx context.Context, restart scopeRestartResult, man
 	if failure != "" {
 		return fail(scopeAdapterFailure(failure, ""))
 	}
-	a := &scopeRuntimeAdapter{manager: manager, identity: identity, workspace: manifest.Root, metadata: metadata, deadline: deadline}
+	a := &scopeRuntimeAdapter{manager: manager, identity: identity, workspace: manifest.Root, metadata: metadata, deadline: deadline, policy: policy}
 	members := make([]sessionruntime.RetainedScopeMemberPrivate, 0, 6)
 	supplyCtx, cancel := context.WithDeadline(ctx, a.deadline)
 	defer cancel()
@@ -264,8 +272,12 @@ func (a *scopeRuntimeAdapter) SupportsCallHierarchy() bool   { return a.metadata
 type scopeDiscoveryOmissionKey struct{}
 
 func (a *scopeRuntimeAdapter) Discover(ctx context.Context, id censusacquisition.SessionIdentity) (censusacquisition.Discovery, error) {
-	if id != a.identity {
+	if a == nil || id != a.identity {
 		return censusacquisition.Discovery{}, ErrInvalid
+	}
+	limits, err := a.policy.discoveryLimits()
+	if err != nil {
+		return censusacquisition.Discovery{}, err
 	}
 	if err := a.check(ctx); err != nil {
 		return censusacquisition.Discovery{}, err
@@ -274,7 +286,7 @@ func (a *scopeRuntimeAdapter) Discover(ctx context.Context, id censusacquisition
 	defer cancel()
 	var invocationOmissions atomic.Uint64
 	ctx = context.WithValue(ctx, scopeDiscoveryOmissionKey{}, &invocationOmissions)
-	out, err := (censusacquisition.DiscoveryAdapter{Workspace: a.workspace, Files: append(censusacquisition.StaticFiles(nil), a.files...), Supplier: a, Client: a, Limits: censusacquisition.DiscoveryLimits{MaxFiles: 4, MaxSymbols: 128, MaxDepth: 64, MaxStringBytes: 1 << 20}}).Discover(ctx, id)
+	out, err := (censusacquisition.DiscoveryAdapter{Workspace: a.workspace, Files: append(censusacquisition.StaticFiles(nil), a.files...), Supplier: a, Client: a, Limits: limits}).Discover(ctx, id)
 	omitted := invocationOmissions.Load()
 	if omitted != 0 {
 		out.Complete = false
