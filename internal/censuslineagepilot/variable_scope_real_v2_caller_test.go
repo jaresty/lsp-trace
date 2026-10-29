@@ -33,34 +33,35 @@ import (
 )
 
 const variableCallerPurpose = "PRIVATE_VARIABLE_SCOPE_V2_PREPARATION_ONLY"
-const variableCallerSchema = "private-variable-scope-v2-caller.v1"
+const variableCallerSchema = "private-variable-scope-v2-caller.v2"
 const variableCallerConfigCap = 64 << 10
 const variableCallerReportCap = 1 << 20
 
 type variableCallerConfig struct {
-	Schema             string                            `json:"schema"`
-	Purpose            string                            `json:"purpose"`
-	CodeRoot           string                            `json:"code_root"`
-	CodeHEAD           string                            `json:"code_head"`
-	Scope              pilot.ScopeSpecPrivateV2          `json:"scope"`
-	Session            censusacquisition.SessionIdentity `json:"session"`
-	Selector           runtimeprofile.Selector           `json:"selector"`
-	Server             string                            `json:"server"`
-	ServerSHA256       string                            `json:"server_sha256"`
-	Args               []string                          `json:"args"`
-	Environment        []string                          `json:"environment"`
-	PrepLimits         prep.Limits                       `json:"prep_limits"`
-	PostLimits         prep.PostPreparationLimits        `json:"post_limits"`
-	Seeds              []uint64                          `json:"seeds"`
-	OperationTimeoutMS int                               `json:"operation_timeout_ms"`
-	ReadinessTimeoutMS int                               `json:"readiness_timeout_ms"`
-	ShutdownTimeoutMS  int                               `json:"shutdown_timeout_ms"`
-	OperationDirectory string                            `json:"operation_directory"`
-	ProducerOutputs    [2]string                         `json:"producer_outputs"`
-	PostOutputs        [2]string                         `json:"post_outputs"`
-	ProtectedRoots     []string                          `json:"protected_roots"`
-	AttemptMarkerPath  string                            `json:"attempt_marker_path"`
-	ReportPath         string                            `json:"report_path"`
+	Schema                    string                            `json:"schema"`
+	Purpose                   string                            `json:"purpose"`
+	CodeRoot                  string                            `json:"code_root"`
+	CodeHEAD                  string                            `json:"code_head"`
+	Scope                     pilot.ScopeSpecPrivateV2          `json:"scope"`
+	Session                   censusacquisition.SessionIdentity `json:"session"`
+	Selector                  runtimeprofile.Selector           `json:"selector"`
+	Server                    string                            `json:"server"`
+	ServerSHA256              string                            `json:"server_sha256"`
+	Args                      []string                          `json:"args"`
+	Environment               []string                          `json:"environment"`
+	PrepLimits                prep.Limits                       `json:"prep_limits"`
+	PostLimits                prep.PostPreparationLimits        `json:"post_limits"`
+	Seeds                     []uint64                          `json:"seeds"`
+	OperationTimeoutMS        int                               `json:"operation_timeout_ms"`
+	ReadinessTimeoutMS        int                               `json:"readiness_timeout_ms"`
+	ShutdownTimeoutMS         int                               `json:"shutdown_timeout_ms"`
+	ShutdownResponseTimeoutMS int                               `json:"shutdown_response_timeout_ms"`
+	OperationDirectory        string                            `json:"operation_directory"`
+	ProducerOutputs           [2]string                         `json:"producer_outputs"`
+	PostOutputs               [2]string                         `json:"post_outputs"`
+	ProtectedRoots            []string                          `json:"protected_roots"`
+	AttemptMarkerPath         string                            `json:"attempt_marker_path"`
+	ReportPath                string                            `json:"report_path"`
 }
 
 type variableCallerReport struct {
@@ -283,6 +284,12 @@ func variableValidate(c variableCallerConfig) error {
 		if x[0] < 1 || x[0] > x[1] {
 			return errors.New("explicit timeout bound")
 		}
+	}
+	if c.ShutdownResponseTimeoutMS < 1 || c.ShutdownResponseTimeoutMS > c.ShutdownTimeoutMS {
+		return errors.New("explicit shutdown response timeout bound")
+	}
+	if _, e := sessionruntime.NewShutdownResponseBudgetPrivateV2(time.Duration(c.ShutdownResponseTimeoutMS) * time.Millisecond); e != nil {
+		return e
 	}
 	if !variablePositiveFields(c.PrepLimits, prepLimitsV2()) || c.PrepLimits.MaxPartBytes < 2048 || c.PrepLimits.MaxTotalBytes < c.PrepLimits.MaxPartBytes || !variablePositiveFields(c.PostLimits, postLimitsV2()) {
 		return errors.New("explicit preparation limits")
@@ -704,6 +711,11 @@ func variableRunWithCode(ctx context.Context, mode, path string, git variableGit
 		return report, errors.New("private runtime dependencies required")
 	}
 	c := p.cfg
+	// Validated integer bounds precede conversion; construction precedes the claim.
+	responseBudget, e := sessionruntime.NewShutdownResponseBudgetPrivateV2(time.Duration(c.ShutdownResponseTimeoutMS) * time.Millisecond)
+	if e != nil {
+		return report, e
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.OperationTimeoutMS)*time.Millisecond)
 	defer cancel()
 	root, e := os.OpenRoot(c.OperationDirectory)
@@ -771,7 +783,7 @@ func variableRunWithCode(ctx context.Context, mode, path string, git variableGit
 			var stopErr error
 			if startedID != "" {
 				observation.StopCalls++
-				stopped := manager.Stop(sctx, startedID, "private-variable-v2-caller-stop-once")
+				stopped := manager.StopWithShutdownResponseBudgetPrivateV2(sctx, startedID, "private-variable-v2-caller-stop-once", responseBudget)
 				observation.StopIntentID = stopped.IntentID
 				if stopped.Failure != "" {
 					stopErr = errors.New("private Stop: " + string(stopped.Failure))

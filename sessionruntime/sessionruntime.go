@@ -52,16 +52,17 @@ const (
 )
 
 type OperationSnapshot struct {
-	ID                       string
-	SessionID                string
-	CallerID                 string
-	Generation               uint64
-	Restart                  bool
-	State                    OperationState
-	Failure                  session.Failure
-	privateB4CallerLeaseJoin bool
-	cleanupPrivateV2         LifecycleCleanupObservationPrivateV2
-	cleanupPrivateV2Present  bool
+	ID                        string
+	SessionID                 string
+	CallerID                  string
+	Generation                uint64
+	Restart                   bool
+	State                     OperationState
+	Failure                   session.Failure
+	privateB4CallerLeaseJoin  bool
+	cleanupPrivateV2          LifecycleCleanupObservationPrivateV2
+	cleanupPrivateV2Present   bool
+	shutdownResponsePrivateV2 *acceptedShutdownResponsePrivateV2
 }
 
 type ReadinessState string
@@ -3078,6 +3079,10 @@ func (m *Manager) reconcileFailedReap(ctx context.Context, id string) session.Fa
 }
 
 func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool) session.LifecycleResult {
+	return m.terminateWithShutdownResponsePrivateV2(ctx, id, caller, restart, nil)
+}
+
+func (m *Manager) terminateWithShutdownResponsePrivateV2(ctx context.Context, id, caller string, restart bool, responseBudget *acceptedShutdownResponsePrivateV2) session.LifecycleResult {
 	if failure := m.reconcileFailedReap(ctx, id); failure != "" {
 		return session.LifecycleResult{Failure: failure}
 	}
@@ -3093,6 +3098,9 @@ func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool
 		for i := len(m.operationIDs) - 1; i >= 0; i-- {
 			existing := m.operations[m.operationIDs[i]]
 			if existing.SessionID == id && existing.CallerID == caller && existing.Restart == restart && existing.State == OperationComplete {
+				if !compatibleShutdownResponsePrivateV2(existing.shutdownResponsePrivateV2, responseBudget) {
+					return session.LifecycleResult{Failure: session.LifecycleConflict}
+				}
 				return session.LifecycleResult{Generation: existing.Generation, IntentID: existing.ID, Replayed: true, Outcome: session.OutcomeComplete, OperationStatus: session.StatusSucceeded}
 			}
 		}
@@ -3115,6 +3123,9 @@ func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool
 		existing := m.operations[m.operationIDs[i]]
 		if existing.SessionID != id || existing.Generation != r.record.Generation || existing.Restart != restart {
 			continue
+		}
+		if (existing.CallerID == caller || existing.State == OperationPending) && !compatibleShutdownResponsePrivateV2(existing.shutdownResponsePrivateV2, responseBudget) {
+			return session.LifecycleResult{Failure: session.LifecycleConflict}
 		}
 		if existing.CallerID == caller {
 			if existing.State == OperationPending && existing.privateB4CallerLeaseJoin {
@@ -3176,7 +3187,7 @@ func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool
 		m.workers--
 		return session.LifecycleResult{Failure: session.ResourceExhausted}
 	}
-	snapshot := OperationSnapshot{ID: intent.IntentID, SessionID: id, CallerID: caller, Generation: r.record.Generation, Restart: restart, State: OperationPending, privateB4CallerLeaseJoin: m.hasPrivateB4CallerLeaseJoinLocked(r)}
+	snapshot := OperationSnapshot{ID: intent.IntentID, SessionID: id, CallerID: caller, Generation: r.record.Generation, Restart: restart, State: OperationPending, privateB4CallerLeaseJoin: m.hasPrivateB4CallerLeaseJoinLocked(r), shutdownResponsePrivateV2: responseBudget}
 	m.operations[snapshot.ID] = snapshot
 	m.operationIDs = append(m.operationIDs, snapshot.ID)
 	r.protocolOwned, r.lifecycleOwned = true, true
@@ -3228,7 +3239,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		teardown, resources = retired.teardown, retired.resources
 	} else {
 		if protocol, ok := child.(wireChild); ok {
-			shutdown = m.gracefulShutdown(protocol, pending, operation.Generation)
+			shutdown = m.gracefulShutdownWithResponsePrivateV2(protocol, pending, operation.Generation, operation.shutdownResponsePrivateV2)
 		}
 		teardown = child.Teardown(context.Background())
 		resources = child.Close()
@@ -3385,14 +3396,38 @@ type shutdownObservation struct {
 }
 
 func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) shutdownObservation {
+	return m.gracefulShutdownWithResponsePrivateV2(child, pending, generation, nil)
+}
+
+func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending *lspwire.Pending, generation uint64, budget *acceptedShutdownResponsePrivateV2) shutdownObservation {
 	key := pending.Begin(generation)
 	id := strconv.FormatUint(key.ID, 10)
 	writer := lspwire.NewWriter(child.Stdin(), m.wire)
-	observed := shutdownObservation{facts: LifecycleCleanupObservationPrivateV2{ShutdownWrite: CleanupFailedPrivateV2}}
+	observed := shutdownObservation{facts: LifecycleCleanupObservationPrivateV2{ShutdownWrite: CleanupFailedPrivateV2, ResponseBudgetSource: "ORDINARY_FIXED", DeclaredResponseBudget: 250 * time.Millisecond}}
+	if budget != nil {
+		observed.facts.ResponseBudgetSource = "PRIVATE_V2"
+		observed.facts.DeclaredResponseBudget = budget.budget.duration
+	}
 	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "shutdown"}); err != nil {
 		return observed
 	}
 	observed.facts.ShutdownWrite = CleanupSucceededPrivateV2
+	remaining := 250 * time.Millisecond
+	var cancelled <-chan struct{}
+	if budget != nil {
+		remaining = time.Until(budget.deadline)
+		if remaining < 0 {
+			remaining = 0
+		}
+		cancelled = budget.ctx.Done()
+	}
+	observed.facts.EffectiveResponseReadBudget = remaining
+	if budget != nil {
+		if ended := budget.ended(); ended != "" {
+			observed.facts.ShutdownRead = ended
+			return observed
+		}
+	}
 	response := make(chan LifecycleCleanupObservationPrivateV2, 1)
 	go func() {
 		defer close(response)
@@ -3434,15 +3469,30 @@ func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, ge
 		}
 		response <- facts
 	}()
-	timer := time.NewTimer(250 * time.Millisecond)
+	// Reader setup/scheduling must not restart the accepted absolute allowance.
+	timerDuration := remaining
+	if budget != nil {
+		timerDuration = time.Until(budget.deadline)
+	}
+	timer := time.NewTimer(timerDuration)
 	defer timer.Stop()
 	select {
 	case facts := <-response:
 		<-response // Join even the non-timeout reader before exit or teardown.
 		observed.facts.ShutdownRead, observed.facts.ReadFrames, observed.facts.ReadBytes = facts.ShutdownRead, facts.ReadFrames, facts.ReadBytes
+		if budget != nil {
+			if ended := budget.ended(); ended != "" {
+				observed.facts.ShutdownRead = ended
+				return observed
+			}
+		}
 		if facts.ShutdownRead != ShutdownMatchedPrivateV2 {
 			return observed
 		}
+	case <-cancelled:
+		observed.facts.ShutdownRead = budget.ended()
+		observed.readJoin = response
+		return observed
 	case <-timer.C:
 		observed.facts.ShutdownRead = ShutdownTimeoutPrivateV2
 		observed.readJoin = response

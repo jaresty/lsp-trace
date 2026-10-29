@@ -63,7 +63,7 @@ bounds afterward. No expansion or implicit zero/default limits.
 
 | Fields | Required meaning |
 |---|---|
-| `schema`, `purpose` | `private-variable-scope-v2-caller.v1`, `PRIVATE_VARIABLE_SCOPE_V2_PREPARATION_ONLY` |
+| `schema`, `purpose` | `private-variable-scope-v2-caller.v2`, `PRIVATE_VARIABLE_SCOPE_V2_PREPARATION_ONLY` |
 | `code_root`, `code_head` | Canonical checkout path matching runtime.Caller's source path; exact lowercase 40-hex reviewed HEAD. Index-only diff and untracked checks are supplemental, never evidence of working byte equality; working-tree diff conversion is prohibited: the separate bounded HEAD-object input verifier below is mandatory. The driver and all relevant repository inputs must be reviewed/committed before real preflight succeeds. This is not proof of which bytes compiled the executing binary. |
 | `scope` | Existing ScopeSpecPrivateV2: canonical root, 40-hex revision assertion, explicit members `{path,role,language_id,expected_sha256,byte_length}`, partition size and every effective-policy field. 1–8 nominations, 0–8 context, ≤16 members, go only. Member SHA/length must match before claim. Discovery ≤256 symbols; targets/batches ≤63. Existing policy bounds remain unchanged. |
 | `session` | Existing SessionIdentity JSON fields `SessionID`, `Generation`; must exactly match the one Start result. |
@@ -73,7 +73,8 @@ bounds afterward. No expansion or implicit zero/default limits.
 | `prep_limits` | All existing prep.Limits fields explicitly positive: targets ≤64, part bytes 2048..2 MiB, total ≥part and ≤8 MiB, parts ≤256, source bytes ≤2 MiB. |
 | `post_limits` | All existing PostPreparationLimits fields positive and within their unchanged private ceilings (64 constituents, 4096 ledger targets, 256 submissions/reviews, 16 claims/item, 32 citations/claim, 64 KiB string, 1 MiB item, 16 MiB input/output, 262144 evidence records, 10000000 work). |
 | `seeds` | Ordered unique uint64 list, length 2..6. Order is preserved. |
-| `operation_timeout_ms`, `readiness_timeout_ms`, `shutdown_timeout_ms` | Explicit positive ceilings 240000, 60000, 10000 respectively. Preflight git/source validation is deadline bounded; runtime has a single operation deadline; readiness and shutdown are separately bounded. No retry/reset. |
+| `operation_timeout_ms`, `readiness_timeout_ms`, `shutdown_timeout_ms` | Explicit positive ceilings 240000, 60000, 10000 respectively. The shutdown context bounds the caller's join/cleanup allowance, including readiness waiting; it is not the response read timer or a global shutdown bound. No retry/reset. |
+| `shutdown_response_timeout_ms` | Required positive representable integer, at most `shutdown_timeout_ms`. Strict v2 incompatibility: absent/zero/negative/overflow/excess is refused before claim. No migration of retained v1 configurations or artifacts. Constructor-created private response allowance is not acquisition authority. Its single deadline is capped by the remaining cleanup context; shutdown write time consumes it. Synchronous shutdown/exit writes and teardown/close/readjoin are not globally bounded; context expiry may return nonjoined failure. The placeholder's 1000ms/10000ms values are examples, not live approval or a promise of success. |
 | `operation_directory` | Existing fresh empty canonical private 0700 directory outside `/tmp` and `/private/tmp`. |
 | `producer_outputs`, `post_outputs` | Each exactly two existing fresh empty canonical private 0700 directories outside temporary roots. No mkdir or output-root creation by caller. |
 | `protected_roots` | Explicit `[]` or ≤15 additional existing protected private roots (source plus additional ≤16). These supplement, never replace, source protection and the exact two genuine producer input roots. |

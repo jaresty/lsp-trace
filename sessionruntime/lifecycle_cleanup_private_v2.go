@@ -1,6 +1,10 @@
 package sessionruntime
 
-import "lsp-trace/internal/managedprocess"
+import (
+	"time"
+
+	"lsp-trace/internal/managedprocess"
+)
 
 // CleanupStepPrivateV2 is a closed observation, not cleanup authority. Zero is
 // unavailable/not attempted, never success. No provider-controlled text survives.
@@ -16,6 +20,7 @@ type ShutdownReadPrivateV2 string
 const (
 	ShutdownReadFailedPrivateV2 ShutdownReadPrivateV2 = "READ_FAILED"
 	ShutdownTimeoutPrivateV2    ShutdownReadPrivateV2 = "TIMEOUT"
+	ShutdownCancelledPrivateV2  ShutdownReadPrivateV2 = "CANCELLED"
 	ShutdownUnexpectedPrivateV2 ShutdownReadPrivateV2 = "UNEXPECTED_FRAME"
 	ShutdownMatchedPrivateV2    ShutdownReadPrivateV2 = "MATCHED_SUCCESS"
 	ShutdownCountLimitPrivateV2 ShutdownReadPrivateV2 = "COUNT_LIMIT"
@@ -29,9 +34,13 @@ const (
 // it does not assert that a shutdown exchange occurred for this operation.
 // StderrDrainAssumed labels the existing algebra input; no drain proof exists.
 type LifecycleCleanupObservationPrivateV2 struct {
-	ShutdownWrite CleanupStepPrivateV2
-	ShutdownRead  ShutdownReadPrivateV2
-	ExitWrite     CleanupStepPrivateV2
+	// Durations describe only the response phase, never a global cleanup bound.
+	DeclaredResponseBudget      time.Duration
+	EffectiveResponseReadBudget time.Duration
+	ResponseBudgetSource        string // closed producer vocabulary: ORDINARY_FIXED or PRIVATE_V2
+	ShutdownWrite               CleanupStepPrivateV2
+	ShutdownRead                ShutdownReadPrivateV2
+	ExitWrite                   CleanupStepPrivateV2
 	// Counts cover complete validated frames only, not partial, malformed,
 	// or over-budget bytes acquired before refusal. They are not wire totals.
 	ReadFrames                           int
