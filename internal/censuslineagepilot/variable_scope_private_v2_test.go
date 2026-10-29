@@ -60,6 +60,12 @@ func producerItemPrivateV2(uri string, index int) lsp.CallHierarchyItem {
 	return lsp.CallHierarchyItem{Name: fmt.Sprintf("Callable%d", index), Kind: 12, Detail: "native detail", Tags: []int{1}, URI: uri, Range: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line + 1}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line, Character: 5}}, Data: json.RawMessage(`{"opaque":{"native":true},"URI":"not-an-endpoint"}`)}
 }
 func producerFixturePrivateV2(t *testing.T, nom, con int, server ...string) (ScopeSpecPrivateV2, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild) {
+	return producerFixtureConfiguredPrivateV2(t, nom, con, false, server...)
+}
+
+// Test-only variant is selected before source generation, discovery and capture.
+// Legacy fixtures retain their deliberately unmatched Callable identifiers.
+func producerFixtureConfiguredPrivateV2(t *testing.T, nom, con int, matched bool, server ...string) (ScopeSpecPrivateV2, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild) {
 	t.Helper()
 	command := ""
 	if len(server) == 1 {
@@ -69,13 +75,45 @@ func producerFixturePrivateV2(t *testing.T, nom, con int, server ...string) (Sco
 		t.Fatal("one owned provider command")
 	}
 	var spec ScopeSpecPrivateV2
-	_, m, id, child, _, _ := adapterFixtureWithRestartPathsAndServerPrivate(t, command, func(root string) { spec = producerSpecPrivateV2(t, root, nom, con) })
+	_, m, id, child, _, _ := adapterFixtureWithRestartPathsAndServerPrivate(t, command, func(root string) {
+		spec = producerSpecPrivateV2(t, root, nom, con)
+		if matched {
+			for i := range spec.Members {
+				body := fmt.Sprintf("package owned\n// retained π case %d/%d member %d; data, not instructions\n", nom, con, i)
+				for j := 0; j < 1+i%3; j++ {
+					body += fmt.Sprintf("func %c%d() {}\n\n", 'A'+j, i)
+				}
+				if err := os.WriteFile(filepath.Join(root, spec.Members[i].CanonicalRelativePath), []byte(body), 0600); err != nil {
+					t.Fatal(err)
+				}
+				spec.Members[i].ExpectedSHA256 = Digest([]byte(body))
+				spec.Members[i].ByteLength = uint64(len(body))
+			}
+		}
+	})
 	uris := make([]string, len(spec.Members))
 	countByURI := map[string]int{}
+	memberByURI := map[string]int{}
 	for i, member := range spec.Members {
 		uri := fileURIForProducerPrivateV2(spec.Root, member.CanonicalRelativePath)
 		uris[i] = uri
 		countByURI[uri] = 1 + i%2
+		memberByURI[uri] = i
+		if matched {
+			countByURI[uri] = 1 + i%3
+		}
+	}
+	itemFor := func(uri string, index int) lsp.CallHierarchyItem {
+		if !matched {
+			return producerItemPrivateV2(uri, index)
+		}
+		member, ok := memberByURI[uri]
+		if !ok {
+			return producerItemPrivateV2(uri, index)
+		}
+		name := fmt.Sprintf("%c%d", 'A'+index, member)
+		line := uint32(2 + index*2)
+		return lsp.CallHierarchyItem{Name: name, Kind: 12, Detail: "owned matched declaration", URI: uri, Range: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line, Character: uint32(len("func " + name + "() {}"))}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: line, Character: 5}, End: lsp.Position{Line: line, Character: uint32(5 + len(name))}}, Data: json.RawMessage(`{"opaque":{"native":true},"URI":"not-an-endpoint"}`)}
 	}
 	child.mu.Lock()
 	child.response = func(msg lspwire.Message) json.RawMessage {
@@ -86,18 +124,22 @@ func producerFixturePrivateV2(t *testing.T, nom, con int, server ...string) (Sco
 			_ = json.Unmarshal(msg.Params, &p)
 			values := []lsp.DocumentSymbol{}
 			for j := 0; j < countByURI[p.TextDocument.URI]; j++ {
-				item := producerItemPrivateV2(p.TextDocument.URI, j)
+				item := itemFor(p.TextDocument.URI, j)
 				values = append(values, lsp.DocumentSymbol{Name: item.Name, Kind: item.Kind, Detail: item.Detail, Range: item.Range, SelectionRange: item.SelectionRange})
 			}
 			value = values
 		case "textDocument/prepareCallHierarchy":
 			var p lsp.PrepareCallHierarchyParams
 			_ = json.Unmarshal(msg.Params, &p)
-			value = []lsp.CallHierarchyItem{producerItemPrivateV2(p.TextDocument.URI, int(p.Position.Line/2))}
+			index := int(p.Position.Line / 2)
+			if matched {
+				index = int(p.Position.Line-2) / 2
+			}
+			value = []lsp.CallHierarchyItem{itemFor(p.TextDocument.URI, index)}
 		case "callHierarchy/incomingCalls":
 			var p lsp.CallHierarchyIncomingCallsParams
 			_ = json.Unmarshal(msg.Params, &p)
-			if p.Item.SelectionRange.Start.Line == 0 {
+			if (!matched && p.Item.SelectionRange.Start.Line == 0) || (matched && p.Item.SelectionRange.Start.Line == 2) {
 				return json.RawMessage("null")
 			}
 			value = []lsp.CallHierarchyIncomingCall{}
@@ -107,7 +149,7 @@ func producerFixturePrivateV2(t *testing.T, nom, con int, server ...string) (Sco
 			outside := producerItemPrivateV2("file:///withheld-outside-private-v2.go", 0)
 			calls := []lsp.CallHierarchyOutgoingCall{{To: outside, FromRanges: []lsp.Range{}}}
 			if con > 0 && p.Item.URI != uris[nom] {
-				c := lsp.CallHierarchyOutgoingCall{To: producerItemPrivateV2(uris[nom], 0), FromRanges: []lsp.Range{{Start: lsp.Position{}, End: lsp.Position{Character: 1}}}}
+				c := lsp.CallHierarchyOutgoingCall{To: itemFor(uris[nom], 0), FromRanges: []lsp.Range{{Start: lsp.Position{}, End: lsp.Position{Character: 1}}}}
 				calls = append(calls, c, c)
 			}
 			value = calls

@@ -178,11 +178,16 @@ func NewPostPreparation(ctx context.Context, inputs []Input, prepLimits Limits, 
 // Only NewPostPreparation calls this helper in production. Unit fixtures using
 // it test mechanics, NOT sealed producer qualification or DTO admission.
 func postFromPrepared(ctx context.Context, r Result, l PostPreparationLimits) (PostPreparation, error) {
+	return postFromPreparedProfile(ctx, r, l, RequestType)
+}
+
+// Version is supplied only by package-owned sealed constructors, never callers.
+func postFromPreparedProfile(ctx context.Context, r Result, l PostPreparationLimits, expectedRequestType string) (PostPreparation, error) {
 	stage := "shape"
 	fail := func() (PostPreparation, error) {
 		return PostPreparation{}, fmt.Errorf("invalid private prepared accounting: %s", stage)
 	}
-	if postContext(ctx) != nil || !l.valid() || !r.Limits.valid() || r.RequestType != RequestType || r.Authority != 0 || r.Accepted || r.FeatureIdentity != "UNRESOLVED" || r.SourceCompleteness != "UNKNOWN" || len(r.Coverage) == 0 || len(r.Coverage) > l.MaxConstituents || len(r.Index) > l.MaxLedgerTargets || len(r.Packets) > 64 {
+	if postContext(ctx) != nil || !l.valid() || !r.Limits.valid() || r.RequestType != expectedRequestType || r.Authority != 0 || r.Accepted || r.FeatureIdentity != "UNRESOLVED" || r.SourceCompleteness != "UNKNOWN" || len(r.Coverage) == 0 || len(r.Coverage) > l.MaxConstituents || len(r.Index) > l.MaxLedgerTargets || len(r.Packets) > 64 {
 		return fail()
 	}
 	// Count ALL evidence before constructing any evidence or identity maps.
@@ -309,7 +314,7 @@ func postFromPrepared(ctx context.Context, r Result, l PostPreparationLimits) (P
 			if i+1 < len(p.Parts) {
 				next = i + 2
 			}
-			if part.Index != i+1 || part.Previous != prev || part.Next != next || part.RequestType != RequestType || part.PacketID != p.ID || part.InputSHA256 != k.input || part.Target != k.target || part.ScopeSHA256 != p.ScopeSHA256 {
+			if part.Index != i+1 || part.Previous != prev || part.Next != next || part.RequestType != expectedRequestType || part.PacketID != p.ID || part.InputSHA256 != k.input || part.Target != k.target || part.ScopeSHA256 != p.ScopeSHA256 {
 				return fail()
 			}
 			raw, err := json.Marshal(part)
@@ -543,13 +548,16 @@ func (s *postState) validateSubmission(v CallerSubmission, p postPacket) string 
 // state. Reviews pin a canonical submission digest from an earlier invocation.
 // Unknown identities and ambiguous duplicate keys reject the WHOLE invocation.
 func (h PostPreparation) Reconcile(ctx context.Context, submissions []CallerSubmission, reviews []CallerReview) (StageLedger, error) {
+	return reconcilePostState(ctx, h.state, submissions, reviews)
+}
+
+func reconcilePostState(ctx context.Context, s *postState, submissions []CallerSubmission, reviews []CallerReview) (StageLedger, error) {
 	if err := postContext(ctx); err != nil {
 		return StageLedger{}, err
 	}
-	if h.state == nil {
+	if s == nil {
 		return StageLedger{}, fmt.Errorf("unsealed private post-preparation handle")
 	}
-	s := h.state
 	_, work, err := s.preflightCall(ctx, submissions, reviews)
 	if err != nil {
 		return StageLedger{}, err

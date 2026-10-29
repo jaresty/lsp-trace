@@ -15,6 +15,7 @@ import (
 	pilot "lsp-trace/internal/censuslineagepilot"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/programc"
 	derived "lsp-trace/internal/retainedpartialprogramc"
 )
 
@@ -57,6 +58,7 @@ type Coverage struct {
 	OriginalTargets, OriginalSymbols, Requested, Prepared, SourceGap, ResourceGap int
 	Selection                                                                     []string
 	DiscoverySHA256                                                               string
+	PrivateV2                                                                     *CoveragePrivateV2 `json:",omitempty"`
 }
 type TargetIndex struct {
 	InputSHA256, Target, Status, Gap, PacketID string
@@ -212,6 +214,10 @@ func Prepare(ctx context.Context, inputs []Input, limits Limits) (Result, error)
 		}
 		out.Coverage = append(out.Coverage, cv)
 	}
+	return boundCanonicalResult(out, limits)
+}
+
+func boundCanonicalResult(out Result, limits Limits) (Result, error) {
 	// Account the entire canonical result, including indexes and part manifests,
 	// not just payload bytes. Withdraw whole packets, never clipped evidence.
 	for len(out.CanonicalBytes()) > limits.MaxTotalBytes && len(out.Packets) > 0 {
@@ -243,10 +249,14 @@ func Prepare(ctx context.Context, inputs []Input, limits Limits) (Result, error)
 }
 
 func split(p Packet, records []Record, l Limits, usedParts, usedBytes int) ([]Part, bool) {
+	return splitPrivate(RequestType, p, records, l, usedParts, usedBytes)
+}
+
+func splitPrivate(requestType string, p Packet, records []Record, l Limits, usedParts, usedBytes int) ([]Part, bool) {
 	// Each record is indivisible. Membership/reference arrays are emitted as one
 	// row per record upstream, never clipped or split into fake full declarations.
 	var out []Part
-	current := Part{RequestType: RequestType, PacketID: p.ID, InputSHA256: p.InputSHA256, Target: p.Target, ScopeSHA256: p.ScopeSHA256, Index: 1, Prompt: Prompt}
+	current := Part{RequestType: requestType, PacketID: p.ID, InputSHA256: p.InputSHA256, Target: p.Target, ScopeSHA256: p.ScopeSHA256, Index: 1, Prompt: Prompt}
 	// Reserve worst-case fixed-width linkage overhead before choosing boundaries.
 	fits := func(x Part) bool {
 		x.Index = 256
@@ -304,13 +314,27 @@ type SourceState struct {
 }
 
 func sources(c graphprovenance.SourceWithholdingPrivateV1) map[string]SourceState {
+	return sourceStates(c.Evidence.Captures, membersV1(c))
+}
+
+type sourceMember struct{ URI, SHA256, Role string }
+
+func membersV1(c graphprovenance.SourceWithholdingPrivateV1) []sourceMember {
+	var out []sourceMember
+	for _, m := range c.Policy.Members {
+		out = append(out, sourceMember{m.URI, m.SHA256, m.Role})
+	}
+	return out
+}
+
+func sourceStates(captures []graphprovenance.Receipt, members []sourceMember) map[string]SourceState {
 	out := map[string]SourceState{}
-	for _, r := range c.Evidence.Captures {
+	for _, r := range captures {
 		s := SourceState{URI: r.URI, Status: r.Status, ByteLength: len(r.Content), ReceiptIDs: []string{r.ID}}
 		if r.Status == "READABLE" {
 			s.SHA256 = pilot.Digest(r.Content)
 		}
-		for _, m := range c.Policy.Members {
+		for _, m := range members {
 			if m.URI == r.URI {
 				s.Role = m.Role
 			}
@@ -329,15 +353,37 @@ func sourceFor(uri string, s map[string]SourceState) SourceState {
 	}
 	return SourceState{URI: uri, Status: "UNAVAILABLE"}
 }
+
+// preparationView is package-private and constructed only downstream of versioned
+// sealed validation. It is not a V2-to-V1 carrier or a DTO admission surface.
+type preparationView struct {
+	captures   []graphprovenance.Receipt
+	members    []sourceMember
+	math       programc.CallsMathPrivate
+	assessment assessmentRows
+}
+type assessmentRows struct {
+	Outcome, RequestSHA256, Digest                  string
+	ExpectedRuns, ExpectedPairs, IndependentSources int
+	Runs                                            []derived.InstabilityRunPrivate
+	Pairs                                           []derived.InstabilityPairPrivate
+	pins                                            []Record
+}
+
 func targetRecords(id, scope string, ordinal int, t acquisition.TargetResult, a acquisition.Result, c graphprovenance.SourceWithholdingPrivateV1, in Input, l Limits) ([]Record, string, string) {
+	v := preparationView{captures: c.Evidence.Captures, members: membersV1(c), math: in.Projection.Math(), assessment: assessmentRows{Outcome: in.Instability.Outcome, RequestSHA256: in.Instability.RequestSHA256, Digest: in.Instability.Digest, ExpectedRuns: in.Instability.ExpectedRuns, ExpectedPairs: in.Instability.ExpectedPairs, IndependentSources: in.Instability.IndependentSources, Runs: in.Instability.Runs, Pairs: in.Instability.Pairs}}
+	return targetRecordsPrivate(id, scope, ordinal, t, a, v, l)
+}
+
+func targetRecordsPrivate(id, scope string, ordinal int, t acquisition.TargetResult, a acquisition.Result, v preparationView, l Limits) ([]Record, string, string) {
 	if t.Resolution.Identity == nil {
 		return nil, "", "UNRESOLVED_ORIGINAL_SUBJECT"
 	}
 	n := *t.Resolution.Identity
-	if !slices.Contains(in.Projection.Math().NodeIdentities, n.ID) {
+	if !slices.Contains(v.math.NodeIdentities, n.ID) {
 		return nil, n.ID, "MISSING_NATIVE_SUBJECT"
 	}
-	ss := sources(c)
+	ss := sourceStates(v.captures, v.members)
 	state := sourceFor(n.URI, ss)
 	if state.Status != "READABLE" {
 		return nil, n.ID, state.Status
@@ -346,7 +392,7 @@ func targetRecords(id, scope string, ordinal int, t acquisition.TargetResult, a 
 		return nil, n.ID, "SOURCE_BYTE_RESOURCE_LIMIT"
 	}
 	var body []byte
-	for _, r := range c.Evidence.Captures {
+	for _, r := range v.captures {
 		if r.URI == n.URI && r.Status == "READABLE" {
 			body = r.Content
 		}
@@ -354,7 +400,7 @@ func targetRecords(id, scope string, ordinal int, t acquisition.TargetResult, a 
 	// The private parser already validates policy/hash/receipt binding; this exact
 	// check prevents source bytes from being accidentally substituted downstream.
 	bound := false
-	for _, m := range c.Policy.Members {
+	for _, m := range v.members {
 		if m.URI == n.URI && m.SHA256 == pilot.Digest(body) {
 			bound = true
 		}
@@ -437,7 +483,7 @@ func targetRecords(id, scope string, ordinal int, t acquisition.TargetResult, a 
 	for _, rel := range own.ReachedRelationIDs {
 		add(record("SEED_RELATION_MEMBERSHIP", handle+"/relation/"+rel, rel))
 	}
-	math := in.Projection.Math()
+	math := v.math
 	for _, e := range a.Graph.Edges {
 		if limited {
 			return nil, n.ID, "RECORD_RESOURCE_LIMIT"
@@ -471,18 +517,21 @@ func targetRecords(id, scope string, ordinal int, t acquisition.TargetResult, a 
 		add(record("GAP", id+"/relation/"+e.RelationID+"/source", "CALLSITE_EXCERPT_NOT_PREPARED; ranges refer to caller source; endpoint meaning UNKNOWN"))
 	}
 	// All runs and pairs survive; never prefer seed 42 or interpret a community.
-	add(record("INSTABILITY", id+"/instability/"+in.Instability.Digest, struct {
+	for _, pin := range v.assessment.pins {
+		add(pin)
+	}
+	add(record("INSTABILITY", id+"/instability/"+v.assessment.Digest, struct {
 		Outcome, RequestSHA256, Digest                  string
 		ExpectedRuns, ExpectedPairs, IndependentSources int
-	}{in.Instability.Outcome, in.Instability.RequestSHA256, in.Instability.Digest, in.Instability.ExpectedRuns, in.Instability.ExpectedPairs, in.Instability.IndependentSources}))
-	for _, pair := range in.Instability.Pairs {
+	}{v.assessment.Outcome, v.assessment.RequestSHA256, v.assessment.Digest, v.assessment.ExpectedRuns, v.assessment.ExpectedPairs, v.assessment.IndependentSources}))
+	for _, pair := range v.assessment.Pairs {
 		add(record("INSTABILITY_PAIR", id+"/pair/"+pair.Left+"/"+pair.Right, pair))
 	}
 	nodes := map[string]graph.Node{}
 	for _, node := range a.Graph.Nodes {
 		nodes[node.ID] = node
 	}
-	for _, run := range in.Instability.Runs {
+	for _, run := range v.assessment.Runs {
 		matched := false
 		for _, community := range run.Partition.Communities {
 			if !slices.Contains(community.Members, n.ID) {

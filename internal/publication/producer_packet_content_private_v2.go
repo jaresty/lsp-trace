@@ -33,6 +33,11 @@ type ProducerPacketCopyObservationPrivateV2 struct {
 // directory paths. It is a custody boundary, not a content read, snapshot, or
 // guarantee against later same-user mutation. Close/cancellation errors refuse.
 func ObserveProducerPacketPairCustodyPrivateV2(ctx context.Context, roots [2]*ContentRetentionRoot, id string) (out [2]ProducerPacketCopyObservationPrivateV2, err error) {
+	return observeContentPairCustodyPrivate(ctx, roots, id, ProducerPacketPrivateV2ObjectLimit)
+}
+
+// Shared metadata-only primitive; wrappers select fixed object families.
+func observeContentPairCustodyPrivate(ctx context.Context, roots [2]*ContentRetentionRoot, id string, ceiling int64) (out [2]ProducerPacketCopyObservationPrivateV2, err error) {
 	if ctx == nil || !observedContentID.MatchString(id) {
 		return out, ErrContentObservation
 	}
@@ -64,7 +69,7 @@ func ObserveProducerPacketPairCustodyPrivateV2(ctx context.Context, roots [2]*Co
 		if err != nil {
 			return out, err
 		}
-		if !r.observed.root.validObservedInfo(infos[i]) || infos[i].Size() < 1 || infos[i].Size() > ProducerPacketPrivateV2ObjectLimit {
+		if !r.observed.root.validObservedInfo(infos[i]) || infos[i].Size() < 1 || infos[i].Size() > ceiling {
 			return out, ErrContentObservation
 		}
 		named, e := r.observed.root.handle.Lstat(id)

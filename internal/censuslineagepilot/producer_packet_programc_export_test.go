@@ -4,6 +4,8 @@ package censuslineagepilot
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -18,7 +20,19 @@ func WithOwnedProducerPacketCodecPrivateV2(t *testing.T, fn func(DerivedProducer
 // protection remain borrowed/alive during fn; Manager is already shut down.
 func WithOwnedProducerPacketPrivateV2(t *testing.T, nom, con int, fn func(DerivedProducerPacketPrivateV2, func() int)) {
 	t.Helper()
-	f, o, captures, traffic := packetFixturePrivateV2(t, nom, con, "owned-v2-fake-provider")
+	withOwnedProducerPacketConfiguredPrivateV2(t, nom, con, false, false, fn)
+}
+
+// WithOwnedMatchedProducerPacketPrivateV2 is TEST ONLY. Names, ranges and source
+// hashes are generated together BEFORE capture. Removing live owned files after
+// derive demonstrates retained-byte preparation without removing the root cap.
+func WithOwnedMatchedProducerPacketPrivateV2(t *testing.T, nom, con int, removeLiveFiles bool, fn func(DerivedProducerPacketPrivateV2, func() int)) {
+	t.Helper()
+	withOwnedProducerPacketConfiguredPrivateV2(t, nom, con, true, removeLiveFiles, fn)
+}
+func withOwnedProducerPacketConfiguredPrivateV2(t *testing.T, nom, con int, matched, removeLiveFiles bool, fn func(DerivedProducerPacketPrivateV2, func() int)) {
+	t.Helper()
+	f, o, captures, traffic := packetFixtureConfiguredPrivateV2(t, nom, con, matched, "owned-v2-fake-provider")
 	before := traffic()
 	roots, _, _ := packetRootsPrivateV2(t, f)
 	retained, err := RetainCompleteScopePrivateV2(context.Background(), f, o, captures, roots)
@@ -32,6 +46,13 @@ func WithOwnedProducerPacketPrivateV2(t *testing.T, nom, con int, fn func(Derive
 	derived, err := DeriveProducerPacketPrivateV2(context.Background(), qualified)
 	if err != nil {
 		t.Fatal("derive owned V2 packet", err)
+	}
+	if removeLiveFiles {
+		for _, member := range f.state.spec.Members {
+			if err := os.Remove(filepath.Join(f.state.spec.Root, member.CanonicalRelativePath)); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	fn(derived, traffic)
 	if traffic() != before {

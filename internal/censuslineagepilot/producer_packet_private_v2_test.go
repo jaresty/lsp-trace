@@ -18,7 +18,12 @@ import (
 
 func packetFixturePrivateV2(t *testing.T, nom, con int, server ...string) (FrozenScopePrivateV2, EnumerationOriginPrivateV2, []OpaqueSuccessfulV2Capture, func() int) {
 	t.Helper()
-	spec, m, id, child := producerFixturePrivateV2(t, nom, con, server...)
+	return packetFixtureConfiguredPrivateV2(t, nom, con, false, server...)
+}
+
+func packetFixtureConfiguredPrivateV2(t *testing.T, nom, con int, matched bool, server ...string) (FrozenScopePrivateV2, EnumerationOriginPrivateV2, []OpaqueSuccessfulV2Capture, func() int) {
+	t.Helper()
+	spec, m, id, child := producerFixtureConfiguredPrivateV2(t, nom, con, matched, server...)
 	if err := os.Chmod(spec.Root, 0755); err != nil {
 		t.Fatal(err)
 	}
