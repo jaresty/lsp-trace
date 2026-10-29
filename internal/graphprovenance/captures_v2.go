@@ -15,6 +15,18 @@ func validateCapturesV2(e EvidenceV2, uris []string) error {
 }
 
 func validateCapturesV2Profile(e EvidenceV2, uris []string, policy *SourcePolicyPrivateV1) error {
+	var view *sourceProfilePrivate
+	if policy != nil {
+		var err error
+		view, err = sourceProfileV1Private(*policy)
+		if err != nil {
+			return err
+		}
+	}
+	return validateCapturesV2ProfilePrivate(e, uris, view)
+}
+
+func validateCapturesV2ProfilePrivate(e EvidenceV2, uris []string, policy *sourceProfilePrivate) error {
 	if e.CaptureBudget.RootStatus != "OPENED" && e.CaptureBudget.RootStatus != "UNAVAILABLE" {
 		return errors.New("V2 missing capture root outcome")
 	}
@@ -25,7 +37,7 @@ func validateCapturesV2Profile(e EvidenceV2, uris []string, policy *SourcePolicy
 			return errors.New("V2 capture order/class mismatch")
 		}
 		if policy != nil && policy.withholds(e.WorkspaceURI, r.URI) {
-			if !validWithheldPrivateV1(e.WorkspaceURI, r) {
+			if !policy.validWithheld(e.WorkspaceURI, r) {
 				return errors.New("private policy withholding receipt mismatch")
 			}
 			continue

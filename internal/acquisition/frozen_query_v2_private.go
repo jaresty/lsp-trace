@@ -74,6 +74,19 @@ func (d FrozenQueryDeclarationPrivateV2) MembersPrivateV2() []string {
 	return append([]string(nil), d.state.members...)
 }
 
+// FrozenQueryMembersPrivateV2 inspects restrict-only metadata, never authority.
+// Absence is nil,nil. Present invalid or mixed metadata is refused. Returned
+// members are detached; JSON decoding cannot populate the private declaration.
+func (r Request) FrozenQueryMembersPrivateV2() ([]string, error) {
+	if r.frozenQueryDeclarationPrivateV2 == nil {
+		return nil, nil
+	}
+	if err := r.validateFrozenQueryPrivate(); err != nil {
+		return nil, err
+	}
+	return r.frozenQueryDeclarationPrivateV2.MembersPrivateV2(), nil
+}
+
 func (d FrozenQueryDeclarationPrivateV2) contains(uri string) bool {
 	if d.validate() != nil {
 		return false

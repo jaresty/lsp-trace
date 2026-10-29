@@ -202,6 +202,10 @@ func ParseSourceWithholdingPrivateV1(raw []byte) (SourceWithholdingPrivateV1, er
 // Bound arrays before typed slice allocation. Opaque LSP data remains raw JSON,
 // just as in the historical preflight; its shape is not a policy/source carrier.
 func preflightSourceArraysPrivateV1(raw []byte) error {
+	return preflightSourceArraysPrivate(raw, 6)
+}
+
+func preflightSourceArraysPrivate(raw []byte, maxMembers int) error {
 	type frame struct {
 		object, key  bool
 		name         string
@@ -209,6 +213,7 @@ func preflightSourceArraysPrivateV1(raw []byte) error {
 		policyMember bool
 	}
 	stack := []frame{}
+	metadataBytes := 0
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
 	for {
@@ -266,13 +271,33 @@ func preflightSourceArraysPrivateV1(raw []byte) error {
 				continue
 			}
 			if top.object {
+				if maxMembers == 16 && (top.policyMember || len(stack) == 2 && stack[0].name == "source_policy") {
+					bound := 0
+					switch top.name {
+					case "uri", "workspace_uri":
+						bound = 8192
+					case "session_id":
+						bound = 1024
+					case "sha256":
+						bound = 71
+					case "role":
+						bound = 12
+					}
+					if bound != 0 {
+						value, ok := token.(string)
+						if !ok || len(value) > bound || len(value) > (128<<10)-metadataBytes {
+							return errors.New("private V2 source metadata preflight bound/type")
+						}
+						metadataBytes += len(value)
+					}
+				}
 				name = top.name
 				top.key = true
 			} else {
 				top.count++
 				bound := MaxRecordsV2
 				if top.name == "members" {
-					bound = 6
+					bound = maxMembers
 				}
 				if top.count > bound {
 					return errors.New("private source array allocation bound")
@@ -356,6 +381,9 @@ func captureBoundSourceWithholdingPrivateV1(ctx context.Context, r acquisition.R
 	if failure := b.manager.CheckRetainedScopePrivate(ctx, b.policy.SessionID, b.policy.Generation, b.guard); failure != "" {
 		return nil, fmt.Errorf("private source capability expired: %s", failure)
 	}
+	if members, err := r.Request.FrozenQueryMembersPrivateV2(); err != nil || members != nil {
+		return nil, errors.New("private V1 source refuses V2 query metadata")
+	}
 	if r.Request.FrozenQueryURIsPrivate != [6]string{} {
 		declaration, err := b.FrozenQueryDeclarationPrivate(ctx)
 		if err != nil || r.Request.FrozenQueryURIsPrivate != declaration {
@@ -367,18 +395,41 @@ func captureBoundSourceWithholdingPrivateV1(ctx context.Context, r acquisition.R
 
 // Read injection is package-local testing only; public callers cannot substitute
 // a policy predicate, a byte supplier, or arbitrary six-file expectations.
-func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result, p SourcePolicyPrivateV1, expected map[string][]byte, read func(context.Context, *sourceRootPrivateV1, string, int64) ([]byte, error)) (out []byte, resultErr error) {
+func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result, p SourcePolicyPrivateV1, expected map[string][]byte, read func(context.Context, *sourceRootPrivateV1, string, int64) ([]byte, error)) ([]byte, error) {
+	if members, err := r.Request.FrozenQueryMembersPrivateV2(); err != nil || members != nil {
+		return nil, errors.New("private V1 source refuses V2 query metadata")
+	}
+	view, err := sourceProfileV1Private(p)
+	if err != nil {
+		return nil, err
+	}
+	return captureSourceProfilePrivate(ctx, r, view, expected, read, func(s EvidenceV2, withheld int) ([]byte, error) {
+		e := SourceWithholdingPrivateV1{SchemaVersion: VersionSourceWithholdingPrivateV1, Policy: p, Evidence: s, SourceCompleteness: "UNKNOWN", Partial: true, WithheldCount: withheld, FrozenQueryScope: r.Request.FrozenQueryURIsPrivate != [6]string{}}
+		encoded, err := json.Marshal(e)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = ParseSourceWithholdingPrivateV1(encoded); err != nil {
+			return nil, err
+		}
+		return append(encoded, '\n'), nil
+	})
+}
+
+func captureSourceProfilePrivate(ctx context.Context, r acquisition.Result, p *sourceProfilePrivate, expected map[string][]byte, read func(context.Context, *sourceRootPrivateV1, string, int64) ([]byte, error), encode func(EvidenceV2, int) ([]byte, error)) (out []byte, resultErr error) {
 	if ctx == nil {
 		return nil, errors.New("private source context required")
 	}
-	if err := p.validate(); err != nil {
-		return nil, err
-	}
-	if len(expected) != 6 {
+	if len(expected) != len(p.members) {
 		return nil, errors.New("private expected source count")
 	}
-	for _, m := range p.Members {
+	totalExpected := 0
+	for _, m := range p.members {
 		b, ok := expected[m.URI]
+		totalExpected += len(b)
+		if totalExpected > 8<<20 {
+			return nil, errors.New("private expected source aggregate bytes")
+		}
 		if !ok || len(b) > MaxFileBytes || sourceHashPrivateV1(b) != m.SHA256 {
 			return nil, errors.New("private expected source binding")
 		}
@@ -393,11 +444,11 @@ func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result
 	if err != nil {
 		return nil, err
 	}
-	s := EvidenceV2{SchemaVersion: VersionSourceWithholdingPrivateV1, Policy: PolicySourceWithholdingPrivateV1, GraphBytes: raw, GraphDigest: digest(VersionV2+":graph", raw), WorkspaceURI: p.WorkspaceURI, AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Acquisition: r, Captures: []Receipt{}, Supplies: []SupplyReceiptV2{}, Bindings: []BindingV2{}}
+	s := EvidenceV2{SchemaVersion: p.version, Policy: p.policy, GraphBytes: raw, GraphDigest: digest(VersionV2+":graph", raw), WorkspaceURI: p.workspace, AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Acquisition: r, Captures: []Receipt{}, Supplies: []SupplyReceiptV2{}, Bindings: []BindingV2{}}
 	if err = checkResultV2Profile(s, true); err != nil {
 		return nil, err
 	}
-	if r.Request.Context.SessionID != p.SessionID || r.Request.Context.Generation != p.Generation {
+	if r.Request.Context.SessionID != p.session || r.Request.Context.Generation != p.generation {
 		return nil, errors.New("private source acquisition context differs from policy")
 	}
 	if s.Bindings, err = CensusV2(r); err != nil {
@@ -406,7 +457,7 @@ func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result
 	if s.Supplies, err = suppliesV2(r, s.WorkspaceURI); err != nil {
 		return nil, err
 	}
-	rootURI, _ := url.Parse(p.WorkspaceURI)
+	rootURI, _ := url.Parse(p.workspace)
 	root, rootErr := openSourceRootPrivateV1(ctx, rootURI.Path)
 	if errors.Is(rootErr, errSourcePrivateUnsupportedV1) {
 		return nil, rootErr
@@ -425,7 +476,7 @@ func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result
 	for _, uri := range sourceURIsV2(s.Bindings) {
 		name, status := RelativeURI(s.WorkspaceURI, uri)
 		if p.withholds(s.WorkspaceURI, uri) {
-			s.Captures = append(s.Captures, withheldPrivateV1(s.WorkspaceURI, uri))
+			s.Captures = append(s.Captures, p.withheld(s.WorkspaceURI, uri))
 			withheld++
 			continue
 		}
@@ -468,13 +519,5 @@ func captureSourceWithholdingPrivateV1(ctx context.Context, r acquisition.Result
 	if err = bindV2(&s); err != nil {
 		return nil, err
 	}
-	e := SourceWithholdingPrivateV1{SchemaVersion: VersionSourceWithholdingPrivateV1, Policy: p, Evidence: s, SourceCompleteness: "UNKNOWN", Partial: true, WithheldCount: withheld, FrozenQueryScope: r.Request.FrozenQueryURIsPrivate != [6]string{}}
-	encoded, err := json.Marshal(e)
-	if err != nil {
-		return nil, err
-	}
-	if _, err = ParseSourceWithholdingPrivateV1(encoded); err != nil {
-		return nil, err
-	}
-	return append(encoded, '\n'), nil
+	return encode(s, withheld)
 }

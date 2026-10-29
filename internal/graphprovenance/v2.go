@@ -557,12 +557,24 @@ func ValidateV2(e EvidenceV2) error {
 
 // A nil private policy preserves the historical closed V2 gate exactly.
 func validateV2Profile(e EvidenceV2, policy *SourcePolicyPrivateV1) error {
+	var view *sourceProfilePrivate
+	if policy != nil {
+		var err error
+		view, err = sourceProfileV1Private(*policy)
+		if err != nil {
+			return err
+		}
+	}
+	return validateV2ProfilePrivate(e, view)
+}
+
+func validateV2ProfilePrivate(e EvidenceV2, policy *sourceProfilePrivate) error {
 	if len(e.Captures) > MaxBindings || len(e.Bindings) > MaxBindings || len(e.Supplies) > 64 {
 		return errors.New("V2 source/census row limit")
 	}
 	version, sourcePolicy := VersionV2, PolicyV2
 	if policy != nil {
-		version, sourcePolicy = VersionSourceWithholdingPrivateV1, PolicySourceWithholdingPrivateV1
+		version, sourcePolicy = policy.version, policy.policy
 	}
 	if e.SchemaVersion != version || e.Policy != sourcePolicy || e.AnalyzedVersion != Unverified || e.DependencyCompleteness != "UNKNOWN_INCOMPLETE" {
 		return errors.New("V2 policy/ceiling mismatch")
@@ -607,7 +619,7 @@ func validateV2Profile(e EvidenceV2, policy *SourcePolicyPrivateV1) error {
 	if len(uris) != len(e.Captures) {
 		return errors.New("V2 missing/extra capture")
 	}
-	if err = validateCapturesV2Profile(e, uris, policy); err != nil {
+	if err = validateCapturesV2ProfilePrivate(e, uris, policy); err != nil {
 		return err
 	}
 	rebuilt := e
