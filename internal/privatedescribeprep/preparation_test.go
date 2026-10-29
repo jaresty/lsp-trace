@@ -72,7 +72,7 @@ func TestRetainedDeclarationAndReceivers(t *testing.T) {
 func TestDeclarationRejectsUnsafeBindings(t *testing.T) {
 	src := []byte("package p\nfunc F() {}")
 	n := graph.Node{Item: graph.Item{Name: "F", Kind: 12, Range: graph.Range{Start: graph.Position{Line: 1}, End: graph.Position{Line: 1, Character: 11}}, SelectionRange: graph.Range{Start: graph.Position{Line: 1, Character: 5}, End: graph.Position{Line: 1, Character: 6}}}}
-	for _, mutate := range []func(*graph.Node){func(n *graph.Node) { n.Kind = 6 }, func(n *graph.Node) { n.SelectionRange.Start.Character = 6 }, func(n *graph.Node) { n.Range.End.Character = 8 }, func(n *graph.Node) { n.SelectionRange.End.Character = 99 }} {
+	for _, mutate := range []func(*graph.Node){func(n *graph.Node) { n.Kind = 6 }, func(n *graph.Node) { n.SelectionRange.Start.Character = 6 }, func(n *graph.Node) { n.Range.End.Character = 5 }, func(n *graph.Node) { n.SelectionRange.End.Character = 99 }} {
 		bad := n
 		mutate(&bad)
 		if _, gap := declaration(src, bad, "utf-16"); gap == "" {

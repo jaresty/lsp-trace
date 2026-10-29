@@ -90,7 +90,11 @@ func declaration(src []byte, n graph.Node, encoding string) (Declaration, string
 				continue
 			}
 		} else {
-			if n.Kind != 6 || len(fn.Recv.List) != 1 {
+			// Providers may label a Go receiver declaration as callable kind 12
+			// with a bare name (observed MarshalJSON endpoints), or kind 6.
+			// The exact unique identifier coordinates bind the retained AST;
+			// its receiver is source evidence, not a rewritten provider label.
+			if len(fn.Recv.List) != 1 {
 				continue
 			}
 			recv := receiverName(fn.Recv.List[0].Type)
@@ -99,7 +103,7 @@ func declaration(src []byte, n graph.Node, encoding string) (Declaration, string
 			}
 			expected := "(" + recv + ")." + fn.Name.Name
 			plain := recv + "." + fn.Name.Name
-			if n.Name != expected && n.Name != plain {
+			if n.Name != fn.Name.Name && n.Name != expected && n.Name != plain {
 				continue
 			}
 		}
@@ -113,8 +117,11 @@ func declaration(src []byte, n graph.Node, encoding string) (Declaration, string
 	}
 	fn := matches[0]
 	s, e := fs.PositionFor(fn.Pos(), false).Offset, fs.PositionFor(fn.End(), false).Offset
-	if s < rstart || e > rend || s < 0 || e > len(src) {
-		return fail("DECLARATION_OUTSIDE_ENDPOINT_RANGE")
+	// The validated native range contains the exact identifier selection, not
+	// necessarily the declaration. Keep it unchanged: this larger span is only
+	// RETAINED_SOURCE_AST_DECLARATION, never provider FULL_DEFINITION evidence.
+	if s < 0 || e <= s || e > len(src) {
+		return fail("INVALID_DECLARATION_RANGE")
 	}
 	sp, err := sourceposition.PositionAtOffset(src, encoding, s)
 	if err != nil {
