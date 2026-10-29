@@ -57,11 +57,23 @@ func NewScopedPartialExact25V4RehearsalFixturePrivate(t *testing.T) (*ScopedRehe
 	return newScopedPartialExact25WithSchemaPrivate(t, "lsp-trace.scoped-rehearsal.private.v4")
 }
 
+// Positive retained declaration is installed BEFORE scope hashes are frozen.
+// The other mock labels deliberately remain non-Go identifiers and must gap.
+func NewScopedPartialReadableRootFixturePrivate(t *testing.T) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
+	return newScopedPartialExact25WithSchemaPrivate(t, "lsp-trace.scoped-rehearsal.private.v4", "readable-root")
+}
+
 func newScopedPartialExact25WithSchemaPrivate(t *testing.T, schema string, faults ...string) (*ScopedRehearsalPrivate, *sessionruntime.Manager, ScopedRehearsalConfigPrivate, *ScopedBatchFixturePrivate) {
 	t.Helper()
 	h, m, cfg, f := newScopedRehearsalFixturePrivate(t, schema, func(root string) {
-		for _, path := range fixtureScopePaths {
-			if e := os.WriteFile(filepath.Join(root, path), []byte("package fixture\n"+strings.Repeat("// deterministic owned mock padding ................................\n", 301)), 0600); e != nil {
+		for i, path := range fixtureScopePaths {
+			content := "package fixture\n" + strings.Repeat("// deterministic owned mock padding ................................\n", 301)
+			if len(faults) > 0 && faults[0] == "readable-root" && i == 0 {
+				lines := strings.Split(content, "\n")
+				lines[15] = "func root() {}" + strings.Repeat(" ", 64-len("func root() {}"))
+				content = strings.Join(lines, "\n")
+			}
+			if e := os.WriteFile(filepath.Join(root, path), []byte(content), 0600); e != nil {
 				t.Fatal(e)
 			}
 		}

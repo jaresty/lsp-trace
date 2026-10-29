@@ -292,7 +292,10 @@ func ValidateInstabilityPrivate(ctx context.Context, p Projection, expected Inst
 	if expected.Outcome == "INCOMPLETE" || len(expected.retained) == 0 || len(expected.Runs) > 6 || len(expected.Pairs) > 15 {
 		return fmt.Errorf("sealed completed assessment required")
 	}
-	supplied, _ := json.Marshal(expected)
+	supplied, err := marshalInstabilityPrivateBounded(p, expected)
+	if err != nil {
+		return err
+	}
 	if !bytes.Equal(supplied, expected.retained) {
 		return fmt.Errorf("sealed completed assessment required")
 	}
