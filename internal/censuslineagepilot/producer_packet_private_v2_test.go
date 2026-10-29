@@ -16,9 +16,9 @@ import (
 	"lsp-trace/internal/publication"
 )
 
-func packetFixturePrivateV2(t *testing.T, nom, con int) (FrozenScopePrivateV2, EnumerationOriginPrivateV2, []OpaqueSuccessfulV2Capture, func() int) {
+func packetFixturePrivateV2(t *testing.T, nom, con int, server ...string) (FrozenScopePrivateV2, EnumerationOriginPrivateV2, []OpaqueSuccessfulV2Capture, func() int) {
 	t.Helper()
-	spec, m, id, child := producerFixturePrivateV2(t, nom, con)
+	spec, m, id, child := producerFixturePrivateV2(t, nom, con, server...)
 	if err := os.Chmod(spec.Root, 0755); err != nil {
 		t.Fatal(err)
 	}

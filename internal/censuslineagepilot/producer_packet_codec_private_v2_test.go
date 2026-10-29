@@ -17,7 +17,11 @@ import (
 )
 
 func TestProducerPacketPrivateV2NativeCodecProcessAndOccurrences(t *testing.T) {
-	spec, m, id, child := producerFixturePrivateV2(t, 2, 1)
+	withProducerPacketCodecPrivateV2(t, "", nil)
+}
+func withProducerPacketCodecPrivateV2(t *testing.T, command string, fn func(DerivedProducerPacketPrivateV2, [][]byte, func() int)) {
+	t.Helper()
+	spec, m, id, child := producerFixturePrivateV2(t, 2, 1, command)
 	var incoming atomic.Int32
 	child.mu.Lock()
 	normal := child.response
@@ -85,6 +89,14 @@ func TestProducerPacketPrivateV2NativeCodecProcessAndOccurrences(t *testing.T) {
 	view, err := ReadDerivedProducerPacketPrivateV2(context.Background(), d)
 	if err != nil {
 		t.Fatal(err)
+	}
+	traffic := func() int { return len(child.snapshot()) }
+	before := traffic()
+	if fn != nil {
+		fn(d, originals, traffic)
+	}
+	if traffic() != before {
+		t.Fatal("ASSERT_V2_CODEC_NO_PROVIDER_AFTER_CAPTURE")
 	}
 	sawNull, sawEmpty, sawDuplicate := false, false, false
 	for i, batch := range view.Batches {

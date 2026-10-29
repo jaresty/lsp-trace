@@ -186,12 +186,17 @@ func assessPrivate(ctx context.Context, p Projection, seeds []uint64, runs []Ins
 	if err := validatePrivateRequest(ctx, p, seeds); err != nil {
 		return InstabilityPrivate{}, err
 	}
-	a := newPrivateAssessment(p, seeds)
+	return assessPrivateMath(ctx, p.state.math, newPrivateAssessment(p, seeds), seeds, runs)
+}
+
+// Source-neutral driver: callers bind their own profile, policy, request and
+// producer state. This routine grants neither V1 nor V2 source admission.
+func assessPrivateMath(ctx context.Context, math programc.CallsMathPrivate, a InstabilityPrivate, seeds []uint64, runs []InstabilityRunPrivate) (InstabilityPrivate, error) {
 	fail := func(err error) (InstabilityPrivate, error) { return finishPrivate(a, err), err }
 	if len(runs) != len(seeds) {
 		return fail(fmt.Errorf("missing run"))
 	}
-	empty := len(p.state.math.Occurrences) == 0
+	empty := len(math.Occurrences) == 0
 	for i, r := range runs {
 		want := "COMPLETE"
 		if empty {
@@ -203,7 +208,7 @@ func assessPrivate(ctx context.Context, p Projection, seeds []uint64, runs []Ins
 		if i > 0 && r.Partition.Algorithm != runs[0].Partition.Algorithm {
 			return fail(fmt.Errorf("mixed algorithm"))
 		}
-		if err := validatePrivatePartition(p.state.math.NodeIdentities, r.Partition.Communities); err != nil {
+		if err := validatePrivatePartition(math.NodeIdentities, r.Partition.Communities); err != nil {
 			return fail(err)
 		}
 		if r.Partition.LogicalDigest != programc.PartitionDigestMathPrivate(r.Partition.Communities) {
@@ -225,7 +230,7 @@ func assessPrivate(ctx context.Context, p Projection, seeds []uint64, runs []Ins
 			if empty {
 				a.Pairs[k].Status = "NOT_APPLICABLE_EMPTY"
 			} else {
-				m, err := programc.ComparePartitionsMathPrivate(p.state.math.NodeIdentities, runs[i].Partition.Communities, runs[j].Partition.Communities)
+				m, err := programc.ComparePartitionsMathPrivate(math.NodeIdentities, runs[i].Partition.Communities, runs[j].Partition.Communities)
 				if err != nil {
 					return fail(err)
 				}

@@ -31,6 +31,17 @@ type PartitionMathPrivate struct {
 // same CALLS interpretation as Project. Native validity is NOT source admission.
 // The private byte cap is independent of, and does not widen, ordinary gates.
 func ProjectNativeCallsMathPrivate(raw []byte) (CallsMathPrivate, *Failure) {
+	return projectNativeCallsMathPrivate(raw, false)
+}
+
+// ProjectNativeCallsMathPrivateV2 is a distinct, source-neutral numerical policy.
+// Native V5 validation and typed relation/endpoint checks are unchanged. Empty
+// call-site lists contribute zero unit occurrences, never a synthetic reference
+// or an absence claim. This conveys no producer or ordinary admission.
+func ProjectNativeCallsMathPrivateV2(raw []byte) (CallsMathPrivate, *Failure) {
+	return projectNativeCallsMathPrivate(raw, true)
+}
+func projectNativeCallsMathPrivate(raw []byte, allowZeroSite bool) (CallsMathPrivate, *Failure) {
 	if len(raw) > 8<<20 {
 		return CallsMathPrivate{}, &Failure{Code: CodeResourceLimit, Message: "private native math byte cap"}
 	}
@@ -41,7 +52,7 @@ func ProjectNativeCallsMathPrivate(raw []byte) (CallsMathPrivate, *Failure) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return CallsMathPrivate{}, &Failure{Code: CodeInvalidCalls, Message: err.Error()}
 	}
-	p, failure := projectNativeCalls(doc)
+	p, failure := projectNativeCallsPolicyPrivate(doc, allowZeroSite)
 	if failure != nil {
 		return CallsMathPrivate{}, failure
 	}

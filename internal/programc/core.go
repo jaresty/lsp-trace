@@ -251,6 +251,12 @@ func Project(input []byte) (Projection, *Failure) {
 // projectNativeCalls is source-neutral math, not provenance admission. Callers
 // must validate their own envelope before attaching any source binding.
 func projectNativeCalls(doc native) (Projection, *Failure) {
+	return projectNativeCallsPolicyPrivate(doc, false)
+}
+
+// The V2-only numerical policy retains typed zero-site relations without
+// fabricating occurrences. Ordinary and V1 callers always pass false.
+func projectNativeCallsPolicyPrivate(doc native, allowZeroSite bool) (Projection, *Failure) {
 	if doc.EvidenceSemantics.CallEdges.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || doc.EvidenceSemantics.CallEdges.SupportContribution != 1 || (len(doc.Edges) != 0 && doc.EvidenceReceipt == nil) {
 		return Projection{}, &Failure{Code: CodeInvalidCalls, Message: "exact server-reported call-hierarchy semantics required"}
 	}
@@ -286,7 +292,7 @@ func projectNativeCalls(doc native) (Projection, *Failure) {
 	p := Projection{NodeIdentities: ids, NodeIDs: nodeIDs, PairWeights: make(map[Pair]float64)}
 	for _, edge := range doc.Edges {
 		r, ok := receipts[edge.RelationID]
-		if !ok || r.RelationKind != "CALL_RELATION" || r.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || r.EvidenceRole != "CALL_SUPPORT" || r.Direction != "CALLER_TO_CALLEE" || r.SupportContribution != 1 || r.CallerNodeID != edge.CallerNodeID || r.CalleeNodeID != edge.CalleeNodeID || len(edge.CallSites) == 0 {
+		if !ok || r.RelationKind != "CALL_RELATION" || r.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || r.EvidenceRole != "CALL_SUPPORT" || r.Direction != "CALLER_TO_CALLEE" || r.SupportContribution != 1 || r.CallerNodeID != edge.CallerNodeID || r.CalleeNodeID != edge.CalleeNodeID || (!allowZeroSite && len(edge.CallSites) == 0) {
 			return Projection{}, &Failure{Code: CodeInvalidCalls, Message: "unqualified or incomplete CALLS occurrence"}
 		}
 		from, fromOK := nodeIDs[edge.CallerNodeID]

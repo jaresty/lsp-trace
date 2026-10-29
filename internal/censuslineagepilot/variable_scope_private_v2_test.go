@@ -59,10 +59,17 @@ func producerItemPrivateV2(uri string, index int) lsp.CallHierarchyItem {
 	line := uint32(index * 2)
 	return lsp.CallHierarchyItem{Name: fmt.Sprintf("Callable%d", index), Kind: 12, Detail: "native detail", Tags: []int{1}, URI: uri, Range: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line + 1}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line, Character: 5}}, Data: json.RawMessage(`{"opaque":{"native":true},"URI":"not-an-endpoint"}`)}
 }
-func producerFixturePrivateV2(t *testing.T, nom, con int) (ScopeSpecPrivateV2, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild) {
+func producerFixturePrivateV2(t *testing.T, nom, con int, server ...string) (ScopeSpecPrivateV2, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild) {
 	t.Helper()
+	command := ""
+	if len(server) == 1 {
+		command = server[0]
+	}
+	if len(server) > 1 {
+		t.Fatal("one owned provider command")
+	}
 	var spec ScopeSpecPrivateV2
-	_, m, id, child, _, _ := adapterFixtureWithRestartPathsAndServerPrivate(t, "", func(root string) { spec = producerSpecPrivateV2(t, root, nom, con) })
+	_, m, id, child, _, _ := adapterFixtureWithRestartPathsAndServerPrivate(t, command, func(root string) { spec = producerSpecPrivateV2(t, root, nom, con) })
 	uris := make([]string, len(spec.Members))
 	countByURI := map[string]int{}
 	for i, member := range spec.Members {
