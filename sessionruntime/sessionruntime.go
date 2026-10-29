@@ -264,7 +264,8 @@ type Request struct {
 // an exact session generation.
 type RoundTripRequest struct {
 	// Private Manager-owned equality guard; never serialized or inferred from flags.
-	RetainedScopePrivate *RetainedScopeGuardPrivate `json:"-"`
+	RetainedScopePrivate   *RetainedScopeGuardPrivate   `json:"-"`
+	RetainedScopePrivateV2 *RetainedScopeGuardPrivateV2 `json:"-"`
 
 	directionalV5 *privateDirectionalCallV5
 	SessionID     string
@@ -900,8 +901,14 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.ToolNotImplemented}, callHierarchyLayer1GenericRefusalRuntimeGate, session.ToolNotImplemented)
 	}
 	requestStarted := m.now()
-	if req.RetainedScopePrivate != nil {
+	if req.RetainedScopePrivate != nil || req.RetainedScopePrivateV2 != nil {
 		if !eligibleRetainedScopeRequestPrivate(req) {
+			return RoundTripResult{Failure: DocumentSupplyUnavailable}
+		}
+		// Immutable attachment identity must fail closed before allocating a
+		// Params snapshot. Live slot/session/generation/lease and frozen-state
+		// equality remain authoritative in the locked matcher below.
+		if _, valid := resolveRetainedScopePrivate(req); !valid {
 			return RoundTripResult{Failure: DocumentSupplyUnavailable}
 		}
 		req.Params = append(json.RawMessage(nil), req.Params...)

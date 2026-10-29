@@ -37,6 +37,8 @@ type RetainedScopeMemberPrivate struct {
 // pointer preserves it; copying the pointed-to struct creates an invalid token.
 // It has no wire representation, trust flag, or caller-controlled enable switch.
 type RetainedScopeGuardPrivate struct {
+	profile            retainedScopeProfilePrivate
+	v2Owner            *RetainedScopeGuardPrivateV2
 	manager            *Manager
 	session            *runtimeSession
 	generation         uint64
@@ -121,19 +123,32 @@ func validRetainedScopeDocumentPrivate(d openDocument, member RetainedScopeMembe
 // equality boundary, not proof that a server analyzed these bytes. Exactly four
 // nominations and two context-only members are required; no generic scope API.
 func (m *Manager) BindRetainedScopePrivate(ctx context.Context, id string, generation uint64, members []RetainedScopeMemberPrivate) (*RetainedScopeGuardPrivate, session.Failure) {
+	return m.bindRetainedScopePrivate(ctx, id, generation, members, retainedScopeV1Private)
+}
+
+func (m *Manager) bindRetainedScopePrivate(ctx context.Context, id string, generation uint64, members []RetainedScopeMemberPrivate, profile retainedScopeProfilePrivate) (*RetainedScopeGuardPrivate, session.Failure) {
 	if ctx == nil {
 		return nil, session.LifecycleConflict
 	}
 	if failure := contextFailure(ctx); failure != "" {
 		return nil, failure
 	}
-	if len(members) != 6 {
+	if (profile == retainedScopeV1Private && len(members) != 6) || (profile == retainedScopeV2Private && (len(members) < 1 || len(members) > 16)) {
 		return nil, DocumentSupplyUnavailable
 	}
 	// Bound the snapshot before copying caller expectations. All identity and
 	// role validation below uses this detached snapshot under Manager.mu.
-	total := 0
+	total, uriBytes := 0, 0
 	for _, member := range members {
+		if profile == retainedScopeV2Private {
+			if len(member.URI) > 8192 || len(member.LanguageID) > 256 {
+				return nil, DocumentSupplyUnavailable
+			}
+			uriBytes += len(member.URI)
+			if uriBytes > 128<<10 {
+				return nil, DocumentSupplyUnavailable
+			}
+		}
 		if len(member.Expected) > 2<<20 {
 			return nil, DocumentSupplyUnavailable
 		}
@@ -162,7 +177,7 @@ func (m *Manager) BindRetainedScopePrivate(ctx context.Context, id string, gener
 		return nil, DocumentSupplyUnavailable
 	}
 	nominations, contexts := 0, 0
-	seen := make(map[string]bool, 6)
+	seen := make(map[string]bool, len(members))
 	for _, member := range members {
 		if !canonicalRetainedScopeURIPrivate(member.URI) || seen[member.URI] || member.LanguageID == "" || strings.TrimSpace(member.LanguageID) != member.LanguageID || !utf8.ValidString(member.LanguageID) || len(member.LanguageID) > 256 || !utf8.Valid(member.Expected) {
 			return nil, DocumentSupplyUnavailable
@@ -177,16 +192,19 @@ func (m *Manager) BindRetainedScopePrivate(ctx context.Context, id string, gener
 			return nil, DocumentSupplyUnavailable
 		}
 	}
-	if nominations != 4 || contexts != 2 {
+	if (profile == retainedScopeV1Private && (nominations != 4 || contexts != 2)) || (profile == retainedScopeV2Private && (nominations < 1 || nominations > 8 || contexts > 8)) {
 		return nil, DocumentSupplyUnavailable
 	}
-	g := &RetainedScopeGuardPrivate{manager: m, session: r, generation: generation, leaseNonce: r.leaseNonce, leaseToken: r.leaseToken, members: members, documents: make(map[string]openDocument, 6)}
+	g := &RetainedScopeGuardPrivate{profile: profile, manager: m, session: r, generation: generation, leaseNonce: r.leaseNonce, leaseToken: r.leaseToken, members: members, documents: make(map[string]openDocument, len(members))}
 	for _, member := range members {
 		d, ok := r.documents[member.URI]
 		if !ok || !validRetainedScopeDocumentPrivate(d, member, id, generation) {
 			return nil, DocumentSupplyUnavailable
 		}
 		g.documents[member.URI] = cloneRetainedScopeDocumentPrivate(d)
+	}
+	if profile == retainedScopeV2Private {
+		g.v2Owner = &RetainedScopeGuardPrivateV2{base: g}
 	}
 	r.retainedScopePrivate = g
 	return g, ""
@@ -195,6 +213,10 @@ func (m *Manager) BindRetainedScopePrivate(ctx context.Context, id string, gener
 // CheckRetainedScopePrivate checks a bound capability without filesystem or wire
 // work. It grants no custody and is used by the fixed private frozen supplier.
 func (m *Manager) CheckRetainedScopePrivate(ctx context.Context, id string, generation uint64, g *RetainedScopeGuardPrivate) session.Failure {
+	return m.checkRetainedScopePrivate(ctx, id, generation, RoundTripRequest{RetainedScopePrivate: g})
+}
+
+func (m *Manager) checkRetainedScopePrivate(ctx context.Context, id string, generation uint64, req RoundTripRequest) session.Failure {
 	if ctx == nil {
 		return session.LifecycleConflict
 	}
@@ -219,11 +241,12 @@ func (m *Manager) CheckRetainedScopePrivate(ctx context.Context, id string, gene
 	if m.closed || r.record.State != session.Ready || r.protocolOwned || r.lifecycleOwned || r.leaseClosing || !m.validSessionLeaseLocked(ctx, r) {
 		return session.LifecycleConflict
 	}
-	if g == nil || len(g.members) != 6 {
+	g, valid := resolveRetainedScopePrivate(req)
+	if !valid || g == nil || len(g.members) == 0 || (g.profile == retainedScopeV1Private && len(g.members) != 6) {
 		return DocumentSupplyUnavailable
 	}
 	params, _ := json.Marshal(map[string]any{"textDocument": map[string]string{"uri": g.members[0].URI}})
-	req := RoundTripRequest{SessionID: id, Generation: generation, Method: "textDocument/documentSymbol", Params: params, RetainedScopePrivate: g}
+	req.SessionID, req.Generation, req.Method, req.Params = id, generation, "textDocument/documentSymbol", params
 	reason, class := m.retainedScopeMatchReasonPrivate(ctx, req, r)
 	if reason != "ACCEPTED" {
 		m.observeRetainedScopePrivate(g, r, "CHECK", "NONE", class, reason)
@@ -363,7 +386,8 @@ func (m *Manager) matchesRetainedScopePrivate(ctx context.Context, req RoundTrip
 	if !retainedScopeMethodPrivate(method) {
 		method = "OTHER"
 	}
-	m.observeRetainedScopePrivate(req.RetainedScopePrivate, r, "ADMISSION", method, class, reason)
+	g, _ := resolveRetainedScopePrivate(req)
+	m.observeRetainedScopePrivate(g, r, "ADMISSION", method, class, reason)
 	return reason == "ACCEPTED"
 }
 
@@ -388,7 +412,10 @@ func (m *Manager) observeRetainedScopePrivate(g *RetainedScopeGuardPrivate, r *r
 }
 
 func (m *Manager) retainedScopeMatchReasonPrivate(ctx context.Context, req RoundTripRequest, r *runtimeSession) (string, string) {
-	g := req.RetainedScopePrivate
+	g, valid := resolveRetainedScopePrivate(req)
+	if !valid {
+		return "CAPABILITY_MISMATCH", "INVALID"
+	}
 	if g == nil {
 		if r.retainedScopePrivate == nil || !retainedScopeMethodPrivate(req.Method) {
 			return "ACCEPTED", "INVALID"
