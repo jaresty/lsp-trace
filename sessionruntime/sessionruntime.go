@@ -60,6 +60,8 @@ type OperationSnapshot struct {
 	State                    OperationState
 	Failure                  session.Failure
 	privateB4CallerLeaseJoin bool
+	cleanupPrivateV2         LifecycleCleanupObservationPrivateV2
+	cleanupPrivateV2Present  bool
 }
 
 type ReadinessState string
@@ -3230,7 +3232,17 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		}
 		teardown = child.Teardown(context.Background())
 		resources = child.Close()
+		// Timeout leaves the sole reader owned by this worker. The existing
+		// teardown/close interrupts it; join before publishing any terminal.
+		if shutdown.readJoin != nil {
+			late := <-shutdown.readJoin
+			<-shutdown.readJoin // Wait for the sole reader's completion close.
+			shutdown.facts.ReadFrames = late.ReadFrames
+			shutdown.facts.ReadBytes = late.ReadBytes
+		}
 	}
+	operation.cleanupPrivateV2 = cleanupObservationPrivateV2(shutdown.facts, teardown, resources, retired != nil)
+	operation.cleanupPrivateV2Present = true
 	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
 	cleanExit := teardown.Death.Kind == managedprocess.DeathExited && death
 	shutdownComplete := shutdown.acknowledged && (shutdown.exitNotified || cleanExit)
@@ -3368,34 +3380,81 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 type shutdownObservation struct {
 	acknowledged bool
 	exitNotified bool
+	facts        LifecycleCleanupObservationPrivateV2
+	readJoin     <-chan LifecycleCleanupObservationPrivateV2
 }
 
 func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) shutdownObservation {
 	key := pending.Begin(generation)
 	id := strconv.FormatUint(key.ID, 10)
 	writer := lspwire.NewWriter(child.Stdin(), m.wire)
+	observed := shutdownObservation{facts: LifecycleCleanupObservationPrivateV2{ShutdownWrite: CleanupFailedPrivateV2}}
 	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "shutdown"}); err != nil {
-		return shutdownObservation{}
+		return observed
 	}
-	response := make(chan error, 1)
+	observed.facts.ShutdownWrite = CleanupSucceededPrivateV2
+	response := make(chan LifecycleCleanupObservationPrivateV2, 1)
 	go func() {
-		message, err := lspwire.NewReader(child.Stdout(), m.wire).Read()
-		if err == nil && (message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || pending.Accept(key) != lspwire.ResponseAccepted) {
-			err = errors.New("sessionruntime: invalid shutdown response")
+		defer close(response)
+		facts := LifecycleCleanupObservationPrivateV2{ShutdownRead: ShutdownCountLimitPrivateV2}
+		// One buffered reader owns the whole loop, including read-ahead bytes.
+		// These are existing runtime/wire limits, not acquisition budget growth.
+		reader := lspwire.NewReader(child.Stdout(), m.wire)
+		maxBytes := m.wire.MaxBodyBytes
+		if maxBytes <= 0 {
+			maxBytes = lspwire.DefaultLimits().MaxBodyBytes
 		}
-		response <- err
+		reader.LimitOriginalFrameBytes(maxBytes)
+		reader.LimitCumulativeOriginalFrameBytes(maxBytes)
+		for n := 0; n < m.limits.MaxObservations; n++ {
+			message, frame, err := reader.ReadWithFrame()
+			if err != nil {
+				facts.ShutdownRead = ShutdownReadFailedPrivateV2
+				if errors.Is(err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
+					facts.ShutdownRead = ShutdownByteLimitPrivateV2
+				}
+				response <- facts
+				return
+			}
+			facts.ReadFrames++
+			facts.ReadBytes += frame.FrameBytes
+			if message.Kind() == lspwire.KindNotification {
+				params := bytes.TrimSpace(message.Params)
+				if len(params) == 0 || params[0] == '{' || params[0] == '[' {
+					continue // No dispatch, response, or retained provider content.
+				}
+				// JSON-RPC params, when present, must be structured.
+			}
+			facts.ShutdownRead = ShutdownUnexpectedPrivateV2
+			if message.Kind() == lspwire.KindSuccessResponse && string(message.ID) == id && pending.Accept(key) == lspwire.ResponseAccepted {
+				facts.ShutdownRead = ShutdownMatchedPrivateV2
+			}
+			response <- facts
+			return
+		}
+		response <- facts
 	}()
 	timer := time.NewTimer(250 * time.Millisecond)
 	defer timer.Stop()
 	select {
-	case err := <-response:
-		if err != nil {
-			return shutdownObservation{}
+	case facts := <-response:
+		<-response // Join even the non-timeout reader before exit or teardown.
+		observed.facts.ShutdownRead, observed.facts.ReadFrames, observed.facts.ReadBytes = facts.ShutdownRead, facts.ReadFrames, facts.ReadBytes
+		if facts.ShutdownRead != ShutdownMatchedPrivateV2 {
+			return observed
 		}
 	case <-timer.C:
-		return shutdownObservation{}
+		observed.facts.ShutdownRead = ShutdownTimeoutPrivateV2
+		observed.readJoin = response
+		return observed
 	}
-	return shutdownObservation{acknowledged: true, exitNotified: writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "exit"}) == nil}
+	observed.acknowledged = true
+	observed.facts.ExitWrite = CleanupFailedPrivateV2
+	observed.exitNotified = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "exit"}) == nil
+	if observed.exitNotified {
+		observed.facts.ExitWrite = CleanupSucceededPrivateV2
+	}
+	return observed
 }
 
 func (m *Manager) finishOperation(operation OperationSnapshot) {

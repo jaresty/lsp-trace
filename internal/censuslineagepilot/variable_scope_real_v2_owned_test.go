@@ -303,6 +303,9 @@ func (w variableOwnedStdin) Write(b []byte) (int, error) {
 	if w.child.closed.Load() {
 		w.child.writesAfterClose.Add(1)
 	}
+	if (w.child.kind == "shutdown-write" && bytes.Contains(b, []byte(`"method":"shutdown"`))) || (w.child.kind == "exit-write" && bytes.Contains(b, []byte(`"method":"exit"`))) {
+		return 0, io.ErrClosedPipe
+	}
 	return w.child.stdin.Write(b)
 }
 func (w variableOwnedStdin) Close() error           { return w.child.stdin.Close() }
@@ -310,6 +313,9 @@ func (c *variableOwnedChild) Stdin() io.WriteCloser { return variableOwnedStdin{
 func (c *variableOwnedChild) Stdout() io.ReadCloser { return c.stdout }
 func (c *variableOwnedChild) Close() managedprocess.ResourceObservation {
 	c.once.Do(func() { c.closed.Store(true); c.input.Close(); c.stdin.Close(); c.stdout.Close(); c.output.Close() })
+	if c.kind == "resource-unknown" {
+		return managedprocess.ResourceObservation{}
+	}
 	if c.kind == "shutdown-close" {
 		return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesCloseFailed, Err: errors.New("owned shutdown close failure")}
 	}
@@ -322,7 +328,18 @@ func (c *variableOwnedChild) Teardown(context.Context) managedprocess.TeardownOb
 		<-c.teardownRelease
 	}
 	c.Close()
-	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
+	death, reap := managedprocess.DeathExited, managedprocess.ReapComplete
+	switch c.kind {
+	case "exit-write":
+		death = managedprocess.DeathSignaled
+	case "death-unknown":
+		death = managedprocess.DeathUnknown
+	case "reap-failed":
+		reap = managedprocess.ReapFailed
+	case "reap-unknown":
+		reap = ""
+	}
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: death, Reap: managedprocess.ReapObservation{Kind: reap}}}
 }
 func (c *variableOwnedChild) serve() {
 	defer close(c.done)
@@ -339,8 +356,41 @@ func (c *variableOwnedChild) serve() {
 		}
 		var value any = []any{}
 		switch m.Method {
+		case "exit":
+			return
 		case "shutdown":
 			c.shutdownRequests.Add(1)
+			switch c.kind {
+			case "shutdown-notifications":
+				var coalesced bytes.Buffer
+				cw := lspwire.NewWriter(&coalesced, lspwire.DefaultLimits())
+				for i := 0; i < 3; i++ {
+					_ = cw.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "withheld", Params: json.RawMessage(`{}`)})
+				}
+				_ = cw.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Result: json.RawMessage(`null`)})
+				if _, e := c.output.Write(coalesced.Bytes()); e != nil {
+					return
+				}
+				continue
+			case "shutdown-wrong-id":
+				m.ID = json.RawMessage(`999999`)
+			case "shutdown-error":
+				if w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Error: &lspwire.RPCError{Code: -32603, Message: "withheld"}}) != nil {
+					return
+				}
+				continue
+			case "shutdown-request":
+				if w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`77`), Method: "withheld", Params: json.RawMessage(`{}`)}) != nil {
+					return
+				}
+				continue
+			case "shutdown-malformed":
+				_, _ = io.WriteString(c.output, "Content-Length: nope\r\n\r\n")
+				continue
+			case "shutdown-timeout":
+				<-c.doneNever()
+				return
+			}
 		case "initialize":
 			if c.kind == "blocked" {
 				<-c.doneNever()

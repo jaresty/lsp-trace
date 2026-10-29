@@ -659,6 +659,8 @@ type variableCleanupObservation struct {
 	StopCalls, ShutdownCalls, TerminalReads int
 	ShutdownJoined, TerminalFound           bool
 	Terminal                                sessionruntime.OperationSnapshot
+	LifecyclePrivateV2                      sessionruntime.LifecycleCleanupObservationPrivateV2
+	LifecyclePrivateV2Present               bool
 	Status                                  string
 }
 
@@ -666,6 +668,15 @@ func variableTerminalCleanup(o variableCleanupObservation) error {
 	t := o.Terminal
 	if !o.ShutdownJoined || o.StopCalls != 1 || o.ShutdownCalls != 1 || o.TerminalReads != 1 || o.StopIntentID == "" || !o.TerminalFound || t.ID != o.StopIntentID || t.SessionID != o.SessionID || t.Generation != o.Generation || t.Restart || t.CallerID != "private-variable-v2-caller-stop-once" || t.State != sessionruntime.OperationComplete || t.Failure != "" {
 		return errors.New("private Stop terminal cleanup not verified: " + string(t.State) + " / " + string(t.Failure))
+	}
+	f := o.LifecyclePrivateV2
+	// These are private observations, never authentication or execution authority.
+	// ShutdownJoined alone does not establish close; absent/unknown facts refuse.
+	if !o.LifecyclePrivateV2Present || f.ResourceClose != managedprocess.ResourcesClosed || f.Reap != managedprocess.ReapComplete || (f.Death != managedprocess.DeathExited && f.Death != managedprocess.DeathSignaled) {
+		return errors.New("private cleanup observations unavailable or incomplete")
+	}
+	if !f.RetiredTransportReused && (f.ShutdownWrite != sessionruntime.CleanupSucceededPrivateV2 || f.ShutdownRead != sessionruntime.ShutdownMatchedPrivateV2 || (f.ExitWrite != sessionruntime.CleanupSucceededPrivateV2 && f.Death != managedprocess.DeathExited)) {
+		return errors.New("private shutdown observations incomplete")
 	}
 	return nil
 }
@@ -776,6 +787,8 @@ func variableRunWithCode(ctx context.Context, mode, path string, git variableGit
 				if observation.StopIntentID != "" {
 					observation.TerminalReads++
 					observation.Terminal, observation.TerminalFound = manager.Operation(observation.StopIntentID)
+					// Copy from the one existing result, never another Manager lookup.
+					observation.LifecyclePrivateV2, observation.LifecyclePrivateV2Present = observation.Terminal.CleanupObservationPrivateV2()
 				}
 				terminalErr := variableTerminalCleanup(observation)
 				se = errors.Join(se, stopErr, terminalErr)
