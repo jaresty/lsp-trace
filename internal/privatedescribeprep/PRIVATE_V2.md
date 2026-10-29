@@ -60,4 +60,12 @@ Tests cover 1/0, 2/1, 5/2 nomination/context counts; repeated batches and indepe
 
 Verification boundary for this implementation checkpoint: affected preparation/publication/graph packages and selected owned V1/V2 consumers passed; preparation/publication races and the connected/refusal/multi-origin V2 race family passed (`GOMAXPROCS=4`). The all-V2 race invocation including the nine-origin aggregate test exceeded a 360-second harness bound after preparation/publication races passed; aggregate coverage is claimed from its successful normal run, not from that timed-out race invocation. Parent verification additionally passed 348 preparation/publication cases, 19 connected normal cases, and separated connected/refusal/multi-origin race cases. The separately selected 72-target aggregate race test also exceeded a 240-second bound; its captured main stack was actively parsing a packet during fixture/projection setup. This is not an aggregate race pass or a scalability qualification. Vet and `git diff --check` passed. No real-25 driver or broad CI run was performed.
 
+Subsequent measured correction (`07de8de`): full admission validation is retained,
+while selected projection/preparation reads reuse constructor-owned immutable
+snapshots. The original aggregate test file is unchanged. Its named race gate now
+passes within the same 240-second bound in both writer and parent execution;
+the writer measured 171.87 seconds. Normal profiled runtime decreased from 45.73
+to 14.84 seconds. Earlier timeout evidence remains historical; no all-V2 race,
+maximum-63-batch, or general scalability result follows from this correction.
+
 Still **not done**: execution over actual varied user-owned real source; actual semantic interpretation, independent authenticated review/adjudication, feature identity acceptance, product meaning, or production validation. The connected mechanics do not discharge those tasks.

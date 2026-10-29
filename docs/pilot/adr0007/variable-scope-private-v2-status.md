@@ -45,6 +45,7 @@ semantic correctness or authenticated reviewer independence.
 | `43d2823` | Complete-origin paired retention, qualification and derived seal |
 | `cb776f6` | Per-batch computation and sealed instability assessment |
 | `d6e44dc` | Preparation, caller accounting and final paired output |
+| `07de8de` | Constructor-owned validated snapshot reuse; unchanged aggregate race gate passes |
 
 These commits are local; no push is implied.
 
@@ -57,10 +58,14 @@ case exercises over-64 preparation accounting without dropping index entries.
 
 Parent verification for the final connection passed 348 preparation/publication
 cases and 19 owned normal cases. Separately selected connected, refusal and
-multi-origin race cases passed. The aggregate race case exceeded 240 seconds;
-an earlier all-V2 race invocation exceeded 360 seconds. Neither is a pass or a
-scalability qualification. Repository-wide CI, exhaustive mutation/interleaving
-adequacy and Linux runtime qualification are not established.
+multi-origin race cases passed. The original aggregate race case exceeded 240
+seconds, and an earlier all-V2 race invocation exceeded 360 seconds. These failed
+attempts remain history. After profiling and constructor-owned snapshot reuse,
+the unchanged aggregate passed `-race -count=1 -timeout=240s` in writer and parent
+verification; the writer measured 171.87 seconds. The normal profiled workload
+fell from 45.73 to 14.84 seconds. This resolves that named race gate, not the
+entire all-V2 suite or general scalability. Repository-wide CI, exhaustive
+mutation/interleaving adequacy and Linux runtime qualification remain unestablished.
 
 Limits remain finite private policies, not comprehensive heap/CPU meters.
 Source artifacts have a 4 MiB ceiling; producer packets and final publication
