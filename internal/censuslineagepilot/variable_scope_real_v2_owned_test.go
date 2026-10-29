@@ -295,7 +295,41 @@ type variableOwnedChild struct {
 	writesAfterClose, shutdownRequests, teardowns atomic.Int64
 	teardownEntered                               chan struct{}
 	teardownRelease                               chan struct{}
+	incomingCount                                 atomic.Int64
+	fixtureMu                                     sync.Mutex
+	fixtureEvents                                 []variableFixtureEvent
+	fixtureReaders, fixtureMaxReaders             int
+	fixtureReadBytes                              int64
+	fixtureFinalID, fixtureShutdownID             string
+	fixtureCoalescedBytes                         int
 }
+
+type variableFixtureEvent struct {
+	Kind, ID      string
+	ActiveReaders int
+	Bytes         int64
+}
+
+type variableFixtureStdout struct{ child *variableOwnedChild }
+
+func (r variableFixtureStdout) Read(p []byte) (int, error) {
+	c := r.child
+	c.fixtureMu.Lock()
+	c.fixtureReaders++
+	if c.fixtureReaders > c.fixtureMaxReaders {
+		c.fixtureMaxReaders = c.fixtureReaders
+	}
+	c.fixtureEvents = append(c.fixtureEvents, variableFixtureEvent{Kind: "READ_BEGIN", ActiveReaders: c.fixtureReaders})
+	c.fixtureMu.Unlock()
+	n, e := c.stdout.Read(p)
+	c.fixtureMu.Lock()
+	c.fixtureReadBytes += int64(n)
+	c.fixtureReaders--
+	c.fixtureEvents = append(c.fixtureEvents, variableFixtureEvent{Kind: "READ_END", ActiveReaders: c.fixtureReaders, Bytes: int64(n)})
+	c.fixtureMu.Unlock()
+	return n, e
+}
+func (r variableFixtureStdout) Close() error { return r.child.stdout.Close() }
 
 type variableOwnedStdin struct{ child *variableOwnedChild }
 
@@ -310,7 +344,12 @@ func (w variableOwnedStdin) Write(b []byte) (int, error) {
 }
 func (w variableOwnedStdin) Close() error           { return w.child.stdin.Close() }
 func (c *variableOwnedChild) Stdin() io.WriteCloser { return variableOwnedStdin{c} }
-func (c *variableOwnedChild) Stdout() io.ReadCloser { return c.stdout }
+func (c *variableOwnedChild) Stdout() io.ReadCloser {
+	if strings.HasPrefix(c.kind, "integrated-") {
+		return variableFixtureStdout{c}
+	}
+	return c.stdout
+}
 func (c *variableOwnedChild) Close() managedprocess.ResourceObservation {
 	c.once.Do(func() { c.closed.Store(true); c.input.Close(); c.stdin.Close(); c.stdout.Close(); c.output.Close() })
 	if c.kind == "resource-unknown" {
@@ -360,6 +399,12 @@ func (c *variableOwnedChild) serve() {
 			return
 		case "shutdown":
 			c.shutdownRequests.Add(1)
+			if strings.HasPrefix(c.kind, "integrated-") {
+				c.fixtureMu.Lock()
+				c.fixtureShutdownID = string(m.ID)
+				c.fixtureEvents = append(c.fixtureEvents, variableFixtureEvent{Kind: "OWN_SHUTDOWN_READ", ID: string(m.ID), ActiveReaders: c.fixtureReaders})
+				c.fixtureMu.Unlock()
+			}
 			switch c.kind {
 			case "shutdown-notifications":
 				var coalesced bytes.Buffer
@@ -407,11 +452,42 @@ func (c *variableOwnedChild) serve() {
 			_ = json.Unmarshal(m.Params, &p)
 			value = []lsp.CallHierarchyItem{{Name: "A0", Kind: 12, URI: p.TextDocument.URI, Range: lsp.Range{Start: lsp.Position{Line: 2}, End: lsp.Position{Line: 2, Character: 12}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: 2, Character: 5}, End: lsp.Position{Line: 2, Character: 7}}}}
 		case "callHierarchy/incomingCalls":
+			ordinal := c.incomingCount.Add(1)
+			if c.kind == "capture-second-failed" && ordinal == 2 {
+				if w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Error: &lspwire.RPCError{Code: -32603, Message: "owned failure"}}) != nil {
+					return
+				}
+				continue
+			}
 			value = []lsp.CallHierarchyIncomingCall{}
 		case "callHierarchy/outgoingCalls":
 			value = []lsp.CallHierarchyOutgoingCall{}
 		}
 		raw, _ := json.Marshal(value)
+		if strings.HasPrefix(c.kind, "integrated-") && m.Method == "callHierarchy/incomingCalls" {
+			var coalesced bytes.Buffer
+			cw := lspwire.NewWriter(&coalesced, lspwire.DefaultLimits())
+			_ = cw.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "owned-prefix", Params: json.RawMessage(`{}`)})
+			_ = cw.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Result: raw})
+			if c.kind == "integrated-request-suffix" {
+				_ = cw.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`77001`), Method: "owned-unsupported", Params: json.RawMessage(`{}`)})
+			} else {
+				_ = cw.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "owned-suffix", Params: json.RawMessage(`{}`)})
+			}
+			c.fixtureMu.Lock()
+			c.fixtureFinalID, c.fixtureCoalescedBytes = string(m.ID), coalesced.Len()
+			c.fixtureEvents = append(c.fixtureEvents, variableFixtureEvent{Kind: "FINAL_RESPONSE_COALESCED", ID: string(m.ID), Bytes: int64(coalesced.Len())})
+			c.fixtureMu.Unlock()
+			if _, e := c.output.Write(coalesced.Bytes()); e != nil {
+				return
+			}
+			continue
+		}
+		if strings.HasPrefix(c.kind, "integrated-") && m.Method == "shutdown" {
+			c.fixtureMu.Lock()
+			c.fixtureEvents = append(c.fixtureEvents, variableFixtureEvent{Kind: "ACK_AFTER_OWN_SHUTDOWN", ID: string(m.ID)})
+			c.fixtureMu.Unlock()
+		}
 		if e := w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Result: raw}); e != nil {
 			return
 		}

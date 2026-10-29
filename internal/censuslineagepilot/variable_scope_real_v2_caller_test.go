@@ -86,6 +86,24 @@ type variableCallerReport struct {
 	Outcome                                                                                        *prep.PostPublicationOutcomePrivateV2
 	Cleanup                                                                                        variableCleanupObservation
 	CodeInputs                                                                                     variableCodeWitness
+	Acquisition                                                                                    variableAcquisitionObservation
+}
+
+// Detached, content-free observations of the original owners, never admission
+// inputs. Discovery retains its existing ordered per-file report, including
+// partial failures; these slots add only bounded per-batch transition facts.
+type variableAcquisitionObservation struct {
+	DiscoveryAttempted, DiscoveryComplete, DiscoveryErrorObserved bool
+	ExpectedBatchesKnown, Complete                                bool
+	ExpectedBatches, AttemptedCaptures, CompletedCaptures         int
+	Batches                                                       []variableCaptureObservation
+}
+type variableCaptureObservation struct {
+	Ordinal        int
+	Disposition    string
+	ErrorObserved  bool
+	ArtifactSHA256 string
+	ArtifactBytes  uint64
 }
 
 func variableEnvironment(get func(string) string) (mode, path string, err error) {
@@ -931,21 +949,47 @@ func variableRunWithCode(ctx context.Context, mode, path string, git variableGit
 	err = manager.WithReadySessionLease(ctx, sessionruntime.SessionLeaseRequest{SessionID: start.SessionID, Generation: start.Generation, Workspace: c.Scope.Root}, func(leased context.Context) error {
 		var d pilot.ScopeDiscoveryReportPrivateV2
 		var e error
+		a := &report.Acquisition
+		a.DiscoveryAttempted = true
 		origin, d, e = pilot.DiscoverScopePrivateV2(leased, p.frozen, manager, c.Session)
 		report.Discovery = d.Bytes()
+		a.DiscoveryErrorObserved = e != nil
 		if e != nil {
 			return e
 		}
-		for i := 0; i < origin.BatchCount(); i++ {
+		a.DiscoveryComplete = true
+		a.ExpectedBatchesKnown = true
+		a.ExpectedBatches = origin.BatchCount() // already bounded by the private scope policy
+		a.Batches = make([]variableCaptureObservation, a.ExpectedBatches)
+		for i := range a.Batches {
+			a.Batches[i] = variableCaptureObservation{Ordinal: i, Disposition: "NOT_ATTEMPTED"}
+		}
+		for i := 0; i < a.ExpectedBatches; i++ {
+			status := &a.Batches[i]
 			b, e := origin.Batch(i)
 			if e != nil {
+				status.Disposition, status.ErrorObserved = "SELECTION_FAILED", true
 				return e
 			}
+			a.AttemptedCaptures++
+			status.Disposition = "CAPTURE_ATTEMPTED"
 			capture, e := pilot.AcquireScopeBatchPrivateV2(leased, manager, origin, b)
+			status.ErrorObserved = e != nil
+			// Observe this exact returned owner. Never decode a DTO into authority.
+			status.ArtifactSHA256, status.ArtifactBytes = capture.ArtifactDigest(), capture.ArtifactByteLength()
 			if e != nil {
+				status.Disposition = "CAPTURE_FAILED"
 				return e
+			}
+			status.Disposition = "SUCCESS_OBSERVED"
+			if status.ArtifactSHA256 != "" && status.ArtifactBytes > 0 {
+				a.CompletedCaptures++
 			}
 			captures = append(captures, capture)
+		}
+		a.Complete = a.CompletedCaptures == a.ExpectedBatches
+		if a.Complete {
+			report.Phases = append(report.Phases, "ACQUISITION_COMPLETE_OBSERVED")
 		}
 		return nil
 	})

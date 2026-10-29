@@ -102,6 +102,10 @@ func newShutdownLoopChild(mode string) *shutdownLoopChild {
 			fmt.Fprintf(&b, "Content-Length: %d\r\n\r\n%s", len(body), body)
 		case "malformed":
 			b.WriteString("Content-Length: nope\r\n\r\n")
+		case "partial-timeout":
+			_, _ = io.WriteString(out, "Content-Length: 50\r\n\r\n{")
+			_, _ = reader.Read()
+			return
 		case "timeout":
 			// Block on the client's input until its existing teardown interrupts it.
 			_, _ = reader.Read()

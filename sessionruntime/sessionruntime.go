@@ -3250,6 +3250,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 			<-shutdown.readJoin // Wait for the sole reader's completion close.
 			shutdown.facts.ReadFrames = late.ReadFrames
 			shutdown.facts.ReadBytes = late.ReadBytes
+			shutdown.raw.snapshot(&shutdown.facts, true)
 		}
 	}
 	operation.cleanupPrivateV2 = cleanupObservationPrivateV2(shutdown.facts, teardown, resources, retired != nil)
@@ -3393,6 +3394,7 @@ type shutdownObservation struct {
 	exitNotified bool
 	facts        LifecycleCleanupObservationPrivateV2
 	readJoin     <-chan LifecycleCleanupObservationPrivateV2
+	raw          *shutdownRawIOPrivateV2
 }
 
 func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) shutdownObservation {
@@ -3402,13 +3404,28 @@ func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, ge
 func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending *lspwire.Pending, generation uint64, budget *acceptedShutdownResponsePrivateV2) shutdownObservation {
 	key := pending.Begin(generation)
 	id := strconv.FormatUint(key.ID, 10)
-	writer := lspwire.NewWriter(child.Stdin(), m.wire)
-	observed := shutdownObservation{facts: LifecycleCleanupObservationPrivateV2{ShutdownWrite: CleanupFailedPrivateV2, ResponseBudgetSource: "ORDINARY_FIXED", DeclaredResponseBudget: 250 * time.Millisecond}}
+	writeCounter := &shutdownCountingWriterPrivateV2{source: child.Stdin()}
+	var bodyBytes, headerWrittenBytes, bodyWrittenBytes int64
+	writer := lspwire.NewWriterObserved(writeCounter.wireWriter(), m.wire, func(event lspwire.Event) {
+		switch event.Stage {
+		case lspwire.EventMarshal:
+			bodyBytes = event.Bytes
+		case lspwire.EventFrame:
+			headerWrittenBytes = event.Bytes
+		case lspwire.EventBodyWrite:
+			bodyWrittenBytes = event.Bytes
+		}
+	})
+	rawIO := &shutdownRawIOPrivateV2{}
+	observed := shutdownObservation{raw: rawIO, facts: LifecycleCleanupObservationPrivateV2{ShutdownRequestID: id, ProcessIOPrivateV2Availability: "UNAVAILABLE", ShutdownWrite: CleanupFailedPrivateV2, ResponseBudgetSource: "ORDINARY_FIXED", DeclaredResponseBudget: 250 * time.Millisecond}}
 	if budget != nil {
 		observed.facts.ResponseBudgetSource = "PRIVATE_V2"
 		observed.facts.DeclaredResponseBudget = budget.budget.duration
 	}
-	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "shutdown"}); err != nil {
+	writeErr := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "shutdown"})
+	observed.facts.RawWriteCalls, observed.facts.RawWriteBytes, observed.facts.RawCounterOverflow = writeCounter.calls, writeCounter.bytes, writeCounter.overflow
+	observed.facts.ShutdownBodyBytes, observed.facts.ShutdownHeaderWrittenBytes, observed.facts.ShutdownBodyWrittenBytes = bodyBytes, headerWrittenBytes, bodyWrittenBytes
+	if writeErr != nil {
 		return observed
 	}
 	observed.facts.ShutdownWrite = CleanupSucceededPrivateV2
@@ -3431,10 +3448,12 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 	response := make(chan LifecycleCleanupObservationPrivateV2, 1)
 	go func() {
 		defer close(response)
+		rawIO.start()
+		defer rawIO.complete()
 		facts := LifecycleCleanupObservationPrivateV2{ShutdownRead: ShutdownCountLimitPrivateV2}
 		// One buffered reader owns the whole loop, including read-ahead bytes.
 		// These are existing runtime/wire limits, not acquisition budget growth.
-		reader := lspwire.NewReader(child.Stdout(), m.wire)
+		reader := lspwire.NewReaderObserved(shutdownCountingReaderPrivateV2{source: child.Stdout(), stats: rawIO}, m.wire, rawIO.wireEvent)
 		maxBytes := m.wire.MaxBodyBytes
 		if maxBytes <= 0 {
 			maxBytes = lspwire.DefaultLimits().MaxBodyBytes
@@ -3479,6 +3498,7 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 	select {
 	case facts := <-response:
 		<-response // Join even the non-timeout reader before exit or teardown.
+		rawIO.snapshot(&observed.facts, true)
 		observed.facts.ShutdownRead, observed.facts.ReadFrames, observed.facts.ReadBytes = facts.ShutdownRead, facts.ReadFrames, facts.ReadBytes
 		if budget != nil {
 			if ended := budget.ended(); ended != "" {
@@ -3490,10 +3510,12 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 			return observed
 		}
 	case <-cancelled:
+		rawIO.snapshot(&observed.facts, false)
 		observed.facts.ShutdownRead = budget.ended()
 		observed.readJoin = response
 		return observed
 	case <-timer.C:
+		rawIO.snapshot(&observed.facts, false)
 		observed.facts.ShutdownRead = ShutdownTimeoutPrivateV2
 		observed.readJoin = response
 		return observed

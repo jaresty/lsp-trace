@@ -43,16 +43,36 @@ type LifecycleCleanupObservationPrivateV2 struct {
 	ExitWrite                   CleanupStepPrivateV2
 	// Counts cover complete validated frames only, not partial, malformed,
 	// or over-budget bytes acquired before refusal. They are not wire totals.
-	ReadFrames                           int
-	ReadBytes                            int64
-	RetiredTransportReused               bool
-	TeardownAttempted                    bool
-	ResourceCloseAttempted               bool
-	ResourceClose                        managedprocess.ResourceKind
-	Death                                managedprocess.DeathKind
-	Reap                                 managedprocess.ReapKind
-	ResourceError, DeathError, ReapError bool
-	StderrDrainAssumed                   bool
+	ReadFrames int
+	ReadBytes  int64
+	// Raw counters include partial and malformed input acquired beneath the one
+	// shutdown-local buffered reader. Final counters are sampled after its join;
+	// AtDeadline fields are sampled when timeout/cancellation is selected, not
+	// at an exact clock instant; they never absorb late teardown-interrupted reads.
+	RawReadCalls, RawReadBytes, RawReadErrors                               uint64
+	BodyReadEvents, BodyReadBytes, ClosedBodyReadEvents                     uint64 // final wire-stage counters after join, not validated frames
+	DecodeAttempts, RejectedDecodes                                         uint64
+	RawReadCallsAtDeadline, RawReadBytesAtDeadline                          uint64
+	RawWriteCalls, RawWriteBytes                                            uint64 // shutdown frame only; excludes exit
+	ShutdownRequestID                                                       string // locally allocated numeric ID, never provider text
+	ShutdownBodyBytes, ShutdownHeaderWrittenBytes, ShutdownBodyWrittenBytes int64  // existing closed writer events
+	ReaderStarted, ReaderCompleted, ReaderJoined                            bool
+	ReaderStartedAtDeadline, ReaderActiveAtDeadline                         bool
+	UnderlyingReadActiveAtDeadline                                          bool
+	RawIOFinalAfterJoin, RawCounterOverflow                                 bool
+	ProcessIOPrivateV2Availability                                          string // UNAVAILABLE or OBSERVED_FIELDS_ONLY; never drain proof
+	StderrCapturedBytes                                                     int    // length only, not raw stderr or total process output
+	StderrTruncated                                                         bool
+	StdoutDeliveryError, StderrDeliveryError                                bool
+	StdoutDeliveryCategory, StderrDeliveryCategory                          string // closed producer vocabulary only
+	RetiredTransportReused                                                  bool
+	TeardownAttempted                                                       bool
+	ResourceCloseAttempted                                                  bool
+	ResourceClose                                                           managedprocess.ResourceKind
+	Death                                                                   managedprocess.DeathKind
+	Reap                                                                    managedprocess.ReapKind
+	ResourceError, DeathError, ReapError                                    bool
+	StderrDrainAssumed                                                      bool
 }
 
 // CleanupObservationPrivateV2 returns an independent value copy from this exact
@@ -79,5 +99,21 @@ func cleanupObservationPrivateV2(f LifecycleCleanupObservationPrivateV2, t manag
 	}
 	f.ResourceError, f.DeathError, f.ReapError = r.Err != nil, t.Death.Err != nil, t.Death.Reap.Err != nil
 	f.StderrDrainAssumed = true
+	f.ProcessIOPrivateV2Availability = "UNAVAILABLE"
+	f.StderrCapturedBytes, f.StderrTruncated = len(t.Death.Stderr.Bytes), t.Death.Stderr.Truncated
+	f.StdoutDeliveryError, f.StderrDeliveryError = t.Death.StdoutDelivery.Err != nil, t.Death.StderrDelivery.Err != nil
+	closedCategory := func(category string) string {
+		switch category {
+		case "WRITE_ERROR", "CLOSED":
+			return category
+		default:
+			return ""
+		}
+	}
+	f.StdoutDeliveryCategory = closedCategory(t.Death.StdoutDelivery.Category)
+	f.StderrDeliveryCategory = closedCategory(t.Death.StderrDelivery.Category)
+	if f.StderrCapturedBytes != 0 || f.StderrTruncated || f.StdoutDeliveryError || f.StderrDeliveryError || f.StdoutDeliveryCategory != "" || f.StderrDeliveryCategory != "" {
+		f.ProcessIOPrivateV2Availability = "OBSERVED_FIELDS_ONLY"
+	}
 	return f
 }
