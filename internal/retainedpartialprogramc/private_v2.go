@@ -9,12 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"lsp-trace/internal/censusacquisition"
 	pilot "lsp-trace/internal/censuslineagepilot"
 	"lsp-trace/internal/graph"
-	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/programc"
-	"lsp-trace/sessionruntime"
 )
 
 const ProfilePrivateV2 = "DERIVED_RETAINED_PARTIAL_CALLS_PRIVATE_V2"
@@ -58,6 +55,7 @@ type projectionStatePrivateV2 struct {
 	math     programc.CallsMathPrivate
 	evidence ProjectionEvidencePrivateV2
 	pin      string
+	selected pilot.ValidatedBatchPrivateV2
 }
 
 func (p ProjectionPrivateV2) valid() bool {
@@ -98,34 +96,27 @@ func (ProjectionPrivateV2) MarshalJSON() ([]byte, error) {
 	return nil, fmt.Errorf("opaque V2 projection")
 }
 
+// ValidatedPreparationMetadataPrivateV2 is inspection only, reachable only from
+// an actual sealed projection. It cannot seal substituted metadata or raw bytes.
+func (p ProjectionPrivateV2) ValidatedPreparationMetadataPrivateV2() (pilot.SelectedBatchViewPrivateV2, error) {
+	if !p.valid() {
+		return pilot.SelectedBatchViewPrivateV2{}, fmt.Errorf("sealed V2 projection required")
+	}
+	return p.state.selected.ViewPrivateV2()
+}
+
 // Concrete producer proof FIRST. DTOs, raw packets and lower math do not enter.
 func ProjectPrivateV2(ctx context.Context, proof pilot.DerivedProducerPacketPrivateV2, batchOrdinal int) (ProjectionPrivateV2, *programc.Failure) {
-	view, err := pilot.ReadDerivedProducerPacketPrivateV2(ctx, proof)
+	selected, err := pilot.ReadSelectedDerivedProducerPacketPrivateV2(ctx, proof, batchOrdinal)
 	if err != nil {
 		return ProjectionPrivateV2{}, invalid("V2 sealed qualified packet required: " + err.Error())
 	}
-	packet, err := pilot.PureParseProducerPacketPrivateV2(view.Packet)
+	view, err := selected.ReadPrivateV2(ctx)
 	if err != nil {
 		return ProjectionPrivateV2{}, invalid(err.Error())
 	}
-	if batchOrdinal < 0 || batchOrdinal > 63 || batchOrdinal >= len(view.Batches) || len(view.Batches) != len(packet.Batches) || view.PacketSHA256 != pilot.Digest(view.Packet) || view.ReportSHA256 != pilot.Digest(view.QualificationReport) {
-		return ProjectionPrivateV2{}, invalid("V2 packet/ordinal pins")
-	}
-	var report pilot.ProducerPacketQualificationReportPrivateV2
-	if json.Unmarshal(view.QualificationReport, &report) != nil || report.PacketSHA256 != view.PacketSHA256 || report.PacketByteLength != uint64(len(view.Packet)) || report.BatchCount != len(packet.Batches) || report.Status != "PRIVATE_PACKET_QUALIFIED_ONLY" || report.Authority != 0 || report.Accepted || report.Feature != "UNRESOLVED" || report.Completeness != "UNKNOWN" || report.Absence != "PROHIBITED" {
-		return ProjectionPrivateV2{}, invalid("V2 qualification report pins")
-	}
-	batch := view.Batches[batchOrdinal]
-	own := packet.Batches[batchOrdinal]
-	if batch.Ordinal != batchOrdinal || own.Ordinal != batchOrdinal || !bytes.Equal(batch.CanonicalSeeds, own.Seeds) || !bytes.Equal(batch.CaptureOrigin, own.Origin) || !bytes.Equal(batch.SourceArtifact, own.SourceArtifact) {
-		return ProjectionPrivateV2{}, invalid("V2 own batch pins")
-	}
-	source, err := graphprovenance.ParseSourceWithholdingPrivateV2(batch.SourceArtifact)
-	if err != nil || !bytes.Equal(batch.NativeGraph, source.Evidence.GraphBytes) {
-		return ProjectionPrivateV2{}, invalid("V2 original source/graph pins")
-	}
-	var meta sessionruntime.SessionMetadata
-	if json.Unmarshal(packet.RuntimeMetadata, &meta) != nil || meta.ServerCommand == "" {
+	batch, source, meta := view.Batch, view.Source, view.Runtime
+	if meta.ServerCommand == "" {
 		return ProjectionPrivateV2{}, invalid("V2 original provider metadata")
 	}
 	// This neutral helper is used only AFTER new sealed V2 qualification. It
@@ -156,13 +147,7 @@ func ProjectPrivateV2(ctx context.Context, proof pilot.DerivedProducerPacketPriv
 	}
 	receipt := programc.SemanticReceipt{ReceiptVersion: native.TraceReceipt.ReceiptVersion, SemanticCommitmentDigest: native.TraceReceipt.SemanticCommitmentDigest, DigestScope: native.TraceReceipt.DigestScope}
 	originalReceipt := programc.SemanticReceipt{ReceiptVersion: originalNative.TraceReceipt.ReceiptVersion, SemanticCommitmentDigest: originalNative.TraceReceipt.SemanticCommitmentDigest, DigestScope: originalNative.TraceReceipt.DigestScope}
-	var origin struct {
-		Enumeration json.RawMessage `json:"actual_enumeration"`
-	}
-	var discovery censusacquisition.Discovery
-	if json.Unmarshal(packet.EnumerationOrigin, &origin) != nil || json.Unmarshal(origin.Enumeration, &discovery) != nil {
-		return ProjectionPrivateV2{}, invalid("V2 enumeration metadata")
-	}
+	discovery := view.Discovery
 	policy, _ := json.Marshal(source.Policy)
 	s := SourceBindingPrivateV2{
 		Profile: ProfilePrivateV2, ProfileDigest: ProfileDigestPrivateV2(),
@@ -172,7 +157,7 @@ func ProjectPrivateV2(ctx context.Context, proof pilot.DerivedProducerPacketPriv
 		CanonicalSeedsSHA256: pilot.Digest(batch.CanonicalSeeds), CaptureOriginSHA256: pilot.Digest(batch.CaptureOrigin),
 		SourceArtifactSHA256: pilot.Digest(batch.SourceArtifact), OriginalNativeV3SHA256: pilot.Digest(batch.NativeGraph),
 		DerivedCanonicalV5SHA256: pilot.Digest(derived), SourcePolicySHA256: pilot.Digest(policy),
-		RuntimeMetadataSHA256: pilot.Digest(packet.RuntimeMetadata),
+		RuntimeMetadataSHA256: pilot.Digest(view.RuntimeMetadata),
 		SnapshotTargetCount:   len(discovery.Targets), BatchTargetCount: len(source.Evidence.Acquisition.Targets),
 		SourceMemberCount: len(source.Policy.Members), NodeCount: len(math.NodeIdentities),
 		RelationCount: len(source.Evidence.Acquisition.Graph.Edges), OccurrenceCount: len(math.Occurrences),
@@ -188,7 +173,7 @@ func ProjectPrivateV2(ctx context.Context, proof pilot.DerivedProducerPacketPriv
 	if err = ctx.Err(); err != nil {
 		return ProjectionPrivateV2{}, invalid(err.Error())
 	}
-	st := &projectionStatePrivateV2{math: programc.CloneCallsMathPrivate(math), evidence: e, pin: instabilityDigest(e)}
+	st := &projectionStatePrivateV2{math: programc.CloneCallsMathPrivate(math), evidence: e, pin: instabilityDigest(e), selected: selected}
 	st.self = st
 	return ProjectionPrivateV2{st}, nil
 }

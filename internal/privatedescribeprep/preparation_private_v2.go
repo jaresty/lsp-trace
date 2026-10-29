@@ -11,7 +11,6 @@ import (
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/censusacquisition"
 	pilot "lsp-trace/internal/censuslineagepilot"
-	"lsp-trace/internal/graphprovenance"
 	derived "lsp-trace/internal/retainedpartialprogramc"
 )
 
@@ -58,37 +57,29 @@ func validatedPreparationInputPrivateV2(ctx context.Context, in InputPrivateV2) 
 	if err != nil {
 		return preparedInputPrivateV2{}, err
 	}
-	c, err := graphprovenance.ParseSourceWithholdingPrivateV2(e.SourceArtifact)
+	metadata, err := in.Projection2.ValidatedPreparationMetadataPrivateV2()
 	if err != nil {
 		return preparedInputPrivateV2{}, err
 	}
-	packet, err := pilot.PureParseProducerPacketPrivateV2(e.Packet)
-	if err != nil {
-		return preparedInputPrivateV2{}, err
-	}
+	c, d := metadata.Source, metadata.Discovery
 	s := e.Source
-	if s.BatchOrdinal < 0 || s.BatchOrdinal >= len(packet.Batches) || pilot.Digest(e.Packet) != s.PacketSHA256 || pilot.Digest(e.QualificationReport) != s.QualificationReportSHA256 || pilot.Digest(e.SourceArtifact) != s.SourceArtifactSHA256 || !bytes.Equal(c.Evidence.GraphBytes, e.OriginalNativeV3) || !bytes.Equal(packet.Batches[s.BatchOrdinal].SourceArtifact, e.SourceArtifact) {
+	if metadata.Batch.Ordinal != s.BatchOrdinal || metadata.PacketSHA256 != s.PacketSHA256 || metadata.ReportSHA256 != s.QualificationReportSHA256 || pilot.Digest(e.SourceArtifact) != s.SourceArtifactSHA256 || !bytes.Equal(c.Evidence.GraphBytes, e.OriginalNativeV3) || !bytes.Equal(metadata.Batch.SourceArtifact, e.SourceArtifact) {
 		return preparedInputPrivateV2{}, fmt.Errorf("private V2 own retained pins")
 	}
-	var origin struct {
-		Enumeration json.RawMessage                  `json:"actual_enumeration"`
-		Batches     []censusacquisition.BatchRequest `json:"target_batches"`
-	}
-	var d censusacquisition.Discovery
-	if json.Unmarshal(packet.EnumerationOrigin, &origin) != nil || json.Unmarshal(origin.Enumeration, &d) != nil || len(d.Targets) != s.SnapshotTargetCount || len(c.Evidence.Acquisition.Targets) != s.BatchTargetCount {
+	if len(d.Targets) != s.SnapshotTargetCount || len(c.Evidence.Acquisition.Targets) != s.BatchTargetCount {
 		return preparedInputPrivateV2{}, fmt.Errorf("private V2 actual discovery")
 	}
 	// The sealed packet retains the actual planned batch selection. Use that exact
 	// own ordinal/seeds, not a name/position heuristic or the whole denominator.
 	// This is discovery metadata, never AST/full-definition qualification.
-	if s.BatchOrdinal >= len(origin.Batches) || origin.Batches[s.BatchOrdinal].Ordinal != s.BatchOrdinal || !bytes.Equal(origin.Batches[s.BatchOrdinal].CanonicalSeedsV2, e.CanonicalSeeds) || len(origin.Batches[s.BatchOrdinal].Targets) != len(c.Evidence.Acquisition.Targets) {
+	if !bytes.Equal(metadata.Batch.CanonicalSeeds, e.CanonicalSeeds) || len(metadata.BatchDiscovery) != len(c.Evidence.Acquisition.Targets) {
 		return preparedInputPrivateV2{}, fmt.Errorf("private V2 own batch discovery selection binding")
 	}
-	batchDiscovery := origin.Batches[s.BatchOrdinal].Targets
+	batchDiscovery := metadata.BatchDiscovery
 	// Packet file bytes are metadata/checks only: never a source-body fallback.
 	for _, m := range c.Policy.Members {
 		found := false
-		for _, f := range packet.Files {
+		for _, f := range metadata.Files {
 			if f.Record.URI == m.URI && f.Record.SHA256 == m.SHA256 && f.Record.Role == m.Role {
 				found = true
 			}
@@ -129,7 +120,7 @@ func validatedPreparationInputPrivateV2(ctx context.Context, in InputPrivateV2) 
 			Ownership                        string
 		}{req, []byte(req.Params), []byte(req.Response), "BATCH_GLOBAL_NOT_TARGET_OWNED; own expansion linkage required"}))
 	}
-	return preparedInputPrivateV2{id: id, evidence: e, acquisition: c.Evidence.Acquisition, discovery: d, batchDiscovery: batchDiscovery, view: v, assessmentSHA: pilot.Digest(raw), discoverySHA: pilot.Digest(origin.Enumeration), originID: pilot.Digest(packet.EnumerationOrigin)}, nil
+	return preparedInputPrivateV2{id: id, evidence: e, acquisition: c.Evidence.Acquisition, discovery: d, batchDiscovery: batchDiscovery, view: v, assessmentSHA: pilot.Digest(raw), discoverySHA: pilot.Digest(metadata.Enumeration), originID: pilot.Digest(metadata.EnumerationOrigin)}, nil
 }
 
 // PreparePrivateV2 performs no IO, provider calls, Leiden reruns, ordinary

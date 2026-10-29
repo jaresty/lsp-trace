@@ -166,6 +166,7 @@ type derivedProducerPacketStatePrivateV2 struct {
 	self      *derivedProducerPacketStatePrivateV2
 	qualified QualifiedProducerPacketPrivateV2
 	batches   []ProducerPacketBatchEvidencePrivateV2
+	snapshot  *validatedProducerSnapshotPrivateV2
 }
 
 // Detached per-batch evidence for the FUTURE ProjectV2 owner. No graph merge,
@@ -182,6 +183,10 @@ type ProducerPacketDerivedViewPrivateV2 struct {
 
 func (DerivedProducerPacketPrivateV2) MarshalJSON() ([]byte, error) { return nil, ErrInvalid }
 func DeriveProducerPacketPrivateV2(ctx context.Context, q QualifiedProducerPacketPrivateV2) (DerivedProducerPacketPrivateV2, error) {
+	return deriveProducerPacketPrivateV2(ctx, q, nil)
+}
+
+func deriveProducerPacketPrivateV2(ctx context.Context, q QualifiedProducerPacketPrivateV2, observed *producerPacketValidationCountsPrivateV2) (DerivedProducerPacketPrivateV2, error) {
 	if ctx == nil || !q.valid() {
 		return DerivedProducerPacketPrivateV2{}, ErrInvalid
 	}
@@ -203,16 +208,26 @@ func DeriveProducerPacketPrivateV2(ctx context.Context, q QualifiedProducerPacke
 	if Digest(q.state.raw) != q.state.digest || !packetMatchesProducerLineagePrivateV2(p, pair) {
 		return DerivedProducerPacketPrivateV2{}, ErrInvalid
 	}
+	if err = b.passes(scopeMetadataPrivateV2, 4, 4, 256); err != nil {
+		return DerivedProducerPacketPrivateV2{}, err
+	}
 	st := &derivedProducerPacketStatePrivateV2{qualified: q}
+	snapshot, err := newValidatedProducerSnapshotPrivateV2(st, p)
+	if err != nil {
+		return DerivedProducerPacketPrivateV2{}, err
+	}
+	st.snapshot = snapshot
 	for _, batch := range p.Batches {
 		if err = b.passes(uint64(len(batch.SourceArtifact)), 2, 24, 4096); err != nil {
 			return DerivedProducerPacketPrivateV2{}, err
 		}
+		b.validation.sourceArtifact++
 		evidence, e := graphprovenance.ParseSourceWithholdingPrivateV2(batch.SourceArtifact)
 		if e != nil {
 			return DerivedProducerPacketPrivateV2{}, e
 		}
 		st.batches = append(st.batches, ProducerPacketBatchEvidencePrivateV2{batch.Ordinal, batch.Seeds, batch.Origin, batch.SourceArtifact, evidence.Evidence.GraphBytes})
+		snapshot.sources = append(snapshot.sources, evidence)
 	}
 	if err = pair.state.roots.check(ctx, pair.state.frozen); err != nil {
 		return DerivedProducerPacketPrivateV2{}, err
@@ -221,6 +236,9 @@ func DeriveProducerPacketPrivateV2(ctx context.Context, q QualifiedProducerPacke
 		return DerivedProducerPacketPrivateV2{}, err
 	}
 	st.self = st
+	if observed != nil {
+		*observed = b.validation
+	}
 	return DerivedProducerPacketPrivateV2{st}, nil
 }
 func ReadDerivedProducerPacketPrivateV2(ctx context.Context, d DerivedProducerPacketPrivateV2) (ProducerPacketDerivedViewPrivateV2, error) {

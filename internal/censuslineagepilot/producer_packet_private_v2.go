@@ -42,7 +42,12 @@ var ErrProducerPacketOverBoundPrivateV2 = errors.New("NOT_RETAINED_OVER_BOUND")
 // change producer capture bounds, generic acquisition defaults, or old families.
 type ProducerPacketLimitsPrivateV2 struct{ LogicalBytes, ReadHashBytes, ValidationWork uint64 }
 type ProducerPacketBudgetPrivateV2 struct{ LogicalBytes, ReadHashBytes, ValidationWork uint64 }
-type producerPacketBudgetPrivateV2 struct{ left, spent ProducerPacketBudgetPrivateV2 }
+type producerPacketBudgetPrivateV2 struct {
+	left, spent ProducerPacketBudgetPrivateV2
+	validation  producerPacketValidationCountsPrivateV2
+}
+
+type producerPacketValidationCountsPrivateV2 struct{ wholePacket, sourceArtifact int }
 
 func newProducerPacketBudgetPrivateV2(limits []ProducerPacketLimitsPrivateV2) (*producerPacketBudgetPrivateV2, error) {
 	if len(limits) > 1 {
@@ -341,6 +346,7 @@ func PureParseProducerPacketPrivateV2(raw []byte) (ProducerPacketInspectionPriva
 	return parseProducerPacketPrivateV2(raw, b)
 }
 func parseProducerPacketPrivateV2(raw []byte, b *producerPacketBudgetPrivateV2) (p ProducerPacketInspectionPrivateV2, err error) {
+	b.validation.wholePacket++
 	if len(raw) == 0 || len(raw) > producerPacketBytesPrivateV2 {
 		return p, ErrProducerPacketOverBoundPrivateV2
 	}
@@ -524,6 +530,7 @@ func validateProducerPacketPrivateV2(p ProducerPacketInspectionPrivateV2, budget
 		if !bytes.Equal(input, b.ManifestInput) {
 			return ErrInvalid
 		}
+		budget.validation.sourceArtifact++
 		source, e := graphprovenance.ParseSourceWithholdingPrivateV2(b.SourceArtifact)
 		if e != nil {
 			return e
