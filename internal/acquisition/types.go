@@ -99,6 +99,8 @@ type Request struct {
 	// Manager/source-policy equality validation. Never decoded from public input.
 	// Arrays copy with Request: callers cannot mutate a retained slice in flight.
 	FrozenQueryURIsPrivate [6]string `json:"-"`
+	// Restrict-only immutable V2 metadata; not a Manager/source authorization.
+	frozenQueryDeclarationPrivateV2 *FrozenQueryDeclarationPrivateV2 `json:"-"`
 }
 
 // Client must be bound to Request.Context, enforce wire byte/message limits and

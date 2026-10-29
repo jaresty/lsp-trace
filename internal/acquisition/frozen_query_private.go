@@ -10,8 +10,13 @@ import (
 
 const FrozenQueryStopPrivate = "EXTERNAL_TO_FROZEN_QUERYSET"
 
-func (r Request) frozenQueryPrivate() bool { return r.FrozenQueryURIsPrivate != [6]string{} }
+func (r Request) frozenQueryPrivate() bool {
+	return r.FrozenQueryURIsPrivate != [6]string{} || r.frozenQueryDeclarationPrivateV2 != nil
+}
 func (r Request) queryAllowedPrivate(uri string) bool {
+	if r.frozenQueryDeclarationPrivateV2 != nil {
+		return r.FrozenQueryURIsPrivate == [6]string{} && r.frozenQueryDeclarationPrivateV2.contains(uri)
+	}
 	if !r.frozenQueryPrivate() {
 		return true
 	}
@@ -26,9 +31,18 @@ func (r Request) validateFrozenQueryPrivate() error {
 	if !r.frozenQueryPrivate() {
 		return nil
 	}
-	for i, uri := range r.FrozenQueryURIsPrivate {
-		if !canonicalURI(uri) || (i > 0 && r.FrozenQueryURIsPrivate[i-1] >= uri) {
-			return errors.New("private frozen query declaration must be sorted canonical six")
+	if r.frozenQueryDeclarationPrivateV2 != nil {
+		if r.FrozenQueryURIsPrivate != [6]string{} {
+			return errors.New("private frozen query V1 and V2 declarations cannot be combined")
+		}
+		if err := r.frozenQueryDeclarationPrivateV2.validate(); err != nil {
+			return err
+		}
+	} else {
+		for i, uri := range r.FrozenQueryURIsPrivate {
+			if !canonicalURI(uri) || (i > 0 && r.FrozenQueryURIsPrivate[i-1] >= uri) {
+				return errors.New("private frozen query declaration must be sorted canonical six")
+			}
 		}
 	}
 	for _, t := range append([]Target{r.Root}, r.RequiredTargets...) {
