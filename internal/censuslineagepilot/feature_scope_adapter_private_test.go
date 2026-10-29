@@ -38,10 +38,24 @@ type scopeAdapterChild struct {
 	response      func(lspwire.Message) json.RawMessage
 	notifications int
 	stdoutBytes   atomic.Int64
+	// Owned preparation-blocking fixture only. Nil for every legacy fixture.
+	afterInitializedPrivateTest func()
+	writeObservedPrivateTest    func()
+	closedPrivateTest           chan struct{}
 }
 
-func (c *scopeAdapterChild) Stdin() io.WriteCloser { return c.stdin }
-func (c *scopeAdapterChild) Stdout() io.ReadCloser { return scopeAdapterReadCounter{c} }
+func (c *scopeAdapterChild) Stdin() io.WriteCloser { return scopeAdapterWriteObserverPrivateTest{c} }
+
+type scopeAdapterWriteObserverPrivateTest struct{ child *scopeAdapterChild }
+
+func (w scopeAdapterWriteObserverPrivateTest) Write(p []byte) (int, error) {
+	if w.child.writeObservedPrivateTest != nil {
+		w.child.writeObservedPrivateTest()
+	}
+	return w.child.stdin.Write(p)
+}
+func (w scopeAdapterWriteObserverPrivateTest) Close() error { return w.child.stdin.Close() }
+func (c *scopeAdapterChild) Stdout() io.ReadCloser          { return scopeAdapterReadCounter{c} }
 
 type scopeAdapterReadCounter struct{ child *scopeAdapterChild }
 
@@ -52,7 +66,15 @@ func (r scopeAdapterReadCounter) Read(p []byte) (int, error) {
 }
 func (r scopeAdapterReadCounter) Close() error { return r.child.stdout.Close() }
 func (c *scopeAdapterChild) Close() managedprocess.ResourceObservation {
-	c.once.Do(func() { c.input.Close(); c.stdin.Close(); c.stdout.Close(); c.output.Close() })
+	c.once.Do(func() {
+		c.input.Close()
+		c.stdin.Close()
+		c.stdout.Close()
+		c.output.Close()
+		if c.closedPrivateTest != nil {
+			close(c.closedPrivateTest)
+		}
+	})
 	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
 }
 func (c *scopeAdapterChild) Teardown(context.Context) managedprocess.TeardownObservation {
@@ -88,6 +110,9 @@ func (c *scopeAdapterChild) serve() {
 		response := c.response
 		notifications := c.notifications
 		c.mu.Unlock()
+		if msg.Method == "initialized" && c.afterInitializedPrivateTest != nil {
+			c.afterInitializedPrivateTest()
+		}
 		if msg.Method == "textDocument/didOpen" || msg.Method == "textDocument/didChange" || msg.Method == "initialized" {
 			continue
 		}
@@ -137,6 +162,10 @@ func adapterFixtureWithRestartPathsPrivate(t *testing.T) (scopeRestartResult, *s
 }
 func adapterFixtureWithRestartPathsAndServerPrivate(t *testing.T, server string, setup ...func(string)) (scopeRestartResult, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild, [3]string, scopeRestartLocator) {
 	t.Helper()
+	return adapterFixtureWithChildSetupPrivate(t, server, nil, setup...)
+}
+func adapterFixtureWithChildSetupPrivate(t *testing.T, server string, childSetup func(*scopeAdapterChild), setup ...func(string)) (scopeRestartResult, *sessionruntime.Manager, censusacquisition.SessionIdentity, *scopeAdapterChild, [3]string, scopeRestartLocator) {
+	t.Helper()
 	// Disposable retained fixtures exercise the actual read-only reconstruction;
 	// no caller DTO or fabricated scopeRestartResult substitutes for the reader.
 	owner, _, locator := restartFixture(t, false, setup...)
@@ -149,6 +178,9 @@ func adapterFixtureWithRestartPathsAndServerPrivate(t *testing.T, server string,
 	input, stdin := io.Pipe()
 	stdout, output := io.Pipe()
 	child := &scopeAdapterChild{input: input, stdin: stdin, stdout: stdout, output: output, done: make(chan struct{})}
+	if childSetup != nil {
+		childSetup(child)
+	}
 	go child.serve()
 	m, err := sessionruntime.New(sessionruntime.Config{Starter: scopeAdapterStarter{child}, Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 1024, MaxOperations: 2}})
 	if err != nil {
