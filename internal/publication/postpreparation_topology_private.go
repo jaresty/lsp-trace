@@ -37,6 +37,30 @@ func checkPostPreparationRetentionTopologyV1Private(ctx context.Context, outputs
 		roots[i] = r.observed
 	}
 	copy(roots[2:], protected)
+	views := make([]topologyRootViewPrivate, len(roots))
+	for i, r := range roots {
+		// Preserve the old per-root validation order inside the chain checker,
+		// including closes/errors from chains acquired before an invalid input.
+		views[i].validate = r.ValidatePrivate
+		if r != nil && r.root != nil {
+			views[i].path, views[i].info = r.root.path, r.root.info
+		}
+	}
+	return checkRootChainsPrivate(ctx, views, 2, ops)
+}
+
+// Only package-owned capability wrappers construct these neutral views.
+// No arbitrary caller predicate or serialized root can enter the checker.
+type topologyRootViewPrivate struct {
+	path     string
+	info     os.FileInfo
+	validate func() error
+}
+
+func checkRootChainsPrivate(ctx context.Context, roots []topologyRootViewPrivate, outputCount int, ops observedRootOps) (err error) {
+	if ctx == nil || outputCount < 0 || outputCount > len(roots) {
+		return ErrObservedRootAdmission
+	}
 	chains := make([][]*os.File, len(roots))
 	infos := make([][]os.FileInfo, len(roots))
 	defer func() {
@@ -48,10 +72,10 @@ func checkPostPreparationRetentionTopologyV1Private(ctx context.Context, outputs
 		err = errors.Join(err, ctx.Err())
 	}()
 	for i, r := range roots {
-		if err = r.ValidatePrivate(); err != nil {
+		if err = r.validate(); err != nil {
 			return err
 		}
-		parts := strings.Split(strings.TrimPrefix(r.root.path, "/"), "/")
+		parts := strings.Split(strings.TrimPrefix(r.path, "/"), "/")
 		if len(parts) > 256 {
 			return ErrObservedRootAdmission
 		}
@@ -84,11 +108,11 @@ func checkPostPreparationRetentionTopologyV1Private(ctx context.Context, outputs
 			infos[i] = append(infos[i], info)
 			parent = f
 		}
-		if !os.SameFile(infos[i][len(infos[i])-1], r.root.info) {
+		if !os.SameFile(infos[i][len(infos[i])-1], r.info) {
 			return ErrObservedRootAdmission
 		}
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < outputCount; i++ {
 		for j := i + 1; j < len(roots); j++ {
 			a, b := infos[i], infos[j]
 			for _, ancestor := range b {
@@ -105,7 +129,7 @@ func checkPostPreparationRetentionTopologyV1Private(ctx context.Context, outputs
 	}
 	for i, r := range roots {
 		names := []string{"/"}
-		for _, part := range strings.Split(strings.TrimPrefix(r.root.path, "/"), "/") {
+		for _, part := range strings.Split(strings.TrimPrefix(r.path, "/"), "/") {
 			if part != "" {
 				names = append(names, part)
 			}
@@ -132,7 +156,7 @@ func checkPostPreparationRetentionTopologyV1Private(ctx context.Context, outputs
 				return e
 			}
 		}
-		if err = r.ValidatePrivate(); err != nil {
+		if err = r.validate(); err != nil {
 			return err
 		}
 	}

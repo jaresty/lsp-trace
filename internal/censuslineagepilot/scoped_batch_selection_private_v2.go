@@ -25,6 +25,7 @@ type batchSelectionStatePrivateV2 struct {
 	mu                       sync.Mutex
 	spent                    bool
 	failure                  error
+	success                  *successfulCaptureStatePrivateV2
 	origin                   *enumerationOriginStatePrivateV2
 	ordinal                  int
 	binding                  acquisitionauthority.Binding
@@ -217,8 +218,11 @@ func acquireScopeBatchPrivateV2(ctx context.Context, m *sessionruntime.Manager, 
 	if err = a.check(opCtx); err != nil {
 		return OpaqueSuccessfulV2Capture{}, err
 	}
-	st := &successfulCaptureStatePrivateV2{origin: raw, seeds: bytes.Clone(s.seeds), artifact: bytes.Clone(artifact)}
+	st := &successfulCaptureStatePrivateV2{origin: raw, seeds: bytes.Clone(s.seeds), artifact: bytes.Clone(artifact), enumeration: o.state, ordinal: s.ordinal, attachedObserved: attached, releasedObserved: released}
 	st.self = st
+	s.mu.Lock()
+	s.success = st
+	s.mu.Unlock()
 	return OpaqueSuccessfulV2Capture{st}, nil
 }
 
@@ -246,6 +250,13 @@ type OpaqueSuccessfulV2Capture struct {
 type successfulCaptureStatePrivateV2 struct {
 	self                    *successfulCaptureStatePrivateV2
 	origin, seeds, artifact []byte
+	// Historical observations set only after this operation's verified release.
+	// Equal serialized origins from another execution cannot substitute for this
+	// pointer. Retention does not revive or consult the expired Manager lease.
+	enumeration      *enumerationOriginStatePrivateV2
+	ordinal          int
+	attachedObserved bool
+	releasedObserved bool
 }
 
 func (c OpaqueSuccessfulV2Capture) valid() bool                { return c.state != nil && c.state.self == c.state }
