@@ -55,9 +55,37 @@ func (a *scopeRuntimeAdapter) wireBoundsLocked(ctx context.Context, messages, wi
 	}
 	callerDeadline, _ := ctx.Deadline()
 	a.mu.Lock()
-	remaining := scopeAdapterCapture - a.captured
+	remaining := a.captureCeilingPrivate() - a.captured
 	a.mu.Unlock()
+	if a.frozenV2.valid() {
+		p := a.frozenV2.state.spec.EffectivePolicy
+		messages = min(messages, p.MaxMessages)
+		wireBytes = min(wireBytes, p.MaxResponseBytes+aggregateEnvelope)
+		requestDeadline := time.Now().Add(time.Duration(p.RequestTimeoutMS) * time.Millisecond)
+		if callerDeadline.IsZero() || requestDeadline.Before(callerDeadline) {
+			callerDeadline = requestDeadline
+		}
+	}
 	return scopeIntersectWireBounds(time.Now(), a.deadline, callerDeadline, remaining, messages, wireBytes, aggregateEnvelope)
+}
+
+func (a *scopeRuntimeAdapter) requestCeilingPrivate() int {
+	if a.frozenV2.valid() {
+		return a.frozenV2.state.spec.EffectivePolicy.MaxRequests
+	}
+	return scopeAdapterRequests
+}
+func (a *scopeRuntimeAdapter) captureCeilingPrivate() int {
+	if a.frozenV2.valid() {
+		return a.frozenV2.state.spec.EffectivePolicy.MaxEvidenceBytes
+	}
+	return scopeAdapterCapture
+}
+func (a *scopeRuntimeAdapter) responseCeilingPrivate() int {
+	if a.frozenV2.valid() {
+		return a.frozenV2.state.spec.EffectivePolicy.MaxResponseBytes
+	}
+	return scopeAdapterResponse
 }
 
 // The production native callback and fake-wire qualification share this exact

@@ -109,6 +109,16 @@ func authorityCallViolations(root string) ([]string, error) {
 			if rel == "cmd/lsp-trace/census_batch_acquirer.go" && selector.Sel.Name == "MintSeedAuthority" {
 				return true
 			}
+			// Closed PRIVATE V2 producer only: the origin is minted from actual
+			// guarded discovery; no ordinary/public acquisition admission changes.
+			if rel == "internal/censuslineagepilot/scope_producer_private_v2.go" && selector.Sel.Name == "MintSeedAuthority" {
+				for _, decl := range file.Decls {
+					fn, ok := decl.(*ast.FuncDecl)
+					if ok && fn.Name.Name == "DiscoverScopePrivateV2" && fn.Recv == nil && fn.Body != nil && call.Pos() >= fn.Body.Pos() && call.End() <= fn.Body.End() {
+						return true
+					}
+				}
+			}
 			violations = append(violations, rel+" calls "+selector.Sel.Name)
 			return true
 		})
@@ -127,9 +137,39 @@ func TestAuthorityMintCallsAreOwnedByPrivateOrchestrationRoutes(t *testing.T) {
 	}
 }
 
+// Run the new owner scan only on an owned source copy, without walking any
+// retained/evidence roots in the working repository.
+func TestAuthorityScanSealedCensusV2OwnerOnly(t *testing.T) {
+	root := t.TempDir()
+	rel := "internal/censuslineagepilot/scope_producer_private_v2.go"
+	raw, err := os.ReadFile(filepath.Join(repositoryRoot(t), filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, filepath.FromSlash(rel))
+	if err = os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(target, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	violations, err := authorityCallViolations(root)
+	if err != nil || len(violations) != 0 {
+		t.Fatalf("ASSERT_V2_CLOSED_MINT_OWNER: %v %v", violations, err)
+	}
+	raw = append(raw, []byte("\nfunc forbiddenOwnerCopy() { acquisitionauthority.MintSeedAuthority() }\n")...)
+	if err = os.WriteFile(target, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	violations, err = authorityCallViolations(root)
+	if err != nil || len(violations) != 1 || violations[0] != rel+" calls MintSeedAuthority" {
+		t.Fatalf("ASSERT_V2_NO_FILE_WIDE_MINT_EXCEPTION: %v %v", violations, err)
+	}
+}
+
 func TestAuthorityScanExcludesEvidenceButRejectsProductionCalls(t *testing.T) {
 	root := t.TempDir()
-	for _, rel := range []string{"src/forbidden.go", "src/.pi/evidence/copied.go"} {
+	for _, rel := range []string{"src/forbidden.go", "src/.pi/evidence/copied.go", "internal/censuslineagepilot/scope_producer_private_v2.go"} {
 		path := filepath.Join(root, rel)
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
@@ -142,7 +182,7 @@ func TestAuthorityScanExcludesEvidenceButRejectsProductionCalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(violations) != 1 || violations[0] != "src/forbidden.go calls MintSeedAuthority" {
+	if len(violations) != 2 || violations[0] != "internal/censuslineagepilot/scope_producer_private_v2.go calls MintSeedAuthority" || violations[1] != "src/forbidden.go calls MintSeedAuthority" {
 		t.Fatalf("ASSERT_AUTHORITY_SOURCE_VS_EVIDENCE: violations=%v", violations)
 	}
 }

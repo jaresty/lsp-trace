@@ -36,6 +36,26 @@ func scopeSame(a, b os.FileInfo) bool {
 // bind to their observed identities. Checks are safe-boundary cancellation, not
 // arbitrary-I/O interruption, actor monitoring, or an atomic checkout snapshot.
 func readFeatureScope(ctx context.Context, root string, ops scopeReadOps) (out []scopeObservedFile, identity scopeFileIdentity, err error) {
+	descriptors := make([]scopeReadDescriptorPrivate, 0, 6)
+	for i, path := range featureScopePaths() {
+		role := "NOMINATION"
+		if i >= 4 {
+			role = "CONTEXT_ONLY"
+		}
+		descriptors = append(descriptors, scopeReadDescriptorPrivate{path, role})
+	}
+	return readScopeDescriptorsPrivate(ctx, root, descriptors, scopeReadBoundsPrivate{featureScopeFileLimit, featureScopeTotalLimit, 0, false}, ops)
+}
+
+// Only validated private descriptors enter here. V1 deliberately keeps its old
+// alias/depth policy. V2 sets finite depth and rejects an alias before reading it.
+func readScopeDescriptorsPrivate(ctx context.Context, root string, descriptors []scopeReadDescriptorPrivate, bounds scopeReadBoundsPrivate, ops scopeReadOps) (out []scopeObservedFile, identity scopeFileIdentity, err error) {
+	if ctx == nil || bounds.fileBytes < 1 || bounds.totalBytes < 1 {
+		return nil, identity, ErrInvalid
+	}
+	if bounds.maxDepth > 0 && len(strings.Split(strings.Trim(root, "/"), "/")) > bounds.maxDepth {
+		return nil, identity, ErrInvalid
+	}
 	var owned []*os.File
 	closeFile := ops.close
 	if closeFile == nil {
@@ -170,9 +190,14 @@ func readFeatureScope(ctx context.Context, root string, ops scopeReadOps) (out [
 	identity = scopeIdentity(info)
 	var bindings []scopeBinding
 	total := 0
-	for i, path := range featureScopePaths() {
+	seen := make(map[scopeFileIdentity]bool)
+	for _, descriptor := range descriptors {
+		path := descriptor.path
 		parent := current
 		parts := strings.Split(path, "/")
+		if bounds.maxDepth > 0 && len(parts) > bounds.maxDepth {
+			return nil, identity, ErrInvalid
+		}
 		for _, part := range parts[:len(parts)-1] {
 			b, e := bind(parent, part, true)
 			if e != nil {
@@ -186,8 +211,13 @@ func readFeatureScope(ctx context.Context, root string, ops scopeReadOps) (out [
 			return nil, identity, e
 		}
 		bindings = append(bindings, first)
-		readLimit := int64(featureScopeFileLimit)
-		if remaining := int64(featureScopeTotalLimit - total); remaining < readLimit {
+		fileIdentity := scopeIdentity(first.info)
+		if bounds.rejectAliases && seen[fileIdentity] {
+			return nil, identity, ErrInvalid
+		}
+		seen[fileIdentity] = true
+		readLimit := int64(bounds.fileBytes)
+		if remaining := int64(bounds.totalBytes - total); remaining < readLimit {
 			readLimit = remaining
 		}
 		if first.info.Size() < 1 || first.info.Size() > readLimit {
@@ -210,17 +240,16 @@ func readFeatureScope(ctx context.Context, root string, ops scopeReadOps) (out [
 			return nil, identity, e
 		}
 		total += len(raw)
-		if len(raw) == 0 || len(raw) > featureScopeFileLimit || int64(len(raw)) != first.info.Size() || total > featureScopeTotalLimit {
+		if len(raw) == 0 || len(raw) > bounds.fileBytes || int64(len(raw)) != first.info.Size() || total > bounds.totalBytes {
 			return nil, identity, ErrInvalid
 		}
-		role := "NOMINATION"
-		if i >= 4 {
-			role = "CONTEXT_ONLY"
-		}
-		out = append(out, scopeObservedFile{scopeManifestFile: scopeManifestFile{Path: path, Role: role, SHA256: Digest(raw), ByteLength: uint64(len(raw)), Identity: scopeIdentity(first.info), Mode: uint32(first.info.Mode()), ModifiedNS: first.info.ModTime().UnixNano(), ChangedSec: int64(first.changed.Sec), ChangedNsec: int64(first.changed.Nsec)}, Bytes: bytes.Clone(raw)})
+		out = append(out, scopeObservedFile{scopeManifestFile: scopeManifestFile{Path: path, Role: descriptor.role, SHA256: Digest(raw), ByteLength: uint64(len(raw)), Identity: scopeIdentity(first.info), Mode: uint32(first.info.Mode()), ModifiedNS: first.info.ModTime().UnixNano(), ChangedSec: int64(first.changed.Sec), ChangedNsec: int64(first.changed.Nsec)}, Bytes: bytes.Clone(raw)})
 	}
 	if e = hook("before-final", root); e != nil {
 		return nil, identity, e
+	}
+	if bounds.rejectAliases {
+		bindings = append(bindings, ancestors...)
 	}
 	for _, b := range bindings {
 		if e = validate(b); e != nil {

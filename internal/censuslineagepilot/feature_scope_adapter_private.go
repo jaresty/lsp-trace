@@ -48,14 +48,17 @@ func (b scopeBindingObservation) symbolOmissions() uint64 {
 }
 
 type scopeRuntimeAdapter struct {
-	manager   *sessionruntime.Manager
-	identity  censusacquisition.SessionIdentity
-	guard     *sessionruntime.RetainedScopeGuardPrivate
-	files     censusacquisition.StaticFiles
-	workspace string
-	metadata  sessionruntime.SessionMetadata
-	policy    scopedExecutionPolicyPrivate
-	deadline  time.Time
+	manager    *sessionruntime.Manager
+	identity   censusacquisition.SessionIdentity
+	guard      *sessionruntime.RetainedScopeGuardPrivate
+	guardV2    *sessionruntime.RetainedScopeGuardPrivateV2
+	frozenV2   FrozenScopePrivateV2
+	lifetimeV2 context.Context
+	files      censusacquisition.StaticFiles
+	workspace  string
+	metadata   sessionruntime.SessionMetadata
+	policy     scopedExecutionPolicyPrivate
+	deadline   time.Time
 	// invocationMu spans Manager transport, accounting, and ALL typed validation.
 	// No callback under it may reenter an adapter invocation.
 	invocationMu                    sync.Mutex
@@ -185,8 +188,11 @@ func validateScopeRestartForAdapter(ctx context.Context, restart scopeRestartRes
 }
 
 func scopeAdapterSupplyMatches(r sessionruntime.DocumentResult, f scopeObservedFile, id censusacquisition.SessionIdentity) bool {
+	return scopeAdapterSupplyMatchesForLanguagePrivate(r, f, id, "go")
+}
+func scopeAdapterSupplyMatchesForLanguagePrivate(r sessionruntime.DocumentResult, f scopeObservedFile, id censusacquisition.SessionIdentity, language string) bool {
 	s := r.Supply
-	if r.URI != f.URI || r.LanguageID != "go" || r.Version < 1 || s == nil || s.Classification != "LSP_SUPPLIED" || s.URI != f.URI || s.SessionID != id.SessionID || s.Generation != id.Generation || s.DocumentVersion != r.Version || !bytes.Equal(s.Content, f.Bytes) || strictjson.RejectDuplicates(s.Params) != nil {
+	if r.URI != f.URI || r.LanguageID != language || r.Version < 1 || s == nil || s.Classification != "LSP_SUPPLIED" || s.URI != f.URI || s.SessionID != id.SessionID || s.Generation != id.Generation || s.DocumentVersion != r.Version || !bytes.Equal(s.Content, f.Bytes) || strictjson.RejectDuplicates(s.Params) != nil {
 		return false
 	}
 	var p struct {
@@ -205,7 +211,7 @@ func scopeAdapterSupplyMatches(r sessionruntime.DocumentResult, f scopeObservedF
 	}
 	switch s.Method {
 	case "textDocument/didOpen":
-		return p.TextDocument.LanguageID == "go" && p.TextDocument.Text != nil && bytes.Equal([]byte(*p.TextDocument.Text), f.Bytes)
+		return p.TextDocument.LanguageID == language && p.TextDocument.Text != nil && bytes.Equal([]byte(*p.TextDocument.Text), f.Bytes)
 	case "textDocument/didChange":
 		return len(p.Changes) == 1 && p.Changes[0].Text != nil && bytes.Equal([]byte(*p.Changes[0].Text), f.Bytes)
 	}
@@ -262,7 +268,33 @@ func (a *scopeRuntimeAdapter) check(ctx context.Context) error {
 	if time.Now().After(a.deadline) {
 		return context.DeadlineExceeded
 	}
-	if f := a.manager.CheckRetainedScopePrivate(ctx, a.identity.SessionID, a.identity.Generation, a.guard); f != "" {
+	if a.manager == nil {
+		return ErrInvalid
+	}
+	if a.frozenV2.state != nil || a.guardV2 != nil || a.lifetimeV2 != nil {
+		if !a.frozenV2.valid() || a.guardV2 == nil || a.guard != nil || a.lifetimeV2 == nil {
+			return ErrInvalid
+		}
+		if err := a.lifetimeV2.Err(); err != nil {
+			return err
+		}
+		lease := sessionruntime.SessionLeaseRequest{SessionID: a.identity.SessionID, Generation: a.identity.Generation, Workspace: a.workspace}
+		// Preserve the original token/lifetime, but bound this check as well.
+		lifetimeCheckCtx, cancel := context.WithDeadline(a.lifetimeV2, a.deadline)
+		defer cancel()
+		if failure := a.manager.CheckActiveSessionLeasePrivateV2(lifetimeCheckCtx, lease); failure != "" {
+			return scopeAdapterFailure(failure, "")
+		}
+		if failure := a.manager.CheckActiveSessionLeasePrivateV2(ctx, lease); failure != "" {
+			return scopeAdapterFailure(failure, "")
+		}
+		if err := a.frozenV2.revalidate(ctx); err != nil {
+			return err
+		}
+		if f := a.manager.CheckRetainedScopePrivateV2(ctx, a.identity.SessionID, a.identity.Generation, a.guardV2); f != "" {
+			return scopeAdapterFailure(f, "")
+		}
+	} else if f := a.manager.CheckRetainedScopePrivate(ctx, a.identity.SessionID, a.identity.Generation, a.guard); f != "" {
 		return scopeAdapterFailure(f, "")
 	}
 	return nil
@@ -279,6 +311,13 @@ func (a *scopeRuntimeAdapter) Discover(ctx context.Context, id censusacquisition
 	limits, err := a.policy.discoveryLimits()
 	if err != nil {
 		return censusacquisition.Discovery{}, err
+	}
+	return a.discoverWithLimitsPrivate(ctx, id, limits)
+}
+
+func (a *scopeRuntimeAdapter) discoverWithLimitsPrivate(ctx context.Context, id censusacquisition.SessionIdentity, limits censusacquisition.DiscoveryLimits) (censusacquisition.Discovery, error) {
+	if a == nil || id != a.identity || limits.MaxFiles < 1 || limits.MaxSymbols < 1 || limits.MaxDepth < 1 || limits.MaxStringBytes < 1 {
+		return censusacquisition.Discovery{}, ErrInvalid
 	}
 	if err := a.check(ctx); err != nil {
 		return censusacquisition.Discovery{}, err
@@ -371,7 +410,7 @@ func (a *scopeRuntimeAdapter) roundTripWithBoundsLocked(ctx context.Context, met
 		a.mu.Unlock()
 		return nil, err
 	}
-	if a.requests >= scopeAdapterRequests || a.captured >= scopeAdapterCapture {
+	if a.requests >= a.requestCeilingPrivate() || a.captured >= a.captureCeilingPrivate() {
 		a.mu.Unlock()
 		return nil, ErrInvalid
 	}
@@ -379,7 +418,7 @@ func (a *scopeRuntimeAdapter) roundTripWithBoundsLocked(ctx context.Context, met
 	a.mu.Unlock()
 	ctx, cancel := context.WithDeadline(ctx, bounds.deadline)
 	defer cancel()
-	r := a.manager.RoundTrip(ctx, sessionruntime.RoundTripRequest{SessionID: a.identity.SessionID, Generation: a.identity.Generation, RetainedScopePrivate: a.guard, Method: method, Params: params, Deadline: bounds.deadline, MaxMessages: bounds.messages, MaxBytes: int64(bounds.bytes)})
+	r := a.manager.RoundTrip(ctx, sessionruntime.RoundTripRequest{SessionID: a.identity.SessionID, Generation: a.identity.Generation, RetainedScopePrivate: a.guard, RetainedScopePrivateV2: a.guardV2, Method: method, Params: params, Deadline: bounds.deadline, MaxMessages: bounds.messages, MaxBytes: int64(bounds.bytes)})
 	if a.afterResponsePrivateTest != nil && r.Failure == "" {
 		a.afterResponsePrivateTest()
 	}
@@ -395,7 +434,7 @@ func (a *scopeRuntimeAdapter) roundTripWithBoundsLocked(ctx context.Context, met
 		a.terminal = err
 		return nil, err
 	}
-	if len(r.Result) > scopeAdapterResponse || len(r.Result) > scopeAdapterCapture-a.captured {
+	if len(r.Result) > a.responseCeilingPrivate() || len(r.Result) > a.captureCeilingPrivate()-a.captured {
 		a.terminal = ErrInvalid
 		return nil, ErrInvalid
 	}

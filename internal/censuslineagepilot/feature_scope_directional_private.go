@@ -34,7 +34,7 @@ func (a *scopeRuntimeAdapter) nativeDirectionalRoundTripLocked(ctx context.Conte
 		return empty, err
 	}
 	a.mu.Lock()
-	if a.requests >= scopeAdapterRequests || a.captured >= scopeAdapterCapture {
+	if a.requests >= a.requestCeilingPrivate() || a.captured >= a.captureCeilingPrivate() {
 		a.mu.Unlock()
 		return empty, ErrInvalid
 	}
@@ -42,7 +42,7 @@ func (a *scopeRuntimeAdapter) nativeDirectionalRoundTripLocked(ctx context.Conte
 	a.mu.Unlock()
 	ctx, cancel := context.WithDeadline(ctx, bounds.deadline)
 	defer cancel()
-	observed, lease := a.manager.RoundTripDirectionalPrivate(ctx, sessionruntime.RoundTripRequest{SessionID: a.identity.SessionID, Generation: a.identity.Generation, RetainedScopePrivate: a.guard, Method: r.Method, Params: r.Params, Deadline: bounds.deadline, MaxMessages: bounds.messages, MaxBytes: int64(bounds.bytes)})
+	observed, lease := a.manager.RoundTripDirectionalPrivate(ctx, sessionruntime.RoundTripRequest{SessionID: a.identity.SessionID, Generation: a.identity.Generation, RetainedScopePrivate: a.guard, RetainedScopePrivateV2: a.guardV2, Method: r.Method, Params: r.Params, Deadline: bounds.deadline, MaxMessages: bounds.messages, MaxBytes: int64(bounds.bytes)})
 	if a.afterResponsePrivateTest != nil && observed.Failure == "" {
 		a.afterResponsePrivateTest()
 	}
@@ -57,7 +57,7 @@ func (a *scopeRuntimeAdapter) nativeDirectionalRoundTripLocked(ctx context.Conte
 	a.mu.Lock()
 	if completed {
 		n := metadata.ResultLengthPrivate
-		if n > scopeAdapterResponse || n > uint64(scopeAdapterCapture-a.captured) {
+		if n > uint64(a.responseCeilingPrivate()) || n > uint64(a.captureCeilingPrivate()-a.captured) {
 			err = errors.Join(err, ErrInvalid)
 		} else {
 			a.captured += int(n)

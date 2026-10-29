@@ -1,7 +1,8 @@
 // Package acquisitionauthority owns the opaque, single-use capabilities used
 // by trusted acquisition orchestration.  Its exported names are unreachable to
 // external modules because the package is internal; mint calls are additionally
-// restricted by repository boundary tests to internal/acquisitionorchestration.
+// restricted by repository boundary tests to explicit private orchestration
+// owners, including the sealed Census V2 producer (not ordinary admission).
 package acquisitionauthority
 
 import (
@@ -99,7 +100,8 @@ type SeedGrant struct {
 
 // MintSeedAuthority validates canonical Seeds V2 bytes against every exact
 // manifest target and seals all route/request/policy/publication semantics.
-// Production call sites must reside in internal/acquisitionorchestration.
+// Call sites are constrained by the private-owner scanner; its sealed Census V2
+// producer exception does not broaden ordinary/public acquisition admission.
 func MintSeedAuthority(b Binding, seedSpec []byte, provenance seedbinding.CustodyMode, authenticated bool, hostReceipt string, retain bool) (SeedAuthority, error) {
 	if b.Operation == "" || b.Route == "" || b.Workspace == "" || b.SessionID == "" || b.Generation == 0 || len(b.Input) == 0 {
 		return SeedAuthority{}, fmt.Errorf("complete acquisition authority binding required")
