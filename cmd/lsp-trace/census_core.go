@@ -31,12 +31,14 @@ type censusCoreDependencies struct {
 }
 
 type censusCoreConfig struct {
-	runner        initializedAcquisitionRunnerConfig
-	limits        acquisitionops.Limits
-	callHierarchy bool
-	diagnostic    *censusdiagnostic.Recorder
-	controlFlow   *censusControlFlowObserver
-	afterCommit   func(context.Context, *initializedAcquisitionRuntime, censusPublicationOutcome) int
+	// Private inventory only: each subsequent frozen origin needs a new original owner.
+	privateFreshRunner func() (initializedAcquisitionRunnerConfig, error)
+	runner             initializedAcquisitionRunnerConfig
+	limits             acquisitionops.Limits
+	callHierarchy      bool
+	diagnostic         *censusdiagnostic.Recorder
+	controlFlow        *censusControlFlowObserver
+	afterCommit        func(context.Context, *initializedAcquisitionRuntime, censusPublicationOutcome) int
 }
 
 type fixedCensusDiscovery struct{ discovery censusacquisition.Discovery }

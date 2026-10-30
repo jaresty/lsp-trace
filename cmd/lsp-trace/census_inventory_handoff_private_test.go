@@ -20,7 +20,11 @@ import (
 	prep "lsp-trace/internal/privatedescribeprep"
 )
 
-func inventoryHostEmulatePrivate(base, mailbox, helper, python string) error {
+func inventoryHostEmulatePrivate(base, mailbox, helper, python string, exchanges ...int) error {
+	count := 4
+	if len(exchanges) == 1 {
+		count = exchanges[0]
+	}
 	bindingPath := mailbox + ".census-export.json"
 	deadline := time.Now().Add(20 * time.Second)
 	wait := func(path string) error {
@@ -39,7 +43,7 @@ func inventoryHostEmulatePrivate(base, mailbox, helper, python string) error {
 	if e != nil {
 		return e
 	}
-	for sequence := 1; sequence <= 4; sequence++ {
+	for sequence := 1; sequence <= count; sequence++ {
 		if e := wait(filepath.Join(mailbox, fmt.Sprintf("request-%06d.json", sequence))); e != nil {
 			return e
 		}

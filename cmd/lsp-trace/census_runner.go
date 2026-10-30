@@ -198,8 +198,22 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, providerProbe: providerProbe, privateEnumerationProjection: options.PrivateEnumerationProjection, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic, controlFlow: controlFlowObserver}
 	code := 0
 	if options.PrivateInventoryConfigPath != "" {
-		// The private route joins its original Manager and verifies the terminal
-		// Stop observation before final inventory retention. No second join here.
+		// Only the private route may construct a subsequent original owner. Each
+		// factory call uses the same admitted process/profile, never a saved DTO.
+		cfg.privateFreshRunner = func() (initializedAcquisitionRunnerConfig, error) {
+			s, err := deps.newStarter()
+			if err != nil {
+				return initializedAcquisitionRunnerConfig{}, err
+			}
+			m, err := deps.newManager(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 128, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 128, MaxObservations: 64}, Starter: s})
+			if err != nil {
+				return initializedAcquisitionRunnerConfig{}, err
+			}
+			next := cfg.runner
+			next.manager = m
+			return next, nil
+		}
+		// The private route owns every join, including the unused first owner.
 		return deps.runPrivateInventory(options, cfg, stdout, stderr)
 	} else if options.Catalog {
 		code = deps.runNativeCatalog(options, cfg, stdout, stderr)

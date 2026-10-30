@@ -53,13 +53,18 @@ type censusInventoryFilePrivate struct {
 	Origin      int // -1 means no origin attempted; never a feature assignment.
 }
 type censusInventoryOriginPrivate struct {
-	Ordinal        int
-	Files          []int
-	Status         string
-	ScopeSHA256    string
-	Discovery      json.RawMessage // complete original Census ledgers, including noncallables
-	Batches        []censusInventoryBatchPrivate
-	ProducerCopies [2]pilot.ProducerPacketCopyReceiptPrivateV2
+	Cleanup                               *sessionruntime.LifecycleCleanupObservationPrivateV2
+	Session                               censusacquisition.SessionIdentity
+	SessionCode, StopCalls, ShutdownCalls int
+	StopFailure, StopIntentID             string
+	ShutdownJoined, CleanupVerified       bool
+	Ordinal                               int
+	Files                                 []int
+	Status                                string
+	ScopeSHA256                           string
+	Discovery                             json.RawMessage // complete original Census ledgers, including noncallables
+	Batches                               []censusInventoryBatchPrivate
+	ProducerCopies                        [2]pilot.ProducerPacketCopyReceiptPrivateV2
 }
 type censusInventoryBatchPrivate struct {
 	Ordinal                int
@@ -111,15 +116,21 @@ func productionCensusInventoryDependenciesPrivate() censusInventoryDependenciesP
 	return censusInventoryDependenciesPrivate{enumerate: enumerateCensusPreflightContextPrivate, runSession: productionCensusCoreDependencies().runSession, automatic: prep.NewAutomaticHandoffPrivateV2}
 }
 
-func loadCensusInventoryConfigPrivate(path string) (c censusInventoryConfigPrivate, err error) {
-	f, err := os.Open(path)
+func loadCensusInventoryConfigPrivate(path string) (censusInventoryConfigPrivate, error) {
+	// Convenience callers retain the old signature, but never an unbounded read.
+	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
+	defer cancel()
+	return loadCensusInventoryConfigContextPrivate(ctx, path)
+}
+
+// Both private production callsites supply their existing caller lifetime.
+func loadCensusInventoryConfigContextPrivate(ctx context.Context, path string) (c censusInventoryConfigPrivate, err error) {
+	raw, err := readCensusInventoryConfigPrivate(ctx, path)
 	if err != nil {
-		return c, errors.New("private inventory config unavailable")
+		return c, err
 	}
-	raw, e := io.ReadAll(io.LimitReader(f, (64<<10)+1))
-	ce := f.Close()
-	if e != nil || ce != nil || len(raw) > 64<<10 {
-		return c, errors.New("private inventory config byte bound")
+	if err = ctx.Err(); err != nil {
+		return c, err
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
@@ -127,13 +138,71 @@ func loadCensusInventoryConfigPrivate(path string) (c censusInventoryConfigPriva
 		return c, errors.New("private inventory config invalid")
 	}
 	canonical, _ := json.Marshal(c)
-	if !bytes.Equal(raw, canonical) || c.Profile != censusInventoryProfilePrivate || c.MaxOrigins != 1 || len(c.Seeds) < 2 || len(c.Seeds) > 16 || c.OperationTimeoutMS < c.Policy.TimeoutMS || c.OperationTimeoutMS < 1 || c.OperationTimeoutMS > 240000 {
+	if !bytes.Equal(raw, canonical) || c.Profile != censusInventoryProfilePrivate || (c.MaxOrigins < 1 || c.MaxOrigins > 2) || len(c.Seeds) < 2 || len(c.Seeds) > 16 || c.OperationTimeoutMS < c.Policy.TimeoutMS || c.OperationTimeoutMS < 1 || c.OperationTimeoutMS > 240000 {
 		return c, errors.New("private inventory config noncanonical or profile/bounds invalid")
 	}
 	if c.Automation != nil && prep.ValidateAutomaticHandoffPrivateV2(*c.Automation) != nil {
 		return c, errors.New("private inventory handoff approval invalid")
 	}
-	return c, nil
+	return c, ctx.Err()
+}
+
+// This reuses the private file-handoff admission pattern: a scoped, no-follow,
+// nonblocking open followed by validation of the OPENED descriptor. No Lstat-
+// then-blocking-Open window, read goroutine, or timeout-abandoned worker exists.
+// Context checks bound cooperative local regular-file reads; they do not promise
+// interruptibility of arbitrary filesystem syscalls or a mutation lease.
+func readCensusInventoryConfigPrivate(ctx context.Context, path string) (raw []byte, err error) {
+	if ctx == nil {
+		return nil, errors.New("private inventory config context required")
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, errors.New("private inventory config unavailable")
+	}
+	defer func() { err = errors.Join(err, root.Close()) }()
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	f, err := root.OpenFile(filepath.Base(path), os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, errors.New("private inventory config unavailable")
+	}
+	defer func() { err = errors.Join(err, f.Close()) }()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, errors.New("private inventory config must be a regular file")
+	}
+	if info.Size() > 64<<10 {
+		return nil, errors.New("private inventory config byte bound")
+	}
+	raw, err = io.ReadAll(io.LimitReader(censusInventoryConfigReaderPrivate{ctx, f}, (64<<10)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > 64<<10 {
+		return nil, errors.New("private inventory config byte bound")
+	}
+	return raw, ctx.Err()
+}
+
+type censusInventoryConfigReaderPrivate struct {
+	ctx  context.Context
+	file *os.File
+}
+
+func (r censusInventoryConfigReaderPrivate) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := r.file.Read(p)
+	if cancelled := r.ctx.Err(); cancelled != nil {
+		return n, cancelled
+	}
+	return n, err
 }
 
 func censusInventoryPlanPrivate(o censusCLIOptions, c censusInventoryConfigPrivate, files []censusacquisition.SourceFile) ([]censusInventoryFilePrivate, [][]int) {
@@ -196,7 +265,16 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	}
 	defer shutdown() // closes unused Managers on configuration/refusal paths too
 	cfg.runner.shutdownManagedByCaller = true
-	c, err := loadCensusInventoryConfigPrivate(o.PrivateInventoryConfigPath)
+	lifetime, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	invocationStarted := time.Now()
+	admissionTimeout := o.Timeout
+	if admissionTimeout <= 0 || admissionTimeout > 240*time.Second {
+		admissionTimeout = 240 * time.Second
+	}
+	admission, stopAdmission := context.WithTimeout(lifetime, admissionTimeout)
+	c, err := loadCensusInventoryConfigContextPrivate(admission, o.PrivateInventoryConfigPath)
+	stopAdmission()
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, true, err)
 	}
@@ -212,9 +290,8 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	if c.Automation != nil && (prep.CheckAutomaticHandoffDirectoryPrivateV2(c.Automation.Directory) != nil || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.Workspace) || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.PublicationRoot)) {
 		return writeCensusFailure(stderr, censusStageConfig, true, errors.New("private inventory handoff roots overlap or unavailable"))
 	}
-	lifetime, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stopSignals()
-	ctx, cancel := context.WithTimeout(lifetime, time.Duration(c.OperationTimeoutMS)*time.Millisecond)
+	// Admission time consumes this same invocation budget, never a new clock.
+	ctx, cancel := context.WithDeadline(lifetime, invocationStarted.Add(time.Duration(c.OperationTimeoutMS)*time.Millisecond))
 	defer cancel()
 	// Fresh namespace is the attempt identity. No saved receipt or generation is
 	// accepted, and no failed attempt is overwritten, resumed, retried or deleted.
@@ -227,6 +304,18 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	// and preparation limits, not a caller-selected file list or a target count.
 	var closes []func() error
 	finish := func(cause error) int {
+		if cause != nil {
+			for i := range r.Origins {
+				if r.Origins[i].Status == "FROZEN" {
+					r.Origins[i].Status = "NOT_ATTEMPTED_AFTER_FAILURE"
+				}
+				for _, index := range r.Origins[i].Files {
+					if r.Files[index].Disposition == "FROZEN" || r.Files[index].Disposition == "FREEZE_ATTEMPTED" {
+						r.Files[index].Disposition = r.Origins[i].Status
+					}
+				}
+			}
+		}
 		for i := len(closes) - 1; i >= 0; i-- {
 			if e := closes[i](); e != nil {
 				r.Errors = append(r.Errors, "ROOT_CLOSE_FAILED")
@@ -319,13 +408,18 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	}
 	approvalConfig := c
 	approvalConfig.Automation = nil
+	var partitions [][]int
+	if c.MaxOrigins > 1 {
+		partitions = groups
+	}
 	scopeBytes, _ := json.Marshal(struct {
 		Workspace                           string
 		Config                              censusInventoryConfigPrivate
 		Sources, Includes, Excludes, Pruned []string
 		Files                               []censusInventoryPagePrivate
 		Manifests                           []json.RawMessage
-	}{o.Workspace, approvalConfig, o.Sources, o.Includes, o.Excludes, o.PrunedDirectories, plannedPages, manifests})
+		Partitions                          [][]int `json:",omitempty"`
+	}{o.Workspace, approvalConfig, o.Sources, o.Includes, o.Excludes, o.PrunedDirectories, plannedPages, manifests, partitions})
 	r.ScopeSHA256 = pilot.Digest(scopeBytes)
 	if err = writeCensusInventoryFilePrivate(filepath.Join(attempt, "scope.json"), json.RawMessage(scopeBytes)); err != nil {
 		return finish(err)
@@ -368,24 +462,59 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		}
 		return
 	}
-	// Existing lifecycle owner starts, readies, stops and joins the one runtime.
-	// The equality guard is irreversible for this generation: this checkpoint
-	// admits ONE original origin only. Overflow is retained, never restarted
-	// under a fresh Manager or presented as a complete application inventory.
-	var pipelineErr error
-	cfg.runner.observeStop = func(s session.LifecycleResult) {
-		r.StopCalls++
-		r.StopFailure = string(s.Failure)
-		r.StopIntentID = s.IntentID
-	}
-	r.SessionCode = deps.runSession(cfg.runner, func(live context.Context, runtime *initializedAcquisitionRuntime) int {
-		r.Session = censusacquisition.SessionIdentity{SessionID: runtime.SessionID(), Generation: runtime.Generation()}
-		for ordinal, indices := range groups {
-			if ctx.Err() != nil {
-				pipelineErr = ctx.Err()
+	// Retain and compute each original origin before stopping its owner. Only
+	// detached sealed inputs cross this boundary; no guard is rebound or revived.
+	seenManagers := map[*sessionruntime.Manager]bool{cfg.runner.manager: true}
+	for ordinal, indices := range groups {
+		obs := &r.Origins[ordinal]
+		if ctx.Err() != nil {
+			obs.Status = "OPERATION_DEADLINE"
+			return finish(ctx.Err())
+		}
+		current := cfg.runner
+		join := shutdown
+		if ordinal > 0 {
+			if cfg.privateFreshRunner == nil {
+				obs.Status = "FRESH_RUNTIME_UNAVAILABLE"
+				return finish(errors.New(obs.Status))
+			}
+			current, err = cfg.privateFreshRunner()
+			if err != nil {
+				obs.Status = "RUNTIME_CREATION_FAILED"
+				return finish(err)
+			}
+			if current.manager == nil || seenManagers[current.manager] {
+				obs.Status = "FRESH_RUNTIME_IDENTITY_REFUSED"
+				return finish(errors.New(obs.Status))
+			}
+			seenManagers[current.manager] = true
+			join = func() error {
+				cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				return current.manager.Shutdown(cleanup)
+			}
+		}
+		current.parent = ctx
+		current.shutdownManagedByCaller = true
+		current.observeStart = func(s sessionruntime.StartResult) {
+			obs.Session = censusacquisition.SessionIdentity{SessionID: s.SessionID, Generation: s.Generation}
+		}
+		current.observeStop = func(s session.LifecycleResult) {
+			obs.StopCalls++
+			obs.StopFailure = string(s.Failure)
+			obs.StopIntentID = s.IntentID
+		}
+		var pipelineErr, joinErr error
+		current.joinAfterStop = func() {
+			obs.ShutdownCalls++
+			joinErr = join()
+		}
+		obs.SessionCode = deps.runSession(current, func(live context.Context, runtime *initializedAcquisitionRuntime) int {
+			if runtime == nil || runtime.manager != current.manager || runtime.SessionID() != obs.Session.SessionID || runtime.Generation() != obs.Session.Generation {
+				obs.Status = "FOREIGN_RUNTIME_REFUSED"
+				pipelineErr = errors.New(obs.Status)
 				return 1
 			}
-			obs := &r.Origins[ordinal]
 			frozen := frozenScopes[ordinal]
 			obs.Status = "DISCOVERY_ATTEMPTED"
 			for _, i := range indices {
@@ -394,12 +523,12 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			var e error
 			var origin pilot.EnumerationOriginPrivateV2
 			var captures []pilot.OpaqueSuccessfulV2Capture
-			e = runtime.manager.WithReadySessionLease(live, sessionruntime.SessionLeaseRequest{SessionID: r.Session.SessionID, Generation: r.Session.Generation, Workspace: o.Workspace}, func(leased context.Context) error {
+			e = runtime.manager.WithReadySessionLease(live, sessionruntime.SessionLeaseRequest{SessionID: obs.Session.SessionID, Generation: obs.Session.Generation, Workspace: o.Workspace}, func(leased context.Context) error {
 				bounded, stop := context.WithDeadline(leased, mustCensusInventoryDeadlinePrivate(ctx))
 				defer stop()
 				var discovery pilot.ScopeDiscoveryReportPrivateV2
 				var de error
-				origin, discovery, de = pilot.DiscoverScopePrivateV2(bounded, frozen, runtime.manager, r.Session)
+				origin, discovery, de = pilot.DiscoverScopePrivateV2(bounded, frozen, runtime.manager, obs.Session)
 				obs.Discovery = discovery.Bytes()
 				if de != nil {
 					return de
@@ -433,7 +562,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 					for _, i := range indices {
 						r.Files[i].Disposition = obs.Status
 					}
-					continue
+					return 0
 				}
 				for _, i := range indices {
 					r.Files[i].Disposition = obs.Status
@@ -443,11 +572,13 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			}
 			pair, e := openPair(fmt.Sprintf("producer-%d", ordinal))
 			if e != nil {
+				obs.Status = "PRODUCER_RETENTION_ROOT_FAILED"
 				pipelineErr = e
 				return 1
 			}
 			roots, e := pilot.NewProducerPacketRootsPrivateV2(ctx, pair, source, nil)
 			if e != nil {
+				obs.Status = "PRODUCER_RETENTION_ROOT_FAILED"
 				pipelineErr = e
 				return 1
 			}
@@ -460,27 +591,32 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			}
 			qualified, e := pilot.QualifyProducerPacketPrivateV2(ctx, retained.VerifiedPair())
 			if e != nil {
+				obs.Status = "PRODUCER_QUALIFICATION_FAILED"
 				pipelineErr = e
 				return 1
 			}
 			proof, e := pilot.DeriveProducerPacketPrivateV2(ctx, qualified)
 			if e != nil {
+				obs.Status = "PRODUCER_DERIVATION_FAILED"
 				pipelineErr = e
 				return 1
 			}
 			view, e := pilot.ReadDerivedProducerPacketPrivateV2(ctx, proof)
 			if e != nil {
+				obs.Status = "PRODUCER_DERIVATION_FAILED"
 				pipelineErr = e
 				return 1
 			}
 			for i := range view.Batches {
 				projection, f := derived.ProjectPrivateV2(ctx, proof, i)
 				if f != nil {
+					obs.Status = "PROGRAM_C_PROJECTION_FAILED"
 					pipelineErr = f
 					return 1
 				}
 				assessment, _, e := derived.InstabilityComputePrivateV2(ctx, projection, c.Seeds)
 				if e != nil {
+					obs.Status = "INSTABILITY_FAILED"
 					pipelineErr = e
 					return 1
 				}
@@ -501,22 +637,50 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			for _, i := range indices {
 				r.Files[i].Disposition = obs.Status
 			}
+			return 0
+		})
+		if obs.ShutdownCalls == 0 { // Startup failed before the runner's stop defer.
+			obs.ShutdownCalls++
+			joinErr = join()
 		}
-		return 0
-	})
-	r.ShutdownCalls++
-	joinErr := shutdown()
-	r.ShutdownJoined = joinErr == nil
-	terminal, found := cfg.runner.manager.Operation(r.StopIntentID)
-	cleanup, observed := terminal.CleanupObservationPrivateV2()
-	r.CleanupVerified = found && terminal.State == sessionruntime.OperationComplete && terminal.Failure == "" && terminal.SessionID == r.Session.SessionID && terminal.Generation == r.Session.Generation && observed && cleanup.ResourceClose == managedprocess.ResourcesClosed && cleanup.Reap == managedprocess.ReapComplete && (cleanup.Death == managedprocess.DeathExited || cleanup.Death == managedprocess.DeathSignaled) && (cleanup.RetiredTransportReused || (cleanup.ShutdownWrite == sessionruntime.CleanupSucceededPrivateV2 && cleanup.ShutdownRead == sessionruntime.ShutdownMatchedPrivateV2 && (cleanup.ExitWrite == sessionruntime.CleanupSucceededPrivateV2 || cleanup.Death == managedprocess.DeathExited)))
-	if r.SessionCode != 0 || pipelineErr != nil || r.StopCalls != 1 || r.StopFailure != "" || !r.ShutdownJoined || !r.CleanupVerified {
-		r.Failure = "ACQUISITION_OR_CLEANUP_FAILED"
-		return finish(errors.Join(pipelineErr, errors.New(r.Failure)))
+		obs.ShutdownJoined = joinErr == nil
+		terminal, found := current.manager.Operation(obs.StopIntentID)
+		cleanup, observed := terminal.CleanupObservationPrivateV2()
+		if observed {
+			obs.Cleanup = &cleanup
+		}
+		obs.CleanupVerified = found && terminal.State == sessionruntime.OperationComplete && terminal.Failure == "" && terminal.SessionID == obs.Session.SessionID && terminal.Generation == obs.Session.Generation && observed && cleanup.ResourceClose == managedprocess.ResourcesClosed && cleanup.Reap == managedprocess.ReapComplete && (cleanup.Death == managedprocess.DeathExited || cleanup.Death == managedprocess.DeathSignaled) && (cleanup.RetiredTransportReused || (cleanup.ShutdownWrite == sessionruntime.CleanupSucceededPrivateV2 && cleanup.ShutdownRead == sessionruntime.ShutdownMatchedPrivateV2 && (cleanup.ExitWrite == sessionruntime.CleanupSucceededPrivateV2 || cleanup.Death == managedprocess.DeathExited)))
+		// Legacy singleton fields remain an aggregate convenience view. Origins
+		// are authoritative for identity and per-owner terminal observations.
+		r.Session, r.SessionCode = obs.Session, obs.SessionCode
+		r.StopCalls += obs.StopCalls
+		r.StopFailure, r.StopIntentID = obs.StopFailure, obs.StopIntentID
+		r.ShutdownCalls += obs.ShutdownCalls
+		r.ShutdownJoined = obs.ShutdownJoined && (ordinal == 0 || r.ShutdownJoined)
+		r.CleanupVerified = obs.CleanupVerified && (ordinal == 0 || r.CleanupVerified)
+		if obs.SessionCode != 0 || pipelineErr != nil || obs.StopCalls != 1 || obs.StopFailure != "" || !obs.ShutdownJoined || !obs.CleanupVerified {
+			if obs.Status == "FROZEN" {
+				obs.Status = "STARTUP_OR_READINESS_FAILED"
+			}
+			for _, i := range indices {
+				r.Files[i].Disposition = obs.Status
+			}
+			r.Failure = "ACQUISITION_OR_CLEANUP_FAILED"
+			return finish(errors.Join(pipelineErr, joinErr, errors.New(r.Failure)))
+		}
 	}
 	if len(inputs) == 0 {
 		r.Status = "NO_PREPARABLE_TARGETS"
 		return finish(nil)
+	}
+	if c.Automation != nil {
+		if e := revalidateCensusInventoryDisclosurePrivate(ctx, o, c, r.Files, groups, manifests, deps.enumerate); e != nil {
+			r.Failure = "SOURCE_SCOPE_OR_APPROVAL_DRIFT"
+			if ctx.Err() != nil {
+				r.Failure = "OPERATION_DEADLINE"
+			}
+			return finish(e)
+		}
 	}
 	prepared, e := prep.PreparePrivateV2(ctx, inputs, c.Preparation)
 	if e != nil {
@@ -628,6 +792,55 @@ func censusInventoryRelatedPathsPrivate(a, b string) (related bool) {
 	}
 	defer func() { err := y.Close(); related = related || err != nil }()
 	return publication.CheckSourceProtectionSeparationPrivateV2(ctx, x, y) != nil
+}
+
+// Read-only equality validation, not another acquisition attempt. Fresh frozen
+// observations are compared to the original approved manifests and discarded;
+// they never replace an owner, become a delivery input, or change approval.
+// All work uses the original invocation context and existing finite bounds.
+func revalidateCensusInventoryDisclosurePrivate(ctx context.Context, o censusCLIOptions, c censusInventoryConfigPrivate, rows []censusInventoryFilePrivate, groups [][]int, manifests []json.RawMessage, enumerate func(context.Context, censusCLIOptions) ([]censusacquisition.SourceFile, error)) error {
+	current, err := loadCensusInventoryConfigContextPrivate(ctx, o.PrivateInventoryConfigPath)
+	if err != nil {
+		return err
+	}
+	before, _ := json.Marshal(c)
+	after, _ := json.Marshal(current)
+	if !bytes.Equal(before, after) {
+		return errors.New("private inventory configuration drift")
+	}
+	files, err := enumerate(ctx, o)
+	if err != nil {
+		return err
+	}
+	fresh, partitions := censusInventoryPlanPrivate(o, c, files)
+	if len(fresh) != len(rows) || len(partitions) != len(groups) {
+		return errors.New("private inventory denominator drift")
+	}
+	for i := range fresh {
+		if fresh[i].File != rows[i].File {
+			return errors.New("private inventory file metadata drift")
+		}
+	}
+	for ordinal, indices := range partitions {
+		if len(indices) != len(groups[ordinal]) {
+			return errors.New("private inventory partition drift")
+		}
+		subset := make([]censusacquisition.SourceFile, len(indices))
+		for j, index := range indices {
+			if index != groups[ordinal][j] {
+				return errors.New("private inventory partition drift")
+			}
+			subset[j] = fresh[index].File
+		}
+		observed, err := pilot.FreezeCensusScopePrivateV2(ctx, o.Workspace, c.RevisionAssertion, subset, c.Policy)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(observed.ManifestBytes(), manifests[ordinal]) {
+			return errors.New("private inventory frozen source drift")
+		}
+	}
+	return ctx.Err()
 }
 
 func mustCensusInventoryDeadlinePrivate(ctx context.Context) time.Time {

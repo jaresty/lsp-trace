@@ -333,6 +333,7 @@ func (r *initializedAcquisitionRuntime) Execute(ctx context.Context, request ope
 }
 
 type initializedAcquisitionRunnerConfig struct {
+	parent                       context.Context // nil preserves ordinary acquisition lifetime
 	manager                      *sessionruntime.Manager
 	privateEnumerationProjection bool
 	start                        sessionruntime.StartRequest
@@ -344,7 +345,8 @@ type initializedAcquisitionRunnerConfig struct {
 	stderr                       io.Writer
 	observeStart                 func(sessionruntime.StartResult)
 	observeStop                  func(session.LifecycleResult)
-	shutdownManagedByCaller      bool // private Census inventory owns the one join
+	shutdownManagedByCaller      bool   // private Census inventory owns the one join
+	joinAfterStop                func() // private join before startup context cancellation
 	providerProbe                *privateProviderProbe
 }
 
@@ -361,7 +363,11 @@ func (cfg initializedAcquisitionRunnerConfig) effectiveReadinessTimeout() time.D
 
 func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, callback func(context.Context, initializedAcquisitionSession) int) int {
 	fail := func(err error) int { fmt.Fprintln(cfg.stderr, err); return 1 }
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	parent := cfg.parent
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	ctx, deadlineCancel := context.WithTimeout(ctx, cfg.timeout)
 	defer deadlineCancel()
@@ -390,6 +396,9 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 		}
 		if stopped.Failure != "" {
 			fmt.Fprintln(cfg.stderr, "managed cleanup:", stopped.Failure)
+		}
+		if cfg.shutdownManagedByCaller && cfg.joinAfterStop != nil {
+			cfg.joinAfterStop()
 		}
 		if !cfg.shutdownManagedByCaller {
 			if err := cfg.manager.Shutdown(cleanup); err != nil {

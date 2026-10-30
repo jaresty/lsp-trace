@@ -36,6 +36,7 @@ type inventoryPipePrivate struct {
 	done          chan struct{}
 	queries       atomic.Int32
 	failCalls     atomic.Bool
+	shutdownDelay time.Duration // owned lifecycle counterfactual only
 }
 
 func (c *inventoryPipePrivate) Stdin() io.WriteCloser { return c.input }
@@ -70,6 +71,7 @@ func (c *inventoryPipePrivate) serve() {
 		case "initialize":
 			value = map[string]any{"capabilities": map[string]any{"positionEncoding": "utf-16", "documentSymbolProvider": true, "callHierarchyProvider": true}}
 		case "shutdown":
+			time.Sleep(c.shutdownDelay)
 			value = nil
 		case "callHierarchy/incomingCalls":
 			if c.failCalls.Load() {
