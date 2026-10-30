@@ -6,14 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 	"unicode/utf8"
 
 	pilot "lsp-trace/internal/censuslineagepilot"
@@ -621,115 +617,4 @@ func TestAutomaticResourceEnvelope(t *testing.T) {
 		}
 		t.Log("ASSERT_AUTO_HUMAN_BUDGET: PASS")
 	})
-	t.Run("wire", func(t *testing.T) {
-		calls := 0
-		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			calls++
-			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"[]"},"finish_reason":"stop"}]}`))
-		}))
-		defer srv.Close()
-		c := AutomaticHTTPConfigPrivateV2{Enabled: true, Endpoint: srv.URL, InterpreterModel: "owned-i", ReviewerModel: "owned-v", ScopeSHA256: pilot.Digest([]byte("owned scope")), TimeoutMS: 1000, Limits: automaticTestLimits()}
-		c.ApprovalSHA256 = AutomaticHTTPApprovalPrivateV2(c)
-		i, _, e := NewAutomaticHTTPPrivateV2(c, c.ScopeSHA256, nil)
-		if e != nil {
-			t.Fatal(e)
-		}
-		backend := i.(*automaticHTTPBackend)
-		backend.client.Transport.(*http.Transport).TLSClientConfig = srv.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
-		req := AutomaticRequestPrivateV2{Protocol: AutomaticProtocolPrivateV2, Stage: "NAVIGATE"}
-		l := automaticTestLimits()
-		l.MaxRequestBytes = 1024
-		b := automaticBudget{limits: l}
-		_, e = b.call(context.Background(), backend, req)
-		if e == nil || calls != 0 {
-			t.Fatal("ASSERT_AUTO_WIRE_BUDGET: FAIL")
-		}
-		n, _ := backend.wireSize(req, l.MaxResponseBytes)
-		l = automaticTestLimits()
-		l.MaxTotalBytes = n + 10
-		b = automaticBudget{limits: l}
-		_, e = b.call(context.Background(), backend, req)
-		if e == nil || calls != 1 || b.bytes > l.MaxTotalBytes {
-			t.Fatal("ASSERT_AUTO_WIRE_BUDGET: FAIL")
-		}
-		t.Log("ASSERT_AUTO_WIRE_BUDGET: PASS")
-	})
-}
-
-type automaticTestRoundTrip func(*http.Request) (*http.Response, error)
-
-func (f automaticTestRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-type automaticTestBrokenBody struct{}
-
-func (automaticTestBrokenBody) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
-func (automaticTestBrokenBody) Close() error             { return nil }
-func TestAutomaticHTTPReadFailure(t *testing.T) {
-	b := &automaticHTTPBackend{endpoint: "https://owned.invalid", model: "owned", timeout: time.Second, requestCap: 1 << 20, tokens: 256, client: &http.Client{Transport: automaticTestRoundTrip(func(r *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: automaticTestBrokenBody{}, Request: r}, nil
-	})}}
-	_, e := b.Exchange(context.Background(), AutomaticRequestPrivateV2{Protocol: AutomaticProtocolPrivateV2, Stage: "NAVIGATE"}, 1024)
-	if e == nil || automaticClass(e) != "UNAVAILABLE" {
-		t.Fatal("ASSERT_AUTO_HTTP_READ_CLASS: FAIL", e)
-	}
-	t.Log("ASSERT_AUTO_HTTP_READ_CLASS: PASS")
-}
-func TestAutomaticHTTPBinding(t *testing.T) {
-	calls := 0
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		if r.Header.Get("Authorization") != "Bearer owned-token" {
-			t.Error("credential binding")
-		}
-		b, _ := io.ReadAll(r.Body)
-		if !bytes.Contains(b, []byte("untrusted DATA")) {
-			t.Error("instruction separation")
-		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"[]"},"finish_reason":"stop"}]}`))
-	}))
-	defer srv.Close()
-	c := AutomaticHTTPConfigPrivateV2{Enabled: true, Endpoint: srv.URL, InterpreterModel: "owned-interpreter", ReviewerModel: "owned-reviewer", APIKeyEnvironment: "OWNED_KEY", ScopeSHA256: pilot.Digest([]byte("scope")), TimeoutMS: 1000, Limits: automaticTestLimits()}
-	c.ApprovalSHA256 = AutomaticHTTPApprovalPrivateV2(c)
-	for _, bad := range []string{"disabled", "digest", "scope", "same-model", "http", "redirect"} {
-		x := c
-		switch bad {
-		case "disabled":
-			x.Enabled = false
-			x.ApprovalSHA256 = AutomaticHTTPApprovalPrivateV2(x)
-		case "digest":
-			x.ApprovalSHA256 = "bad"
-		case "scope":
-			x.ScopeSHA256 = "bad"
-		case "same-model":
-			x.ReviewerModel = x.InterpreterModel
-			x.ApprovalSHA256 = AutomaticHTTPApprovalPrivateV2(x)
-		case "http":
-			x.Endpoint = "http://example.com"
-		case "redirect":
-			x.Endpoint += "?redirect=bad"
-		}
-		reads := 0
-		_, _, e := NewAutomaticHTTPPrivateV2(x, c.ScopeSHA256, func(string) string { reads++; return "owned-token" })
-		if e == nil || reads != 0 {
-			t.Fatal("ASSERT_AUTO_REAL_GATE: FAIL", bad)
-		}
-	}
-	i, _, e := NewAutomaticHTTPPrivateV2(c, c.ScopeSHA256, func(string) string { return "owned-token" })
-	if e != nil {
-		t.Fatal(e)
-	}
-	backend := i.(*automaticHTTPBackend)
-	backend.client.Transport.(*http.Transport).TLSClientConfig = srv.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
-	raw, e := backend.Exchange(context.Background(), AutomaticRequestPrivateV2{Protocol: AutomaticProtocolPrivateV2, Stage: "NAVIGATE"}, 1024)
-	if e != nil || string(raw) != "[]" || calls != 1 {
-		t.Fatal("ASSERT_AUTO_HTTP: FAIL", e, calls)
-	}
-	t.Log("ASSERT_AUTO_HTTP: PASS")
-	t.Log("ASSERT_AUTO_REAL_GATE: PASS")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
-	defer cancel()
-	_, e = backend.Exchange(ctx, AutomaticRequestPrivateV2{}, 1024)
-	if e == nil {
-		t.Fatal("cancelled HTTP succeeded")
-	}
 }

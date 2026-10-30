@@ -46,17 +46,21 @@ func variableAutomaticConfig(t *testing.T, n int) (variableCallerConfig, string,
 	if e != nil {
 		t.Fatal(e)
 	}
-	c.Schema = "private-variable-scope-v2-caller.v3"
+	c.Schema = "private-variable-scope-v2-caller.v4"
 	c.Purpose = "PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL"
-	cfg := prep.AutomaticHTTPConfigPrivateV2{Enabled: true, Endpoint: "https://owned.invalid/v1/chat/completions", InterpreterModel: "owned-interpreter", ReviewerModel: "owned-reviewer", ScopeSHA256: pilot.Digest(frozen.SpecBytes()), TimeoutMS: 1000, Limits: prep.AutomaticLimitsPrivateV2{MaxCorrections: 1, MaxCalls: 32, MaxRequestBytes: 8 << 20, MaxResponseBytes: 64 << 10, MaxTotalBytes: 32 << 20, MaxOutputBytes: 8 << 20}}
-	cfg.ApprovalSHA256 = prep.AutomaticHTTPApprovalPrivateV2(cfg)
+	mailbox := filepath.Join(filepath.Dir(c.OperationDirectory), "mailbox")
+	if e := os.Mkdir(mailbox, 0700); e != nil {
+		t.Fatal(e)
+	}
+	cfg := prep.AutomaticHandoffConfigPrivateV2{Enabled: true, Directory: mailbox, Invocation: "owned-invocation", InterpreterRole: "host/interpreter/session-a", ReviewerRole: "host/reviewer/session-b", ScopeSHA256: pilot.Digest(frozen.SpecBytes()), TimeoutMS: 1000, OverallTimeoutMS: 10000, PollMS: 5, Limits: prep.AutomaticLimitsPrivateV2{MaxCorrections: 1, MaxCalls: 32, MaxRequestBytes: 8 << 20, MaxResponseBytes: 64 << 10, MaxTotalBytes: 32 << 20, MaxOutputBytes: 8 << 20}}
+	cfg.ApprovalSHA256 = prep.AutomaticHandoffApprovalPrivateV2(cfg)
 	c.Automation = &cfg
 	variableSave(t, path, c)
 	return c, path, git
 }
 func variableAutomaticOwnedFactory(t *testing.T, afterCleanup func(), kind string) variableAutomaticFactory {
 	t.Helper()
-	return func(prep.AutomaticHTTPConfigPrivateV2, string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
+	return func(prep.AutomaticHandoffConfigPrivateV2, string, prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
 		afterCleanup()
 		i := variableAutomaticOwnedBackend{"interpreter", func(r prep.AutomaticRequestPrivateV2) ([]byte, error) {
 			afterCleanup()
@@ -195,7 +199,7 @@ func TestVariableCallerAutomaticUnavailable(t *testing.T) {
 func TestVariableCallerAutomaticBindingUnavailable(t *testing.T) {
 	_, path, git := variableAutomaticConfig(t, 2)
 	factory, _, _, _ := variableOwnedFactory(t, "")
-	r, e := variableRunWithAutomatic(context.Background(), "execute-once", path, git, factory, variableClose, variableOwnedCodeInputs, func(prep.AutomaticHTTPConfigPrivateV2, string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
+	r, e := variableRunWithAutomatic(context.Background(), "execute-once", path, git, factory, variableClose, variableOwnedCodeInputs, func(prep.AutomaticHandoffConfigPrivateV2, string, prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
 		return nil, nil, prep.AutomaticBackendErrorPrivateV2{Class: "UNAVAILABLE"}
 	})
 	if e == nil || r.Inventory == nil || len(r.Inventory.Rows) != 2 || r.Phase != "FAILED_SPENT" {
@@ -227,14 +231,14 @@ func TestVariableCallerAutomaticApprovalBeforeClaim(t *testing.T) {
 				c.Automation.Enabled = false
 			case "scope":
 				c.Automation.ScopeSHA256 = pilot.Digest([]byte("foreign"))
-				c.Automation.ApprovalSHA256 = prep.AutomaticHTTPApprovalPrivateV2(*c.Automation)
+				c.Automation.ApprovalSHA256 = prep.AutomaticHandoffApprovalPrivateV2(*c.Automation)
 			case "digest":
 				c.Automation.ApprovalSHA256 = "foreign"
 			}
 			variableSave(t, path, c)
 			factory, starts, _, _ := variableOwnedFactory(t, "")
 			calls := 0
-			r, e := variableRunWithAutomatic(context.Background(), "execute-once", path, git, factory, variableClose, variableOwnedCodeInputs, func(prep.AutomaticHTTPConfigPrivateV2, string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
+			r, e := variableRunWithAutomatic(context.Background(), "execute-once", path, git, factory, variableClose, variableOwnedCodeInputs, func(prep.AutomaticHandoffConfigPrivateV2, string, prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
 				calls++
 				return nil, nil, nil
 			})

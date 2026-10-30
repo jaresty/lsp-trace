@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -38,31 +39,31 @@ const variableCallerConfigCap = 64 << 10
 const variableCallerReportCap = 1 << 20
 
 type variableCallerConfig struct {
-	Schema                    string                             `json:"schema"`
-	Purpose                   string                             `json:"purpose"`
-	CodeRoot                  string                             `json:"code_root"`
-	CodeHEAD                  string                             `json:"code_head"`
-	Scope                     pilot.ScopeSpecPrivateV2           `json:"scope"`
-	Session                   censusacquisition.SessionIdentity  `json:"session"`
-	Selector                  runtimeprofile.Selector            `json:"selector"`
-	Server                    string                             `json:"server"`
-	ServerSHA256              string                             `json:"server_sha256"`
-	Args                      []string                           `json:"args"`
-	Environment               []string                           `json:"environment"`
-	PrepLimits                prep.Limits                        `json:"prep_limits"`
-	PostLimits                prep.PostPreparationLimits         `json:"post_limits"`
-	Seeds                     []uint64                           `json:"seeds"`
-	OperationTimeoutMS        int                                `json:"operation_timeout_ms"`
-	ReadinessTimeoutMS        int                                `json:"readiness_timeout_ms"`
-	ShutdownTimeoutMS         int                                `json:"shutdown_timeout_ms"`
-	ShutdownResponseTimeoutMS int                                `json:"shutdown_response_timeout_ms"`
-	OperationDirectory        string                             `json:"operation_directory"`
-	ProducerOutputs           [2]string                          `json:"producer_outputs"`
-	PostOutputs               [2]string                          `json:"post_outputs"`
-	ProtectedRoots            []string                           `json:"protected_roots"`
-	AttemptMarkerPath         string                             `json:"attempt_marker_path"`
-	ReportPath                string                             `json:"report_path"`
-	Automation                *prep.AutomaticHTTPConfigPrivateV2 `json:"automation,omitempty"`
+	Schema                    string                                `json:"schema"`
+	Purpose                   string                                `json:"purpose"`
+	CodeRoot                  string                                `json:"code_root"`
+	CodeHEAD                  string                                `json:"code_head"`
+	Scope                     pilot.ScopeSpecPrivateV2              `json:"scope"`
+	Session                   censusacquisition.SessionIdentity     `json:"session"`
+	Selector                  runtimeprofile.Selector               `json:"selector"`
+	Server                    string                                `json:"server"`
+	ServerSHA256              string                                `json:"server_sha256"`
+	Args                      []string                              `json:"args"`
+	Environment               []string                              `json:"environment"`
+	PrepLimits                prep.Limits                           `json:"prep_limits"`
+	PostLimits                prep.PostPreparationLimits            `json:"post_limits"`
+	Seeds                     []uint64                              `json:"seeds"`
+	OperationTimeoutMS        int                                   `json:"operation_timeout_ms"`
+	ReadinessTimeoutMS        int                                   `json:"readiness_timeout_ms"`
+	ShutdownTimeoutMS         int                                   `json:"shutdown_timeout_ms"`
+	ShutdownResponseTimeoutMS int                                   `json:"shutdown_response_timeout_ms"`
+	OperationDirectory        string                                `json:"operation_directory"`
+	ProducerOutputs           [2]string                             `json:"producer_outputs"`
+	PostOutputs               [2]string                             `json:"post_outputs"`
+	ProtectedRoots            []string                              `json:"protected_roots"`
+	AttemptMarkerPath         string                                `json:"attempt_marker_path"`
+	ReportPath                string                                `json:"report_path"`
+	Automation                *prep.AutomaticHandoffConfigPrivateV2 `json:"automation,omitempty"`
 }
 
 type variableCallerReport struct {
@@ -284,12 +285,15 @@ func variablePositiveFields(v any, ceilings any) bool {
 	return true
 }
 func variableValidate(c variableCallerConfig) error {
+	if c.Schema == "private-variable-scope-v2-caller.v3" {
+		return errors.New("retired HTTP v3: no migration or fallback")
+	}
 	automatic := c.Automation != nil
 	if automatic {
-		if c.Schema != "private-variable-scope-v2-caller.v3" || c.Purpose != "PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL" {
+		if c.Schema != "private-variable-scope-v2-caller.v4" || c.Purpose != "PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL" {
 			return errors.New("automatic private purpose/schema required")
 		}
-		if e := prep.ValidateAutomaticHTTPPrivateV2(*c.Automation); e != nil {
+		if e := prep.ValidateAutomaticHandoffPrivateV2(*c.Automation); e != nil {
 			return e
 		}
 	}
@@ -434,6 +438,7 @@ type variablePreflight struct {
 	raw           []byte
 	info          os.FileInfo
 	operationInfo os.FileInfo
+	mailboxInfo   os.FileInfo
 	report        variableCallerReport
 	codeVerifier  variableCodeVerifier
 }
@@ -508,6 +513,12 @@ func variablePreflightWithCode(ctx context.Context, path string, git variableGit
 	paths := append([]string{c.Scope.Root, c.OperationDirectory}, c.ProducerOutputs[:]...)
 	paths = append(paths, c.PostOutputs[:]...)
 	paths = append(paths, c.ProtectedRoots...)
+	if c.Automation != nil {
+		if e := prep.CheckAutomaticHandoffDirectoryPrivateV2(c.Automation.Directory); e != nil {
+			return p, e
+		}
+		paths = append(paths, c.Automation.Directory)
+	}
 	infos := make([]os.FileInfo, len(paths))
 	for i, r := range paths {
 		if err = variableCanonical(r); err != nil {
@@ -560,6 +571,9 @@ func variablePreflightWithCode(ctx context.Context, path string, git variableGit
 		}
 	}
 	p.operationInfo = infos[1]
+	if c.Automation != nil {
+		p.mailboxInfo = infos[len(infos)-1]
+	}
 	for _, target := range []string{c.AttemptMarkerPath, c.ReportPath} {
 		if filepath.Dir(target) != c.OperationDirectory || filepath.Clean(target) != target || target == path || target == c.Server || filepath.Base(target) == "." || filepath.Base(target) == ".." || len(target) > 4096 {
 			err = errors.New("single direct child marker/report required")
@@ -720,19 +734,26 @@ func variableTerminalCleanup(o variableCleanupObservation) error {
 	return nil
 }
 
-func variableRun(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error) (variableCallerReport, error) {
-	return variableRunWithCode(ctx, mode, path, git, factory, closeFile, variableVerifyCodeInputs)
+// Only the real host entry and its owned worker fixture use this entry. The
+// expected digest is supplied by the supervisor, never recovered from config.
+func variableHostRunWithCode(ctx context.Context, mode, path, expectedConfigSHA256 string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier) (variableCallerReport, error) {
+	return variableRunWithAutomaticPinned(ctx, mode, path, git, factory, closeFile, verify, variableRealAutomatic, &expectedConfigSHA256)
 }
 
-type variableAutomaticFactory func(prep.AutomaticHTTPConfigPrivateV2, string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error)
+type variableAutomaticFactory func(prep.AutomaticHandoffConfigPrivateV2, string, prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error)
 
-func variableRealAutomatic(c prep.AutomaticHTTPConfigPrivateV2, scope string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
-	return prep.NewAutomaticHTTPPrivateV2(c, scope, os.Getenv)
+func variableRealAutomatic(c prep.AutomaticHandoffConfigPrivateV2, scope string, h prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
+	return prep.NewAutomaticHandoffPrivateV2(c, scope, h)
 }
 func variableRunWithCode(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier) (variableCallerReport, error) {
 	return variableRunWithAutomatic(ctx, mode, path, git, factory, closeFile, verify, variableRealAutomatic)
 }
-func variableRunWithAutomatic(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier, automatic variableAutomaticFactory) (report variableCallerReport, err error) {
+
+// Unpinned dependency seam is for owned orchestration tests, not host dispatch.
+func variableRunWithAutomatic(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier, automatic variableAutomaticFactory) (variableCallerReport, error) {
+	return variableRunWithAutomaticPinned(ctx, mode, path, git, factory, closeFile, verify, automatic, nil)
+}
+func variableRunWithAutomaticPinned(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier, automatic variableAutomaticFactory, expectedConfigSHA256 *string) (report variableCallerReport, err error) {
 	if mode != "preflight" && mode != "execute-once" {
 		return report, errors.New("explicit private caller mode required")
 	}
@@ -742,6 +763,16 @@ func variableRunWithAutomatic(ctx context.Context, mode, path string, git variab
 	p, e := variablePreflightWithCode(ctx, path, git, verify)
 	if e != nil {
 		return p.report, e
+	}
+	// p.raw is the exact byte slice parsed into p.cfg and used below. Check
+	// before any claim/start, without rereading a path to compute the expectation.
+	// A supplied nonempty trusted pin applies regardless of consumed schema;
+	// only the missing-pin requirement is v4-specific. Legacy v2 without a pin
+	// and the existing unpinned dependency-injected seam remain unchanged.
+	if mode == "execute-once" && expectedConfigSHA256 != nil && (*expectedConfigSHA256 != "" || p.cfg.Schema == "private-variable-scope-v2-caller.v4") {
+		if *expectedConfigSHA256 == "" || *expectedConfigSHA256 != pilot.Digest(p.raw) {
+			return p.report, errors.New("supervisor config pin mismatch or missing")
+		}
 	}
 	report = p.report
 	report.Config = bytes.Clone(p.raw)
@@ -788,6 +819,15 @@ func variableRunWithAutomatic(ctx context.Context, mode, path string, git variab
 	}
 	if _, e = root.Lstat(filepath.Base(c.ReportPath)); !errors.Is(e, os.ErrNotExist) {
 		return report, errors.New("report no longer absent")
+	}
+	if c.Automation != nil {
+		if e := prep.CheckAutomaticHandoffDirectoryPrivateV2(c.Automation.Directory); e != nil {
+			return report, e
+		}
+		info, e := os.Lstat(c.Automation.Directory)
+		if e != nil || !os.SameFile(info, p.mailboxInfo) {
+			return report, errors.New("handoff mailbox changed before claim")
+		}
 	}
 	currentCode, e := p.codeVerifier(ctx, c.CodeRoot, c.CodeHEAD)
 	if e != nil || currentCode != report.CodeInputs {
@@ -1088,16 +1128,27 @@ func variableRunWithAutomatic(ctx context.Context, mode, path string, git variab
 	report.PreparationBytes = len(preparedRaw)
 	report.PreparationSHA256 = pilot.Digest(preparedRaw)
 	if c.Automation != nil {
+		info, mailboxErr := os.Lstat(c.Automation.Directory)
+		if mailboxErr != nil || !os.SameFile(info, p.mailboxInfo) {
+			err = errors.New("handoff mailbox changed after claim")
+			return
+		}
 		var interpreter, reviewer prep.AutomaticBackendPrivateV2
 		if automatic != nil {
 			var bindingErr error
-			interpreter, reviewer, bindingErr = automatic(*c.Automation, report.ScopeSHA256)
+			interpreter, reviewer, bindingErr = automatic(*c.Automation, report.ScopeSHA256, h)
 			if bindingErr != nil {
 				interpreter = nil
 				reviewer = nil
 				report.Errors = append(report.Errors, "AUTOMATIC_BINDING_UNAVAILABLE")
 			}
 		}
+		if bounded, ok := interpreter.(interface{ DeadlinePrivateV2() time.Time }); ok {
+			var cancelAutomatic context.CancelFunc
+			ctx, cancelAutomatic = context.WithDeadline(ctx, bounded.DeadlinePrivateV2())
+			defer cancelAutomatic()
+		}
+		defer func() { err = errors.Join(err, prep.FinishAutomaticHandoffPrivateV2(interpreter, report.Outcome, err)) }()
 		result, e := prep.AutomatePrivateV2(ctx, h, c.Automation.Limits, interpreter, reviewer)
 		inventory := result.Inventory()
 		report.Inventory = &inventory
@@ -1160,7 +1211,9 @@ func TestPrivateVariableScopeRealV2(t *testing.T) {
 	}
 	// LocalDarwinSupervisor is the existing supported real-process backend. Do not
 	// claim Linux real-provider support merely because owned tests compile there.
-	report, e := variableRun(context.Background(), mode, path, variableGit, variableRealManager, func(f *os.File) error { return f.Close() })
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	report, e := variableHostRunWithCode(ctx, mode, path, os.Getenv("LSP_TRACE_PRIVATE_V2_CALLER_CONFIG_SHA256"), variableGit, variableRealManager, func(f *os.File) error { return f.Close() }, variableVerifyCodeInputs)
 	b, me := json.Marshal(report)
 	if me != nil {
 		t.Fatal(me)

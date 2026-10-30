@@ -66,7 +66,7 @@ type NavigationPrivateV2 struct {
 	Rationale, WithdrawalCondition string
 }
 
-// One typed protocol used by both owned fixtures and the approved HTTP binding.
+// One typed protocol used by owned fixtures and the private local host handoff.
 // Bodies are own-target AST, not FULL_DEFINITION, MethodResult or native custody.
 type AutomaticRequestPrivateV2 struct {
 	Protocol, Stage, PreparationSHA256, InputSHA256, Target, PredecessorDigest string
@@ -182,9 +182,13 @@ func automaticClass(e error) string {
 type automaticBudget struct {
 	limits       AutomaticLimitsPrivateV2
 	calls, bytes int
+	terminal     error
 }
 
 func (b *automaticBudget) call(ctx context.Context, backend AutomaticBackendPrivateV2, req AutomaticRequestPrivateV2) ([]byte, error) {
+	if b.terminal != nil {
+		return nil, b.terminal
+	}
 	if e := ctx.Err(); e != nil {
 		return nil, e
 	}
@@ -218,6 +222,10 @@ func (b *automaticBudget) call(ctx context.Context, backend AutomaticBackendPriv
 	b.calls++
 	b.bytes += requestBytes
 	response, e := backend.Exchange(ctx, postClone(req), responseLimit)
+	var terminal interface{ TerminalHandoffFailure() }
+	if errors.As(e, &terminal) {
+		b.terminal = e
+	}
 	responseBytes := len(response)
 	if wire, ok := backend.(interface{ wireResponseBytes() int }); ok {
 		responseBytes = wire.wireResponseBytes()
@@ -226,7 +234,7 @@ func (b *automaticBudget) call(ctx context.Context, backend AutomaticBackendPriv
 		return nil, AutomaticBackendErrorPrivateV2{"MALFORMED"}
 	}
 	// Resource consumption is charged even when evidence is refused or reading
-	// failed. Saturation excludes only a possible final HTTP lookahead byte
+	// failed. Saturation excludes only a possible final transport lookahead byte
 	// beyond the aggregate allowance, never an entire refused response prefix.
 	b.bytes += min(responseBytes, remaining)
 	if responseBytes > responseLimit {
@@ -354,6 +362,12 @@ func AutomatePrivateV2(ctx context.Context, h PostPreparationPrivateV2, l Automa
 		a.inventory.Failure = "UNAVAILABLE"
 		return a, AutomaticBackendErrorPrivateV2{"UNAVAILABLE"}
 	}
+	for _, backend := range []AutomaticBackendPrivateV2{interpreter, reviewer} {
+		if bound, ok := backend.(interface{ automaticOwner() *postState }); ok && bound.automaticOwner() != s {
+			a.inventory.Failure = "HANDOFF_FOREIGN_OWNER"
+			return a, errors.New(a.inventory.Failure)
+		}
+	}
 	if interpreter.Identity() == reviewer.Identity() {
 		a.inventory.Failure = "INDEPENDENCE_REFUSED"
 		return a, errors.New(a.inventory.Failure)
@@ -437,6 +451,10 @@ func AutomatePrivateV2(ctx context.Context, h PostPreparationPrivateV2, l Automa
 				rev.Status = "APPROVED"
 			}
 			row.Revisions = append(row.Revisions, postClone(rev))
+			if b.terminal != nil {
+				a.inventory.Failure = "HANDOFF_TERMINAL"
+				return a, b.terminal
+			}
 			previous = rev.Digest
 			feedback = status + ": " + rev.Findings
 			if status == "" {
@@ -512,6 +530,10 @@ func AutomatePrivateV2(ctx context.Context, h PostPreparationPrivateV2, l Automa
 				a.inventory.Navigation = postClone(groups)
 			}
 			a.inventory.NavigationRevisions = append(a.inventory.NavigationRevisions, nr)
+			if b.terminal != nil {
+				a.inventory.Failure = "HANDOFF_TERMINAL"
+				return a, b.terminal
+			}
 			previous = nr.Digest
 			feedback = status + ": " + nr.Findings
 			if status == "" {

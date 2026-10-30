@@ -336,8 +336,8 @@ func TestVariableCallerQualificationCleanupTraffic(t *testing.T) {
 		return m, e
 	}
 	models := qualificationScript{nominal: true}.factory(t)
-	observedModels := func(cfg prep.AutomaticHTTPConfigPrivateV2, scope string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
-		return models(cfg, scope)
+	observedModels := func(cfg prep.AutomaticHandoffConfigPrivateV2, scope string, h prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
+		return models(cfg, scope, h)
 	}
 	r, e := variableRunWithAutomatic(context.Background(), "execute-once", path, git, factory, variableClose, variableOwnedCodeInputs, observedModels)
 	// This snapshot follows the actual terminal return, including all defers.

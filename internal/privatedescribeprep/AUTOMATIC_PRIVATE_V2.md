@@ -1,62 +1,122 @@
-# Automatic provisional inventory — private V2
+# Automatic provisional inventory — private V2 AST
 
-This is an internal continuation of the existing opaque census lineage, not a public CLI/MCP route, ordinary Native output, qualified Describe request, or workflow admission. No historical configuration or retained bytes can recover acquisition authority.
+Experimental, default OFF. This is neither ordinary Native, qualified Describe,
+MethodResult, FULL_DEFINITION nor the disabled broader ADR0007 bridge. All outputs
+remain authority=0, accepted=false, featureIdentity=UNRESOLVED,
+sourceCompleteness=UNKNOWN, absence=PROHIBITED. Local implementation is not live
+execution permission, qualification, shipment or stakeholder acceptance.
 
-## Experimental adoption boundary
+## Architectural correction
 
-This implementation is adopted as private experimental code, not as fully Craft/falsify-qualified or production-ready functionality. Parent normal/race checks and independent integration reviews support the bounded implementation; real model compatibility and semantic quality remain unverified.
+The primary inference path is the **existing HOST session**, not another model
+backend. Go prepares evidence and validates/retains typed results only. The HTTP
+adapter, model/endpoint configuration, credential reads and TLS fixtures have been
+removed. No model client, new provider dependency, public API/MCP/CLI operation,
+Go agent/harness/process launcher or permanent server replaces them.
 
-The 2026-10-30 correspondence review verified the repaired exact-target, actual cleanup-association and acquisition-to-retention guards. Its source-finite ledger still records 70 assertion identities without qualifying current-version failure observations, plus dependency/isolation and historical derivation limitations. These are evidence gaps, not 70 missing features or established runtime defects. No complete falsification, universal adequacy or all-assertion isolation certificate is claimed. Prior failed derivations, mutations and evidence generations remain preserved rather than retrospectively certified.
+The real private caller now connects:
 
-Local code adoption does not authorize a push, public enablement, live provider/model execution, source sharing, accepted feature identities or use of a spent attempt. A real end-to-end trial requires a fresh reviewed configuration and separate explicit execution permission.
+`variableRunWithAutomatic -> NewPostPreparationPrivateV2 ->
+variableRealAutomatic -> NewAutomaticHandoffPrivateV2 -> AutomatePrivateV2 ->
+RetainAutomaticPrivateV2 -> exact paired readback -> terminal receipt`.
 
-## Actual caller connection
+The original worker keeps the opaque owner and root capabilities alive. The
+mailbox exports evidence, not acquisition authority. There is no from-JSON owner
+constructor or restart recovery. New owner nonces prevent same-byte mailbox
+replay; the adapter additionally checks the exact in-memory preparation owner.
 
-`internal/censuslineagepilot/variable_scope_real_v2_caller_test.go` retains the default-OFF explicit private caller. The older v2 preparation-only configuration remains unchanged. A new automatic invocation requires:
+**[Host-owned launch/read/respond/status workflow](../../docs/pilot/adr0007/private-variable-v2-host-handoff.md)**
+is the actual entry recipe. A single user request lets the host perform all tool
+calls and isolated roles automatically. Neither a manual user handoff nor parent
+assembly of report artifacts is required. The helper never invokes those roles.
 
-- schema `private-variable-scope-v2-caller.v3`;
-- purpose `PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL`;
-- the existing exact code HEAD/source/executable/configuration pins, finite scope, explicit environment, single-spend attempt marker, private roots and timeouts;
-- an `automation` object of type `AutomaticHTTPConfigPrivateV2`, with `Enabled=true`, explicit limits and timeout, different interpreter/reviewer model IDs, HTTPS chat-completions endpoint, exact frozen `ScopeSHA256`, and `ApprovalSHA256` equal to `AutomaticHTTPApprovalPrivateV2` of that exact configuration (approval field blanked for hashing).
+## Configuration and custody
 
-The real acquisition profile remains the existing Darwin/Go supervisor profile; Linux-owned fixtures do not establish Linux real-provider support. There is no supplied runnable real configuration. A caller-computed digest is an exact binding, not authentication, independently verified consent, or permission to run it. Real execution requires a fresh, separately reviewed approval. The source pins close over imported code before claim/start; an uncommitted implementation cannot pass a real clean-HEAD binding by reusing an older approval.
+- Legacy `private-variable-scope-v2-caller.v2` is preparation-only, unchanged.
+- HTTP `private-variable-scope-v2-caller.v3` is retired and refused before claim
+  or process start. No migration, inference fallback or automatic retry.
+- Local handoff uses `private-variable-scope-v2-caller.v4` and purpose
+  `PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL`.
+- `automation` is `AutomaticHandoffConfigPrivateV2`: Enabled, Directory,
+  Invocation, InterpreterRole, ReviewerRole, ScopeSHA256, TimeoutMS,
+  OverallTimeoutMS, PollMS, unchanged Limits, ApprovalSHA256. Approval is the
+  SHA256 of exact Go canonical config bytes with ApprovalSHA256 blanked.
+- Role/session tags must differ; the same host model is allowed. This is a caller
+  assertion of isolation, not authenticated independence or expertise.
+- Existing exact code/config/source/server pins, Darwin supervision, explicit
+  acquisition environment, scope, shutdown and single-spend guards stay intact.
+  Real execution requires a fresh reviewed configuration and separate approval;
+  the dirty working diff cannot pass by reusing an old code pin.
+- Mailbox is a fresh canonical current-owner 0700 directory outside `/tmp`,
+  nonoverlapping source, producer, operation/journal, protected and final roots.
+  Knowable path errors are refused before claim. Files are direct-child,
+  current-owner 0600 single-link regular objects, no-follow, create-only and
+  descriptor-rooted. A matching temporary hard link is an unfinished atomic
+  publication, never accepted as a response. No arbitrary same-user attacker or
+  crash-recovery resistance is claimed.
 
-`variableRunWithAutomatic` is the common production orchestration path used by the real binding and owned fixtures. Its real model factory is `variableRealAutomatic -> NewAutomaticHTTPPrivateV2`; tests replace only runtime/model dependencies, not the orchestration stages.
+## Finite protocol
 
-The invocation performs frozen discovery and every planned batch acquisition; one Stop, one Shutdown join and one terminal cleanup verification; complete-scope paired retention/qualification/derivation; each own-batch projection and all configured instability runs/pairs; sealed own-source preparation; `AutomatePrivateV2`; and `RetainAutomaticPrivateV2`. No model step has a provider handle or source acquisition capability. The manager is retired before the semantic continuation.
+The distinct custody label is `PRIVATE_V2_AST_LOCAL_HANDOFF.v1`.
+`preparation.json` binds exact prepared bytes/length/digest, including the selected
+packet manifests, scope, invocation, random owner nonce, limits and overall
+deadline. Each `request-NNNNNN.json` contains a canonical request and binding:
+protocol, invocation, nonce, monotonic sequence, stage, role ID, request digest,
+preparation/input/target, attempt, predecessor, response allowance and deadline.
 
-## Semantic protocol and trust
+Each `response-NNNNNN.json` echoes that binding and binds exact payload bytes by
+length and SHA256. Payload is base64, so even unacceptable model bytes can be
+preserved without normalization. The host helper calculates framing/digests; it
+does not repair semantic output. A duplicate cannot overwrite an earlier file.
+`terminal.json` records verified-pair digest/length or accountable failure and
+closes the mailbox. Report-write/close failures can still invalidate overall caller
+success; both the joined host exit status and verified terminal report matter.
 
-`AutomaticBackendPrivateV2` exchanges typed `AutomaticRequestPrivateV2` data. Stages are INTERPRET, REVIEW_TECHNICAL, NAVIGATE and REVIEW_NAVIGATION. Requests contain only sealed own-target bodies/packet records or already provisional candidates. Original native request ordering, duplicates, direction and null/empty distinctions remain in the packet; no cross-batch graph union is made.
+Stages accept only the existing exact types: INTERPRET uses
+AutomaticInterpretationPrivateV2; REVIEW_TECHNICAL and REVIEW_NAVIGATION use
+AutomaticReviewPrivateV2; NAVIGATE uses nonnull []NavigationPrivateV2. Reviewers
+receive the complete selected own packet and bodies, not merely chosen citations.
+Source, prompts, prior revisions and model responses are inert data.
 
-Responses must be canonical compact JSON of the exact typed protocol: field names/order, explicit zero-valued fields, no aliases, duplicates, extra fields or trailing text. Source comments and all response text are inert data. The HTTP adapter supplies fixed system instructions, never tools or executable model actions. It uses a private proxy-free, compression-disabled, non-keepalive HTTP/1.1 transport, disables HTTP/2 and replayable request bodies, refuses redirects, bounds headers and bodies, and obeys context/timeout. HTTP/2-only endpoints are not supported by this private binding. Owned TLS tests replace only trust roots, not the transport policy. Only the explicitly named credential environment key is read after admission; credentials/provider error bodies are never included in reports.
+## Preserved pipeline and limits
 
-Descriptions must contain claims, limitations, alternatives and a rejection condition. Each citation must name this target's own AST declaration handle and exact UTF-8 byte offsets and quote. Mechanical equality does not establish semantic truth. Original quotes may exceed the legacy DTO's 240-byte citation limit, up to the reviewed automatic string bound: the inventory retains the exact original quote/offsets while its legacy-ledger representation is mechanically split into ordered UTF-8-safe ≤240-byte pieces. Joining those pieces reproduces the original bytes; the expanded citation count must still fit the unchanged post limits. A distinct configured reviewer must approve the exact revision digest; it must reject vacuous init/return-only descriptions when the own body supports a meaningful algorithm description. Reviewer/model identity distinction is caller-configured, not authenticated independent expertise.
+Every planned batch still completes original acquisition and one Stop/Shutdown/
+terminal cleanup observation before source preparation. Requests preserve order,
+direction, duplicates, cache/source attribution and null versus empty arrays.
+Quotes retain exact UTF-8 bytes; the existing lossless 240-byte ledger chunk
+adapter, bounded explicit semantic corrections, predecessor IDs, review binding,
+stable origin-based candidate IDs, reversible navigation, reconciliation and
+paired human/machine publication remain unchanged. No old Describe admission bits
+or selectors are borrowed. No historical packet/campaign is modified or replayed.
 
-Malformed/rejected interpretations can be corrected within `MaxCorrections`; predecessor-linked attempted revisions remain in the inventory. Each revision records `ResponseSHA256` and `ResponseByteLength`. Its ID is `pilot.Digest(json.Marshal(struct{Previous, RawDigest string}{PredecessorDigest, ResponseSHA256}))`; reviews bind that exact ID. Invalid JSON response bodies are omitted from the JSON carrier, but their digest, length, explicit failure class and predecessor remain. Review findings/verdict do not rewrite the identity of the interpretation they review. Unsupported, unavailable, abstained, cancelled and budget-exhausted target outcomes are explicit. Correction requests carry explicit PostLimits, the ledger quote-chunk bound, and only their own prior revisions/responses/reviews; the HTTP backend needs no hidden conversation memory. Navigation has its own bounded preserved correction/review sequence. A null navigation response is malformed, not an empty hypothesis set; an explicitly reviewed empty array is supported. Group membership never creates or merges candidate identity; withdrawing navigation returns a detached inventory with identical candidates.
+Request frames and consumed response-frame prefixes are charged by the existing
+aggregate budget. Request sizing conservatively reserves the maximum allowance's
+encoded digit width; a narrowed aggregate allowance can overcharge a few reserved
+digit bytes, never undercharge the emitted request. No response capacity means no send/count/charge. Reads consume
+at most allowance+1; only the possible final aggregate lookahead is excluded from
+the saturating counter. This is logical IPC-byte accounting, not heap, syscall,
+OS buffer or host-inference metering. No automatic limit is increased.
+Malformed **frames**, misbindings, unavailable/unsafe/closed mailboxes, late or
+missing responses and cancellation are terminal, not semantic retry. Malformed
+or rejected **payloads** retain their exact mailbox bytes and may use only the
+existing explicit bounded correction sequence. Terminal failure accounts for
+remaining selected targets and publishes no successful candidate inventory.
 
-Candidate IDs bind the original input namespace and target, not description text or grouping. Stability is within the same retained origin; separate acquisitions are not asserted to be independent workloads or the same accepted feature.
+## Verification and incomplete qualification
 
-## Budgets and failures
+New owned tests exercise the real file adapter and actual host helper in separate
+original-worker, host-emulator and supervisor processes, for one and three
+batches, with paired machine/human readback. The emulator is a fixture, not a model
+or production fallback. Stop/join behavior is separately exercised. Binding,
+foreign-owner, unsafe-file, cancellation/timeout and charged-prefix guards are
+bounded regression tests. Generic backend and citation/correction/navigation/
+publication tests are retained.
 
-All automatic limits are explicit and validated. `MaxCalls` bounds admitted backend exchange attempts; a request with no response allowance is not sent, counted or charged. `MaxRequestBytes` bounds serialized requests (actual HTTP JSON envelope for the real adapter). `MaxResponseBytes` is the response admission ceiling, not an exemption for consumed refused data. `MaxTotalBytes` charges encoded request bodies plus consumed response-body prefixes, including overflow, malformed, read-error and other failure prefixes, before returning the failure. Each HTTP exchange reads at most its response ceiling plus one lookahead byte. A per-response lookahead is also charged while aggregate room remains; only the possible one final lookahead byte beyond the remaining aggregate allowance is excluded from the saturating counter. After the aggregate is spent no further backend exchange is sent, while all remaining selected targets still receive explicit bounded outcomes. Semantic evidence admission is separate from resource charging. This is not exact network-wire, header, TLS, buffering, heap or CPU metering. `MaxOutputBytes` bounds inventory JSON plus JSON-encoded human rendering. Existing post-publication/report caps separately bound the final carrier and failure diagnostics. No provider/model/publication retry or automatic budget/scope expansion is added.
-
-Every prepared or source/resource-gap target receives a final automatic row. `PROVISIONAL_COMPLETE` requires described and reviewed target candidates and reviewed navigation (which may be an explicitly reviewed empty array). `PROVISIONAL_WITH_UNRESOLVED` retains every selected target and its explicit unresolved status. `FAILED` is non-deliverable and includes a reason; attempted revision observations may remain, but publication ownership/candidate success is revoked. Errors before preparation remain accountable spent caller failures with the existing discovery/acquisition/cleanup observations; they are never labelled complete. Late report-write/close errors also return `FAILED_SPENT` and preserve the original error and any already verified pair observations. An exclusively created but incompletely synced/closed report file is only a prospective snapshot, not a success receipt; it remains spent and is not rewritten or retried. Overall success requires the caller's error-free terminal return, not a phase string read from a partial file.
-
-The existing mechanical ledger still records only admitted CallerSubmission/CallerReview DTOs. Its PENDING means no such technical assertion was admitted, not a manual work queue or automatic success. The envelope's automatic rows supply the final unsupported/unavailable/rejected dispositions alongside that unchanged mechanical evidence ledger.
-
-## Final delivery
-
-`AutomaticResultPrivateV2` is opaque and tied to the original in-memory post-preparation owner. JSON, returned inventories and another preparation cannot mint it. `RetainAutomaticPrivateV2` reuses the existing V2 publication path and every protected-root/topology/mode/hash/no-alias/no-replace/receipt/readback gate.
-
-Both retained copies contain the same native envelope: original preparation, reconciled ledger, complete machine inventory with revisions/reviews, and human-readable `HumanInventory`. The human rendering includes target dispositions, attempted revision/review summaries, original claims/quotes, limitations, alternatives, rejection conditions and navigation-review outcomes. It is inside both verified copies, not a separately hand-assembled companion archive. The caller performs exact final readback before returning its final phase. Pair verification is not namespace-atomic delivery or a power-loss guarantee.
-
-All outputs remain authority 0, accepted false, feature identity UNRESOLVED, source completeness UNKNOWN, absence PROHIBITED, and ordinary Native/Describe/workflow NOT_ATTEMPTED. AST evidence does not become FULL_DEFINITION, MethodResult or native custody. Stakeholder acceptance remains an optional external boundary, not a blocking manual stage of provisional completion.
-
-## Owned verification
-
-- `automatic_http_budget_private_v2_test.go`: actual owned TLS four-target consumed-body accounting, no fourth send after aggregate exhaustion, per-response overflow continuation within remaining allowance, non-empty read-error prefixes, zero response allowance and supplementary finite numeric metadata defenses.
-- `automatic_private_v2_test.go`: nominal algorithmic interpretation, exact citations, own namespace, independent review rejection/abstention, explicit backend failure classes, correction bounds/predecessors, stable IDs across wording revisions, reversible navigation, canonical HTTP fixtures, real-binding approval/privacy limits, machine/human budget, opaque owner and native publication gates.
-- `variable_scope_real_v2_automatic_test.go`: one explicit invocation for one and three original batches through actual scope/acquisition/cleanup/retention/computation/preparation/final publication; exact own assessments, quiescent retired transport, paired final bytes, spent replay refusal, unavailable binding/targets and admission refusal before claim.
-
-All executed runtime/model dependencies are owned fixtures, including local TLS httptest servers. No real provider or model API execution is established. Passing suites do not substitute for assertion-specific counterfactual witnesses or parent verification.
+The predecessor 2026-10-30 correspondence review recorded 70 assertion identities
+without qualifying current-version failure observations and additional historical
+derivation/isolation limitations. Those records remain historical and incomplete;
+this correction does not retro-certify source hashes or claim full all-assertion
+falsification, universal adequacy, semantic quality or provider compatibility.
+Only actual new command/witness records support this working diff. Independent
+parent review and checks are required before a corrective commit; no commit/push
+or live provider/model execution is performed by this change.

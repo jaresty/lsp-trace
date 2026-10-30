@@ -67,7 +67,7 @@ func TestVariableCallerQualificationPins(t *testing.T) {
 				case "config":
 					cc := c
 					cc.Automation.TimeoutMS++
-					cc.Automation.ApprovalSHA256 = prep.AutomaticHTTPApprovalPrivateV2(*cc.Automation)
+					cc.Automation.ApprovalSHA256 = prep.AutomaticHandoffApprovalPrivateV2(*cc.Automation)
 					variableSave(t, path, cc)
 				case "source":
 					e = os.WriteFile(filepath.Join(c.Scope.Root, c.Scope.Members[0].CanonicalRelativePath), []byte("package owned\nfunc changed() {}\n"), 0600)
