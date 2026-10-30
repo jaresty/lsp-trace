@@ -22,13 +22,24 @@ type postPublicationEnvelopePrivateV2 struct {
 	Absence, Profile, PolicySHA256, PreparationSHA256 string
 	Preparation                                       json.RawMessage
 	Ledger                                            StageLedgerPrivateV2
+	Inventory                                         *AutomaticInventoryPrivateV2 `json:",omitempty"`
+	HumanInventory                                    string                       `json:",omitempty"`
 }
 
 func encodePostPublicationPrivateV2(prepared []byte, ledger StageLedgerPrivateV2, sha string) ([]byte, error) {
+	return encodeAutomaticPublicationPrivateV2(prepared, ledger, sha, nil)
+}
+func encodeAutomaticPublicationPrivateV2(prepared []byte, ledger StageLedgerPrivateV2, sha string, automatic *AutomaticResultPrivateV2) ([]byte, error) {
 	if len(prepared) == 0 || len(prepared) > int(publication.PostPreparationPrivateV2ObjectLimit) || !json.Valid(prepared) || postPublicationDigest(prepared) != sha || ledger.RequestType != RequestTypePrivateV2 {
 		return nil, fmt.Errorf("private V2 publication preparation pins")
 	}
-	raw, err := json.Marshal(postPublicationEnvelopePrivateV2{"post-preparation-publication.private.v2", privateCeilings(), "PROHIBITED", PostPublicationProfilePrivateV2, postPublicationDigest([]byte(PostPublicationPolicyPrivateV2)), sha, json.RawMessage(prepared), ledger})
+	envelope := postPublicationEnvelopePrivateV2{SchemaVersion: "post-preparation-publication.private.v2", PrivateCeilings: privateCeilings(), Absence: "PROHIBITED", Profile: PostPublicationProfilePrivateV2, PolicySHA256: postPublicationDigest([]byte(PostPublicationPolicyPrivateV2)), PreparationSHA256: sha, Preparation: json.RawMessage(prepared), Ledger: ledger}
+	if automatic != nil {
+		inventory := automatic.Inventory()
+		envelope.Inventory = &inventory
+		envelope.HumanInventory = automatic.Human()
+	}
+	raw, err := json.Marshal(envelope)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +88,15 @@ func retainPostPreparationPrivateV2(ctx context.Context, h PostPreparationPrivat
 		return out, err
 	}
 	remaining := int(publication.PostPreparationPrivateV2ObjectLimit)
-	for _, n := range []int{postPublicationOverhead, len(h.state.prepared), estimate} {
+	automaticBytes := 0
+	if h.automatic != nil {
+		b, e := json.Marshal(h.automatic.inventory)
+		if e != nil {
+			return out, e
+		}
+		automaticBytes = len(b) + len(h.automatic.human)
+	}
+	for _, n := range []int{postPublicationOverhead, len(h.state.prepared), estimate, automaticBytes} {
 		if n < 0 || n > remaining {
 			return out, fmt.Errorf("private V2 publication envelope estimate")
 		}
@@ -92,7 +111,10 @@ func retainPostPreparationPrivateV2(ctx context.Context, h PostPreparationPrivat
 			return out, fmt.Errorf("private V2 publication rejected caller input: %s / %s", row.SubmissionReason, row.ReviewReason)
 		}
 	}
-	raw, err := encodePostPublicationPrivateV2(h.state.prepared, ledger, h.state.sha)
+	if h.automatic != nil && h.automatic.owner != h.state {
+		return out, fmt.Errorf("foreign automatic continuation owner")
+	}
+	raw, err := encodeAutomaticPublicationPrivateV2(h.state.prepared, ledger, h.state.sha, h.automatic)
 	if err != nil {
 		return out, err
 	}

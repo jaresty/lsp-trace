@@ -13,9 +13,10 @@ import (
 // PostPreparationPrivateV2 has no DTO/byte/ledger constructor or public fields.
 // Shared accounting state is immutable; the version is not caller-selectable.
 type PostPreparationPrivateV2 struct {
-	state   *postState
-	roots   []producerRootBindingPrivateV2
-	objects []producerObjectBindingPrivateV2
+	state     *postState
+	automatic *AutomaticResultPrivateV2
+	roots     []producerRootBindingPrivateV2
+	objects   []producerObjectBindingPrivateV2
 }
 type producerRootBindingPrivateV2 struct {
 	Path          string

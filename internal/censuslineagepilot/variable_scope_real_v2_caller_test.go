@@ -38,30 +38,31 @@ const variableCallerConfigCap = 64 << 10
 const variableCallerReportCap = 1 << 20
 
 type variableCallerConfig struct {
-	Schema                    string                            `json:"schema"`
-	Purpose                   string                            `json:"purpose"`
-	CodeRoot                  string                            `json:"code_root"`
-	CodeHEAD                  string                            `json:"code_head"`
-	Scope                     pilot.ScopeSpecPrivateV2          `json:"scope"`
-	Session                   censusacquisition.SessionIdentity `json:"session"`
-	Selector                  runtimeprofile.Selector           `json:"selector"`
-	Server                    string                            `json:"server"`
-	ServerSHA256              string                            `json:"server_sha256"`
-	Args                      []string                          `json:"args"`
-	Environment               []string                          `json:"environment"`
-	PrepLimits                prep.Limits                       `json:"prep_limits"`
-	PostLimits                prep.PostPreparationLimits        `json:"post_limits"`
-	Seeds                     []uint64                          `json:"seeds"`
-	OperationTimeoutMS        int                               `json:"operation_timeout_ms"`
-	ReadinessTimeoutMS        int                               `json:"readiness_timeout_ms"`
-	ShutdownTimeoutMS         int                               `json:"shutdown_timeout_ms"`
-	ShutdownResponseTimeoutMS int                               `json:"shutdown_response_timeout_ms"`
-	OperationDirectory        string                            `json:"operation_directory"`
-	ProducerOutputs           [2]string                         `json:"producer_outputs"`
-	PostOutputs               [2]string                         `json:"post_outputs"`
-	ProtectedRoots            []string                          `json:"protected_roots"`
-	AttemptMarkerPath         string                            `json:"attempt_marker_path"`
-	ReportPath                string                            `json:"report_path"`
+	Schema                    string                             `json:"schema"`
+	Purpose                   string                             `json:"purpose"`
+	CodeRoot                  string                             `json:"code_root"`
+	CodeHEAD                  string                             `json:"code_head"`
+	Scope                     pilot.ScopeSpecPrivateV2           `json:"scope"`
+	Session                   censusacquisition.SessionIdentity  `json:"session"`
+	Selector                  runtimeprofile.Selector            `json:"selector"`
+	Server                    string                             `json:"server"`
+	ServerSHA256              string                             `json:"server_sha256"`
+	Args                      []string                           `json:"args"`
+	Environment               []string                           `json:"environment"`
+	PrepLimits                prep.Limits                        `json:"prep_limits"`
+	PostLimits                prep.PostPreparationLimits         `json:"post_limits"`
+	Seeds                     []uint64                           `json:"seeds"`
+	OperationTimeoutMS        int                                `json:"operation_timeout_ms"`
+	ReadinessTimeoutMS        int                                `json:"readiness_timeout_ms"`
+	ShutdownTimeoutMS         int                                `json:"shutdown_timeout_ms"`
+	ShutdownResponseTimeoutMS int                                `json:"shutdown_response_timeout_ms"`
+	OperationDirectory        string                             `json:"operation_directory"`
+	ProducerOutputs           [2]string                          `json:"producer_outputs"`
+	PostOutputs               [2]string                          `json:"post_outputs"`
+	ProtectedRoots            []string                           `json:"protected_roots"`
+	AttemptMarkerPath         string                             `json:"attempt_marker_path"`
+	ReportPath                string                             `json:"report_path"`
+	Automation                *prep.AutomaticHTTPConfigPrivateV2 `json:"automation,omitempty"`
 }
 
 type variableCallerReport struct {
@@ -87,6 +88,7 @@ type variableCallerReport struct {
 	Cleanup                                                                                        variableCleanupObservation
 	CodeInputs                                                                                     variableCodeWitness
 	Acquisition                                                                                    variableAcquisitionObservation
+	Inventory                                                                                      *prep.AutomaticInventoryPrivateV2
 }
 
 // Detached, content-free observations of the original owners, never admission
@@ -282,7 +284,16 @@ func variablePositiveFields(v any, ceilings any) bool {
 	return true
 }
 func variableValidate(c variableCallerConfig) error {
-	if c.Schema != variableCallerSchema || c.Purpose != variableCallerPurpose || !variableHex(c.CodeHEAD, 20) || c.Session.Validate() != nil || len(c.Session.SessionID) > 1024 {
+	automatic := c.Automation != nil
+	if automatic {
+		if c.Schema != "private-variable-scope-v2-caller.v3" || c.Purpose != "PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL" {
+			return errors.New("automatic private purpose/schema required")
+		}
+		if e := prep.ValidateAutomaticHTTPPrivateV2(*c.Automation); e != nil {
+			return e
+		}
+	}
+	if (!automatic && (c.Schema != variableCallerSchema || c.Purpose != variableCallerPurpose)) || !variableHex(c.CodeHEAD, 20) || c.Session.Validate() != nil || len(c.Session.SessionID) > 1024 {
 		return errors.New("private purpose/schema/code/session")
 	}
 	if len(c.Args) != 0 || c.Args == nil || len(c.Environment) == 0 || len(c.Environment) > 32 || c.ProtectedRoots == nil || len(c.ProtectedRoots) > 15 || len(c.Seeds) < 2 || len(c.Seeds) > 6 {
@@ -573,6 +584,9 @@ func variablePreflightWithCode(ctx context.Context, path string, git variableGit
 	if err != nil {
 		return
 	}
+	if c.Automation != nil && c.Automation.ScopeSHA256 != pilot.Digest(p.frozen.SpecBytes()) {
+		return p, errors.New("automatic exact frozen scope approval mismatch")
+	}
 	for _, member := range c.Scope.Members {
 		// Prevent physical aliases to the configuration/executable as well as lexical
 		// source overlap. The frozen reader independently checks source components.
@@ -709,7 +723,16 @@ func variableTerminalCleanup(o variableCleanupObservation) error {
 func variableRun(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error) (variableCallerReport, error) {
 	return variableRunWithCode(ctx, mode, path, git, factory, closeFile, variableVerifyCodeInputs)
 }
-func variableRunWithCode(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier) (report variableCallerReport, err error) {
+
+type variableAutomaticFactory func(prep.AutomaticHTTPConfigPrivateV2, string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error)
+
+func variableRealAutomatic(c prep.AutomaticHTTPConfigPrivateV2, scope string) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error) {
+	return prep.NewAutomaticHTTPPrivateV2(c, scope, os.Getenv)
+}
+func variableRunWithCode(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier) (variableCallerReport, error) {
+	return variableRunWithAutomatic(ctx, mode, path, git, factory, closeFile, verify, variableRealAutomatic)
+}
+func variableRunWithAutomatic(ctx context.Context, mode, path string, git variableGitRunner, factory variableManagerFactory, closeFile func(*os.File) error, verify variableCodeVerifier, automatic variableAutomaticFactory) (report variableCallerReport, err error) {
 	if mode != "preflight" && mode != "execute-once" {
 		return report, errors.New("explicit private caller mode required")
 	}
@@ -740,7 +763,13 @@ func variableRunWithCode(ctx context.Context, mode, path string, git variableGit
 	if e != nil {
 		return report, e
 	}
-	defer func() { err = errors.Join(err, root.Close()) }()
+	defer func() {
+		if closeErr := root.Close(); closeErr != nil {
+			report.CloseErrors = append(report.CloseErrors, closeErr.Error())
+			report.Phase = "FAILED_SPENT"
+			err = errors.Join(err, closeErr)
+		}
+	}()
 	info, e := root.Stat(".")
 	if e != nil || !os.SameFile(info, p.operationInfo) {
 		return report, errors.Join(e, errors.New("operation root changed"))
@@ -852,6 +881,10 @@ func variableRunWithCode(ctx context.Context, mode, path string, git variableGit
 		encoded, e := json.Marshal(report)
 		if e == nil {
 			_, e = variableWriteOnce(root, filepath.Base(c.ReportPath), encoded, variableCallerReportCap, closeFile)
+		}
+		if e != nil {
+			report.Phase = "FAILED_SPENT"
+			report.Errors = append(report.Errors, "TERMINAL_REPORT_WRITE_FAILED")
 		}
 		err = errors.Join(err, e)
 	}()
@@ -1054,6 +1087,40 @@ func variableRunWithCode(ctx context.Context, mode, path string, git variableGit
 	}
 	report.PreparationBytes = len(preparedRaw)
 	report.PreparationSHA256 = pilot.Digest(preparedRaw)
+	if c.Automation != nil {
+		var interpreter, reviewer prep.AutomaticBackendPrivateV2
+		if automatic != nil {
+			var bindingErr error
+			interpreter, reviewer, bindingErr = automatic(*c.Automation, report.ScopeSHA256)
+			if bindingErr != nil {
+				interpreter = nil
+				reviewer = nil
+				report.Errors = append(report.Errors, "AUTOMATIC_BINDING_UNAVAILABLE")
+			}
+		}
+		result, e := prep.AutomatePrivateV2(ctx, h, c.Automation.Limits, interpreter, reviewer)
+		inventory := result.Inventory()
+		report.Inventory = &inventory
+		if e != nil {
+			err = e
+			return
+		}
+		outcome, e := prep.RetainAutomaticPrivateV2(ctx, h, result, post, protected)
+		report.Outcome = &outcome
+		if e != nil {
+			err = e
+			return
+		}
+		for _, r := range post {
+			b, e := r.ReadPostPreparationPrivateV2(ctx, outcome.EnvelopeSHA256, int64(outcome.ByteLength))
+			if e != nil || !bytes.Equal(b, outcome.EnvelopeBytes()) {
+				err = errors.Join(e, errors.New("automatic final envelope copy mismatch"))
+				return
+			}
+		}
+		report.Phase = inventory.Status
+		return
+	}
 	ledger, e := h.Reconcile(ctx, nil, nil)
 	if e != nil {
 		err = e
