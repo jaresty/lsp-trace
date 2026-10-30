@@ -344,6 +344,7 @@ type initializedAcquisitionRunnerConfig struct {
 	stderr                       io.Writer
 	observeStart                 func(sessionruntime.StartResult)
 	observeStop                  func(session.LifecycleResult)
+	shutdownManagedByCaller      bool // private Census inventory owns the one join
 	providerProbe                *privateProviderProbe
 }
 
@@ -390,8 +391,10 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 		if stopped.Failure != "" {
 			fmt.Fprintln(cfg.stderr, "managed cleanup:", stopped.Failure)
 		}
-		if err := cfg.manager.Shutdown(cleanup); err != nil {
-			fmt.Fprintln(cfg.stderr, "managed cleanup:", err)
+		if !cfg.shutdownManagedByCaller {
+			if err := cfg.manager.Shutdown(cleanup); err != nil {
+				fmt.Fprintln(cfg.stderr, "managed cleanup:", err)
+			}
 		}
 	}()
 	pending := cfg.manager.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(cfg.effectiveReadinessTimeout()))

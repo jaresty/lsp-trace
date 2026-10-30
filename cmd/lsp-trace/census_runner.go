@@ -41,6 +41,7 @@ type censusRunnerDependencies struct {
 	newStarter               func() (sessionruntime.Starter, error)
 	runCore                  func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome
 	runNativeCatalog         func(censusCLIOptions, censusCoreConfig, io.Writer, io.Writer) int
+	runPrivateInventory      func(censusCLIOptions, censusCoreConfig, io.Writer, io.Writer) int
 	openCatalogHost          func(string, string) (*continuationhost.Bundle, error)
 	runCatalog               func(context.Context, censuscontinuation.Request) censuscontinuation.Result
 	resumeCatalog            func(context.Context, censuscontinuation.ResumeRequest) censuscontinuation.Result
@@ -71,6 +72,7 @@ func productionCensusRunnerDependencies() censusRunnerDependencies {
 		},
 		runCore:                  runCensusCore,
 		runNativeCatalog:         runCensusNativeCatalog,
+		runPrivateInventory:      runCensusInventoryPrivate,
 		openCatalogHost:          openCensusCatalogHost,
 		runCatalog:               censuscontinuation.Run,
 		resumeCatalog:            censuscontinuation.Resume,
@@ -195,7 +197,11 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	}
 	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, providerProbe: providerProbe, privateEnumerationProjection: options.PrivateEnumerationProjection, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic, controlFlow: controlFlowObserver}
 	code := 0
-	if options.Catalog {
+	if options.PrivateInventoryConfigPath != "" {
+		// The private route joins its original Manager and verifies the terminal
+		// Stop observation before final inventory retention. No second join here.
+		return deps.runPrivateInventory(options, cfg, stdout, stderr)
+	} else if options.Catalog {
 		code = deps.runNativeCatalog(options, cfg, stdout, stderr)
 	} else {
 		outcome := deps.runCore(options, cfg, productionCensusCoreDependencies())
@@ -218,6 +224,12 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 }
 
 func enumerateCensusPreflight(options censusCLIOptions) ([]censusacquisition.SourceFile, error) {
+	return enumerateCensusPreflightContextPrivate(context.Background(), options)
+}
+
+// The private continuation supplies its operation/signal lifetime. The legacy
+// ordinary Census adapter deliberately retains its existing background context.
+func enumerateCensusPreflightContextPrivate(ctx context.Context, options censusCLIOptions) ([]censusacquisition.SourceFile, error) {
 	workspace, err := filepath.Abs(options.Workspace)
 	if err != nil {
 		return nil, err
@@ -229,7 +241,7 @@ func enumerateCensusPreflight(options censusCLIOptions) ([]censusacquisition.Sou
 	sort.Strings(includes)
 	excludes := append([]string(nil), options.Excludes...)
 	sort.Strings(excludes)
-	return (censusWorkspaceEnumerator{workspace: workspace, roots: roots, filters: censusacquisition.Filters{Includes: includes, Excludes: excludes}, maxFiles: censusMaxDiscoveredEntries, prunedDirectories: options.PrunedDirectories}).Enumerate(context.Background())
+	return (censusWorkspaceEnumerator{workspace: workspace, roots: roots, filters: censusacquisition.Filters{Includes: includes, Excludes: excludes}, maxFiles: censusMaxDiscoveredEntries, prunedDirectories: options.PrunedDirectories}).Enumerate(ctx)
 }
 
 func runCensusEnumerationPreflight(options censusCLIOptions, stdout, stderr io.Writer, enumerate func(censusCLIOptions) ([]censusacquisition.SourceFile, error)) int {

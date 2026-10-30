@@ -148,17 +148,19 @@ def request(fd, sequence, retain=False, cap=CAP):
 
 def export_request(fd, mailbox, sequence, destination, config_path, config_pin, control):
     """Artifact affordance only. No inference, authority reconstruction or retry."""
-    c = config(config_path, config_pin)
-    maximum = c['automation']['Limits']['MaxRequestBytes']
+    automation, protected, expected = export_config(config_path, config_pin)
+    maximum = automation['Limits']['MaxRequestBytes']
     if not isinstance(maximum, int) or isinstance(maximum, bool) or not 1 <= maximum <= CAP:
         raise ValueError('export request ceiling')
-    if c['automation']['Directory'] != mailbox:
+    if automation['Directory'] != mailbox:
         raise ValueError('export mailbox config mismatch')
     # Retain the one exact validated read; never reopen the request to export it.
     frame, raw, prep = request(fd, sequence, retain=True, cap=maximum)
     b = frame['Binding']
-    if b['Invocation'] != c['automation']['Invocation'] or prep['Limits'] != c['automation']['Limits']:
+    if b['Invocation'] != automation['Invocation'] or prep['Limits'] != automation['Limits']:
         raise ValueError('export config binding mismatch')
+    if expected is not None and (prep.get('ScopeSHA256'), b['PreparationSHA256']) != expected:
+        raise ValueError('Census export scope/preparation mismatch')
     prefix = b'{"Binding":' + canonical(b) + b',"Request":'
     if list(frame) != ['Binding', 'Request'] or not raw.startswith(prefix):
         raise ValueError('export frame shape')
@@ -169,9 +171,7 @@ def export_request(fd, mailbox, sequence, destination, config_path, config_pin, 
     # limited to this supplied pinned config/control, not omniscient discovery.
     if not isinstance(destination, str) or len(destination.encode()) > 2048 or os.path.normpath(destination) != destination:
         raise ValueError('export path bound')
-    roots = [mailbox, control, c['code_root'], c['scope']['root'], c['operation_directory'],
-             *c['producer_outputs'], *c['post_outputs'], *c['protected_roots'],
-             config_path, c['report_path'], c['attempt_marker_path']]
+    roots = [mailbox, control, *protected, config_path]
     for root in roots:
         if not os.path.isabs(root) or os.path.normpath(root) != root:
             raise ValueError('export root shape')
@@ -283,7 +283,7 @@ def respond(mailbox, sequence, payload_path):
     finally:
         os.close(fd)
 
-def config(path, pin):
+def pinned_config(path, pin):
     fd = directory(os.path.dirname(path))
     try:
         raw = read(fd, os.path.basename(path), 64 << 10)
@@ -291,10 +291,35 @@ def config(path, pin):
         os.close(fd)
     if digest(raw) != pin:
         raise ValueError('reviewed config digest mismatch')
-    c = decode(raw)
-    if c['schema'] != 'private-variable-scope-v2-caller.v4' or c['purpose'] != 'PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL':
+    return decode(raw)
+
+def legacy_config(c):
+    if c.get('schema') != 'private-variable-scope-v2-caller.v4' or c.get('purpose') != 'PRIVATE_VARIABLE_SCOPE_V2_AUTOMATIC_PROVISIONAL':
         raise ValueError('only local handoff v4; v3 retired')
     return c
+
+def config(path, pin):
+    # Launch/supervise remain v4-only. Census export metadata is never relabelled
+    # as a worker config or used to recreate an acquisition/preparation owner.
+    return legacy_config(pinned_config(path, pin))
+
+def export_config(path, pin):
+    c = pinned_config(path, pin)
+    if c.get('Schema') == 'private-census-inventory-host-export.v1':
+        if (c.get('Profile') != 'PRIVATE_CENSUS_AST_V2' or c.get('Protocol') != PROTOCOL
+                or c.get('Authority') != 0 or isinstance(c.get('Authority'), bool)
+                or c.get('Accepted') is not False or c.get('Qualified') is not False
+                or c.get('FeatureIdentity') != 'UNRESOLVED' or c.get('SourceCompleteness') != 'UNKNOWN'
+                or c.get('AbsenceInference') != 'PROHIBITED'
+                or c['Automation']['ScopeSHA256'] != c['ScopeSHA256']
+                or not isinstance(c.get('Roots'), list) or not 2 <= len(c['Roots']) <= 16):
+            raise ValueError('private Census export family/ceiling refused')
+        return c['Automation'], c['Roots'], (c['ScopeSHA256'], c['PreparationSHA256'])
+    c = legacy_config(c)
+    roots = [c['code_root'], c['scope']['root'], c['operation_directory'],
+             *c['producer_outputs'], *c['post_outputs'], *c['protected_roots'],
+             c['report_path'], c['attempt_marker_path']]
+    return c['automation'], roots, None
 
 def launch(args):
     c = config(args.config, args.config_sha256)
