@@ -19,6 +19,10 @@ from datetime import datetime
 
 PROTOCOL = 'PRIVATE_V2_AST_LOCAL_HANDOFF.v1'
 CAP = 16 << 20
+EXPORT_PART_BYTES = 20000
+EXPORT_MAX_PARTS = (CAP + EXPORT_PART_BYTES - 4) // (EXPORT_PART_BYTES - 3)
+EXPORT_MANIFEST_CAP = 256 << 10
+EXPORT_RECEIPT_CAP = 8192
 
 class IntegerLexeme(int):
     def __new__(cls, raw):
@@ -127,11 +131,12 @@ def decode(raw):
         raise ValueError('canonical JSON required')
     return value
 
-def request(fd, sequence):
+def request(fd, sequence, retain=False, cap=CAP):
     if not 1 <= sequence <= 4096:
         raise ValueError('sequence bound')
     prep = decode(read(fd, 'preparation.json'))
-    frame = decode(read(fd, f'request-{sequence:06d}.json'))
+    raw = read(fd, f'request-{sequence:06d}.json', cap)
+    frame = decode(raw)
     b = frame['Binding']
     if b['Protocol'] != PROTOCOL or any(b[k] != prep[k] for k in ('Invocation', 'OwnerNonce', 'PreparationSHA256')) or b['Sequence'] != sequence or digest(canonical(frame['Request'])) != b['RequestSHA256']:
         raise ValueError('request binding refused')
@@ -139,7 +144,125 @@ def request(fd, sequence):
         raise ValueError('expired handoff')
     if 'terminal.json' in os.listdir(fd):
         raise ValueError('terminal handoff')
-    return frame
+    return (frame, raw, prep) if retain else frame
+
+def export_request(fd, mailbox, sequence, destination, config_path, config_pin, control):
+    """Artifact affordance only. No inference, authority reconstruction or retry."""
+    c = config(config_path, config_pin)
+    maximum = c['automation']['Limits']['MaxRequestBytes']
+    if not isinstance(maximum, int) or isinstance(maximum, bool) or not 1 <= maximum <= CAP:
+        raise ValueError('export request ceiling')
+    if c['automation']['Directory'] != mailbox:
+        raise ValueError('export mailbox config mismatch')
+    # Retain the one exact validated read; never reopen the request to export it.
+    frame, raw, prep = request(fd, sequence, retain=True, cap=maximum)
+    b = frame['Binding']
+    if b['Invocation'] != c['automation']['Invocation'] or prep['Limits'] != c['automation']['Limits']:
+        raise ValueError('export config binding mismatch')
+    prefix = b'{"Binding":' + canonical(b) + b',"Request":'
+    if list(frame) != ['Binding', 'Request'] or not raw.startswith(prefix):
+        raise ValueError('export frame shape')
+    request_raw = raw[len(prefix):-1]
+    if digest(request_raw) != b['RequestSHA256']:
+        raise ValueError('export exact request mismatch')
+    # Canonical absolute no-follow paths have no lexical aliases. Roots are
+    # limited to this supplied pinned config/control, not omniscient discovery.
+    if not isinstance(destination, str) or len(destination.encode()) > 2048 or os.path.normpath(destination) != destination:
+        raise ValueError('export path bound')
+    roots = [mailbox, control, c['code_root'], c['scope']['root'], c['operation_directory'],
+             *c['producer_outputs'], *c['post_outputs'], *c['protected_roots'],
+             config_path, c['report_path'], c['attempt_marker_path']]
+    for root in roots:
+        if not os.path.isabs(root) or os.path.normpath(root) != root:
+            raise ValueError('export root shape')
+        if os.path.commonpath((root, destination)) in (root, destination):
+            raise ValueError('export overlaps supplied roots')
+    control_fd = directory(control)
+    parent_fd = None
+    export_fd = None
+    try:
+        def fresh():
+            if datetime.fromisoformat(b['Deadline'].replace('Z', '+00:00')).timestamp() <= time.time():
+                raise ValueError('expired handoff')
+            if any(n in os.listdir(fd) for n in ('terminal.json', f'response-{sequence:06d}.json')) or 'stop.json' in os.listdir(control_fd):
+                raise ValueError('export closed/cancelled handoff')
+        fresh()
+        parent_fd = directory(os.path.dirname(destination))
+        # Existing directory aliases (e.g. case-insensitive spellings) must not
+        # evade lexical overlap checks. Observe identities, never source contents.
+        ancestors = set()
+        ancestor_fd = os.dup(parent_fd)
+        try:
+            for _ in range(2049):  # destination is at most 2048 UTF-8 bytes
+                info = os.fstat(ancestor_fd)
+                identity = (info.st_dev, info.st_ino)
+                if identity in ancestors:
+                    break
+                ancestors.add(identity)
+                next_fd = os.open('..', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=ancestor_fd)
+                os.close(ancestor_fd)
+                ancestor_fd = next_fd
+            else:
+                raise ValueError('export ancestor ceiling')
+        finally:
+            os.close(ancestor_fd)
+        for root in roots:
+            try:
+                info = os.stat(root, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISLNK(info.st_mode) or (stat.S_ISDIR(info.st_mode) and (info.st_dev, info.st_ino) in ancestors):
+                raise ValueError('export aliases supplied root')
+        name = os.path.basename(destination)
+        # mkdir is the exclusive attempt claim. Keep partial files on any error;
+        # the existing directory then refuses every repeated export attempt.
+        os.mkdir(name, mode=0o700, dir_fd=parent_fd)
+        export_fd = directory(destination)
+        os.fsync(parent_fd)
+        def put(name, content):
+            fresh()
+            publish(export_fd, name, content)
+        put('frame.json', raw)
+        put('request.json', request_raw)
+        parts = []
+        start = 0
+        # Slice bytes, backing up at most three UTF-8 continuation bytes.
+        # No decoding/re-encoding of the evidence or newline/Unicode changes.
+        raw.decode('utf-8', errors='strict')
+        while start < len(raw):
+            end = min(start + EXPORT_PART_BYTES, len(raw))
+            while end < len(raw) and raw[end] & 0xc0 == 0x80:
+                end -= 1
+            part = raw[start:end]
+            name = f'part-{len(parts) + 1:06d}.txt'
+            parts.append(dict(Name=name, Start=start, End=end, ByteLength=len(part), SHA256=digest(part)))
+            if len(parts) > EXPORT_MAX_PARTS:
+                raise ValueError('export part count')
+            put(name, part)
+            start = end
+        manifest = dict(Schema='private-v2-host-export.v1', Binding=b,
+                        Frame=dict(Name='frame.json', SHA256=digest(raw), ByteLength=len(raw)),
+                        Request=dict(Name='request.json', SHA256=digest(request_raw), ByteLength=len(request_raw), Start=len(prefix), End=len(raw) - 1),
+                        PartBytes=EXPORT_PART_BYTES, Parts=parts,
+                        Provenance='Exact validated local frame bytes; caller-asserted source provenance; no provider-byte custody or execution authority')
+        encoded = canonical(manifest)
+        if len(encoded) > EXPORT_MANIFEST_CAP:
+            raise ValueError('export manifest ceiling')
+        receipt = dict(Schema='private-v2-host-export-receipt.v1', Directory=destination,
+                       Manifest='manifest.json', ManifestSHA256=digest(encoded), ManifestByteLength=len(encoded),
+                       FrameSHA256=digest(raw), FrameByteLength=len(raw), RequestSHA256=b['RequestSHA256'],
+                       RequestByteLength=len(request_raw), PartCount=len(parts), Sequence=sequence,
+                       Deadline=b['Deadline'])
+        if len(canonical(receipt)) > EXPORT_RECEIPT_CAP:
+            raise ValueError('export receipt ceiling')
+        # Last publication is the only complete manifest; no partial manifest.
+        put('manifest.json', encoded)
+        fresh()
+        return receipt
+    finally:
+        for opened in (export_fd, parent_fd, control_fd):
+            if opened is not None:
+                os.close(opened)
 
 def respond(mailbox, sequence, payload_path):
     fd = directory(mailbox)
@@ -317,6 +440,11 @@ def main():
             s.add_argument('--sequence', type=int, required=True)
         if name == 'respond':
             s.add_argument('--payload', required=True)
+        if name == 'read':
+            s.add_argument('--export-dir')
+            s.add_argument('--config')
+            s.add_argument('--config-sha256')
+            s.add_argument('--control')
     s = sub.add_parser('stop')
     s.add_argument('--control', required=True)
     a = p.parse_args()
@@ -338,7 +466,19 @@ def main():
         fd = directory(a.mailbox)
         try:
             if a.action == 'read':
-                result = request(fd, a.sequence)
+                if a.export_dir:
+                    if not all((a.config, a.config_sha256, a.control)):
+                        raise ValueError('export requires pinned config and control')
+                    try:
+                        result = export_request(fd, a.mailbox, a.sequence, a.export_dir, a.config, a.config_sha256, a.control)
+                    except (OSError, ValueError, KeyError, TypeError):
+                        # Parser/date errors may include untrusted request text.
+                        # Never print it or publish a completed export receipt.
+                        raise ValueError('export refused; preserve diagnostics; do not retry') from None
+                else:
+                    if any((a.config, a.config_sha256, a.control)):
+                        raise ValueError('export options require export directory')
+                    result = request(fd, a.sequence)
             else:
                 names = os.listdir(fd)
                 result = {'Terminal': decode(read(fd, 'terminal.json')) if 'terminal.json' in names else None, 'Requests': sorted(n for n in names if n.startswith('request-')), 'Responses': sorted(n for n in names if n.startswith('response-'))}

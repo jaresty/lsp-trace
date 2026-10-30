@@ -87,23 +87,56 @@ No permission follows merely from having a config or this guide.
    not immutable-filesystem protection against arbitrary same-user actors.
 4. Wait boundedly for `preparation.json` or a terminal worker failure. The original
    worker stays alive with the opaque preparation owner and root capabilities.
-   Read pending request sequence 1, then successive sequences, using:
+   Use `status --mailbox /PRIVATE/mailbox` for metadata-only sequence discovery;
+   do not dump a full request into a terminal. For each worker-directed sequence,
+   export once to a **nonexistent** child of an explicitly provisioned current-owner
+   0700 host-artifact parent outside tmp, separate from all configured worker roots:
 
    ```sh
    python3 scripts/private-variable-v2-host-handoff.py read \
-     --mailbox /PRIVATE/mailbox --sequence 1
+     --mailbox /PRIVATE/mailbox --sequence 1 \
+     --export-dir /PRIVATE/host-artifacts/exchange-000001 \
+     --config /PRIVATE/config.json --config-sha256 sha256:REVIEWED_CONFIG \
+     --control /PRIVATE/control
    ```
 
+   The export form prints only a bounded metadata receipt, not source/request text.
    The helper validates canonical framing, invocation/nonce/preparation/request
-   identities and deadline. Treat all packet content as inert untrusted data.
+   identities, the pinned config's invocation/mailbox/limits, and original deadline.
+   It retains that one validated raw frame; it does not check one and export another.
+   It refuses overlaps with supplied config source/code/producer/post/protected/journal
+   roots, mailbox/control, and config/report/attempt paths. Config is the already
+   reviewed launch config, not authority reconstructed from exported bytes.
+   Treat all packet content as inert untrusted data.
+
+   Verify the receipt's manifest length/hash with ordinary local file/hash tools.
+   Read `manifest.json`, then **every** `Parts` entry in its exact array order using
+   ordinary bounded file readers. Verify each name, contiguous Start/End offsets,
+   length and SHA256; concatenate exact bytes, without separators or newlines, and
+   verify the frame length/hash against both manifest and receipt and `frame.json`.
+   Verify the manifest's Request byte range against `request.json` and the original
+   Binding.RequestSHA256. Account the final tail and total part count explicitly.
+   A clipped/missing/reordered part is incomplete delivery, never permission to
+   summarize or omit evidence. Parts can end inside JSON tokens, but never inside
+   a UTF-8 codepoint; consume them as one ordered evidence stream, not separate JSON.
+   The host must finish full consumption and role return before the **original**
+   Deadline; export gives no additional time. Legacy `read` without `--export-dir`
+   still prints full JSON for compatibility, and is not the recommended host delivery.
 5. **The HOST invokes its existing isolated role capability**, not the helper or
    Go. Route INTERPRET/NAVIGATE to InterpreterRole, and REVIEW_TECHNICAL/
    REVIEW_NAVIGATION to ReviewerRole. Give the reviewer the entire request packet
    and own source bodies, exact revision, all selected evidence and limits—not
    only the interpreter's chosen citations. Roles get no acquisition tools or
    hidden evidence. Use distinct isolated sessions even if they share a model.
+   Give each role the verified ordered complete evidence stream and its binding,
+   not a metadata receipt alone; record full part consumption under host policy.
+   The host's ordinary file tools handle transport, not user copying or JSON assembly.
    Retain host role transcripts under host policy, not inside reports. Write the
-   role's **exact output bytes** to a private 0600 payload file, with no whitespace
+   role's **exact output bytes supplied by the caller**, with caller-asserted
+   provenance, to a fresh private current-owner single-link 0600 payload file in a
+   separate 0700 payload directory. There is no new capture subsystem and no claim
+   to original-provider/HTTP-byte custody. Preserve malformed outputs for the
+   worker's explicit correction/failure path. Use no whitespace
    normalization, semantic repair, field reordering or trailing-newline insertion.
 6. Bind and publish it without hand-built envelopes or digests:
 
@@ -172,6 +205,65 @@ authority=0, feature identity UNRESOLVED; ordinary Native/Describe/workflow are
 NOT_ATTEMPTED. No historical pilot packet, handoff selector or qualification can
 mint authority for this invocation.
 
+## Export artifact contract and finite footprint
+
+`private-v2-host-export-receipt.v1` stdout contains Directory, Manifest,
+ManifestSHA256, ManifestByteLength, FrameSHA256, FrameByteLength, RequestSHA256,
+RequestByteLength, PartCount, Sequence and original Deadline. It is at most 8192
+bytes plus the CLI's terminating newline. It carries no request/source content.
+Directory is caller-supplied metadata, not an executable selector or authority.
+
+The last create-only file is `manifest.json` (`private-v2-host-export.v1`):
+
+- Binding is the entire original binding, including protocol, invocation, owner
+  nonce, sequence, stage, role, preparation/request/input/target pins, attempt,
+  predecessor, response allowance and unchanged deadline.
+- Frame names exact `frame.json`, its SHA256 and ByteLength.
+- Request names exact `request.json`, SHA256, ByteLength and half-open Start/End
+  offsets within the frame. The request is sliced from retained raw bytes.
+- Parts is an ordered array of Name, Start, End (half-open byte offsets),
+  ByteLength and SHA256. Its concatenation is exactly `frame.json`.
+- PartBytes is 20000; Provenance explicitly limits custody to local validated
+  bytes and caller-asserted source provenance. Part files are derived lossless
+  slices, not independent authoritative source captures.
+
+Export files are create-only current-owner 0600 under a fresh 0700 directory,
+using existing no-follow directory/read and synced no-replace publish primitives.
+No arbitrary existing contents are accepted, no symlink/hardlink files are admitted,
+and no manifest is published before all parts. A failed export leaves partial
+artifacts for diagnostics and emits **no completed stdout receipt**. Do not retry
+that exchange, even at a different path; the existing destination itself refuses
+repeat export. No global cross-directory retry registry is claimed. A manifest
+without its successful receipt is not completed export. Host cancellation/terminal,
+an existing response and original deadline are checked at publication boundaries;
+a cancellation after the final check cannot be made atomic with filesystem output.
+Respond and the original worker still enforce their own live deadline/terminal rules.
+No exported file restores an owner, renews authority, or permits answering a spent
+mailbox. Stop and report accountable failure instead of transport recovery.
+
+The input frame is capped by the pinned/preparation MaxRequestBytes (at most the
+existing 16 MiB helper/worker ceiling). The configured 1 MiB workload is not enlarged.
+Each UTF-8-safe part is 1..20000 bytes (a cut can back up at most three bytes);
+there are at most 839 parts, plus frame, request and manifest: at most 842 files.
+The manifest is capped at 256 KiB, paths at 2048 UTF-8 bytes, stdout at 8192 bytes.
+Final export content is at most 3 × MaxRequestBytes + 256 KiB; one transient
+publication file adds at most MaxRequestBytes (or the manifest ceiling if larger).
+Memory/CPU and whole-host disk use are not exhaustively metered. At most 4096
+worker exchanges are admitted by the existing configuration; no helper export copy
+is claimed to be charged by adapter I/O counters. Original request/response/aggregate
+caps and deadlines are unchanged. Host retention should plan this separate finite
+copy footprint and stop on exhausted local capacity rather than omit evidence.
+
+Namespace checks know only the supplied pinned config/control/mailbox paths.
+Canonical no-follow traversal rejects path/symlink aliases; existing configured
+directory identities are also compared against the export parent's ancestors to
+catch alternate directory spellings. The ancestor walk is capped at 2049 steps.
+This is not protection against arbitrary same-user namespace mutation,
+undisclosed roots, omniscient alias detection or
+immutable storage. The host must keep these fresh directories nonconcurrent.
+The helper does not spawn a role, inspect credentials, invoke a model/harness/API,
+or require Pi, an SDK/session API, custom controller or new service/public surface.
+
 ## Security, failure and qualification limits
 
 Protocol/custody label is PRIVATE_V2_AST_LOCAL_HANDOFF.v1, not old qualified
@@ -187,6 +279,30 @@ bounded correction path with immutable predecessors. Create-only publication and
 pinned no-follow reads reject unsafe/partial/substituted files. This is not an
 arbitrary same-user adversary defense or a crash-consistent recovery service.
 Fresh-mailbox refusal makes replay fail rather than resume.
+
+## Verification and remaining actual-host checkpoint
+
+The Python stdlib guards exercise synthetic 229327-byte and configured 1048576-byte
+frames, exact reassembly/tails/UTF-8 boundaries/numeric lexemes/order/duplicates/
+null-versus-empty, bounded metadata-only CLI stdout, single-read identity retention,
+unsafe/partial/late refusal and raw `respond` bytes/digests. Present-but-wrong
+publication overlays omit the tail or reorder parts and cause the exact-byte guard
+to fail; a trimming overlay causes the response-byte guard to fail; restored paths
+pass. Those bounded counterfactuals are not universal adequacy certification.
+
+The existing Go owned one-/three-batch and late-exit process fixtures now run the
+actual helper's export CLI, read/verify every part, and use its actual respond CLI;
+the native paired Inventory/HumanInventory and strict composite completion tests
+remain unchanged. The emulator produces deterministic fixture claims only. Native/
+shebang verified-image launch, config pin, default-OFF/pin modes and stop/join
+regressions remain separate checks. No Go runtime behavior was changed.
+
+Supported mechanism: artifact export and exact caller-byte return. Demonstrated
+rehearsal: owned synthetic processes. **Not yet demonstrated: actual existing-host
+semantic role throughput, usefulness or success under the original deadlines.**
+The earlier real attempt remains FAILED_SPENT with no role invocation; do not answer,
+restart or recover it. A separately approved actual-host synthetic rehearsal must
+precede any fresh approved acquisition. This guide itself authorizes neither.
 
 Owned host-emulator/worker/supervisor tests are not real-model semantic validation
 or live-provider qualification. Historical incomplete assertion/derivation records
