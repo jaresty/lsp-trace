@@ -53,7 +53,22 @@ type censusInventoryFilePrivate struct {
 	Disposition string
 	Origin      int // -1 means no origin attempted; never a feature assignment.
 }
+
+// First original failure only; detached observations never confer producer credit.
+type censusInventoryFailurePrivate struct {
+	pilot.ScopeFailureObservationPrivateV2
+	OriginOrdinal int
+	LeaseEntered  bool
+	BatchOrdinal  *int `json:",omitempty"`
+}
+type censusInventoryCleanupFailurePrivate struct {
+	Class                           string
+	StopCalls, ShutdownCalls        int
+	ShutdownJoined, CleanupVerified bool
+}
 type censusInventoryOriginPrivate struct {
+	PipelineFailure                       *censusInventoryFailurePrivate        `json:",omitempty"`
+	CleanupFailure                        *censusInventoryCleanupFailurePrivate `json:",omitempty"`
 	Cleanup                               *sessionruntime.LifecycleCleanupObservationPrivateV2
 	Session                               censusacquisition.SessionIdentity
 	SessionCode, StopCalls, ShutdownCalls int
@@ -109,11 +124,14 @@ type censusInventoryReportPrivate struct {
 	ShutdownJoined, CleanupVerified                                 bool
 	ApplicationCoverage                                             string
 	Errors                                                          []string
+	ContinuationFailure                                             *pilot.ScopeFailureObservationPrivateV2 `json:",omitempty"`
 }
 type censusInventoryDependenciesPrivate struct {
-	enumerate  func(context.Context, censusCLIOptions) ([]censusacquisition.SourceFile, error)
-	runSession func(initializedAcquisitionRunnerConfig, func(context.Context, *initializedAcquisitionRuntime) int) int
-	automatic  func(prep.AutomaticHandoffConfigPrivateV2, string, prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error)
+	// Owned failure injection only: nil in production; cannot supply successful values.
+	derivedFailure func(stage string, batch int) error
+	enumerate      func(context.Context, censusCLIOptions) ([]censusacquisition.SourceFile, error)
+	runSession     func(initializedAcquisitionRunnerConfig, func(context.Context, *initializedAcquisitionRuntime) int) int
+	automatic      func(prep.AutomaticHandoffConfigPrivateV2, string, prep.PostPreparationPrivateV2) (prep.AutomaticBackendPrivateV2, prep.AutomaticBackendPrivateV2, error)
 }
 
 func productionCensusInventoryDependenciesPrivate() censusInventoryDependenciesPrivate {
@@ -316,7 +334,17 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	// and preparation limits, not a caller-selected file list or a target count.
 	var closes []func() error
 	var application *censusApplicationProgressPrivate
+	continuationStage := "CONTINUATION_ADMISSION"
 	finish := func(cause error) int {
+		if cause != nil {
+			originFailure := false
+			for _, origin := range r.Origins {
+				originFailure = originFailure || origin.PipelineFailure != nil || origin.CleanupFailure != nil
+			}
+			if !originFailure {
+				r.ContinuationFailure = &pilot.ScopeFailureObservationPrivateV2{Stage: continuationStage, Class: pilot.ScopeFailureClassPrivateV2(cause), Subcause: "UNKNOWN", DiscoveryAvailability: "NOT_APPLICABLE"}
+			}
+		}
 		if application != nil {
 			if cause != nil && application.failure == "" {
 				application.failure = "CURRENT_ATTEMPT_OR_ADMISSION_FAILED"
@@ -360,6 +388,26 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			if r.Failure == "" {
 				r.Failure = "PRIVATE_CONTINUATION_FAILED"
 			}
+		}
+		// Fixed-code human failure view survives report-writer failure too;
+		// machine stdout remains metadata-only.
+		for _, origin := range r.Origins {
+			if f := origin.PipelineFailure; f != nil {
+				member, batch := -1, -1 // explicit unknown, never an inferred first member
+				if f.MemberOrdinal != nil {
+					member = *f.MemberOrdinal
+				}
+				if f.BatchOrdinal != nil {
+					batch = *f.BatchOrdinal
+				}
+				fmt.Fprintf(stderr, "private inventory pipeline failure origin=%d stage=%s class=%s subcause=%s member=%d batch=%d discovery=%s\n", f.OriginOrdinal, f.Stage, f.Class, f.Subcause, member, batch, f.DiscoveryAvailability)
+			}
+			if f := origin.CleanupFailure; f != nil {
+				fmt.Fprintf(stderr, "private inventory cleanup failure origin=%d class=CLEANUP_NOT_VERIFIED stop_calls=%d shutdown_calls=%d joined=%t verified=%t\n", origin.Ordinal, f.StopCalls, f.ShutdownCalls, f.ShutdownJoined, f.CleanupVerified)
+			}
+		}
+		if f := r.ContinuationFailure; f != nil {
+			fmt.Fprintf(stderr, "private inventory continuation failure stage=%s class=%s\n", f.Stage, f.Class)
 		}
 		if e := writeCensusInventoryFilePrivate(filepath.Join(attempt, "report.json"), r); e != nil {
 			fmt.Fprintln(stderr, "private inventory report retention failed")
@@ -588,11 +636,21 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			obs.StopIntentID = s.IntentID
 		}
 		var pipelineErr, joinErr error
+		callbackEntered := false
 		current.joinAfterStop = func() {
 			obs.ShutdownCalls++
 			joinErr = join()
 		}
 		obs.SessionCode = deps.runSession(current, func(live context.Context, runtime *initializedAcquisitionRuntime) int {
+			callbackEntered = true
+			stage, availability := "CALLBACK_RUNTIME_BINDING", "NOT_REACHED_ADAPTER"
+			leaseEntered := false
+			var batchOrdinal *int
+			defer func() {
+				if pipelineErr != nil && obs.PipelineFailure == nil {
+					obs.PipelineFailure = &censusInventoryFailurePrivate{ScopeFailureObservationPrivateV2: pilot.ScopeFailureObservationPrivateV2{Stage: stage, Class: pilot.ScopeFailureClassPrivateV2(pipelineErr), Subcause: "UNKNOWN", DiscoveryAvailability: availability}, OriginOrdinal: ordinal, LeaseEntered: leaseEntered, BatchOrdinal: batchOrdinal}
+				}
+			}()
 			if runtime == nil || runtime.manager != current.manager || runtime.SessionID() != obs.Session.SessionID || runtime.Generation() != obs.Session.Generation {
 				obs.Status = "FOREIGN_RUNTIME_REFUSED"
 				pipelineErr = errors.New(obs.Status)
@@ -606,7 +664,10 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			var e error
 			var origin pilot.EnumerationOriginPrivateV2
 			var captures []pilot.OpaqueSuccessfulV2Capture
+			stage = "LEASE_ADMISSION"
 			e = runtime.manager.WithReadySessionLease(live, sessionruntime.SessionLeaseRequest{SessionID: obs.Session.SessionID, Generation: obs.Session.Generation, Workspace: o.Workspace}, func(leased context.Context) error {
+				leaseEntered = true
+				stage, availability = "DISCOVERY", "DISCOVERY_REPORT_UNAVAILABLE"
 				bounded, stop := context.WithDeadline(leased, mustCensusInventoryDeadlinePrivate(ctx))
 				defer stop()
 				var discovery pilot.ScopeDiscoveryReportPrivateV2
@@ -616,14 +677,18 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 					origin, terminal, discovery, de = pilot.DiscoverScopeOutcomePrivateV2(bounded, frozen, runtime.manager, obs.Session)
 					obs.Discovery = discovery.Bytes()
 					if de == nil && terminal.Reason() != "" {
+						availability = "AVAILABLE_ERROR_REPORT"
+						stage = "TERMINAL_RETENTION_ROOT"
 						pair, e := openPair(fmt.Sprintf("terminal-%d", ordinal))
 						if e != nil {
 							return e
 						}
+						stage = "TERMINAL_ROOT_BINDING"
 						roots, e := pilot.NewProducerPacketRootsPrivateV2(bounded, pair, source, nil)
 						if e != nil {
 							return e
 						}
+						stage = "TERMINAL_RETENTION"
 						copies, e := pilot.RetainTerminalDiscoveryPrivateV2(bounded, frozen, terminal, roots)
 						if e != nil {
 							return e
@@ -638,18 +703,26 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 					obs.Discovery = discovery.Bytes()
 				}
 				if de != nil {
+					if detail, ok := discovery.FailureObservationPrivateV2(); ok && !errors.Is(de, pilot.ErrScopeDiscoveryEmptyPrivateV2) {
+						obs.PipelineFailure = &censusInventoryFailurePrivate{ScopeFailureObservationPrivateV2: detail, OriginOrdinal: ordinal, LeaseEntered: leaseEntered}
+					}
 					return de
 				}
+				availability = "AVAILABLE_ERROR_REPORT"
 				obs.Batches = make([]censusInventoryBatchPrivate, origin.BatchCount())
 				for i := range obs.Batches {
 					obs.Batches[i] = censusInventoryBatchPrivate{Ordinal: i, Status: "UNPROCESSED"}
 				}
 				for i := range obs.Batches {
+					n := i
+					batchOrdinal = &n
+					stage = "BATCH_SELECTION"
 					b, e := origin.Batch(i)
 					if e != nil {
 						return e
 					}
 					obs.Batches[i].Status = "ACQUISITION_ATTEMPTED"
+					stage = "CAPTURE_BATCH"
 					v, e := pilot.AcquireScopeBatchPrivateV2(bounded, runtime.manager, origin, b)
 					obs.Batches[i].ArtifactSHA256 = v.ArtifactDigest()
 					obs.Batches[i].ArtifactBytes = v.ArtifactByteLength()
@@ -677,24 +750,28 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 				pipelineErr = e
 				return 1
 			}
+			batchOrdinal = nil
 			if obs.Terminal != nil {
 				for _, i := range indices {
 					r.Files[i].Disposition = obs.Status
 				}
 				return 0
 			}
+			stage = "PRODUCER_RETENTION_ROOT"
 			pair, e := openPair(fmt.Sprintf("producer-%d", ordinal))
 			if e != nil {
 				obs.Status = "PRODUCER_RETENTION_ROOT_FAILED"
 				pipelineErr = e
 				return 1
 			}
+			stage = "PRODUCER_ROOT_BINDING"
 			roots, e := pilot.NewProducerPacketRootsPrivateV2(ctx, pair, source, nil)
 			if e != nil {
 				obs.Status = "PRODUCER_RETENTION_ROOT_FAILED"
 				pipelineErr = e
 				return 1
 			}
+			stage = "PRODUCER_RETENTION"
 			retained, e := pilot.RetainCompleteScopePrivateV2(ctx, frozen, origin, captures, roots)
 			obs.ProducerCopies = retained.CopyReceipts()
 			if e != nil {
@@ -702,18 +779,21 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 				pipelineErr = e
 				return 1
 			}
+			stage = "PRODUCER_QUALIFICATION"
 			qualified, e := pilot.QualifyProducerPacketPrivateV2(ctx, retained.VerifiedPair())
 			if e != nil {
 				obs.Status = "PRODUCER_QUALIFICATION_FAILED"
 				pipelineErr = e
 				return 1
 			}
+			stage = "PRODUCER_DERIVATION"
 			proof, e := pilot.DeriveProducerPacketPrivateV2(ctx, qualified)
 			if e != nil {
 				obs.Status = "PRODUCER_DERIVATION_FAILED"
 				pipelineErr = e
 				return 1
 			}
+			stage = "PRODUCER_DERIVATION_READ"
 			view, e := pilot.ReadDerivedProducerPacketPrivateV2(ctx, proof)
 			if e != nil {
 				obs.Status = "PRODUCER_DERIVATION_FAILED"
@@ -721,13 +801,27 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 				return 1
 			}
 			for i := range view.Batches {
+				n := i
+				batchOrdinal = &n
+				stage = "PROGRAM_C_PROJECTION"
 				projection, f := derived.ProjectPrivateV2(ctx, proof, i)
+				if f == nil && deps.derivedFailure != nil {
+					if injected := deps.derivedFailure(stage, i); injected != nil {
+						obs.Status = "PROGRAM_C_PROJECTION_FAILED"
+						pipelineErr = injected
+						return 1
+					}
+				}
 				if f != nil {
 					obs.Status = "PROGRAM_C_PROJECTION_FAILED"
 					pipelineErr = f
 					return 1
 				}
+				stage = "INSTABILITY_COMPUTATION"
 				assessment, _, e := derived.InstabilityComputePrivateV2(ctx, projection, c.Seeds)
+				if e == nil && deps.derivedFailure != nil {
+					e = deps.derivedFailure(stage, i)
+				}
 				if e != nil {
 					obs.Status = "INSTABILITY_FAILED"
 					pipelineErr = e
@@ -735,8 +829,16 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 				}
 				inputs = append(inputs, prep.InputPrivateV2{Projection2: projection, Assessment2: assessment})
 			}
+			batchOrdinal = nil
 			// Required protected roots are the exact producer pair, never inferred from
 			// equal graph bytes or shared session identifiers.
+			stage = "PROTECTED_ROOT_OBSERVATION"
+			if deps.derivedFailure != nil {
+				if e := deps.derivedFailure(stage, -1); e != nil {
+					pipelineErr = e
+					return 1
+				}
+			}
 			for i := 0; i < 2; i++ {
 				v, e := publication.OpenObservedRoot(ctx, filepath.Join(attempt, fmt.Sprintf("producer-%d-%d", ordinal, i)))
 				if e != nil {
@@ -763,6 +865,12 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			obs.Cleanup = &cleanup
 		}
 		obs.CleanupVerified = found && terminal.State == sessionruntime.OperationComplete && terminal.Failure == "" && terminal.SessionID == obs.Session.SessionID && terminal.Generation == obs.Session.Generation && observed && cleanup.ResourceClose == managedprocess.ResourcesClosed && cleanup.Reap == managedprocess.ReapComplete && (cleanup.Death == managedprocess.DeathExited || cleanup.Death == managedprocess.DeathSignaled) && (cleanup.RetiredTransportReused || (cleanup.ShutdownWrite == sessionruntime.CleanupSucceededPrivateV2 && cleanup.ShutdownRead == sessionruntime.ShutdownMatchedPrivateV2 && (cleanup.ExitWrite == sessionruntime.CleanupSucceededPrivateV2 || cleanup.Death == managedprocess.DeathExited)))
+		if obs.StopCalls != 1 || obs.StopFailure != "" || !obs.ShutdownJoined || !obs.CleanupVerified {
+			obs.CleanupFailure = &censusInventoryCleanupFailurePrivate{Class: "CLEANUP_NOT_VERIFIED", StopCalls: obs.StopCalls, ShutdownCalls: obs.ShutdownCalls, ShutdownJoined: obs.ShutdownJoined, CleanupVerified: obs.CleanupVerified}
+		}
+		if obs.SessionCode != 0 && pipelineErr == nil && !callbackEntered {
+			obs.PipelineFailure = &censusInventoryFailurePrivate{ScopeFailureObservationPrivateV2: pilot.ScopeFailureObservationPrivateV2{Stage: "STARTUP_OR_READINESS", Class: "UNKNOWN", Subcause: "UNKNOWN", DiscoveryAvailability: "NOT_REACHED_ADAPTER"}, OriginOrdinal: ordinal}
+		}
 		// Legacy singleton fields remain an aggregate convenience view. Origins
 		// are authoritative for identity and per-owner terminal observations.
 		r.Session, r.SessionCode = obs.Session, obs.SessionCode
@@ -796,6 +904,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		if application == nil {
 			return finish(errors.New("terminal application owner missing"))
 		}
+		continuationStage = "TERMINAL_SCOPE_REVALIDATION"
 		if err := application.revalidate(ctx, o, c, deps.enumerate); err != nil {
 			return finish(err)
 		}
@@ -813,6 +922,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		return finish(nil)
 	}
 	if c.Automation != nil {
+		continuationStage = "DISCLOSURE_SCOPE_REVALIDATION"
 		var disclosureErr error
 		if application != nil {
 			disclosureErr = application.revalidate(ctx, o, c, deps.enumerate)
@@ -827,11 +937,13 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			return finish(e)
 		}
 	}
+	continuationStage = "PREPARATION"
 	prepared, e := prep.PreparePrivateV2(ctx, inputs, c.Preparation)
 	if e != nil {
 		return finish(e)
 	}
 	r.Coverage, r.Index = prepared.Coverage, prepared.Index
+	continuationStage = "POST_PREPARATION"
 	h, e := prep.NewPostPreparationPrivateV2(ctx, inputs, c.Preparation, c.Post)
 	if e != nil {
 		return finish(e)
@@ -842,12 +954,14 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	}
 	r.PreparationSHA256 = pilot.Digest(raw)
 	r.PreparationBytes = len(raw)
+	continuationStage = "INVENTORY_RETENTION_ROOT"
 	outputs, e := openPair("inventory")
 	if e != nil {
 		return finish(e)
 	}
 	var outcome prep.PostPublicationOutcomePrivateV2
 	if c.Automation == nil {
+		continuationStage = "POST_PREPARATION_RETENTION"
 		outcome, e = prep.RetainPostPreparationPrivateV2(ctx, h, nil, nil, outputs, protected)
 		r.Status = "PENDING_INTERPRETATION_PRIVATE_V2"
 	} else {
@@ -865,14 +979,17 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		}
 		bindingRaw, _ := json.Marshal(binding)
 		r.HostExportBindingSHA256 = pilot.Digest(bindingRaw)
+		continuationStage = "AUTOMATIC_BINDING"
 		interpreter, reviewer, bindingErr := deps.automatic(*c.Automation, r.ScopeSHA256, h)
 		if bindingErr != nil {
 			return finish(bindingErr)
 		}
+		continuationStage = "AUTOMATIC_EXCHANGE"
 		result, automaticErr := prep.AutomatePrivateV2(ctx, h, c.Automation.Limits, interpreter, reviewer)
 		inventory := result.Inventory()
 		r.Inventory = &inventory
 		if automaticErr == nil {
+			continuationStage = "AUTOMATIC_RETENTION"
 			outcome, automaticErr = prep.RetainAutomaticPrivateV2(ctx, h, result, outputs, protected)
 			r.Outcome = &outcome
 		}
@@ -883,6 +1000,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	if e != nil {
 		return finish(e)
 	}
+	continuationStage = "INVENTORY_PAIR_READBACK"
 	for _, root := range outputs {
 		b, e := root.ReadPostPreparationPrivateV2(ctx, outcome.EnvelopeSHA256, int64(outcome.ByteLength))
 		if e != nil || !bytes.Equal(b, outcome.EnvelopeBytes()) {

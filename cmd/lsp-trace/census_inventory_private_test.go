@@ -30,13 +30,15 @@ import (
 // Owned pipe provider: real CLI, Census, Manager lease, guarded supply and
 // original acquisition. No model, external provider or saved owner is involved.
 type inventoryPipePrivate struct {
-	in, out       *io.PipeReader
-	input, output *io.PipeWriter
-	once          sync.Once
-	done          chan struct{}
-	queries       atomic.Int32
-	failCalls     atomic.Bool
-	shutdownDelay time.Duration // owned lifecycle counterfactual only
+	in, out         *io.PipeReader
+	input, output   *io.PipeWriter
+	once            sync.Once
+	done            chan struct{}
+	queries         atomic.Int32
+	failCalls       atomic.Bool
+	failCallOrdinal int           // owned diagnostic fixture only; zero leaves legacy behavior
+	callOrdinal     int           // serve goroutine owns this counter
+	shutdownDelay   time.Duration // owned lifecycle counterfactual only
 }
 
 func (c *inventoryPipePrivate) Stdin() io.WriteCloser { return c.input }
@@ -82,7 +84,8 @@ func (c *inventoryPipePrivate) serve() {
 			time.Sleep(c.shutdownDelay)
 			value = nil
 		case "callHierarchy/incomingCalls":
-			if c.failCalls.Load() || os.Getenv("LSP_TRACE_OWNED_TERMINAL_FAIL") == "1" {
+			c.callOrdinal++
+			if c.failCalls.Load() || (c.failCallOrdinal > 0 && c.callOrdinal == c.failCallOrdinal) || os.Getenv("LSP_TRACE_OWNED_TERMINAL_FAIL") == "1" {
 				if w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Error: &lspwire.RPCError{Code: -32603, Message: "owned failure"}}) != nil {
 					return
 				}

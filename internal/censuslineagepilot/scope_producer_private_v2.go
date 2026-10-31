@@ -21,6 +21,21 @@ var ErrScopeDiscoveryEmptyPrivateV2 = errors.New("private V2 discovery empty; no
 // The only V2 constructor accepts opaque frozen provenance, a concrete Manager,
 // and the original active lease context. No caller-controlled version switch.
 func newScopeRuntimeAdapterPrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sessionruntime.Manager, id censusacquisition.SessionIdentity) (*scopeRuntimeAdapter, error) {
+	return newScopeRuntimeAdapterObservedPrivateV2(ctx, f, m, id, nil)
+}
+
+func newScopeRuntimeAdapterObservedPrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sessionruntime.Manager, id censusacquisition.SessionIdentity, observation *ScopeFailureObservationPrivateV2) (adapter *scopeRuntimeAdapter, err error) {
+	stage, member := "ADAPTER_ADMISSION", -1
+	subcause := "UNKNOWN"
+	defer func() {
+		if err != nil && observation != nil {
+			*observation = ScopeFailureObservationPrivateV2{Stage: stage, Class: ScopeFailureClassPrivateV2(err), Subcause: subcause, DiscoveryAvailability: "NOT_REACHED_DISCOVERY"}
+			if member >= 0 {
+				n := member
+				observation.MemberOrdinal = &n
+			}
+		}
+	}()
 	started := time.Now()
 	if ctx == nil || m == nil || !f.valid() || id.Validate() != nil || len(id.SessionID) > 1024 {
 		return nil, ErrInvalid
@@ -34,6 +49,7 @@ func newScopeRuntimeAdapterPrivateV2(ctx context.Context, f FrozenScopePrivateV2
 	defer constructionCancel()
 	lease := sessionruntime.SessionLeaseRequest{SessionID: id.SessionID, Generation: id.Generation, Workspace: f.state.spec.Root}
 	checkActive := func() error {
+		stage = "ADAPTER_ACTIVE_LEASE"
 		if failure := m.CheckActiveSessionLeasePrivateV2(constructionCtx, lease); failure != "" {
 			return scopeAdapterFailure(failure, "")
 		}
@@ -44,13 +60,16 @@ func newScopeRuntimeAdapterPrivateV2(ctx context.Context, f FrozenScopePrivateV2
 	if err := checkActive(); err != nil {
 		return nil, err
 	}
+	stage = "ADAPTER_SOURCE_REVALIDATION"
 	if err := f.revalidate(constructionCtx); err != nil {
 		return nil, err
 	}
+	stage = "ADAPTER_WORKSPACE_BINDING"
 	root, ok := m.WorkspaceRoot(id.SessionID, id.Generation)
 	if !ok || root != f.state.spec.Root {
 		return nil, ErrInvalid
 	}
+	stage = "ADAPTER_METADATA"
 	metadata, failure := m.Metadata(id.SessionID, id.Generation)
 	if failure != "" {
 		return nil, scopeAdapterFailure(failure, "")
@@ -60,30 +79,37 @@ func newScopeRuntimeAdapterPrivateV2(ctx context.Context, f FrozenScopePrivateV2
 	a := &scopeRuntimeAdapter{manager: m, identity: id, metadata: metadata, workspace: root, frozenV2: f, lifetimeV2: ctx, deadline: deadline}
 	members := make([]sessionruntime.RetainedScopeMemberPrivate, 0, len(f.state.files))
 	for i, file := range f.state.files {
+		member = i
 		if err := checkActive(); err != nil {
 			return nil, err
 		}
+		stage = "ADAPTER_SOURCE_REVALIDATION"
 		if err := f.revalidate(constructionCtx); err != nil {
 			return nil, err
 		}
 		language := f.state.spec.Members[i].LanguageID
 		supplied := func() sessionruntime.DocumentResult {
+			stage = "ADAPTER_MEMBER_ACTIVE_LEASE"
 			requestCtx, cancel := context.WithTimeout(constructionCtx, time.Duration(p.RequestTimeoutMS)*time.Millisecond)
 			defer cancel()
 			if failure := m.CheckActiveSessionLeasePrivateV2(requestCtx, lease); failure != "" {
 				return sessionruntime.DocumentResult{Failure: failure}
 			}
+			stage = "ADAPTER_MEMBER_PREPARE"
 			return m.PrepareDocument(requestCtx, sessionruntime.DocumentRequest{SessionID: id.SessionID, Generation: id.Generation, URI: file.URI, LanguageID: language, CaptureSupply: true})
 		}()
 		if supplied.Failure != "" {
+			subcause = scopeFailureSubcausePrivateV2(supplied.LifecycleSubcause)
 			return nil, scopeAdapterFailure(supplied.Failure, supplied.LifecycleSubcause)
 		}
+		stage = "ADAPTER_MEMBER_SUPPLY_VALIDATION"
 		if !scopeAdapterSupplyMatchesForLanguagePrivate(supplied, file, id, language) || !scopeSupplyKeysPrivateV2(supplied) {
 			return nil, ErrInvalid
 		}
 		if err := checkActive(); err != nil {
 			return nil, err
 		}
+		stage = "ADAPTER_SOURCE_REVALIDATION"
 		if err := f.revalidate(constructionCtx); err != nil {
 			return nil, err
 		}
@@ -93,13 +119,16 @@ func newScopeRuntimeAdapterPrivateV2(ctx context.Context, f FrozenScopePrivateV2
 			a.files = append(a.files, censusacquisition.SourceFile{Path: file.Path, URI: file.URI, LanguageID: language})
 		}
 	}
+	member = -1
 	if err := checkActive(); err != nil {
 		return nil, err
 	}
+	stage = "ADAPTER_RETAINED_GUARD_BINDING"
 	a.guardV2, failure = m.BindRetainedScopePrivateV2(constructionCtx, id.SessionID, id.Generation, members)
 	if failure != "" {
 		return nil, scopeAdapterFailure(failure, "")
 	}
+	stage = "ADAPTER_GUARD_REVALIDATION"
 	if err := a.check(constructionCtx); err != nil {
 		return nil, err
 	}
@@ -148,7 +177,10 @@ func scopeSupplyKeysPrivateV2(r sessionruntime.DocumentResult) bool {
 }
 
 // Reports are detached observations, not origin constructors or live authority.
-type ScopeDiscoveryReportPrivateV2 struct{ raw []byte }
+type ScopeDiscoveryReportPrivateV2 struct {
+	raw     []byte
+	failure *ScopeFailureObservationPrivateV2
+}
 
 func (r ScopeDiscoveryReportPrivateV2) Bytes() []byte { return bytes.Clone(r.raw) }
 
@@ -208,8 +240,13 @@ func DiscoverScopePrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sess
 	return discoverScopeOutcomePrivateV2(ctx, f, m, id, nil)
 }
 
-func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sessionruntime.Manager, id censusacquisition.SessionIdentity, terminal *TerminalDiscoveryOutcomePrivateV2) (EnumerationOriginPrivateV2, ScopeDiscoveryReportPrivateV2, error) {
-	var report ScopeDiscoveryReportPrivateV2
+func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sessionruntime.Manager, id censusacquisition.SessionIdentity, terminal *TerminalDiscoveryOutcomePrivateV2) (origin EnumerationOriginPrivateV2, report ScopeDiscoveryReportPrivateV2, err error) {
+	stage, availability := "DISCOVERY_ADMISSION", "NOT_REACHED_ADAPTER"
+	defer func() {
+		if err != nil && report.failure == nil {
+			report.failure = &ScopeFailureObservationPrivateV2{Stage: stage, Class: ScopeFailureClassPrivateV2(err), Subcause: "UNKNOWN", DiscoveryAvailability: availability}
+		}
+	}()
 	if !f.valid() || ctx == nil || m == nil {
 		return EnumerationOriginPrivateV2{}, report, ErrInvalid
 	}
@@ -220,25 +257,35 @@ func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, 
 	}
 	f.state.discoveryAttempted = true
 	f.state.discoveryMu.Unlock()
-	a, err := newScopeRuntimeAdapterPrivateV2(ctx, f, m, id)
+	var constructorFailure ScopeFailureObservationPrivateV2
+	a, err := newScopeRuntimeAdapterObservedPrivateV2(ctx, f, m, id, &constructorFailure)
 	if err != nil {
+		report.failure = &constructorFailure
 		return EnumerationOriginPrivateV2{}, report, err
 	}
+	stage, availability = "DOCUMENT_SYMBOL_DISCOVERY", "DISCOVERY_REPORT_UNAVAILABLE"
 	p := f.state.spec.EffectivePolicy
 	d, err := a.discoverWithLimitsPrivate(ctx, id, p.Discovery)
 	raw, encodingErr := json.Marshal(d)
 	if encodingErr == nil && len(raw) <= scopeMetadataPrivateV2 {
 		report.raw = bytes.Clone(raw)
+		availability = "AVAILABLE_ERROR_REPORT"
+	} else if encodingErr != nil {
+		availability = "DISCOVERY_ENCODING_FAILED"
+	} else {
+		availability = "DISCOVERY_ENCODING_BOUND"
 	}
 	if err != nil {
 		return EnumerationOriginPrivateV2{}, report, err
 	}
 	if encodingErr != nil || len(raw) > scopeMetadataPrivateV2 {
+		stage = "DISCOVERY_SERIALIZATION"
 		return EnumerationOriginPrivateV2{}, report, ErrInvalid
 	}
 	// Only this opt-in path, during the actual original attempt, can mint a
 	// terminal owner. The legacy API reaches exactly its old guards below.
 	if terminal != nil && (len(d.Targets) == 0 || len(d.Targets) > p.MaxTargets) {
+		stage = "TERMINAL_DISCOVERY"
 		owned, e := newTerminalDiscoveryOutcomePrivateV2(ctx, a, d, raw)
 		if e != nil {
 			return EnumerationOriginPrivateV2{}, report, e
@@ -246,6 +293,7 @@ func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, 
 		*terminal = owned
 		return EnumerationOriginPrivateV2{}, report, nil
 	}
+	stage = "DISCOVERY_ACCOUNTING"
 	if !d.Complete || d.Accounting.FileDenominator != len(a.files) {
 		return EnumerationOriginPrivateV2{}, report, ErrScopeDiscoveryIncompletePrivateV2
 	}
@@ -255,9 +303,11 @@ func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, 
 	if len(d.Targets) > p.MaxTargets {
 		return EnumerationOriginPrivateV2{}, report, ErrScopeDiscoveryIncompletePrivateV2
 	}
+	stage = "DISCOVERY_SCOPE_REVALIDATION"
 	if err = a.check(ctx); err != nil {
 		return EnumerationOriginPrivateV2{}, report, err
 	}
+	stage = "DISCOVERY_BATCH_PLANNING"
 	batches, err := (censusacquisition.Core{Planning: &p.Planning}).PlanDiscovery(id, d)
 	if err != nil {
 		return EnumerationOriginPrivateV2{}, report, err
@@ -265,10 +315,12 @@ func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, 
 	if len(batches) == 0 {
 		return EnumerationOriginPrivateV2{}, report, ErrScopeDiscoveryEmptyPrivateV2
 	}
+	stage = "DISCOVERY_SOURCE_BINDING"
 	boundSource, err := graphprovenance.BindSourcePrivateV2(ctx, m, a.guardV2, id.SessionID, id.Generation, a.workspace)
 	if err != nil {
 		return EnumerationOriginPrivateV2{}, report, err
 	}
+	stage = "DISCOVERY_QUERY_DECLARATION"
 	declaration, err := boundSource.FrozenQueryDeclarationPrivateV2(ctx)
 	if err != nil {
 		return EnumerationOriginPrivateV2{}, report, err
@@ -276,13 +328,15 @@ func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, 
 	queryURIs := declaration.MembersPrivateV2()
 	policyBytes, _ := json.Marshal(p)
 	frame := originFramePrivateV2{Schema: "lsp-trace.enumeration-origin.private.v2", Feature: "UNRESOLVED", Source: "UNKNOWN", Absence: "PROHIBITED", ScopeSHA256: Digest(f.state.manifest), SpecSHA256: Digest(f.state.specBytes), SelectionSHA256: Digest(f.state.selection), FilePlanSHA256: Digest(f.state.filePlan), PolicySHA256: Digest(policyBytes), EnumerationSHA256: Digest(raw), Enumeration: raw, CanonicalQueryURIs: queryURIs, PlannedBatches: batches}
+	stage = "DISCOVERY_ORIGIN_ENCODING"
 	originBytes, err := json.Marshal(frame)
 	if err != nil || len(originBytes) > scopeMetadataPrivateV2 {
 		return EnumerationOriginPrivateV2{}, report, ErrInvalid
 	}
 	st := &enumerationOriginStatePrivateV2{adapter: a, manager: m, guard: a.guardV2, identity: id, frozen: f, lifetime: ctx, raw: originBytes, queryURIs: queryURIs}
 	st.self = st
-	origin := EnumerationOriginPrivateV2{st}
+	origin = EnumerationOriginPrivateV2{st}
+	stage = "DISCOVERY_BATCH_BINDING"
 	for _, batch := range batches {
 		manifest := batch.AcquisitionManifest(p.acquisitionLimits())
 		input, err := json.Marshal(scopedBatchInputPrivate{SessionID: id.SessionID, Generation: id.Generation, Manifest: manifest, OutputVersion: graphprovenance.VersionV5})
@@ -301,6 +355,7 @@ func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, 
 		s.self = s
 		st.batches = append(st.batches, s)
 	}
+	stage = "DISCOVERY_FINAL_REVALIDATION"
 	if err = a.check(ctx); err != nil {
 		return EnumerationOriginPrivateV2{}, report, err
 	}
