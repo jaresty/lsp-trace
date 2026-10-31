@@ -409,5 +409,252 @@ class HandoffTest(unittest.TestCase):
             finally:
                 os.close(fd)
 
+class WaitTest(unittest.TestCase):
+    export_fixture = HandoffTest.export_fixture
+
+    def fixture(self):
+        tmp = tempfile.TemporaryDirectory(prefix='.owned-wait-', dir=Path.home())
+        self.addCleanup(tmp.cleanup)
+        f = self.export_fixture(tmp.name)
+        self.put(f['control'] / 'start.json', dict(Schema='private.onefile-actual-start.v2',
+                 ParentInvokedOperator=True, Invocation='owned-export',
+                 ScopeSHA256=h.digest(b'scope'), FullPlanSHA256=h.digest(b'plan'),
+                 ActualRoleBindingsSHA256=h.digest(b'roles'),
+                 StartedUnix=1000000000, HardDeadlineUnix=4102444800))
+        return f
+
+    def put(self, path, value):
+        path.write_bytes(h.canonical(value))
+        path.chmod(0o600)
+
+    def make_request(self, f, n, role='owned/interpreter', body='OWNED_PAYLOAD_CANARY'):
+        frame = h.decode(f['raw'])
+        frame['Request'] = dict(Stage='INTERPRET', Body=body)
+        frame['Binding'].update(Sequence=n, RoleID=role,
+                                RequestSHA256=h.digest(h.canonical(frame['Request'])))
+        self.put(f['mailbox'] / f'request-{n:06d}.json', frame)
+        return frame['Binding']
+
+    def wait(self, f, **kwargs):
+        return h.wait_request(str(f['mailbox']), 'owned/interpreter', str(f['control']), **kwargs)
+
+    def snapshot(self, f):
+        return {str(p.relative_to(f['base'])): (p.read_bytes(), p.stat().st_mode)
+                for root in (f['mailbox'], f['control']) for p in root.iterdir() if p.is_file()}
+
+    def test_wait_old_predicate_red_then_real_green(self):
+        f = self.fixture()
+        binding = h.decode(f['raw'])['Binding']
+        before = self.snapshot(f)
+        # Frozen defect only: ordinary API, real existing request, no undefined
+        # helper or setup error. The filename contains no 'binding' substring.
+        def old_wait(mailbox, role_id, control, after_sequence=0, poll_ms=100):
+            selected = [p for p in Path(mailbox).iterdir() if 'binding' in p.name]
+            return {'Status': 'REQUEST', 'Binding': binding} if selected else {'Status': 'DEADLINE'}
+        def discovery(selector):
+            got = selector(str(f['mailbox']), 'owned/interpreter', str(f['control']))
+            self.assertEqual(got, dict(Status='REQUEST', Binding=binding), 'WAIT_NESTED_ROLE')
+        with self.assertRaisesRegex(AssertionError, 'WAIT_NESTED_ROLE'):
+            discovery(old_wait)
+        print('WAIT_NESTED_ROLE: A-fail frozen filename-binding predicate')
+        with patch.object(h.time, 'sleep', side_effect=AssertionError('must notify before sleeping')):
+            discovery(h.wait_request)
+        print('WAIT_NESTED_ROLE: A-pass actual nested Binding selector')
+        self.assertEqual(before, self.snapshot(f), 'WAIT_READ_ONLY')
+
+    def test_wait_cli_binding_only_and_other_role_privacy(self):
+        f = self.fixture()
+        self.make_request(f, 1, 'other', 'OTHER_ROLE_REQUEST_CANARY')
+        self.make_request(f, 2, 'other', 'OTHER_ROLE_REQUEST_CANARY')
+        binding = self.make_request(f, 3)
+        command = [h.sys.executable, h.__file__, 'wait', '--mailbox', str(f['mailbox']),
+                   '--role-id', 'owned/interpreter', '--control', str(f['control'])]
+        result = h.subprocess.run(command, capture_output=True, check=True)
+        self.assertEqual(result.stderr, b'')
+        self.assertEqual(result.stdout, h.canonical(dict(Status='REQUEST', Binding=binding)) + b'\n')
+        self.assertNotIn(b'OTHER_ROLE_REQUEST_CANARY', result.stdout + result.stderr)
+        self.assertNotIn(b'OWNED_PAYLOAD_CANARY', result.stdout + result.stderr)
+        self.assertNotIn(b'"Request":', result.stdout)
+
+    def test_wait_even_sequence_and_absolute_bound(self):
+        f = self.fixture()
+        self.make_request(f, 1, 'other')
+        binding = self.make_request(f, 2)
+        self.assertEqual(self.wait(f), dict(Status='REQUEST', Binding=binding))
+        binding = self.make_request(f, 4096)
+        self.assertEqual(self.wait(f, after_sequence=2), dict(Status='REQUEST', Binding=binding))
+
+    def test_wait_response_and_cursor_no_replay_numeric_order(self):
+        f = self.fixture()
+        payload = f['base'] / 'payload'
+        payload.write_bytes(b'[]')
+        payload.chmod(0o600)
+        h.respond(str(f['mailbox']), 1, str(payload))
+        # Completion, not an expired deadline, determines whether to skip.
+        for name in ('request-000001.json', 'response-000001.json'):
+            path = f['mailbox'] / name
+            frame = h.decode(path.read_bytes())
+            frame['Binding']['Deadline'] = '2000-01-01T00:00:00Z'
+            self.put(path, frame)
+        self.make_request(f, 10)
+        expected = self.make_request(f, 9)
+        self.assertEqual(self.wait(f), dict(Status='REQUEST', Binding=expected))
+        # Matching malformed completed bindings must not hide behind a valid
+        # later pending row. Expired-but-well-formed history above remains valid.
+        for field, value in (('Deadline', None), ('Deadline', 'not-a-deadline'),
+                             ('Deadline', 123), ('RoleID', None), ('RoleID', 123),
+                             ('Stage', None), ('Stage', 123)):
+            with self.subTest(completed_field=field, value=value):
+                paths = [f['mailbox'] / name for name in ('request-000001.json', 'response-000001.json')]
+                originals = [path.read_bytes() for path in paths]
+                try:
+                    for path, raw in zip(paths, originals):
+                        row = h.decode(raw)
+                        if value is None:
+                            del row['Binding'][field]
+                        else:
+                            row['Binding'][field] = value
+                        self.put(path, row)
+                    try:
+                        self.wait(f)
+                    except ValueError as error:
+                        refused = str(error) == 'wait refused'
+                    else:
+                        refused = False
+                    self.assertTrue(refused, f'WAIT_COMPLETED_METADATA:{field}:{value!r}')
+                    print(f'WAIT_COMPLETED_METADATA:{field}:{value!r}: A-pass refused')
+                finally:
+                    for path, raw in zip(paths, originals):
+                        path.write_bytes(raw)
+        self.assertEqual(self.wait(f), dict(Status='REQUEST', Binding=expected))
+        with patch.object(h.time, 'sleep', side_effect=lambda _: self.put(f['control'] / 'stop.json', {})):
+            self.assertEqual(self.wait(f, after_sequence=10), {'Status': 'STOP'})
+
+    def test_wait_closure_priority_and_no_payload(self):
+        for owner, name, status in (('mailbox', 'terminal.json', 'TERMINAL'),
+                                    ('control', 'stop.json', 'STOP'),
+                                    ('control', 'actual-exit.json', 'STOP')):
+            with self.subTest(name=name):
+                f = self.fixture()
+                self.put(f[owner] / name, dict(Secret='OTHER_ROLE_CANARY'))
+                before = self.snapshot(f)
+                self.assertEqual(self.wait(f), {'Status': status})
+                self.assertEqual(before, self.snapshot(f))
+
+    def test_wait_fixed_deadline_and_expired_request(self):
+        f = self.fixture()
+        with patch.object(h.time, 'time', return_value=4102444800):
+            self.assertEqual(self.wait(f), {'Status': 'DEADLINE'})
+        self.make_request(f, 1)
+        path = f['mailbox'] / 'request-000001.json'
+        frame = h.decode(path.read_bytes())
+        frame['Binding']['Deadline'] = '2000-01-01T00:00:00Z'
+        self.put(path, frame)
+        self.assertEqual(self.wait(f), {'Status': 'STOP'})
+        path.unlink()
+        def deadline_on_sleep(_):
+            start = h.decode((f['control'] / 'start.json').read_bytes())
+            start['HardDeadlineUnix'] = 4102444801
+            self.put(f['control'] / 'start.json', start)
+        with patch.object(h.time, 'sleep', side_effect=deadline_on_sleep):
+            with self.assertRaisesRegex(ValueError, '^wait refused$'):
+                self.wait(f)
+
+    def test_wait_empty_fixed_deadline_and_stop_during_read(self):
+        f = self.fixture()
+        p = f['mailbox'] / 'request-000001.json'
+        p.unlink()
+        clock = [4102444799.95]
+        def advance(delay):
+            self.assertLessEqual(delay, 0.051)
+            clock[0] = 4102444800
+        before = self.snapshot(f)
+        with patch.object(h.time, 'time', side_effect=lambda: clock[0]), patch.object(h.time, 'sleep', side_effect=advance) as sleep:
+            self.assertEqual(self.wait(f), {'Status': 'DEADLINE'})
+            sleep.assert_called_once()
+        self.assertEqual(before, self.snapshot(f))
+        self.make_request(f, 1)
+        original = h.request
+        def stop_after_read(*args, **kwargs):
+            frame = original(*args, **kwargs)
+            self.put(f['control'] / 'stop.json', {})
+            return frame
+        with patch.object(h, 'request', side_effect=stop_after_read):
+            self.assertEqual(self.wait(f), {'Status': 'STOP'})
+
+    def test_wait_empty_then_publication_and_terminal_race(self):
+        f = self.fixture()
+        (f['mailbox'] / 'request-000001.json').unlink()
+        with patch.object(h.time, 'sleep', side_effect=lambda _: self.make_request(f, 1)) as sleep:
+            self.assertEqual(self.wait(f)['Status'], 'REQUEST')
+            sleep.assert_called_once()
+        original = h.request
+        def terminal_after_read(*args, **kwargs):
+            frame = original(*args, **kwargs)
+            self.put(f['mailbox'] / 'terminal.json', {})
+            return frame
+        with patch.object(h, 'request', side_effect=terminal_after_read):
+            self.assertEqual(self.wait(f), {'Status': 'TERMINAL'})
+
+    def test_wait_unsafe_inputs_fail_closed(self):
+        for kind in ('malformed', 'duplicate', 'digest', 'mode', 'symlink', 'hardlink',
+                     'nonprivate', 'badname', 'overflow', 'wrong-response', 'response-mode',
+                     'start-schema', 'start-invocation', 'start-missing', 'start-mode', 'start-time'):
+            with self.subTest(kind=kind):
+                f = self.fixture()
+                p = f['mailbox'] / 'request-000001.json'
+                if kind == 'malformed':
+                    p.write_bytes(b'{"LEAK_CANARY":')
+                elif kind == 'duplicate':
+                    p.write_bytes(f['raw'].replace(b'"Sequence":1', b'"Sequence":1,"Sequence":1'))
+                elif kind == 'digest':
+                    p.write_bytes(f['raw'].replace(b'OWNED_TAIL_SENTINEL', b'OTHER_TAIL_SENTINEL'))
+                elif kind == 'mode':
+                    p.chmod(0o644)
+                elif kind == 'symlink':
+                    p.rename(f['base'] / 'target')
+                    p.symlink_to(f['base'] / 'target')
+                elif kind == 'hardlink':
+                    os.link(p, f['base'] / 'alias')
+                elif kind == 'nonprivate':
+                    f['mailbox'].chmod(0o755)
+                elif kind in ('badname', 'overflow'):
+                    self.put(f['mailbox'] / ('request-1.json' if kind == 'badname' else 'request-004097.json'), {})
+                elif kind in ('wrong-response', 'response-mode'):
+                    b = h.decode(f['raw'])['Binding']
+                    if kind == 'wrong-response':
+                        b['RoleID'] = 'other'
+                    q = f['mailbox'] / 'response-000001.json'
+                    self.put(q, dict(Binding=b, Payload='W10=', PayloadSHA256=h.digest(b'[]'), PayloadByteLength=2))
+                    if kind == 'response-mode':
+                        q.chmod(0o644)
+                else:
+                    q = f['control'] / 'start.json'
+                    if kind == 'start-missing':
+                        q.unlink()
+                    elif kind == 'start-mode':
+                        q.chmod(0o644)
+                    else:
+                        start = h.decode(q.read_bytes())
+                        start[{'start-schema': 'Schema', 'start-invocation': 'Invocation', 'start-time': 'HardDeadlineUnix'}[kind]] = 'LEAK_CANARY'
+                        self.put(q, start)
+                command = [h.sys.executable, h.__file__, 'wait', '--mailbox', str(f['mailbox']),
+                           '--role-id', 'owned/interpreter', '--control', str(f['control'])]
+                result = h.subprocess.run(command, capture_output=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, b'')
+                self.assertEqual(result.stderr, b'private handoff refused: wait refused\n')
+
+    def test_wait_argument_bounds_and_fractional_start(self):
+        f = self.fixture()
+        for args in (dict(after_sequence=-1), dict(after_sequence=4097), dict(poll_ms=0), dict(poll_ms=1001)):
+            with self.subTest(args=args), self.assertRaisesRegex(ValueError, '^wait refused$'):
+                self.wait(f, **args)
+        start = h.decode((f['control'] / 'start.json').read_bytes())
+        start.update(StartedUnix=h.FloatLexeme('1000000000.125'), HardDeadlineUnix=h.FloatLexeme('4102444800.125'))
+        self.put(f['control'] / 'start.json', start)
+        self.assertEqual(self.wait(f)['Status'], 'REQUEST')
+
+
 if __name__ == '__main__':
     unittest.main()

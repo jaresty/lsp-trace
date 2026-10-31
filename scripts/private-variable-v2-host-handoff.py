@@ -9,6 +9,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import signal
 import stat
 import subprocess
@@ -145,6 +146,118 @@ def request(fd, sequence, retain=False, cap=CAP):
     if 'terminal.json' in os.listdir(fd):
         raise ValueError('terminal handoff')
     return (frame, raw, prep) if retain else frame
+
+def wait_request(mailbox, role_id, control, after_sequence=0, poll_ms=100):
+    """Read-only, post-START notification. Never returns any Request text."""
+    try:
+        if (not isinstance(role_id, str) or not role_id
+                or type(after_sequence) is not int or not 0 <= after_sequence <= 4096
+                or type(poll_ms) is not int or not 1 <= poll_ms <= 1000):
+            raise ValueError('wait arguments')
+        fd = directory(mailbox)
+        try:
+            cfd = directory(control)
+            try:
+                start_raw = read(cfd, 'start.json', 64 << 10)
+                start = decode(start_raw)
+                prep = decode(read(fd, 'preparation.json'))
+                def number(value):
+                    if isinstance(value, bool) or not isinstance(value, (int, FloatLexeme)):
+                        raise ValueError('wait start time')
+                    result = float(value.raw if isinstance(value, FloatLexeme) else value)
+                    if not 0 < result < float('inf'):
+                        raise ValueError('wait start time')
+                    return result
+                deadline = number(start['HardDeadlineUnix'])
+                if (start['Schema'] != 'private.onefile-actual-start.v2'
+                        or start['ParentInvokedOperator'] is not True
+                        or start['Invocation'] != prep['Invocation']
+                        or prep['Protocol'] != PROTOCOL
+                        or number(start['StartedUnix']) >= deadline
+                        or any(not isinstance(start[k], str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', start[k])
+                               for k in ('ScopeSHA256', 'FullPlanSHA256', 'ActualRoleBindingsSHA256'))
+                        or ('ScopeSHA256' in prep and start['ScopeSHA256'] != prep['ScopeSHA256'])):
+                    raise ValueError('wait start binding')
+                def binding_deadline(binding):
+                    # Syntax only: completed history need not still be live.
+                    if any(not isinstance(binding[k], str) for k in ('RoleID', 'Stage', 'Deadline')):
+                        raise ValueError('wait role binding')
+                    return datetime.fromisoformat(binding['Deadline'].replace('Z', '+00:00')).timestamp()
+                def closed():
+                    # Recheck immediately before notification. Never output terminal
+                    # bodies or diagnostics, which may contain another role's text.
+                    for owner, name, status in ((cfd, 'stop.json', 'STOP'),
+                                                 (cfd, 'actual-exit.json', 'STOP'),
+                                                 (fd, 'terminal.json', 'TERMINAL')):
+                        if name in os.listdir(owner):
+                            decode(read(owner, name, 64 << 10))
+                            return {'Status': status}
+                    if read(cfd, 'start.json', 64 << 10) != start_raw:
+                        raise ValueError('wait start changed')
+                    if time.time() >= deadline:
+                        return {'Status': 'DEADLINE'}
+                while True:
+                    stopped = closed()
+                    if stopped:
+                        return stopped
+                    names = os.listdir(fd)
+                    sequences = []
+                    for name in names:
+                        if name.startswith(('request-', 'response-')):
+                            match = re.fullmatch(r'(request|response)-([0-9]{6})\.json', name)
+                            if not match or not 1 <= int(match[2]) <= 4096:
+                                raise ValueError('wait sequence name')
+                            if match[1] == 'request' and int(match[2]) > after_sequence:
+                                sequences.append(int(match[2]))
+                    for sequence in sorted(sequences):
+                        response_name = f'response-{sequence:06d}.json'
+                        if response_name in os.listdir(fd):
+                            # Completed exchanges may already be expired. Validate
+                            # their identity/bytes before skipping, not their liveness.
+                            frame = decode(read(fd, f'request-{sequence:06d}.json'))
+                            binding = frame['Binding']
+                            binding_deadline(binding)
+                            response = decode(read(fd, response_name))
+                            payload = base64.b64decode(response['Payload'], validate=True)
+                            if (binding['Protocol'] != PROTOCOL or binding['Sequence'] != sequence
+                                    or any(binding[k] != prep[k] for k in ('Invocation', 'OwnerNonce', 'PreparationSHA256'))
+                                    or binding['RequestSHA256'] != digest(canonical(frame['Request']))
+                                    or response['Binding'] != binding
+                                    or response['PayloadSHA256'] != digest(payload)
+                                    or response['PayloadByteLength'] != len(payload)):
+                                raise ValueError('wait response binding')
+                            continue
+                        try:
+                            frame = request(fd, sequence)
+                        except ValueError as error:
+                            stopped = closed()
+                            if stopped:
+                                return stopped
+                            if str(error) == 'expired handoff':
+                                return {'Status': 'STOP'}
+                            raise
+                        binding = frame['Binding']
+                        pending_deadline = binding_deadline(binding)
+                        if binding['RoleID'] == role_id:
+                            stopped = closed()
+                            if stopped:
+                                return stopped
+                            if pending_deadline <= time.time():
+                                return {'Status': 'STOP'}
+                            # A response published during validation wins too.
+                            if response_name in os.listdir(fd):
+                                break
+                            return {'Status': 'REQUEST', 'Binding': binding}
+                    time.sleep(min(poll_ms / 1000, max(0, deadline - time.time())))
+            finally:
+                os.close(cfd)
+        finally:
+            os.close(fd)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, OverflowError):
+        # json/date errors can embed untrusted payload strings. One constant
+        # refusal for this action only; legacy read/respond/status stay unchanged.
+        raise ValueError('wait refused') from None
+
 
 def export_request(fd, mailbox, sequence, destination, config_path, config_pin, control):
     """Artifact affordance only. No inference, authority reconstruction or retry."""
@@ -470,6 +583,11 @@ def main():
             s.add_argument('--config')
             s.add_argument('--config-sha256')
             s.add_argument('--control')
+    s = sub.add_parser('wait', help='post-START role Binding notification only')
+    for key in ('mailbox', 'role-id', 'control'):
+        s.add_argument('--' + key, required=True)
+    s.add_argument('--after-sequence', type=int, default=0)
+    s.add_argument('--poll-ms', type=int, default=100)
     s = sub.add_parser('stop')
     s.add_argument('--control', required=True)
     a = p.parse_args()
@@ -480,6 +598,8 @@ def main():
         return
     elif a.action == 'respond':
         result = respond(a.mailbox, a.sequence, a.payload)
+    elif a.action == 'wait':
+        result = wait_request(a.mailbox, a.role_id, a.control, a.after_sequence, a.poll_ms)
     elif a.action == 'stop':
         fd = directory(a.control)
         try:
