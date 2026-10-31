@@ -205,6 +205,10 @@ func (EnumerationOriginPrivateV2) MarshalJSON() ([]byte, error) { return nil, Er
 // Exactly one discovery attempt per frozen owner; no automatic rescan, retry,
 // reset, caller DTO constructor, or cross-constituent graph merge.
 func DiscoverScopePrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sessionruntime.Manager, id censusacquisition.SessionIdentity) (EnumerationOriginPrivateV2, ScopeDiscoveryReportPrivateV2, error) {
+	return discoverScopeOutcomePrivateV2(ctx, f, m, id, nil)
+}
+
+func discoverScopeOutcomePrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sessionruntime.Manager, id censusacquisition.SessionIdentity, terminal *TerminalDiscoveryOutcomePrivateV2) (EnumerationOriginPrivateV2, ScopeDiscoveryReportPrivateV2, error) {
 	var report ScopeDiscoveryReportPrivateV2
 	if !f.valid() || ctx == nil || m == nil {
 		return EnumerationOriginPrivateV2{}, report, ErrInvalid
@@ -231,6 +235,16 @@ func DiscoverScopePrivateV2(ctx context.Context, f FrozenScopePrivateV2, m *sess
 	}
 	if encodingErr != nil || len(raw) > scopeMetadataPrivateV2 {
 		return EnumerationOriginPrivateV2{}, report, ErrInvalid
+	}
+	// Only this opt-in path, during the actual original attempt, can mint a
+	// terminal owner. The legacy API reaches exactly its old guards below.
+	if terminal != nil && (len(d.Targets) == 0 || len(d.Targets) > p.MaxTargets) {
+		owned, e := newTerminalDiscoveryOutcomePrivateV2(ctx, a, d, raw)
+		if e != nil {
+			return EnumerationOriginPrivateV2{}, report, e
+		}
+		*terminal = owned
+		return EnumerationOriginPrivateV2{}, report, nil
 	}
 	if !d.Complete || d.Accounting.FileDenominator != len(a.files) {
 		return EnumerationOriginPrivateV2{}, report, ErrScopeDiscoveryIncompletePrivateV2

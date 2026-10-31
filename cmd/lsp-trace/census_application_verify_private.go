@@ -49,12 +49,12 @@ func (s *censusApplicationProgressPrivate) pair(attempt, label, digest string, n
 			return nil, err
 		}
 		names, err := root.names(1)
-		if err != nil || len(names) != 1 {
+		if err != nil || len(names) != 1 || names[0] != digest {
 			_ = root.close()
 			return nil, errors.Join(err, errors.New("application missing/extra pair constituent"))
 		}
-		raw, err := root.read(names[0], a.MaxArtifactBytes)
-		opened, e := root.root.Lstat(names[0])
+		raw, err := root.read(digest, a.MaxArtifactBytes)
+		opened, e := root.root.Lstat(digest)
 		err = errors.Join(err, e, root.close())
 		s.store.remaining = root.remaining
 		if err != nil || uint64(len(raw)) != n || pilot.Digest(raw) != digest {
@@ -108,8 +108,15 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 		return v, err
 	}
 	var r censusInventoryReportPrivate
-	if decodeCensusApplicationPrivate(reportRaw, &r) != nil || r.Schema != "lsp-trace.census-application-inventory.private.v1" || r.Profile != censusInventoryProfilePrivate || r.InputFamily != "PRIVATE_AST" || pilot.Digest(reportRaw) != host.ReportSHA256 || r.AttemptDirectory != attempt || r.ScopeSHA256 != claim.ScopeSHA256 || r.Status != result.Status || r.Failure != "" || r.Authority != 0 || r.Accepted || r.Qualified || r.ApplicationBinding == nil || r.ApplicationBinding.FullPlanSHA256 != s.id || r.ApplicationBinding.Segment != segment || r.ApplicationBinding.ProcessID != host.ProcessID || r.ApplicationBinding.ClaimSHA256 != host.ClaimSHA256 || r.Configuration.Automation == nil || r.Outcome == nil || r.Inventory == nil {
+	if decodeCensusApplicationPrivate(reportRaw, &r) != nil || r.Schema != "lsp-trace.census-application-inventory.private.v1" || r.Profile != censusInventoryProfilePrivate || r.InputFamily != "PRIVATE_AST" || pilot.Digest(reportRaw) != host.ReportSHA256 || r.AttemptDirectory != attempt || r.ScopeSHA256 != claim.ScopeSHA256 || r.Status != result.Status || r.Failure != "" || r.Authority != 0 || r.Accepted || r.Qualified || r.ApplicationBinding == nil || r.ApplicationBinding.FullPlanSHA256 != s.id || r.ApplicationBinding.Segment != segment || r.ApplicationBinding.ProcessID != host.ProcessID || r.ApplicationBinding.ClaimSHA256 != host.ClaimSHA256 {
 		return v, errors.New("application report binding")
+	}
+	terminalSegment := censusTerminalEnabledPrivate(s.config) && r.Status == censusTerminalSegmentStatusPrivate
+	if !terminalSegment && (r.Configuration.Automation == nil || r.Outcome == nil || r.Inventory == nil) {
+		return v, errors.New("application native delivery missing")
+	}
+	if terminalSegment && (host.NativeSHA256 != "" || host.NativeBytes != 0 || r.Outcome != nil || r.Inventory != nil || r.PreparationSHA256 != "" || r.PreparationBytes != 0 || len(r.Coverage) != 0 || len(r.Index) != 0 || r.HostExportBindingPath != "" || r.HostExportBindingSHA256 != "") {
+		return v, errors.New("application terminal must not claim native delivery")
 	}
 	if r.FeatureIdentity != "UNRESOLVED" || r.SourceCompleteness != "UNKNOWN" || r.AbsenceInference != "PROHIBITED" || !reflect.DeepEqual(r.Sources, s.options.Sources) || !reflect.DeepEqual(r.Includes, s.options.Includes) || !reflect.DeepEqual(r.Excludes, s.options.Excludes) || !reflect.DeepEqual(r.PrunedDirectories, s.options.PrunedDirectories) {
 		return v, errors.New("application report ceiling/source controls mismatch")
@@ -122,7 +129,7 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 	approved.Automation = nil
 	expectedConfig, _ := json.Marshal(s.plan.Configuration)
 	actualConfig, _ := json.Marshal(approved)
-	if !bytes.Equal(expectedConfig, actualConfig) || r.Configuration.Automation.ScopeSHA256 != r.ScopeSHA256 || prep.ValidateAutomaticHandoffPrivateV2(*r.Configuration.Automation) != nil {
+	if !bytes.Equal(expectedConfig, actualConfig) || (r.Configuration.Automation != nil && (r.Configuration.Automation.ScopeSHA256 != r.ScopeSHA256 || prep.ValidateAutomaticHandoffPrivateV2(*r.Configuration.Automation) != nil)) {
 		return v, errors.New("application approval/configuration mismatch")
 	}
 	groups := s.plan.groups(segment)
@@ -146,7 +153,11 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 		origin censusInventoryOriginPrivate
 	}
 	producers := map[string]producerObservation{}
+	terminalOrigins := 0
 	for j, origin := range r.Origins {
+		if terminalSegment && !censusTerminalCleanupPrivate(origin) {
+			return v, errors.New("application terminal concrete cleanup missing")
+		}
 		if origin.Ordinal != j || !reflect.DeepEqual(origin.Files, groups[j]) || origin.ScopeSHA256 != pilot.Digest(manifests[j]) || origin.SessionCode != 0 || origin.StopCalls != 1 || origin.ShutdownCalls != 1 || !origin.ShutdownJoined || !origin.CleanupVerified || origin.Cleanup == nil || origin.StopFailure != "" {
 			return v, errors.New("application original-origin lineage mismatch")
 		}
@@ -169,7 +180,26 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 				accounting.NonCallableSymbols++
 			}
 		}
+		if terminalSegment {
+			accounting.Reason = origin.Status
+			accounting.Disposition = "TERMINAL_ACCOUNTED_GAP"
+		} else if censusTerminalEnabledPrivate(s.config) {
+			accounting.Disposition = "COMPLETED_NATIVE"
+		}
 		v.Origins = append(v.Origins, accounting)
+		if censusTerminalOriginStatusPrivate(origin.Status) {
+			if !terminalSegment {
+				return v, errors.New("application terminal in native segment")
+			}
+			if e := s.verifyTerminalOriginPrivate(attempt, j, origin, manifests[j]); e != nil {
+				return v, e
+			}
+			terminalOrigins++
+			continue
+		}
+		if origin.Terminal != nil {
+			return v, errors.New("application unexpected terminal owner record")
+		}
 		if origin.Status == "SUCCESSFUL_EMPTY" {
 			if len(discovery.Targets) != 0 || !discovery.Complete {
 				return v, errors.New("application original discovery contradicts empty origin")
@@ -179,20 +209,23 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 		if len(discovery.Targets) == 0 {
 			return v, errors.New("application original discovery contradicts computed origin")
 		}
-		if origin.Status != "COMPUTED_PRIVATE_PER_BATCH" {
+		if (!terminalSegment && origin.Status != "COMPUTED_PRIVATE_PER_BATCH") || (terminalSegment && origin.Status != censusComputedSegmentGapPrivate) {
 			return v, errors.New("application origin not completed")
 		}
 		copy := origin.ProducerCopies[0].Receipt
 		other := origin.ProducerCopies[1].Receipt
-		if copy == nil || other == nil || copy.Digest != other.Digest || copy.ByteLength != other.ByteLength || copy.VerificationStatus != "VERIFIED" || other.VerificationStatus != "VERIFIED" {
+		if copy == nil || other == nil || copy.Digest != other.Digest || copy.FinalSelector != copy.Digest || other.FinalSelector != copy.Digest || copy.ByteLength != other.ByteLength || copy.VerificationStatus != "VERIFIED" || other.VerificationStatus != "VERIFIED" {
 			return v, errors.New("application producer receipt mismatch")
 		}
 		packet, err := s.pair(attempt, fmt.Sprintf("producer-%d", j), copy.Digest, copy.ByteLength)
 		if err != nil {
 			return v, err
 		}
-		var producer pilot.ProducerPacketInspectionPrivateV2
-		if decodeCensusApplicationPrivate(packet, &producer) != nil || producer.Schema != pilot.ProducerPacketSchemaPrivateV2 || !bytes.Equal(producer.FrozenManifest, manifests[j]) || producer.Authority != 0 || producer.Accepted {
+		// The complete pure inspector validates all detached source, role, batch,
+		// seed, Native, runtime and enumeration constituents before ANY advance.
+		// It cannot restore an owner or mint custody authority.
+		producer, inspectErr := pilot.PureParseProducerPacketPrivateV2(packet)
+		if inspectErr != nil || !bytes.Equal(producer.FrozenManifest, manifests[j]) {
 			return v, errors.New("application producer source lineage mismatch")
 		}
 		var enumeration struct {
@@ -202,7 +235,28 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 		if json.Unmarshal(producer.EnumerationOrigin, &enumeration) != nil || !bytes.Equal(enumeration.Enumeration, origin.Discovery) || enumeration.ScopeSHA256 != origin.ScopeSHA256 {
 			return v, errors.New("application producer original discovery mismatch")
 		}
+		policy, _ := json.Marshal(s.plan.Configuration.Policy)
+		if !bytes.Equal(producer.EffectivePolicy, policy) || len(producer.Batches) != len(origin.Batches) {
+			return v, errors.New("application producer policy/report batch mismatch")
+		}
+		for i, batch := range producer.Batches {
+			observed := origin.Batches[i]
+			if observed.Ordinal != i || observed.Status != "ACQUIRED" || observed.ArtifactSHA256 != pilot.Digest(batch.SourceArtifact) || observed.ArtifactBytes != uint64(len(batch.SourceArtifact)) {
+				return v, errors.New("application producer original batch/report mismatch")
+			}
+		}
 		producers[copy.Digest] = producerObservation{producer, origin}
+	}
+	if terminalSegment {
+		if terminalOrigins == 0 {
+			return v, errors.New("application segment gap without terminal origin")
+		}
+		v.Segment, v.AttemptDirectory, v.ScopeSHA256, v.ReportSHA256, v.HostObservationSHA256 = segment, attempt, r.ScopeSHA256, host.ReportSHA256, pilot.Digest(hostRaw)
+		v.Disposition = "TERMINAL_ACCOUNTED_GAP"
+		if err := s.verifyTerminalPages(attempt, r); err != nil {
+			return v, err
+		}
+		return v, s.store.check()
 	}
 	expectedCeilings := prep.PrivateCeilings{FeatureIdentity: "UNRESOLVED", SourceCompleteness: "UNKNOWN", OrdinaryNative: "NOT_ATTEMPTED", Describe: "NOT_ATTEMPTED", Workflow: "NOT_ATTEMPTED"}
 	if r.Outcome.PrivateCeilings != expectedCeilings || r.Outcome.Absence != "PROHIBITED" || r.Outcome.Profile != prep.PostPublicationProfilePrivateV2 || r.Outcome.PolicySHA256 != pilot.Digest([]byte(prep.PostPublicationPolicyPrivateV2)) || r.Outcome.PreparationSHA256 != r.PreparationSHA256 || r.Outcome.Status != "VERIFIED_PAIR_PRIVATE_WITH_LIMITS" || r.Outcome.EnvelopeSHA256 != host.NativeSHA256 || r.Outcome.ByteLength != host.NativeBytes {
@@ -277,6 +331,9 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 	}
 	v.Segment, v.AttemptDirectory, v.ScopeSHA256, v.ReportSHA256, v.HostObservationSHA256, v.NativeSHA256, v.NativeBytes = segment, attempt, r.ScopeSHA256, host.ReportSHA256, pilot.Digest(hostRaw), host.NativeSHA256, host.NativeBytes
 	v.Coverage = r.Coverage
+	if censusTerminalEnabledPrivate(s.config) {
+		v.Disposition = "COMPLETED_NATIVE"
+	}
 	// Complete, hashed terminal denominator pages must still exist, even when the
 	// report omitted its large inline convenience array.
 	if err := s.verifyTerminalPages(attempt, r); err != nil {
@@ -291,7 +348,7 @@ func (s *censusApplicationProgressPrivate) verifyTerminalPages(attempt string, r
 	fail := func() error { return errors.New("application terminal denominator mismatch") }
 	expected := append([]censusInventoryFilePrivate(nil), s.rows...)
 	for _, origin := range r.Origins {
-		if origin.Status != "COMPUTED_PRIVATE_PER_BATCH" && origin.Status != "SUCCESSFUL_EMPTY" {
+		if origin.Status != "COMPUTED_PRIVATE_PER_BATCH" && origin.Status != "SUCCESSFUL_EMPTY" && !(censusTerminalEnabledPrivate(s.config) && r.Status == censusTerminalSegmentStatusPrivate && (censusTerminalOriginStatusPrivate(origin.Status) || origin.Status == censusComputedSegmentGapPrivate)) {
 			return fail()
 		}
 		for _, index := range origin.Files {

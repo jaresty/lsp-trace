@@ -63,6 +63,7 @@ type censusCLIOptions struct {
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
 	PrivateProviderProbePath, PrivateProviderProbeVersion                      string
 	PrivateInventoryConfigPath                                                 string
+	PrivateInventoryScopePreview                                               bool `json:",omitempty"`
 	PrivateProviderProbeByteTimeNotifications                                  bool
 	ServerArgs                                                                 []string
 	DownDepth, UpDepth, MaxNodes, MaxBatchTargets                              int
@@ -104,6 +105,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.StringVar(&o.PrivateProviderProbeVersion, "private-provider-probe-version", "v1", "")
 	fs.BoolVar(&o.PrivateProviderProbeByteTimeNotifications, "private-provider-probe-byte-time-notifications", false, "")
 	fs.StringVar(&o.PrivateInventoryConfigPath, "private-inventory-config", "", "")
+	fs.BoolVar(&o.PrivateInventoryScopePreview, "private-inventory-scope-preview", false, "")
 	fs.BoolVar(&o.Catalog, "catalog", false, "continue to the provisional feature catalog")
 	fs.StringVar(&o.Resume, "resume", "", "resume an opaque catalog continuation selector")
 	fs.StringVar(&o.StopAfter, "stop-after", "", "stop catalog continuation after describe-requests")
@@ -229,6 +231,9 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 			}
 		}
 		return nil
+	}
+	if censusNamedFlagCount(args, "private-inventory-scope-preview") > 1 || (censusNamedFlagCount(args, "private-inventory-scope-preview") != 0 && o.PrivateInventoryConfigPath == "") {
+		return errors.New("private scope preview requires private inventory")
 	}
 	if o.PrivateInventoryConfigPath != "" {
 		if censusNamedFlagCount(args, "private-inventory-config") != 1 || !o.PrivateEnumerationProjection || !o.Machine || o.Resume != "" || o.Catalog || o.StopAfter != "" || o.PrivateProviderProbePath != "" {

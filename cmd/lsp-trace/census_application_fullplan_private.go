@@ -16,6 +16,7 @@ import (
 )
 
 const censusApplicationProfilePrivate = "PRIVATE_CENSUS_APPLICATION_V1"
+const censusApplicationTerminalProfilePrivate = "PRIVATE_CENSUS_APPLICATION_TERMINAL_V2"
 
 type censusApplicationConfigPrivate struct {
 	Profile, Directory                                        string
@@ -23,7 +24,7 @@ type censusApplicationConfigPrivate struct {
 }
 
 func (a censusApplicationConfigPrivate) validate() error {
-	if a.Profile != censusApplicationProfilePrivate || a.Directory == "" || a.MaxPlanBytes < 1 || a.MaxPlanBytes > 16<<20 || a.MaxArtifactBytes < 1 || a.MaxArtifactBytes > 16<<20 || a.MaxReadBytes < 1 || a.MaxReadBytes > 256<<20 || a.MaxSegments < 1 || a.MaxSegments > 100000 {
+	if (a.Profile != censusApplicationProfilePrivate && a.Profile != censusApplicationTerminalProfilePrivate) || a.Directory == "" || a.MaxPlanBytes < 1 || a.MaxPlanBytes > 16<<20 || a.MaxArtifactBytes < 1 || a.MaxArtifactBytes > 16<<20 || a.MaxReadBytes < 1 || a.MaxReadBytes > 256<<20 || a.MaxSegments < 1 || a.MaxSegments > 100000 {
 		return errors.New("application private profile/bounds")
 	}
 	return nil
@@ -97,7 +98,11 @@ func buildCensusApplicationFullPlanPrivate(ctx context.Context, o censusCLIOptio
 	if err != nil {
 		return p, nil, err
 	}
-	controls, _ := json.Marshal(o)
+	// Preview is an operation selector, not an execution/security/source control.
+	// Keep every other option (including paths, provider args and bounds) pinned.
+	controlsOptions := o
+	controlsOptions.PrivateInventoryScopePreview = false
+	controls, _ := json.Marshal(controlsOptions)
 	clean := c
 	clean.Automation = nil
 	p = censusApplicationFullPlanPrivate{FeatureIdentity: "UNRESOLVED", SourceCompleteness: "UNKNOWN", AbsenceInference: "PROHIBITED", Schema: "lsp-trace.census-application-source-plan.private.v1", InputFamily: "APPLICATION_SOURCE_OBSERVATIONS_NOT_AUTHORITY", Workspace: o.Workspace, GitObservation: git, RevisionCustody: "CALLER_ASSERTED_NOT_AUTHENTICATED", ControlsSHA256: pilot.Digest(controls), RuntimeConfigurationSHA256: runtimeSHA, Configuration: clean, Sources: o.Sources, Includes: o.Includes, Excludes: o.Excludes, PrunedDirectories: o.PrunedDirectories, Denominator: pages}

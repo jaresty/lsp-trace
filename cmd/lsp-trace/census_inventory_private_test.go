@@ -64,6 +64,14 @@ func (c *inventoryPipePrivate) serve() {
 		if m.Method == "initialized" || strings.HasPrefix(m.Method, "textDocument/did") {
 			continue
 		}
+		if os.Getenv("LSP_TRACE_OWNED_TERMINAL_SERVER") == "1" {
+			if raw, handled := terminalOwnedResponsePrivate(m); handled {
+				if w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Result: raw}) != nil {
+					return
+				}
+				continue
+			}
+		}
 		var value any = []any{}
 		rng := lsp.Range{Start: lsp.Position{Line: 2}, End: lsp.Position{Line: 2, Character: 12}}
 		sel := lsp.Range{Start: lsp.Position{Line: 2, Character: 5}, End: lsp.Position{Line: 2, Character: 7}}
@@ -74,7 +82,7 @@ func (c *inventoryPipePrivate) serve() {
 			time.Sleep(c.shutdownDelay)
 			value = nil
 		case "callHierarchy/incomingCalls":
-			if c.failCalls.Load() {
+			if c.failCalls.Load() || os.Getenv("LSP_TRACE_OWNED_TERMINAL_FAIL") == "1" {
 				if w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: m.ID, Error: &lspwire.RPCError{Code: -32603, Message: "owned failure"}}) != nil {
 					return
 				}

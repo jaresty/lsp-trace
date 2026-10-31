@@ -42,12 +42,15 @@ type censusApplicationCandidateRefPrivate struct {
 	NativeIndex                    int
 }
 type censusApplicationOriginAccountingPrivate struct {
+	Reason                                                          string `json:",omitempty"`
+	Disposition                                                     string `json:",omitempty"`
 	PlanOrigin                                                      int
 	DiscoverySHA256                                                 string
 	FileEntries, SymbolEntries, CallableTargets, NonCallableSymbols int
 	DiscoveryComplete                                               bool
 }
 type censusApplicationVerifiedSegmentPrivate struct {
+	Disposition                                                                      string `json:",omitempty"`
 	Origins                                                                          []censusApplicationOriginAccountingPrivate
 	Segment                                                                          int
 	AttemptDirectory, ScopeSHA256, ReportSHA256, HostObservationSHA256, NativeSHA256 string
@@ -70,6 +73,8 @@ type censusApplicationAccountingPrivate struct {
 	FileDenominator, EligibleFiles, CompletedFiles, ExcludedFiles, GapFiles, UnattemptedFiles int
 	ObservedSymbolEntries, CallableTargets, NonCallableSymbols                                int
 	SourceGapTargets, ResourceGapTargets                                                      int
+	TerminalAccountedFiles, TerminalAccountedTargets                                          int `json:",omitempty"`
+	NativePreparedTargets                                                                     int `json:",omitempty"`
 	Files                                                                                     []censusInventoryFilePrivate
 	FilePages                                                                                 []censusInventoryPagePrivate
 	Verified                                                                                  []censusApplicationVerifiedSegmentPrivate
@@ -154,6 +159,7 @@ func openCensusApplicationProgressPrivate(ctx context.Context, o censusCLIOption
 func (s *censusApplicationProgressPrivate) accounting(attempt string) error {
 	view := censusApplicationAccountingPrivate{SourceCompleteness: "UNKNOWN", AbsenceInference: "PROHIBITED", Schema: "lsp-trace.census-application-accounting.private.v1", InputFamily: "APPLICATION_ACCOUNTING_NOT_NATIVE", FullPlanSHA256: s.id, Trust: censusApplicationHostTrustPrivate, FeatureIdentity: "UNRESOLVED", CrossSegmentNavigation: "UNREVIEWED_NO_GLOBAL_GRAPH_OR_INDEPENDENCE_CLAIM", FileDenominator: len(s.rows), Files: append([]censusInventoryFilePrivate(nil), s.rows...), Verified: s.verified, Failure: s.failure, Blocked: s.blocked}
 	completed := map[int]bool{}
+	terminal := map[int]bool{}
 	for _, v := range s.verified {
 		for _, origin := range v.Origins {
 			view.ObservedSymbolEntries += origin.SymbolEntries
@@ -162,10 +168,22 @@ func (s *censusApplicationProgressPrivate) accounting(attempt string) error {
 		}
 		for _, g := range s.plan.groups(v.Segment) {
 			for _, index := range g {
-				completed[index] = true
+				if v.Disposition == "TERMINAL_ACCOUNTED_GAP" {
+					terminal[index] = true
+				} else {
+					completed[index] = true
+				}
+			}
+		}
+		if v.Disposition == "TERMINAL_ACCOUNTED_GAP" {
+			for _, origin := range v.Origins {
+				view.TerminalAccountedTargets += origin.CallableTargets
 			}
 		}
 		for _, c := range v.Coverage {
+			if censusTerminalEnabledPrivate(s.config) && v.Disposition == "COMPLETED_NATIVE" {
+				view.NativePreparedTargets += c.Prepared
+			}
 			view.SourceGapTargets += c.SourceGap
 			view.ResourceGapTargets += c.ResourceGap
 		}
@@ -185,7 +203,14 @@ func (s *censusApplicationProgressPrivate) accounting(attempt string) error {
 			switch {
 			case completed[i]:
 				row.Disposition = "COMPLETED_HOST_ATTESTED"
+				if censusTerminalEnabledPrivate(s.config) {
+					row.Disposition = "COMPLETED_NATIVE"
+				}
 				view.CompletedFiles++
+			case terminal[i]:
+				row.Disposition = "TERMINAL_ACCOUNTED_GAP"
+				view.GapFiles++
+				view.TerminalAccountedFiles++
 			case spent[i]:
 				row.Disposition = "GAP_SPENT_OR_UNVERIFIED_SEGMENT"
 				view.GapFiles++
@@ -214,6 +239,9 @@ func (s *censusApplicationProgressPrivate) accounting(attempt string) error {
 	human := fmt.Sprintf("# Private application accounting\n\nPlan: %s\nTrust: %s\nAuthority: 0; accepted: false; feature identity: UNRESOLVED\nCross-segment navigation: UNREVIEWED; no global graph or independence claim.\n\nFiles: %d = completed %d + excluded %d + gap %d + unattempted %d\nSource-gap targets: %d; resource-gap targets: %d\nFailure: %s\n\n", s.id, censusApplicationHostTrustPrivate, view.FileDenominator, view.CompletedFiles, view.ExcludedFiles, view.GapFiles, view.UnattemptedFiles, view.SourceGapTargets, view.ResourceGapTargets, view.Failure)
 	var text strings.Builder
 	text.WriteString(human)
+	if censusTerminalEnabledPrivate(s.config) {
+		fmt.Fprintf(&text, "Terminal-accounted gap files: %d; targets: %d. NOT_NATIVE_DELIVERY; no absence or feature-completion inference.\n", view.TerminalAccountedFiles, view.TerminalAccountedTargets)
+	}
 	fmt.Fprintf(&text, "Observed symbol entries across declared file partitions: %d; callable targets: %d; non-callable symbols: %d. These counts assert no global symbol or feature identity.\n", view.ObservedSymbolEntries, view.CallableTargets, view.NonCallableSymbols)
 	if s.blocked != nil {
 		fmt.Fprintf(&text, "Blocked segment %d: %s; status %s; claim %s; result %s; claimed report %s; %s (no completion credit)\n", s.blocked.Segment, s.blocked.AttemptDirectory, s.blocked.Status, s.blocked.ClaimSHA256, s.blocked.ResultSHA256, s.blocked.ClaimedReportSHA256, s.blocked.BindingStatus)

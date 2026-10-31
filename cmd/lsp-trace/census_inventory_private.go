@@ -66,6 +66,7 @@ type censusInventoryOriginPrivate struct {
 	Discovery                             json.RawMessage // complete original Census ledgers, including noncallables
 	Batches                               []censusInventoryBatchPrivate
 	ProducerCopies                        [2]pilot.ProducerPacketCopyReceiptPrivateV2
+	Terminal                              *censusTerminalRetentionPrivate `json:",omitempty"`
 }
 type censusInventoryBatchPrivate struct {
 	Ordinal                int
@@ -284,6 +285,11 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, true, err)
 	}
+	// Preview is strictly metadata-only in the explicit terminal profile, with
+	// no automation/config approval authoring and no generation claim.
+	if o.PrivateInventoryScopePreview && (!censusTerminalEnabledPrivate(c) || c.Automation != nil) {
+		return writeCensusFailure(stderr, censusStageConfig, true, errors.New("scope preview requires terminal profile without automation"))
+	}
 	// CLI acquisition controls remain binding. Config may not silently change them.
 	p := c.Policy
 	if p.MaxNominationFiles < 1 || p.MaxNominationFiles > 8 || p.Planning.MaxBatchTargets != o.MaxBatchTargets || p.MaxNodes != o.MaxNodes || p.Planning.DownDepth != o.DownDepth || p.Planning.UpDepth != o.UpDepth || p.TimeoutMS != int(o.Timeout.Milliseconds()) || p.RequestTimeoutMS != int(o.RequestTimeout.Milliseconds()) {
@@ -475,6 +481,16 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	if err = writeCensusInventoryFilePrivate(filepath.Join(attempt, "scope.json"), json.RawMessage(scopeBytes)); err != nil {
 		return finish(err)
 	}
+	if o.PrivateInventoryScopePreview {
+		if application == nil {
+			return finish(errors.New("scope preview application missing"))
+		}
+		if err := application.revalidate(ctx, o, c, deps.enumerate); err != nil {
+			return finish(err)
+		}
+		r.Status = "SCOPE_PREVIEW_METADATA_ONLY_NOT_GENERATION"
+		return finish(nil)
+	}
 	if c.Automation != nil && c.Automation.ScopeSHA256 != r.ScopeSHA256 {
 		r.Failure = "DISCLOSURE_SCOPE_MISMATCH"
 		return finish(errors.New(r.Failure))
@@ -497,7 +513,9 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			r.Failure = "APPLICATION_PRE_ACQUISITION_DRIFT"
 			return finish(err)
 		}
-		if c.Automation != nil {
+		if c.Automation != nil || censusTerminalEnabledPrivate(c) {
+			// The opt-in terminal profile spends the attempt BEFORE startup. Even
+			// an expired operation cannot reopen this generation on a later call.
 			if err := application.claim(attempt, r.ScopeSHA256); err != nil {
 				r.Failure = "APPLICATION_CLAIM_REFUSED"
 				return finish(err)
@@ -511,6 +529,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	}
 	closes = append(closes, source.Close)
 	var inputs []prep.InputPrivateV2
+	terminalSegment := false
 	var protected []*publication.ObservedRoot
 	openPair := func(label string) (out [2]*publication.ContentRetentionRoot, e error) {
 		for i := range out {
@@ -592,8 +611,32 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 				defer stop()
 				var discovery pilot.ScopeDiscoveryReportPrivateV2
 				var de error
-				origin, discovery, de = pilot.DiscoverScopePrivateV2(bounded, frozen, runtime.manager, obs.Session)
-				obs.Discovery = discovery.Bytes()
+				if censusTerminalEnabledPrivate(c) {
+					var terminal pilot.TerminalDiscoveryOutcomePrivateV2
+					origin, terminal, discovery, de = pilot.DiscoverScopeOutcomePrivateV2(bounded, frozen, runtime.manager, obs.Session)
+					obs.Discovery = discovery.Bytes()
+					if de == nil && terminal.Reason() != "" {
+						pair, e := openPair(fmt.Sprintf("terminal-%d", ordinal))
+						if e != nil {
+							return e
+						}
+						roots, e := pilot.NewProducerPacketRootsPrivateV2(bounded, pair, source, nil)
+						if e != nil {
+							return e
+						}
+						copies, e := pilot.RetainTerminalDiscoveryPrivateV2(bounded, frozen, terminal, roots)
+						if e != nil {
+							return e
+						}
+						obs.Terminal = &censusTerminalRetentionPrivate{Reason: terminal.Reason(), Copies: copies}
+						obs.Status = terminal.Reason()
+						terminalSegment = true
+						return nil
+					}
+				} else {
+					origin, discovery, de = pilot.DiscoverScopePrivateV2(bounded, frozen, runtime.manager, obs.Session)
+					obs.Discovery = discovery.Bytes()
+				}
 				if de != nil {
 					return de
 				}
@@ -633,6 +676,12 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 				}
 				pipelineErr = e
 				return 1
+			}
+			if obs.Terminal != nil {
+				for _, i := range indices {
+					r.Files[i].Disposition = obs.Status
+				}
+				return 0
 			}
 			pair, e := openPair(fmt.Sprintf("producer-%d", ordinal))
 			if e != nil {
@@ -732,6 +781,32 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			r.Failure = "ACQUISITION_OR_CLEANUP_FAILED"
 			return finish(errors.Join(pipelineErr, joinErr, errors.New(r.Failure)))
 		}
+	}
+	if terminalSegment {
+		// Explicit bounded segment-gap contract: computed origins retain their
+		// producer pairs but receive no Native delivery credit or model disclosure.
+		for i := range r.Origins {
+			if r.Origins[i].Status == "COMPUTED_PRIVATE_PER_BATCH" {
+				r.Origins[i].Status = censusComputedSegmentGapPrivate
+				for _, index := range r.Origins[i].Files {
+					r.Files[index].Disposition = censusComputedSegmentGapPrivate
+				}
+			}
+		}
+		if application == nil {
+			return finish(errors.New("terminal application owner missing"))
+		}
+		if err := application.revalidate(ctx, o, c, deps.enumerate); err != nil {
+			return finish(err)
+		}
+		if !application.claimed {
+			return finish(errors.New("original terminal claim missing"))
+		}
+		r.Status = censusTerminalSegmentStatusPrivate
+		return finish(nil)
+	}
+	if censusTerminalEnabledPrivate(c) && c.Automation == nil {
+		return finish(errors.New("normal terminal-profile delivery requires approved automation before startup"))
 	}
 	if len(inputs) == 0 {
 		r.Status = "NO_PREPARABLE_TARGETS"
