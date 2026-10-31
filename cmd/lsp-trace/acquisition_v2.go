@@ -348,6 +348,24 @@ type initializedAcquisitionRunnerConfig struct {
 	shutdownManagedByCaller      bool   // private Census inventory owns the one join
 	joinAfterStop                func() // private join before startup context cancellation
 	providerProbe                *privateProviderProbe
+
+	privateShutdownResponseTimeout time.Duration // private Census only; zero preserves ordinary Stop
+}
+
+// Construct a fresh typed allowance for this original Manager's Stop, never an
+// accepted deadline or an owner reconstructed from a detached lifecycle receipt.
+func (cfg initializedAcquisitionRunnerConfig) stop(ctx context.Context, id string) session.LifecycleResult {
+	if cfg.privateShutdownResponseTimeout == 0 {
+		return cfg.manager.Stop(ctx, id, "public-acquisition-cli")
+	}
+	if cfg.privateShutdownResponseTimeout < 0 || cfg.privateShutdownResponseTimeout > 2*time.Second {
+		return session.LifecycleResult{Failure: session.LifecycleConflict}
+	}
+	budget, err := sessionruntime.NewShutdownResponseBudgetPrivateV2(cfg.privateShutdownResponseTimeout)
+	if err != nil {
+		return session.LifecycleResult{Failure: session.LifecycleConflict}
+	}
+	return cfg.manager.StopWithShutdownResponseBudgetPrivateV2(ctx, id, "public-acquisition-cli", budget)
 }
 
 func productionInitializedAcquisitionRunnerConfig(timeout, requestTimeout time.Duration) initializedAcquisitionRunnerConfig {
@@ -390,7 +408,7 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		stopped := cfg.manager.Stop(cleanup, started.SessionID, "public-acquisition-cli")
+		stopped := cfg.stop(cleanup, started.SessionID)
 		if cfg.observeStop != nil {
 			cfg.observeStop(stopped)
 		}

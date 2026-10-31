@@ -46,6 +46,9 @@ type censusInventoryConfigPrivate struct {
 	// authenticated acceptance decision. Parent must separately approve disclosure.
 	Automation  *prep.AutomaticHandoffConfigPrivateV2
 	Application *censusApplicationConfigPrivate `json:",omitempty"`
+
+	// Private response allowance only, not a whole-teardown deadline or authority.
+	ShutdownResponseTimeoutMS int `json:"ShutdownResponseTimeoutMS,omitempty"`
 }
 
 type censusInventoryFilePrivate struct {
@@ -160,7 +163,7 @@ func loadCensusInventoryConfigContextPrivate(ctx context.Context, path string) (
 		return c, errors.New("private inventory config invalid")
 	}
 	canonical, _ := json.Marshal(c)
-	if !bytes.Equal(raw, canonical) || c.Profile != censusInventoryProfilePrivate || (c.MaxOrigins < 1 || c.MaxOrigins > 2) || len(c.Seeds) < 2 || len(c.Seeds) > 16 || c.OperationTimeoutMS < c.Policy.TimeoutMS || c.OperationTimeoutMS < 1 || c.OperationTimeoutMS > 240000 {
+	if !bytes.Equal(raw, canonical) || c.Profile != censusInventoryProfilePrivate || (c.MaxOrigins < 1 || c.MaxOrigins > 2) || len(c.Seeds) < 2 || len(c.Seeds) > 16 || c.OperationTimeoutMS < c.Policy.TimeoutMS || c.OperationTimeoutMS < 1 || c.OperationTimeoutMS > 240000 || c.ShutdownResponseTimeoutMS < 0 || c.ShutdownResponseTimeoutMS > 2000 {
 		return c, errors.New("private inventory config noncanonical or profile/bounds invalid")
 	}
 	if c.Application != nil && c.Application.validate() != nil {
@@ -625,6 +628,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 				return current.manager.Shutdown(cleanup)
 			}
 		}
+		current.privateShutdownResponseTimeout = time.Duration(c.ShutdownResponseTimeoutMS) * time.Millisecond
 		current.parent = ctx
 		current.shutdownManagedByCaller = true
 		current.observeStart = func(s sessionruntime.StartResult) {

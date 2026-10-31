@@ -27,6 +27,12 @@ func TestInventoryOwnedLSPProcessPrivate(t *testing.T) {
 	a, b := io.Pipe()
 	c, d := io.Pipe()
 	child := &inventoryPipePrivate{in: a, input: b, out: c, output: d, done: make(chan struct{})}
+	if os.Getenv("LSP_TRACE_OWNED_SHUTDOWN_DELAY") == "late" {
+		child.shutdownDelay = 600 * time.Millisecond
+	}
+	if os.Getenv("LSP_TRACE_OWNED_SHUTDOWN_DELAY") == "absent" {
+		child.shutdownDelay = 4 * time.Second
+	}
 	go func() { _, _ = io.Copy(b, os.Stdin); _ = b.Close() }()
 	copied := make(chan struct{})
 	go func() { _, _ = io.Copy(os.Stdout, c); close(copied) }()
