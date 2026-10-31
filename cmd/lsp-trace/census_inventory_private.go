@@ -44,7 +44,8 @@ type censusInventoryConfigPrivate struct {
 	Seeds              []uint64
 	// Nil is preparation-only. Approval is exact scope/config data, not an
 	// authenticated acceptance decision. Parent must separately approve disclosure.
-	Automation *prep.AutomaticHandoffConfigPrivateV2
+	Automation  *prep.AutomaticHandoffConfigPrivateV2
+	Application *censusApplicationConfigPrivate `json:",omitempty"`
 }
 
 type censusInventoryFilePrivate struct {
@@ -88,6 +89,8 @@ type censusInventoryReportPrivate struct {
 	FileDenominator                                                 int
 	EnumerationLimit                                                *censuspreflight.Diagnostic
 	FilePages                                                       []censusInventoryPagePrivate
+	ApplicationPlan                                                 *censusInventoryPagePrivate      `json:",omitempty"` // accounting only; never a continuation owner
+	ApplicationBinding                                              *censusApplicationBindingPrivate `json:",omitempty"`
 	Origins                                                         []censusInventoryOriginPrivate
 	Coverage                                                        []prep.Coverage
 	Index                                                           []prep.TargetIndex
@@ -140,6 +143,9 @@ func loadCensusInventoryConfigContextPrivate(ctx context.Context, path string) (
 	canonical, _ := json.Marshal(c)
 	if !bytes.Equal(raw, canonical) || c.Profile != censusInventoryProfilePrivate || (c.MaxOrigins < 1 || c.MaxOrigins > 2) || len(c.Seeds) < 2 || len(c.Seeds) > 16 || c.OperationTimeoutMS < c.Policy.TimeoutMS || c.OperationTimeoutMS < 1 || c.OperationTimeoutMS > 240000 {
 		return c, errors.New("private inventory config noncanonical or profile/bounds invalid")
+	}
+	if c.Application != nil && c.Application.validate() != nil {
+		return c, errors.New("private application profile invalid")
 	}
 	if c.Automation != nil && prep.ValidateAutomaticHandoffPrivateV2(*c.Automation) != nil {
 		return c, errors.New("private inventory handoff approval invalid")
@@ -303,7 +309,18 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	// Approval pins the full automatic nomination denominator and all acquisition
 	// and preparation limits, not a caller-selected file list or a target count.
 	var closes []func() error
+	var application *censusApplicationProgressPrivate
 	finish := func(cause error) int {
+		if application != nil {
+			if cause != nil && application.failure == "" {
+				application.failure = "CURRENT_ATTEMPT_OR_ADMISSION_FAILED"
+			}
+			if e := application.accounting(attempt); e != nil {
+				cause = errors.Join(cause, e)
+				r.Errors = append(r.Errors, "APPLICATION_ACCOUNTING_NOT_RETAINED")
+			}
+			r.ApplicationBinding = application.binding()
+		}
 		if cause != nil {
 			for i := range r.Origins {
 				if r.Origins[i].Status == "FROZEN" {
@@ -342,6 +359,13 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			fmt.Fprintln(stderr, "private inventory report retention failed")
 			return 1
 		}
+		if application != nil {
+			report, _ := json.Marshal(r)
+			if e := application.result(report, r); e != nil {
+				fmt.Fprintln(stderr, "private application terminal result retention failed; claim remains spent")
+				cause = errors.Join(cause, e) // still emit the retained failure report's metadata
+			}
+		}
 		// Metadata only. Exact source and packets stay under the private root.
 		raw, _ := json.Marshal(struct {
 			Profile, InputFamily, Status, AttemptDirectory, ScopeSHA256 string
@@ -372,11 +396,43 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	if pageErr != nil {
 		return finish(pageErr)
 	}
+	r.ApplicationPlan, err = retainCensusApplicationPlanPrivate(ctx, attempt, o, c, rows, plannedPages)
+	if err != nil {
+		r.Failure = "APPLICATION_METADATA_PLAN_RETENTION_FAILED"
+		return finish(err)
+	}
 	r.ApplicationCoverage = "BOUNDED_ACCOUNTED_NOT_SOURCE_COMPLETE"
 	for _, row := range rows {
 		if strings.HasPrefix(row.Disposition, "RESOURCE_GAP") {
 			r.ApplicationCoverage = "PARTIAL_RESOURCE_GAPS"
 		}
+	}
+	if c.Application != nil {
+		// Bind resolved stable runtime identity, not clock/session nonce or raw
+		// environment/credential values. Profile identity already carries its
+		// opaque environment reference under the existing runtime contract.
+		runtimeConfig, runtimeErr := json.Marshal(struct {
+			Profile, Path, Dir, Language string
+			Args                         []string
+		}{cfg.runner.start.Profile.SessionKey().String(), cfg.runner.start.Process.Path, cfg.runner.start.Process.Dir, cfg.runner.start.LanguageID, cfg.runner.start.Process.Args})
+		if runtimeErr != nil {
+			return finish(runtimeErr)
+		}
+		application, err = openCensusApplicationProgressPrivate(ctx, o, c, rows, plannedPages, attempt, pilot.Digest(runtimeConfig))
+		if application != nil {
+			defer application.store.close()
+			r.ApplicationBinding = application.binding()
+		}
+		if err != nil {
+			r.Failure = "APPLICATION_ADMISSION_REFUSED"
+			return finish(err)
+		}
+		if application.next == len(application.plan.Segments) {
+			r.Status = "APPLICATION_ACCOUNTING_COMPLETE_HOST_ATTESTED"
+			r.ScopeSHA256 = application.id
+			return finish(nil)
+		}
+		groups = application.plan.groups(application.next)
 	}
 	// Freeze every automatically selected group before startup or disclosure.
 	// Approval includes observed source hashes/lengths, not just mutable paths.
@@ -400,26 +456,21 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		}
 		frozenScopes[ordinal] = frozen
 		manifests[ordinal] = frozen.ManifestBytes()
+		if application != nil && !bytes.Equal(manifests[ordinal], application.plan.Origins[application.plan.Segments[application.next][ordinal]].Manifest) {
+			r.Failure = "APPLICATION_FRESH_FREEZE_DRIFT"
+			return finish(errors.New(r.Failure))
+		}
 		r.Origins[ordinal].ScopeSHA256 = pilot.Digest(manifests[ordinal])
 		r.Origins[ordinal].Status = "FROZEN"
 		for _, i := range indices {
 			r.Files[i].Disposition = "FROZEN"
 		}
 	}
-	approvalConfig := c
-	approvalConfig.Automation = nil
-	var partitions [][]int
-	if c.MaxOrigins > 1 {
-		partitions = groups
+	var applicationScope *censusApplicationScopePrivate
+	if application != nil {
+		applicationScope = &censusApplicationScopePrivate{application.id, application.next}
 	}
-	scopeBytes, _ := json.Marshal(struct {
-		Workspace                           string
-		Config                              censusInventoryConfigPrivate
-		Sources, Includes, Excludes, Pruned []string
-		Files                               []censusInventoryPagePrivate
-		Manifests                           []json.RawMessage
-		Partitions                          [][]int `json:",omitempty"`
-	}{o.Workspace, approvalConfig, o.Sources, o.Includes, o.Excludes, o.PrunedDirectories, plannedPages, manifests, partitions})
+	scopeBytes := censusInventoryScopeBytesPrivate(o, c, plannedPages, manifests, groups, applicationScope)
 	r.ScopeSHA256 = pilot.Digest(scopeBytes)
 	if err = writeCensusInventoryFilePrivate(filepath.Join(attempt, "scope.json"), json.RawMessage(scopeBytes)); err != nil {
 		return finish(err)
@@ -439,6 +490,19 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		if prep.CheckAutomaticHandoffDirectoryPrivateV2(c.Automation.Directory) != nil || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.Workspace) || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.PublicationRoot) {
 			r.Failure = "HANDOFF_TOPOLOGY_REFUSED"
 			return finish(errors.New(r.Failure))
+		}
+	}
+	if application != nil {
+		if err := application.revalidate(ctx, o, c, deps.enumerate); err != nil {
+			r.Failure = "APPLICATION_PRE_ACQUISITION_DRIFT"
+			return finish(err)
+		}
+		if c.Automation != nil {
+			if err := application.claim(attempt, r.ScopeSHA256); err != nil {
+				r.Failure = "APPLICATION_CLAIM_REFUSED"
+				return finish(err)
+			}
+			r.ApplicationBinding = application.binding()
 		}
 	}
 	source, err := publication.OpenSourceProtectionRootPrivateV2(ctx, o.Workspace)
@@ -674,7 +738,13 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		return finish(nil)
 	}
 	if c.Automation != nil {
-		if e := revalidateCensusInventoryDisclosurePrivate(ctx, o, c, r.Files, groups, manifests, deps.enumerate); e != nil {
+		var disclosureErr error
+		if application != nil {
+			disclosureErr = application.revalidate(ctx, o, c, deps.enumerate)
+		} else {
+			disclosureErr = revalidateCensusInventoryDisclosurePrivate(ctx, o, c, r.Files, groups, manifests, deps.enumerate)
+		}
+		if e := disclosureErr; e != nil {
 			r.Failure = "SOURCE_SCOPE_OR_APPROVAL_DRIFT"
 			if ctx.Err() != nil {
 				r.Failure = "OPERATION_DEADLINE"
