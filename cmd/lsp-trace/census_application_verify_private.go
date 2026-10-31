@@ -277,6 +277,27 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 	if observationErr != nil {
 		return v, errors.Join(errors.New("application native observation refused"), observationErr)
 	}
+	if r.Configuration.CohortAutomation != nil {
+		cfg := r.Configuration.CohortAutomation
+		if inventory.Protocol != prep.CohortProtocolPrivateV2 || inventory.Cohort == nil || inventory.Cohort.MaxItems != cfg.MaxItems || inventory.Calls > cfg.Limits.MaxCalls || inventory.Bytes > cfg.Limits.MaxTotalBytes {
+			return v, errors.New("application cohort runtime/observation bounds mismatch")
+		}
+		for _, row := range inventory.Rows {
+			if len(row.Revisions) > cfg.Limits.MaxCorrections+1 {
+				return v, errors.New("application cohort correction bounds mismatch")
+			}
+		}
+		if len(inventory.NavigationRevisions) > cfg.Limits.MaxCorrections+1 {
+			return v, errors.New("application cohort navigation bounds mismatch")
+		}
+		for _, frame := range inventory.Cohort.Frames {
+			if frame.ResponseByteLength > cfg.Limits.MaxResponseBytes || frame.PhysicalResponseByteLength > cfg.Limits.MaxResponseBytes {
+				return v, errors.New("application cohort response bounds mismatch")
+			}
+		}
+	} else if inventory.Protocol != prep.AutomaticProtocolPrivateV2 || inventory.Cohort != nil {
+		return v, errors.New("application inventory runtime/family mismatch")
+	}
 	preparedRaw := prepared.CanonicalBytes()
 	if pilot.Digest(preparedRaw) != r.PreparationSHA256 || len(preparedRaw) != r.PreparationBytes || !reflect.DeepEqual(prepared.Coverage, r.Coverage) || !reflect.DeepEqual(prepared.Index, r.Index) {
 		return v, errors.New("application native preparation/report mismatch")

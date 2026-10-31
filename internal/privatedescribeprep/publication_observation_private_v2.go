@@ -103,8 +103,11 @@ func ValidateAutomaticPublicationObservationPrivateV2(ctx context.Context, raw [
 	if (inv.Status != "PROVISIONAL_COMPLETE" && inv.Status != "PROVISIONAL_WITH_UNRESOLVED") || inv.Calls < 0 || inv.Bytes < 0 || len(l.Leads) != len(inv.Candidates) || e.HumanInventory != renderAutomatic(inv) {
 		return fail("inventory status/render/reconciliation")
 	}
-	if !inv.PrivateCeilings.valid() || inv.Protocol != AutomaticProtocolPrivateV2 || inv.PreparationSHA256 != e.PreparationSHA256 || inv.Absence != "PROHIBITED" || inv.Independence != "CONFIGURED_DISTINCT_IDENTITIES_NOT_AUTHENTICATED" || inv.Failure != "" || len(inv.Rows) != len(p.Index) {
+	if !inv.PrivateCeilings.valid() || (inv.Protocol != AutomaticProtocolPrivateV2 && inv.Protocol != CohortProtocolPrivateV2) || inv.PreparationSHA256 != e.PreparationSHA256 || inv.Absence != "PROHIBITED" || inv.Independence != "CONFIGURED_DISTINCT_IDENTITIES_NOT_AUTHENTICATED" || inv.Failure != "" || len(inv.Rows) != len(p.Index) {
 		return fail("inventory family/ceilings")
+	}
+	if (inv.Protocol == CohortProtocolPrivateV2) != (inv.Cohort != nil) {
+		return fail("inventory family/cohort shape")
 	}
 	for i, row := range inv.Rows {
 		if row.InputSHA256 != p.Index[i].InputSHA256 || row.Target != p.Index[i].Target {
@@ -123,6 +126,11 @@ func ValidateAutomaticPublicationObservationPrivateV2(ctx context.Context, raw [
 		}
 		if !found {
 			return fail("candidate correspondence")
+		}
+	}
+	if inv.Protocol == CohortProtocolPrivateV2 {
+		if err := observationCohortPrivateV2(ctx, p, inv, l, post); err != nil {
+			return fail(err.Error())
 		}
 	}
 	if err := ctx.Err(); err != nil {

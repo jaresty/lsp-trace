@@ -162,6 +162,7 @@ func TestCohortOwnBodiesAndMixedCorrections(t *testing.T) {
 	if len(rows[0].Revisions) != 1 || len(rows[1].Revisions) != 2 || rows[1].Revisions[0].Status != "MALFORMED" || rows[2].Revisions[0].Status != "REJECTED" || rows[1].Revisions[1].PredecessorDigest != rows[1].Revisions[0].Digest {
 		t.Fatal("ASSERT_COHORT_CORRECTION_CHAIN: FAIL revisions")
 	}
+	checkOwnedCohortObservationTest(t, h, a)
 	t.Log("ASSERT_COHORT_CORRECTION_CHAIN: PASS")
 }
 func TestCohortReviewDigestAndTerminalBudget(t *testing.T) {

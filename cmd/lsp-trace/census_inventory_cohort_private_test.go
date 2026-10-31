@@ -175,7 +175,20 @@ func TestCensusCohortActualCLIProcessPrivate(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	base, _, config, args := inventoryFixturePrivate(t)
+	base, src, config, args := inventoryFixturePrivate(t)
+	if e = os.Remove(filepath.Join(src, "b.go")); e != nil {
+		t.Fatal(e)
+	}
+	for j := 0; j < 4; j++ {
+		if e = os.WriteFile(filepath.Join(src, fmt.Sprintf("cohort-%d.go", j)), []byte("package owned\n\nfunc A0() {}\n"), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	c := inventoryConfigPrivate()
+	c.Policy.MaxNominationFiles = 6
+	c.Policy.Discovery.MaxFiles = 6
+	c.Policy.MaxMembers = 7
+	saveInventoryConfigPrivate(t, config, c)
 	binary := filepath.Join(base, "lsp-trace")
 	build := exec.Command("go", "build", "-o", binary, ".")
 	if out, e := build.CombinedOutput(); e != nil {
@@ -224,7 +237,6 @@ func TestCensusCohortActualCLIProcessPrivate(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	c := inventoryConfigPrivate()
 	cfg := censusCohortFixtureConfig(filepath.Join(base, "mailbox"), first.ScopeSHA256)
 	c.CohortAutomation = &cfg
 	saveInventoryConfigPrivate(t, config, c)
@@ -236,8 +248,17 @@ func TestCensusCohortActualCLIProcessPrivate(t *testing.T) {
 	go func() { done <- cohortHostEmulatePrivate(base, cfg.Directory, helper, python) }()
 	r, code := run()
 	hostErr := <-done
-	if hostErr != nil || code != 0 || r.Inventory == nil || r.Inventory.Calls != 4 || r.Inventory.Protocol != prep.CohortProtocolPrivateV2 || r.Outcome == nil || r.Outcome.Status != "VERIFIED_PAIR_PRIVATE_WITH_LIMITS" || r.HostExportBindingSHA256 == "" || !r.CleanupVerified || r.ShutdownCalls != 1 {
+	if hostErr != nil || code != 0 || r.Inventory == nil || r.Inventory.Calls != 4 || len(r.Inventory.Candidates) != 6 || r.Inventory.Protocol != prep.CohortProtocolPrivateV2 || r.Outcome == nil || r.Outcome.Status != "VERIFIED_PAIR_PRIVATE_WITH_LIMITS" || r.HostExportBindingSHA256 == "" || !r.CleanupVerified || r.ShutdownCalls != 1 {
 		t.Fatalf("ASSERT_COHORT_ACTUAL_CLI_PAIR: FAIL host=%v exit=%d report=%+v", hostErr, code, r)
 	}
+	raw, err := os.ReadFile(filepath.Join(r.AttemptDirectory, "inventory-0", r.Outcome.EnvelopeSHA256))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = prep.ValidateAutomaticPublicationObservationPrivateV2(context.Background(), raw, c.Preparation, c.Post); err != nil {
+		t.Fatalf("ASSERT_COHORT_PURE_OBSERVATION: valid owned creator output refused: %v", err)
+	}
+	t.Log("ASSERT_COHORT_PURE_OBSERVATION: PASS")
+	cohortObservationMutationsPrivate(t, raw, c)
 	t.Logf("ASSERT_COHORT_ACTUAL_CLI_PAIR: PASS physical_exchanges=%d candidates=%d shutdown=%d joined=true", r.Inventory.Calls, len(r.Inventory.Candidates), r.ShutdownCalls)
 }
