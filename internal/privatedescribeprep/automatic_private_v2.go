@@ -110,6 +110,7 @@ type AutomaticNavigationRevisionPrivateV2 struct {
 	Review                                      *AutomaticReviewPrivateV2
 }
 type AutomaticInventoryPrivateV2 struct {
+	Cohort *CohortEvidencePrivateV2 `json:",omitempty"`
 	PrivateCeilings
 	Protocol, Status, Failure, PreparationSHA256, Absence, Independence string
 	Rows                                                                []AutomaticRowPrivateV2

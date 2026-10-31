@@ -18,6 +18,7 @@ import (
 
 func censusInventoryScopeBytesPrivate(o censusCLIOptions, c censusInventoryConfigPrivate, pages []censusInventoryPagePrivate, manifests []json.RawMessage, groups [][]int, application *censusApplicationScopePrivate) []byte {
 	c.Automation = nil
+	c.CohortAutomation = nil
 	var partitions [][]int
 	if c.MaxOrigins > 1 {
 		partitions = groups
@@ -112,7 +113,7 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 		return v, errors.New("application report binding")
 	}
 	terminalSegment := censusTerminalEnabledPrivate(s.config) && r.Status == censusTerminalSegmentStatusPrivate
-	if !terminalSegment && (r.Configuration.Automation == nil || r.Outcome == nil || r.Inventory == nil) {
+	if !terminalSegment && (!r.Configuration.hasAutomation() || r.Outcome == nil || r.Inventory == nil) {
 		return v, errors.New("application native delivery missing")
 	}
 	if terminalSegment && (host.NativeSHA256 != "" || host.NativeBytes != 0 || r.Outcome != nil || r.Inventory != nil || r.PreparationSHA256 != "" || r.PreparationBytes != 0 || len(r.Coverage) != 0 || len(r.Index) != 0 || r.HostExportBindingPath != "" || r.HostExportBindingSHA256 != "") {
@@ -127,9 +128,10 @@ func (s *censusApplicationProgressPrivate) verify(segment int) (v censusApplicat
 	}
 	approved := r.Configuration
 	approved.Automation = nil
+	approved.CohortAutomation = nil
 	expectedConfig, _ := json.Marshal(s.plan.Configuration)
 	actualConfig, _ := json.Marshal(approved)
-	if !bytes.Equal(expectedConfig, actualConfig) || (r.Configuration.Automation != nil && (r.Configuration.Automation.ScopeSHA256 != r.ScopeSHA256 || prep.ValidateAutomaticHandoffPrivateV2(*r.Configuration.Automation) != nil)) {
+	if !bytes.Equal(expectedConfig, actualConfig) || r.Configuration.validateAutomation() != nil || (r.Configuration.hasAutomation() && r.Configuration.automationScope() != r.ScopeSHA256) {
 		return v, errors.New("application approval/configuration mismatch")
 	}
 	groups := s.plan.groups(segment)

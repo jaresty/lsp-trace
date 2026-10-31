@@ -98,6 +98,7 @@ func retainCensusApplicationPlanPrivate(ctx context.Context, directory string, o
 	}
 	config := c
 	config.Automation = nil // Disclosure approval is not accounting identity.
+	config.CohortAutomation = nil
 	plan := censusApplicationPlanPrivate{
 		Schema: "lsp-trace.census-application-metadata-plan.private.v1", InputFamily: "APPLICATION_MANIFEST",
 		SourceBinding: "METADATA_ONLY", Progression: "BLOCKED_FULL_SOURCE_PINS_AND_VERIFIED_SEGMENT_RECEIPTS_REQUIRED",

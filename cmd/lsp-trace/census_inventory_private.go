@@ -44,8 +44,9 @@ type censusInventoryConfigPrivate struct {
 	Seeds              []uint64
 	// Nil is preparation-only. Approval is exact scope/config data, not an
 	// authenticated acceptance decision. Parent must separately approve disclosure.
-	Automation  *prep.AutomaticHandoffConfigPrivateV2
-	Application *censusApplicationConfigPrivate `json:",omitempty"`
+	Automation       *prep.AutomaticHandoffConfigPrivateV2
+	CohortAutomation *prep.CohortHandoffConfigPrivateV2 `json:",omitempty"`
+	Application      *censusApplicationConfigPrivate    `json:",omitempty"`
 
 	// Private response allowance only, not a whole-teardown deadline or authority.
 	ShutdownResponseTimeoutMS int `json:"ShutdownResponseTimeoutMS,omitempty"`
@@ -169,7 +170,7 @@ func loadCensusInventoryConfigContextPrivate(ctx context.Context, path string) (
 	if c.Application != nil && c.Application.validate() != nil {
 		return c, errors.New("private application profile invalid")
 	}
-	if c.Automation != nil && prep.ValidateAutomaticHandoffPrivateV2(*c.Automation) != nil {
+	if c.validateAutomation() != nil {
 		return c, errors.New("private inventory handoff approval invalid")
 	}
 	return c, ctx.Err()
@@ -308,7 +309,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 	}
 	// Preview is strictly metadata-only in the explicit terminal profile, with
 	// no automation/config approval authoring and no generation claim.
-	if o.PrivateInventoryScopePreview && (!censusTerminalEnabledPrivate(c) || c.Automation != nil) {
+	if o.PrivateInventoryScopePreview && (!censusTerminalEnabledPrivate(c) || c.hasAutomation()) {
 		return writeCensusFailure(stderr, censusStageConfig, true, errors.New("scope preview requires terminal profile without automation"))
 	}
 	// CLI acquisition controls remain binding. Config may not silently change them.
@@ -320,7 +321,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		return writeCensusFailure(stderr, censusStageConfig, true, errors.New("private inventory source/publication roots overlap"))
 	}
 	// Mailbox topology must be admitted before even the attempt/denominator writes.
-	if c.Automation != nil && (prep.CheckAutomaticHandoffDirectoryPrivateV2(c.Automation.Directory) != nil || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.Workspace) || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.PublicationRoot)) {
+	if c.hasAutomation() && (prep.CheckAutomaticHandoffDirectoryPrivateV2(c.automationDirectory()) != nil || censusInventoryRelatedPathsPrivate(c.automationDirectory(), o.Workspace) || censusInventoryRelatedPathsPrivate(c.automationDirectory(), o.PublicationRoot)) {
 		return writeCensusFailure(stderr, censusStageConfig, true, errors.New("private inventory handoff roots overlap or unavailable"))
 	}
 	// Admission time consumes this same invocation budget, never a new clock.
@@ -542,19 +543,19 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		r.Status = "SCOPE_PREVIEW_METADATA_ONLY_NOT_GENERATION"
 		return finish(nil)
 	}
-	if c.Automation != nil && c.Automation.ScopeSHA256 != r.ScopeSHA256 {
+	if c.hasAutomation() && c.automationScope() != r.ScopeSHA256 {
 		r.Failure = "DISCLOSURE_SCOPE_MISMATCH"
 		return finish(errors.New(r.Failure))
 	}
-	if c.Automation != nil {
+	if c.hasAutomation() {
 		// A deterministic metadata-only export binding is separate from the
 		// fresh mailbox; it never becomes a v4 worker-launch configuration.
-		r.HostExportBindingPath = c.Automation.Directory + ".census-export.json"
+		r.HostExportBindingPath = c.automationDirectory() + ".census-export.json"
 		if _, e := os.Lstat(r.HostExportBindingPath); !errors.Is(e, os.ErrNotExist) {
 			r.Failure = "HOST_EXPORT_BINDING_NOT_FRESH"
 			return finish(errors.New(r.Failure))
 		}
-		if prep.CheckAutomaticHandoffDirectoryPrivateV2(c.Automation.Directory) != nil || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.Workspace) || censusInventoryRelatedPathsPrivate(c.Automation.Directory, o.PublicationRoot) {
+		if prep.CheckAutomaticHandoffDirectoryPrivateV2(c.automationDirectory()) != nil || censusInventoryRelatedPathsPrivate(c.automationDirectory(), o.Workspace) || censusInventoryRelatedPathsPrivate(c.automationDirectory(), o.PublicationRoot) {
 			r.Failure = "HANDOFF_TOPOLOGY_REFUSED"
 			return finish(errors.New(r.Failure))
 		}
@@ -564,7 +565,7 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 			r.Failure = "APPLICATION_PRE_ACQUISITION_DRIFT"
 			return finish(err)
 		}
-		if c.Automation != nil || censusTerminalEnabledPrivate(c) {
+		if c.hasAutomation() || censusTerminalEnabledPrivate(c) {
 			// The opt-in terminal profile spends the attempt BEFORE startup. Even
 			// an expired operation cannot reopen this generation on a later call.
 			if err := application.claim(attempt, r.ScopeSHA256); err != nil {
@@ -918,14 +919,14 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		r.Status = censusTerminalSegmentStatusPrivate
 		return finish(nil)
 	}
-	if censusTerminalEnabledPrivate(c) && c.Automation == nil {
+	if censusTerminalEnabledPrivate(c) && !c.hasAutomation() {
 		return finish(errors.New("normal terminal-profile delivery requires approved automation before startup"))
 	}
 	if len(inputs) == 0 {
 		r.Status = "NO_PREPARABLE_TARGETS"
 		return finish(nil)
 	}
-	if c.Automation != nil {
+	if c.hasAutomation() {
 		continuationStage = "DISCLOSURE_SCOPE_REVALIDATION"
 		var disclosureErr error
 		if application != nil {
@@ -964,10 +965,13 @@ func runCensusInventoryWithDependenciesPrivate(o censusCLIOptions, cfg censusCor
 		return finish(e)
 	}
 	var outcome prep.PostPublicationOutcomePrivateV2
-	if c.Automation == nil {
+	if !c.hasAutomation() {
 		continuationStage = "POST_PREPARATION_RETENTION"
 		outcome, e = prep.RetainPostPreparationPrivateV2(ctx, h, nil, nil, outputs, protected)
 		r.Status = "PENDING_INTERPRETATION_PRIVATE_V2"
+	} else if c.CohortAutomation != nil {
+		continuationStage = "COHORT_AUTOMATIC_CONTINUATION"
+		outcome, e = runCensusCohortPrivate(ctx, c, &r, h, outputs, protected, []string{o.Workspace, o.PublicationRoot, o.PrivateInventoryConfigPath, cfg.runner.start.Process.Path})
 	} else {
 		binding := struct {
 			Schema, Profile, Protocol                             string

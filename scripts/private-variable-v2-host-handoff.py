@@ -19,6 +19,9 @@ import time
 from datetime import datetime
 
 PROTOCOL = 'PRIVATE_V2_AST_LOCAL_HANDOFF.v1'
+COHORT_PROTOCOL = 'PRIVATE_V2_AST_COHORT_LOCAL_HANDOFF.v1'
+COHORT_SEMANTIC_PROTOCOL = 'private-provisional-inventory-cohort.v1'
+LEGACY_SEMANTIC_PROTOCOL = 'private-provisional-inventory.v2'
 CAP = 16 << 20
 EXPORT_PART_BYTES = 20000
 EXPORT_MAX_PARTS = (CAP + EXPORT_PART_BYTES - 4) // (EXPORT_PART_BYTES - 3)
@@ -132,6 +135,115 @@ def decode(raw):
         raise ValueError('canonical JSON required')
     return value
 
+def cohort_config(c):
+    fields = ['Enabled', 'Mode', 'Protocol', 'MaxItems', 'Directory', 'Invocation',
+              'InterpreterRole', 'ReviewerRole', 'ScopeSHA256', 'TimeoutMS',
+              'OverallTimeoutMS', 'PollMS', 'Limits', 'ApprovalSHA256']
+    if (list(c) != fields or any(isinstance(c[k], bool) or not isinstance(c[k], int)
+                                for k in ('MaxItems', 'TimeoutMS', 'OverallTimeoutMS', 'PollMS'))
+            or c['Enabled'] is not True
+            or c['Mode'] != 'PRIVATE_OPT_IN_SEMANTIC_COHORT_V1'
+            or c['Protocol'] != COHORT_PROTOCOL
+            or not 1 <= c['MaxItems'] <= 63
+            or c['InterpreterRole'] == c['ReviewerRole']
+            or not 1 <= c['TimeoutMS'] <= 60000
+            or not c['TimeoutMS'] <= c['OverallTimeoutMS'] <= 180000
+            or not 1 <= c['PollMS'] <= 1000):
+        raise ValueError('cohort configuration refused')
+    limits = c['Limits']
+    bounds = [('MaxCorrections', 0, 1), ('MaxCalls', 1, 16),
+              ('MaxRequestBytes', 1, 1 << 20), ('MaxResponseBytes', 1, 64 << 10),
+              ('MaxTotalBytes', 1, 8 << 20), ('MaxOutputBytes', 1, 4 << 20)]
+    if list(limits) != [k for k, _, _ in bounds] or any(
+            isinstance(limits[k], bool) or not isinstance(limits[k], int)
+            or not lo <= limits[k] <= hi for k, lo, hi in bounds):
+        raise ValueError('cohort limits refused')
+    unsigned = dict(c)
+    unsigned['ApprovalSHA256'] = ''
+    if digest(canonical(unsigned)) != c['ApprovalSHA256']:
+        raise ValueError('cohort approval refused')
+    return c
+
+
+def cohort_frame(frame, prep):
+    b, r = frame['Binding'], frame['Request']
+    cfg = cohort_config(prep['CohortConfiguration'])
+    if (list(b) != ['Protocol', 'Invocation', 'OwnerNonce', 'Sequence', 'Stage',
+                    'RoleID', 'RequestSHA256', 'PreparationSHA256', 'Items',
+                    'Navigation', 'ResponseAllowance', 'Deadline']
+            or list(r) != ['Protocol', 'Stage', 'PreparationSHA256', 'Items',
+                          'ItemBindings', 'PostLimits', 'LedgerQuoteChunkBytes', 'Navigation']
+            or prep['Limits'] != cfg['Limits']
+            or prep['ScopeSHA256'] != cfg['ScopeSHA256']
+            or prep['Invocation'] != cfg['Invocation']
+            or b['Protocol'] != COHORT_PROTOCOL
+            or r['Protocol'] != COHORT_SEMANTIC_PROTOCOL
+            or r['Stage'] != b['Stage'] or r['PreparationSHA256'] != b['PreparationSHA256']
+            or not 1 <= b['Sequence'] <= cfg['Limits']['MaxCalls']
+            or not 1 <= b['ResponseAllowance'] <= cfg['Limits']['MaxResponseBytes']):
+        raise ValueError('cohort frame refused')
+    role = {'INTERPRET_COHORT': cfg['InterpreterRole'], 'NAVIGATE': cfg['InterpreterRole'],
+            'REVIEW_TECHNICAL_COHORT': cfg['ReviewerRole'], 'REVIEW_NAVIGATION': cfg['ReviewerRole']}
+    if b['Stage'] not in role or b['RoleID'] != role[b['Stage']]:
+        raise ValueError('cohort stage/role refused')
+    if b['Stage'] in ('INTERPRET_COHORT', 'REVIEW_TECHNICAL_COHORT'):
+        if (not isinstance(r['Items'], list) or not 1 <= len(r['Items']) <= cfg['MaxItems']
+                or not isinstance(r['ItemBindings'], list) or len(r['Items']) != len(r['ItemBindings'])
+                or b['Items'] != r['ItemBindings'] or b['Navigation'] is not None or r['Navigation'] is not None):
+            raise ValueError('cohort item vector refused')
+        seen = set()
+        for item, binding in zip(r['Items'], r['ItemBindings']):
+            if (list(item) != ['InputSHA256', 'Target', 'Attempt', 'PredecessorDigest', 'Packet',
+                              'Bodies', 'Feedback', 'PriorRevisions', 'Interpretation', 'InterpretationDigest']
+                    or isinstance(item['Attempt'], bool) or not isinstance(item['Attempt'], int)):
+                raise ValueError('cohort item shape refused')
+            key = (item['InputSHA256'], item['Target'])
+            expected = dict(InputSHA256=item['InputSHA256'], Target=item['Target'], Attempt=item['Attempt'],
+                            PredecessorDigest=item['PredecessorDigest'], RequestSHA256=digest(canonical(item)))
+            if key in seen or binding != expected or list(binding) != list(expected) or item['Attempt'] not in (0, 1):
+                raise ValueError('cohort ordered item binding refused')
+            seen.add(key)
+            if b['Stage'] == 'INTERPRET_COHORT':
+                if item['Interpretation'] is not None or item['InterpretationDigest'] != '':
+                    raise ValueError('cohort interpretation shape refused')
+            elif not isinstance(item['Interpretation'], dict) or not item['InterpretationDigest']:
+                raise ValueError('cohort review shape refused')
+    else:
+        n = r['Navigation']
+        if (r['Items'] is not None or r['ItemBindings'] is not None or b['Items'] is not None
+                or not isinstance(n, dict) or n['Protocol'] != r['Protocol'] or n['Stage'] != r['Stage']
+                or n['PreparationSHA256'] != r['PreparationSHA256'] or n['InputSHA256'] != '' or n['Target'] != ''
+                or n['Attempt'] not in (0, 1) or b['Navigation'] != dict(Attempt=n['Attempt'],
+                    PredecessorDigest=n['PredecessorDigest'], RevisionDigest=n['RevisionDigest'],
+                    CandidatesSHA256=digest(canonical(n['Candidates'])))):
+            raise ValueError('cohort navigation binding refused')
+
+
+def semantic_family(frame, prep):
+    """Family closure only; opaque legacy request data is never rewritten.
+
+    Navigation in the legacy Go request is a nullable hypothesis array, not
+    the cohort's nested request object. Legacy bindings have scalar attribution
+    only. Use this check for completed history too, independently of liveness.
+    """
+    b, r = frame['Binding'], frame['Request']
+    if b['Protocol'] == COHORT_PROTOCOL:
+        cohort_frame(frame, prep)
+        return
+    if b['Protocol'] != PROTOCOL:
+        raise ValueError('semantic family refused')
+    if b['Stage'] not in ('INTERPRET', 'REVIEW_TECHNICAL', 'NAVIGATE', 'REVIEW_NAVIGATION'):
+        raise ValueError('legacy stage refused')
+    if set(b) != {'Protocol', 'Invocation', 'OwnerNonce', 'Sequence', 'Stage', 'RoleID',
+                  'RequestSHA256', 'PreparationSHA256', 'InputSHA256', 'Target', 'Attempt',
+                  'PredecessorDigest', 'ResponseAllowance', 'Deadline'}:
+        raise ValueError('legacy binding shape refused')
+    if (not isinstance(r, dict) or r.get('Protocol') != LEGACY_SEMANTIC_PROTOCOL
+            or r.get('Stage') != b['Stage'] or 'Items' in r or 'ItemBindings' in r
+            or (r.get('Navigation') is not None and not isinstance(r['Navigation'], list))):
+        raise ValueError('legacy semantic family refused')
+
+
 def request(fd, sequence, retain=False, cap=CAP):
     if not 1 <= sequence <= 4096:
         raise ValueError('sequence bound')
@@ -139,8 +251,11 @@ def request(fd, sequence, retain=False, cap=CAP):
     raw = read(fd, f'request-{sequence:06d}.json', cap)
     frame = decode(raw)
     b = frame['Binding']
-    if b['Protocol'] != PROTOCOL or any(b[k] != prep[k] for k in ('Invocation', 'OwnerNonce', 'PreparationSHA256')) or b['Sequence'] != sequence or digest(canonical(frame['Request'])) != b['RequestSHA256']:
+    if b['Protocol'] not in (PROTOCOL, COHORT_PROTOCOL) or b['Protocol'] != prep['Protocol'] or any(b[k] != prep[k] for k in ('Invocation', 'OwnerNonce', 'PreparationSHA256')) or b['Sequence'] != sequence or digest(canonical(frame['Request'])) != b['RequestSHA256']:
         raise ValueError('request binding refused')
+    semantic_family(frame, prep)
+    if b['Protocol'] == COHORT_PROTOCOL and len(raw) > prep['Limits']['MaxRequestBytes']:
+        raise ValueError('cohort request ceiling')
     if datetime.fromisoformat(b['Deadline'].replace('Z', '+00:00')).timestamp() <= time.time():
         raise ValueError('expired handoff')
     if 'terminal.json' in os.listdir(fd):
@@ -172,7 +287,7 @@ def wait_request(mailbox, role_id, control, after_sequence=0, poll_ms=100):
                 if (start['Schema'] != 'private.onefile-actual-start.v2'
                         or start['ParentInvokedOperator'] is not True
                         or start['Invocation'] != prep['Invocation']
-                        or prep['Protocol'] != PROTOCOL
+                        or prep['Protocol'] not in (PROTOCOL, COHORT_PROTOCOL)
                         or number(start['StartedUnix']) >= deadline
                         or any(not isinstance(start[k], str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', start[k])
                                for k in ('ScopeSHA256', 'FullPlanSHA256', 'ActualRoleBindingsSHA256'))
@@ -219,13 +334,14 @@ def wait_request(mailbox, role_id, control, after_sequence=0, poll_ms=100):
                             binding_deadline(binding)
                             response = decode(read(fd, response_name))
                             payload = base64.b64decode(response['Payload'], validate=True)
-                            if (binding['Protocol'] != PROTOCOL or binding['Sequence'] != sequence
+                            if (binding['Protocol'] not in (PROTOCOL, COHORT_PROTOCOL) or binding['Protocol'] != prep['Protocol'] or binding['Sequence'] != sequence
                                     or any(binding[k] != prep[k] for k in ('Invocation', 'OwnerNonce', 'PreparationSHA256'))
                                     or binding['RequestSHA256'] != digest(canonical(frame['Request']))
                                     or response['Binding'] != binding
                                     or response['PayloadSHA256'] != digest(payload)
                                     or response['PayloadByteLength'] != len(payload)):
                                 raise ValueError('wait response binding')
+                            semantic_family(frame, prep)
                             continue
                         try:
                             frame = request(fd, sequence)
@@ -272,6 +388,10 @@ def export_request(fd, mailbox, sequence, destination, config_path, config_pin, 
     b = frame['Binding']
     if b['Invocation'] != automation['Invocation'] or prep['Limits'] != automation['Limits']:
         raise ValueError('export config binding mismatch')
+    if ((b['Protocol'] == COHORT_PROTOCOL) != (automation.get('Protocol') == COHORT_PROTOCOL)
+            or (b['Protocol'] == COHORT_PROTOCOL
+                and canonical(prep['CohortConfiguration']) != canonical(automation))):
+        raise ValueError('export cohort configuration mismatch')
     if expected is not None and (prep.get('ScopeSHA256'), b['PreparationSHA256']) != expected:
         raise ValueError('Census export scope/preparation mismatch')
     prefix = b'{"Binding":' + canonical(b) + b',"Request":'
@@ -353,7 +473,7 @@ def export_request(fd, mailbox, sequence, destination, config_path, config_pin, 
                 raise ValueError('export part count')
             put(name, part)
             start = end
-        manifest = dict(Schema='private-v2-host-export.v1', Binding=b,
+        manifest = dict(Schema=('private-v2-cohort-host-export.v1' if b['Protocol'] == COHORT_PROTOCOL else 'private-v2-host-export.v1'), Binding=b,
                         Frame=dict(Name='frame.json', SHA256=digest(raw), ByteLength=len(raw)),
                         Request=dict(Name='request.json', SHA256=digest(request_raw), ByteLength=len(request_raw), Start=len(prefix), End=len(raw) - 1),
                         PartBytes=EXPORT_PART_BYTES, Parts=parts,
@@ -361,7 +481,7 @@ def export_request(fd, mailbox, sequence, destination, config_path, config_pin, 
         encoded = canonical(manifest)
         if len(encoded) > EXPORT_MANIFEST_CAP:
             raise ValueError('export manifest ceiling')
-        receipt = dict(Schema='private-v2-host-export-receipt.v1', Directory=destination,
+        receipt = dict(Schema=('private-v2-cohort-host-export-receipt.v1' if b['Protocol'] == COHORT_PROTOCOL else 'private-v2-host-export-receipt.v1'), Directory=destination,
                        Manifest='manifest.json', ManifestSHA256=digest(encoded), ManifestByteLength=len(encoded),
                        FrameSHA256=digest(raw), FrameByteLength=len(raw), RequestSHA256=b['RequestSHA256'],
                        RequestByteLength=len(request_raw), PartCount=len(parts), Sequence=sequence,
@@ -418,6 +538,16 @@ def config(path, pin):
 
 def export_config(path, pin):
     c = pinned_config(path, pin)
+    if c.get('Schema') == 'private-census-inventory-cohort-host-export.v1':
+        cfg = cohort_config(c['CohortAutomation'])
+        if (c.get('Profile') != 'PRIVATE_CENSUS_AST_V2' or c.get('Protocol') != COHORT_PROTOCOL
+                or c.get('Authority') != 0 or isinstance(c.get('Authority'), bool)
+                or c.get('Accepted') is not False or c.get('Qualified') is not False
+                or c.get('FeatureIdentity') != 'UNRESOLVED' or c.get('SourceCompleteness') != 'UNKNOWN'
+                or c.get('AbsenceInference') != 'PROHIBITED' or cfg['ScopeSHA256'] != c['ScopeSHA256']
+                or not isinstance(c.get('Roots'), list) or not 2 <= len(c['Roots']) <= 16):
+            raise ValueError('private cohort Census export family/ceiling refused')
+        return cfg, c['Roots'], (c['ScopeSHA256'], c['PreparationSHA256'])
     if c.get('Schema') == 'private-census-inventory-host-export.v1':
         if (c.get('Profile') != 'PRIVATE_CENSUS_AST_V2' or c.get('Protocol') != PROTOCOL
                 or c.get('Authority') != 0 or isinstance(c.get('Authority'), bool)

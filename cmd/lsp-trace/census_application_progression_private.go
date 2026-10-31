@@ -100,7 +100,7 @@ type censusApplicationProgressPrivate struct {
 
 func openCensusApplicationProgressPrivate(ctx context.Context, o censusCLIOptions, c censusInventoryConfigPrivate, rows []censusInventoryFilePrivate, pages []censusInventoryPagePrivate, attempt, runtimeSHA string) (s *censusApplicationProgressPrivate, err error) {
 	a := c.Application
-	if a == nil || a.validate() != nil || censusInventoryRelatedPathsPrivate(a.Directory, o.Workspace) || censusInventoryRelatedPathsPrivate(a.Directory, o.PublicationRoot) || (c.Automation != nil && censusInventoryRelatedPathsPrivate(a.Directory, c.Automation.Directory)) {
+	if a == nil || a.validate() != nil || censusInventoryRelatedPathsPrivate(a.Directory, o.Workspace) || censusInventoryRelatedPathsPrivate(a.Directory, o.PublicationRoot) || (c.hasAutomation() && censusInventoryRelatedPathsPrivate(a.Directory, c.automationDirectory())) {
 		return nil, errors.New("application roots overlap or unavailable")
 	}
 	store, err := openCensusApplicationStorePrivate(ctx, a.Directory, a.MaxReadBytes)

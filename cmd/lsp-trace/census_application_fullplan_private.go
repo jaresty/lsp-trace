@@ -105,6 +105,7 @@ func buildCensusApplicationFullPlanPrivate(ctx context.Context, o censusCLIOptio
 	controls, _ := json.Marshal(controlsOptions)
 	clean := c
 	clean.Automation = nil
+	clean.CohortAutomation = nil
 	p = censusApplicationFullPlanPrivate{FeatureIdentity: "UNRESOLVED", SourceCompleteness: "UNKNOWN", AbsenceInference: "PROHIBITED", Schema: "lsp-trace.census-application-source-plan.private.v1", InputFamily: "APPLICATION_SOURCE_OBSERVATIONS_NOT_AUTHORITY", Workspace: o.Workspace, GitObservation: git, RevisionCustody: "CALLER_ASSERTED_NOT_AUTHENTICATED", ControlsSHA256: pilot.Digest(controls), RuntimeConfigurationSHA256: runtimeSHA, Configuration: clean, Sources: o.Sources, Includes: o.Includes, Excludes: o.Excludes, PrunedDirectories: o.PrunedDirectories, Denominator: pages}
 	observedBytes := 0
 	for _, segment := range segments {

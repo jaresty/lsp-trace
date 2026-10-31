@@ -32,7 +32,9 @@ class HandoffTest(unittest.TestCase):
         # exponent spelling and negative zero; this is synthetic, never replay.
         req = b'{"Stage":"INTERPRET","Numbers":[1e-9,-0,1e+21],"Direction":"OUTGOING","Occurrences":["dup","dup"],"Missing":null,"Empty":[],"Body":"'
         req += ('a' * 19137 + '界🙂e\u0301\r\n'.replace('\r', '\\r').replace('\n', '\\n')).encode()
-        tail = b'","Tail":"OWNED_TAIL_SENTINEL"}'
+        # Family-closure fixture adjustment: explicitly name the real legacy
+        # semantic protocol while keeping the opaque byte/UTF8/lexeme exercise.
+        tail = b'","Protocol":"private-provisional-inventory.v2","Tail":"OWNED_TAIL_SENTINEL"}'
         def framed(request):
             binding = dict(**{k: prep[k] for k in ('Protocol', 'Invocation', 'OwnerNonce', 'PreparationSHA256')},
                            Sequence=1, Stage='INTERPRET', RoleID='owned/interpreter', RequestSHA256=h.digest(request),
@@ -379,7 +381,7 @@ class HandoffTest(unittest.TestCase):
             fd = h.directory(str(mailbox))
             try:
                 prep = dict(Protocol=h.PROTOCOL, Invocation='owned', OwnerNonce='nonce', PreparationSHA256=h.digest(b'prepared'))
-                req = dict(Stage='NAVIGATE')
+                req = dict(Stage='NAVIGATE', Protocol='private-provisional-inventory.v2')
                 binding = dict(**prep, Sequence=1, Stage='NAVIGATE', RoleID='same-model/host-role/session', RequestSHA256=h.digest(h.canonical(req)), InputSHA256='', Target='', Attempt=0, PredecessorDigest='', ResponseAllowance=4096, Deadline='2099-01-01T00:00:00Z')
                 h.publish(fd, 'preparation.json', h.canonical(prep))
                 h.publish(fd, 'request-000001.json', h.canonical(dict(Binding=binding, Request=req)))
@@ -429,7 +431,7 @@ class WaitTest(unittest.TestCase):
 
     def make_request(self, f, n, role='owned/interpreter', body='OWNED_PAYLOAD_CANARY'):
         frame = h.decode(f['raw'])
-        frame['Request'] = dict(Stage='INTERPRET', Body=body)
+        frame['Request'] = dict(Stage='INTERPRET', Body=body, Protocol='private-provisional-inventory.v2')
         frame['Binding'].update(Sequence=n, RoleID=role,
                                 RequestSHA256=h.digest(h.canonical(frame['Request'])))
         self.put(f['mailbox'] / f'request-{n:06d}.json', frame)
