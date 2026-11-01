@@ -1,0 +1,28 @@
+# Private cohort: four-finding repair — pending parent adoption
+
+HEAD remains `ffc99380fad002b2ce586fb67ac9d76456e3d0fe`. Sole-writer local repair only: no delegation, staging, commit, push, installation, live provider/model/application execution, SDK, service, or activation.
+
+## Implemented boundaries
+
+1. **Durable production-mailbox accounting.** Before disclosure, the concrete file-IPC capability pins the private mailbox path, device/inode, both exact READY records, and cohort configuration digest. Recovery checks the configuration/grant, protocol, sequence, role, request digest, registered bundle and exact request parts against the durable claim. It reads bounded physical reply bytes before response-semantic parsing, including invalid protocol/digest replies. Mailbox and host copies of one event count once; disagreements refuse qualified observations rather than choosing cheaper data. Deadline-return reconciliation also retains known published bytes. Recovery retains earlier validated observations, never adopts ambiguous reply semantics, never recreates an original owner, and never rediscloses a spent generation. Generic backends supply no arbitrary recovery path. Local consistency is not authentication.
+2. **Wait publication.** The actual sibling dispatcher propagates encoder/write errors and short writes independently of the wait result. Its bounded event buffer preserves the previous JSON bytes/newline. TERMINAL, DEADLINE, PUBLICATION_ERROR and NEEDS_HOST remain distinct. The shared legacy encoder is unchanged.
+3. **Bounded mailbox polling.** One `Readdirnames(889)` acquisition permits at most 888 entries: sixteen canonical exchanges with up to 53 UTF-8 request parts, request/reply files, READY/terminal/return records and bounded staging slack. Overflow or foreign names refuse before sorting; only at most sixteen request names reach sorting. Context checks precede acquisition and metadata processing. Role/sequence come from validated metadata, not parity.
+4. **Whole optional-navigation admission.** Before its first claim/disclosure, navigation checks two calls, the actual serialized proposal, a reviewer envelope bounded by protocol field/group/member maxima and sixfold worst-case JSON re-encoding, two maximum physical responses, cumulative wire and output. Insufficient grant or impossible envelope yields UNAVAILABLE with no optional claim/backend call/counter change. Reservation slack is not charged as payload. No ceilings or grants increased.
+
+## RED/GREEN and gates
+
+Four new compiling assertion REDs preceded production edits. The initial navigation fixture collision was excluded as RED and corrected before the genuine partial-spend failure. A further short-write RED preceded its repair. Actual predecessor CLI SIGSTOP → production SubmitCohort → SIGKILL → fresh CLI failure recovered **0 instead of 23 response bytes**; repaired normal/race runs recover **12,246 request / 23 response bytes**, with zero adopted items.
+
+Final uncached normal **and** race terminal test/subtest events: product **122 pass**, preparation **299 pass**, focused CLI **40 pass / 1 controlled-child skip**, relevant lineage **3 pass**, zero failures. Six-package vet, gofmt and diff checks pass. New guards cover bounded-acquisition instrumentation, invalid replies, duplicate/conflicting copies, known deadline replies, valid third-reply loss retaining ten earlier reviews, READY substitution, all wait events/errors/short writes, navigation wire/output shortage, exact conservative admission, impossible envelope and overflow.
+
+The unchanged actual private-CLI twenty-item driver still uses **8 exchanges, 84,514 request / 30,232 response bytes**, including correction and navigation. Roles remain predetermined None_Model / SCRIPTED_CONTRACT, not independent Agent judgment.
+
+## Evidence and preservation
+
+Private evidence: `/Users/schwa/.local/state/lsp-trace-evidence/host-cohort-reviewrepair-20261101-narrow4/` (0700 directories/0600 files; Go children 022). It retains the 97-path pre-mutation baseline, REDs, final JSON logs, SELECT-only count SQL, preservation record and repair patch. Twelve repair source paths changed/added; the separate 32-path combined source whitelist SHA-256 is `08e3b9ec80be9906c797e6cb4fc980db85486ac93f6a4ec4cdb2d16c4e822bdd`. Original whitelist remains unchanged (`229e0233c1f6154ec1082c855cfb9222c06ef01a302d8549e591fd8b9ee0cee1`). Protected document pins remain `13e0b3f37d7eade816a266c2eed2fad6ef50af7cdbd6933561c9d4f2e3d325f9` and `350834897cdec7f053ae7e03791e01e38d0cca8a4016defc4486cc6e00eca128`. Historical handoff/capsules/grants remain untouched. This new handoff is separate from that source whitelist.
+
+A fresh finite child-local Craft derivation governed this repair. The predecessor's already-disclosed sequencing gap remains separate; later tests do not retroactively repair it. Planning was explicitly filesystem-only under the no-new-server constraint.
+
+## Remaining limits
+
+Unchanged ceilings: sixteen calls; 1 MiB request, 64 KiB response, 8 MiB wire, 4 MiB output; 60/180/240/270-second exchange/backend/operation/HOST bounds. Source-unit-one and per-progress/report 4 MiB limits are **not arbitrary-total application accounting**. Acquisition/session/bootstrap retries, inference billing, host/export outer framing and full-store IO remain excluded. Runtime grants, actual Agent judgment/latency/isolation/authentication/cleanup remain unverified. Authority 0; accepted false; feature UNRESOLVED; source UNKNOWN; absence PROHIBITED. Parent tests and independent review must clear before commit or activation; these gates are affected-scope, not exhaustive certification.

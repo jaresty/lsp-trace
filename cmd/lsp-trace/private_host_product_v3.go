@@ -345,7 +345,10 @@ func encodeHostProductV3(out io.Writer, v any) int {
 	}
 	return 0
 }
-func acquireHostProductV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer) (resultCode int) {
+func acquireHostProductV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer) int {
+	return acquireHostProductWithCleanupV3(ctx, r, frozen, o, c, out, errout, 3*time.Second)
+}
+func acquireHostProductWithCleanupV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer, cleanupGrace time.Duration) (resultCode int) {
 	var err error
 	phase := "ORIGINAL_RETENTION_ROOTS"
 	defer func() {
@@ -395,7 +398,7 @@ func acquireHostProductV3(ctx context.Context, r hostProductRequestV3, frozen pi
 	current.observeStop = func(s session.LifecycleResult) { stops++; cleanupOK = string(s.Failure) == "" }
 	current.joinAfterStop = func() {
 		joins++
-		done, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		done, cancel := context.WithTimeout(context.Background(), cleanupGrace)
 		defer cancel()
 		if current.manager.Shutdown(done) != nil {
 			cleanupOK = false
