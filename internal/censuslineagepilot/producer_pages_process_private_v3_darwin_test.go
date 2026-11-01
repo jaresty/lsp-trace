@@ -3,6 +3,7 @@
 package censuslineagepilot
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/publication"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/sessionruntime"
 )
@@ -87,7 +89,32 @@ func TestProducerPagesPrivateV3OwnedStdioPeer(t *testing.T) {
 		}
 	}
 }
+
+// ReadControlledPagePairPrivateV3 is a test-only independent physical oracle.
+func ReadControlledPagePairPrivateV3(t *testing.T, p ProducerPagesPrivateV3, id string, max int64) []byte {
+	t.Helper()
+	var out []byte
+	for _, root := range p.state.roots.state.outputs {
+		raw, err := p.state.ops.read(context.Background(), root, id, max)
+		if err != nil || Digest(raw) != id || out != nil && !bytes.Equal(out, raw) {
+			t.Fatal("ASSERT_V3_PHYSICAL_REFERENCE_PAIR", id, err)
+		}
+		out = raw
+	}
+	if err := publication.CheckProducerPacketObjectsDistinctPrivateV2(context.Background(), p.state.roots.state.outputs, id); err != nil {
+		t.Fatal("ASSERT_V3_REFERENCE_DISTINCT_INODES", err)
+	}
+	return out
+}
+
 func TestProducerPagesPrivateV3OwnedTwentyStdio(t *testing.T) {
+	ControlledTwentyPagesPrivateV3(t, pageAllowancePrivateV3())
+}
+
+// Exported only in the test binary so external-package integration guards can
+// consume actual original owners without any production fixture constructor.
+func ControlledTwentyPagesPrivateV3(t *testing.T, allowance PageCostPrivateV3) (ProducerPagesPrivateV3, PageRevisionPrivateV3) {
+	t.Helper()
 	ctx := context.Background()
 	root, e := filepath.EvalSymlinks(t.TempDir())
 	if e != nil {
@@ -169,8 +196,8 @@ func TestProducerPagesPrivateV3OwnedTwentyStdio(t *testing.T) {
 		t.Fatal(stop)
 	}
 	roots, _, _ := packetRootsPrivateV2(t, f)
-	ledger, _, _ := ledgerFixturePrivateV3(t, pageAllowancePrivateV3())
-	defer ledger.Close()
+	ledger, _, _ := ledgerFixturePrivateV3(t, allowance)
+	t.Cleanup(func() { _ = ledger.Close() })
 	p, e := NewProducerPagesPrivateV3(ctx, f, o, captures, roots, PagePolicyPrivateV3{32768, 1 << 20, Digest([]byte("owned twenty config"))}, ledger)
 	if e != nil {
 		t.Fatal(e)
@@ -194,4 +221,5 @@ func TestProducerPagesPrivateV3OwnedTwentyStdio(t *testing.T) {
 		}
 	}
 	t.Logf("CONTROLLED_NOT_LIVE: targets=20 batches=20 raw_artifact_bytes=%d pages=%d revision=%s", total, r.Cursor.PageCount, id)
+	return p, r
 }
