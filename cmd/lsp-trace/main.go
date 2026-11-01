@@ -188,6 +188,9 @@ func main() {
 	os.Exit(code)
 }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "private-host-v3" {
+		return runPrivateHostProductV3(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
 	if len(args) > 0 && args[0] == "experimental-handoff" {
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
