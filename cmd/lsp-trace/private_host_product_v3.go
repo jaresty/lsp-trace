@@ -348,7 +348,13 @@ func encodeHostProductV3(out io.Writer, v any) int {
 func acquireHostProductV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer) int {
 	return acquireHostProductWithCleanupV3(ctx, r, frozen, o, c, out, errout, 3*time.Second)
 }
-func acquireHostProductWithCleanupV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer, cleanupGrace time.Duration) (resultCode int) {
+func acquireHostProductWithCleanupV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer, cleanupGrace time.Duration) int {
+	return acquireHostProductWithHookV3(ctx, r, frozen, o, c, out, errout, cleanupGrace, nil)
+}
+
+// Application-only hook binds the native observed denominator. The legacy
+// helper supplies nil and retains its exact request/grant/wire behavior.
+func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer, cleanupGrace time.Duration, discovered func(*hostProductRequestV3, pilot.EnumerationOriginPrivateV2) error) (resultCode int) {
 	var err error
 	phase := "ORIGINAL_RETENTION_ROOTS"
 	defer func() {
@@ -405,6 +411,7 @@ func acquireHostProductWithCleanupV3(ctx context.Context, r hostProductRequestV3
 		}
 	}
 	var transfer product.Transfer
+	terminalReason := ""
 	phase = "ORIGINAL_SESSION_START"
 	code := productionCensusCoreDependencies().runSession(current, func(live context.Context, runtime *initializedAcquisitionRuntime) int {
 		if runtime == nil || runtime.manager != current.manager {
@@ -412,9 +419,25 @@ func acquireHostProductWithCleanupV3(ctx context.Context, r hostProductRequestV3
 		}
 		err = current.manager.WithReadySessionLease(live, sessionruntime.SessionLeaseRequest{SessionID: id.SessionID, Generation: id.Generation, Workspace: o.Workspace}, func(leased context.Context) error {
 			phase = "ORIGINAL_CENSUS_DISCOVERY"
-			origin, _, e := pilot.DiscoverScopePrivateV2(leased, frozen, runtime.manager, id)
+			var origin pilot.EnumerationOriginPrivateV2
+			var e error
+			if discovered == nil {
+				origin, _, e = pilot.DiscoverScopePrivateV2(leased, frozen, runtime.manager, id)
+			} else {
+				var terminal pilot.TerminalDiscoveryOutcomePrivateV2
+				origin, terminal, _, e = pilot.DiscoverScopeOutcomePrivateV2(leased, frozen, runtime.manager, id)
+				terminalReason = terminal.Reason()
+			}
 			if e != nil {
 				return e
+			}
+			if terminalReason != "" {
+				return nil
+			}
+			if discovered != nil {
+				if e = discovered(&r, origin); e != nil {
+					return e
+				}
 			}
 			captures := make([]pilot.OpaqueSuccessfulV2Capture, 0, origin.BatchCount())
 			for i := 0; i < origin.BatchCount(); i++ {
@@ -458,6 +481,18 @@ func acquireHostProductWithCleanupV3(ctx context.Context, r hostProductRequestV3
 	})
 	if code != 0 || err != nil || stops != 1 || joins != 1 || !cleanupOK {
 		return 1
+	}
+	if terminalReason != "" {
+		raw, _ := json.Marshal(struct {
+			Reason, ScopeSHA256                  string
+			Authority                            int
+			Accepted                             bool
+			SourceCompleteness, AbsenceInference string
+		}{terminalReason, pilot.Digest(frozen.ManifestBytes()), 0, false, "UNKNOWN", "PROHIBITED"})
+		if os.WriteFile(filepath.Join(r.AuxiliaryRoot, "application-terminal-discovery.json"), raw, 0600) != nil {
+			return 1
+		}
+		return 0
 	}
 	transfer.Cleanup = product.Lifecycle{OriginalStopCalls: stops, OriginalJoinCalls: joins, InnerGraceful: cleanupOK, RoleCleanup: "UNOBSERVED_HOST_ROLE_RETURN"}
 	if product.WriteTransfer(filepath.Join(r.AuxiliaryRoot, "transfer.json"), transfer) != nil {

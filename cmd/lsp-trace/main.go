@@ -188,6 +188,9 @@ func main() {
 	os.Exit(code)
 }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "private-host-application" {
+		return runPrivateHostApplication(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
 	if len(args) > 0 && args[0] == "private-host-cohort" {
 		return runPrivateHostCohort(args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}
