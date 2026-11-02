@@ -27,20 +27,35 @@ type hostApplicationRequest struct {
 	MaxUnitsPerRun    int
 	UnitResponseBytes int
 	UnitTimeoutMS     int
+	UnitEnvelope      *hostApplicationUnitEnvelope `json:",omitempty"`
 	ApprovalSHA256    string
 }
 
-func hostApplicationUnitPolicyDigest(r hostApplicationRequest) string {
-	raw, _ := json.Marshal(struct {
+func hostApplicationUnitPolicyDigest(r hostApplicationRequest, lanes ...*applicationFinalizeLane) string {
+	return applicationFinalizeDigest(struct {
 		Template                         hostProductRequestV3
 		UnitResponseBytes, UnitTimeoutMS int
-	}{r.Template, r.UnitResponseBytes, r.UnitTimeoutMS})
+		UnitEnvelope                     *hostApplicationUnitEnvelope `json:",omitempty"`
+	}{r.Template, r.UnitResponseBytes, r.UnitTimeoutMS, r.UnitEnvelope}, lanes...)
+}
+func hostApplicationDigest(r hostApplicationRequest, lanes ...*applicationFinalizeLane) string {
+	r.ApprovalSHA256 = ""
+	return applicationFinalizeDigest(r, lanes...)
+}
+
+func applicationFinalizeDigest(value any, lanes ...*applicationFinalizeLane) string {
+	if applicationFinalizeCheck(lanes...) != nil {
+		return ""
+	}
+	raw, e := json.Marshal(value)
+	if e != nil || applicationFinalizeCheck(lanes...) != nil {
+		return ""
+	}
 	return pilot.Digest(raw)
 }
-func hostApplicationDigest(r hostApplicationRequest) string {
-	r.ApprovalSHA256 = ""
-	b, _ := json.Marshal(r)
-	return pilot.Digest(b)
+func applicationFinalizeConfigDigest(c product.ApplicationConfig, lanes ...*applicationFinalizeLane) string {
+	c.ApprovalSHA256 = ""
+	return applicationFinalizeDigest(c, lanes...)
 }
 func readHostApplication(path string) (hostApplicationRequest, error) {
 	return decodeHostApplication(path, true)
@@ -51,12 +66,33 @@ func decodeHostApplication(path string, validateTemplate bool) (hostApplicationR
 	if e != nil {
 		return r, e
 	}
+	return decodeHostApplicationRaw(raw, validateTemplate)
+}
+
+func decodeHostApplicationRaw(raw []byte, validateTemplate bool, lanes ...*applicationFinalizeLane) (hostApplicationRequest, error) {
+	var r hostApplicationRequest
+	gate := func() error { return applicationFinalizeCheck(lanes...) }
+	if e := gate(); e != nil {
+		return r, e
+	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
-	if d.Decode(&r) != nil || d.Decode(new(any)) != io.EOF {
+	if d.Decode(&r) != nil {
 		return r, product.ErrInvalid
 	}
+	if e := gate(); e != nil {
+		return r, e
+	}
+	if d.Decode(new(any)) != io.EOF {
+		return r, product.ErrInvalid
+	}
+	if e := gate(); e != nil {
+		return r, e
+	}
 	canonical, _ := json.Marshal(r)
+	if e := gate(); e != nil {
+		return r, e
+	}
 	if _, e := applicationChildAllowance(r, r.Template); e != nil {
 		return r, e
 	}
@@ -68,9 +104,30 @@ func decodeHostApplication(path string, validateTemplate bool) (hostApplicationR
 		}
 		return r, nil
 	}
+	if e := gate(); e != nil {
+		return r, e
+	}
 	o, e := parseCensusCLIOptions(r.Template.CensusArguments)
-	if !bytes.Equal(raw, canonical) || r.Schema != "private-host-application-request.v1" || r.ApprovalSHA256 != hostApplicationDigest(r) || r.Configuration.ApprovalSHA256 != product.ApplicationConfigDigest(r.Configuration) || r.Configuration.UnitPolicySHA256 != hostApplicationUnitPolicyDigest(r) || r.Configuration.ProducerConfigSHA256 != hostApplicationUnitPolicyDigest(r) || r.Configuration.SourceRoot != o.Workspace || r.Configuration.RevisionAssertion != r.Template.RevisionAssertion || r.Template.RuntimeGrantSHA256 != "" || r.Template.Configuration.ApprovalSHA256 != "" || r.Template.Configuration.Requested != 0 || r.Template.Configuration.ScopeSHA256 != "" || r.Template.Configuration.ProducerConfigSHA256 != "" || r.MaxUnitsPerRun < 1 || r.MaxUnitsPerRun > 16 || r.UnitResponseBytes < 1024 || r.UnitResponseBytes > 8192 || r.UnitTimeoutMS < 1 || r.UnitTimeoutMS > 60000 || e != nil || len(o.Sources) != 1 || o.Sources[0] != "." || !o.PrivateEnumerationProjection || r.Template.ExchangeTimeoutMS > 60000 || r.Template.OperationTimeoutMS > 240000 || r.Configuration.ProducerExecutableSHA256 != r.Template.ServerSHA256 {
+	if ce := gate(); ce != nil {
+		return r, ce
+	}
+	requestDigest := hostApplicationDigest(r, lanes...)
+	if ce := gate(); ce != nil {
+		return r, ce
+	}
+	configDigest := applicationFinalizeConfigDigest(r.Configuration, lanes...)
+	if ce := gate(); ce != nil {
+		return r, ce
+	}
+	unitDigest := hostApplicationUnitPolicyDigest(r, lanes...)
+	if ce := gate(); ce != nil {
+		return r, ce
+	}
+	if !bytes.Equal(raw, canonical) || r.Schema != "private-host-application-request.v1" || r.ApprovalSHA256 != requestDigest || r.Configuration.ApprovalSHA256 != configDigest || r.Configuration.UnitPolicySHA256 != unitDigest || r.Configuration.ProducerConfigSHA256 != unitDigest || r.Configuration.SourceRoot != o.Workspace || r.Configuration.RevisionAssertion != r.Template.RevisionAssertion || r.Template.RuntimeGrantSHA256 != "" || r.Template.Configuration.ApprovalSHA256 != "" || r.Template.Configuration.Requested != 0 || r.Template.Configuration.ScopeSHA256 != "" || r.Template.Configuration.ProducerConfigSHA256 != "" || r.MaxUnitsPerRun < 1 || r.MaxUnitsPerRun > 16 || r.UnitResponseBytes < 1024 || r.UnitResponseBytes > 8192 || r.UnitTimeoutMS < 1 || r.UnitTimeoutMS > 60000 || e != nil || len(o.Sources) != 1 || o.Sources[0] != "." || !o.PrivateEnumerationProjection || r.Template.ExchangeTimeoutMS > 60000 || r.Template.OperationTimeoutMS > 240000 || r.Configuration.ProducerExecutableSHA256 != r.Template.ServerSHA256 {
 		return r, product.ErrInvalid
+	}
+	if ce := gate(); ce != nil {
+		return r, ce
 	}
 	if hostProductLexicalRelatedV3(r.Configuration.SourceRoot, r.Configuration.Store) {
 		return r, product.ErrInvalid
@@ -153,6 +210,9 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 	if args[0] == "prompts" {
 		return runPrivateHostCohort([]string{"prompts"}, stdin, stdout, stderr)
 	}
+	if args[0] == "finalize" {
+		return applicationFinalizeDispatch(args, stdin, stdout, stderr)
+	}
 	r, e := decodeHostApplication(args[1], false)
 	if e != nil {
 		return fail("CONFIG_REFUSED")
@@ -199,8 +259,12 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 	if e != nil {
 		return fail("CONFIG_REFUSED_CHARGED")
 	}
+	unitPolicy, policyErr := applicationUnitEnvelope(r)
+	if policyErr != nil {
+		return fail("UNIT_POLICY_REFUSED")
+	}
 	if args[0] == "setup" {
-		ticket, e := applicationTicket(a, r.MaxUnitsPerRun)
+		ticket, e := applicationTicket(a, r.Configuration.Store, r.MaxUnitsPerRun, unitPolicy.MaxCalls)
 		if e != nil {
 			return fail("COORDINATOR_ENVELOPE_REFUSED")
 		}
@@ -227,7 +291,7 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		if args[0] == "discover" {
 			units = 0
 		}
-		runID, e = applicationTicket(a, units)
+		runID, e = applicationTicket(a, r.Configuration.Store, units, unitPolicy.MaxCalls)
 		if e != nil {
 			return fail("COORDINATOR_ENVELOPE_REFUSED")
 		}
@@ -378,6 +442,9 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 			if len(terminalRaw) > 4096 || json.Unmarshal(terminalRaw, &terminal) != nil || terminal.ScopeSHA256 != source.Configuration.ScopeSHA256 {
 				return report("FAILED_TERMINAL_DISCOVERY_BINDING", 1)
 			}
+			if terminal.Reason == "UNIT_SEMANTIC_POLICY_PAUSE" {
+				return report("PAUSED_UNIT_SEMANTIC_POLICY", 0)
+			}
 			s.SourceGaps++
 			s.Selected = next
 			s.Inflight = ""
@@ -445,6 +512,15 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		cohort, runErr := product.RunCohortRetained(backendCtx, source.Configuration, cc, owner, product.ApplicationCohortBackend{Journal: a, UnitID: unitID, Mailbox: mailbox, MaxResponseBytes: uint64(r.UnitResponseBytes)})
 		backendCancel()
 		closeErr := closeOwner()
+		// Preparation may refuse before a cohort report exists. Preserve the spent
+		// inflight unit and known costs; the application terminal, not a fabricated
+		// empty cohort terminal, communicates this typed pause to both roles.
+		if closeErr == nil && errors.Is(runErr, pilot.ErrPagesUnitPrivateV3) {
+			return report("PAUSED_UNSUPPORTED_COMPUTATION_UNIT", 0)
+		}
+		if closeErr == nil && errors.Is(runErr, pilot.ErrPagesPausedPrivateV3) {
+			return report("PAUSED_PREPARATION_BUDGET", 0)
+		}
 		terminalErr := mailbox.TerminalCohort(cohort)
 		if errors.Join(runErr, closeErr, terminalErr) != nil {
 			fmt.Fprintf(stderr, "retained failure class=%s close=%t terminal=%t\n", pilot.ScopeFailureClassPrivateV2(runErr), closeErr != nil, terminalErr != nil)

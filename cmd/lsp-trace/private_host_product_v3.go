@@ -436,6 +436,10 @@ func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, f
 			}
 			if discovered != nil {
 				if e = discovered(&r, origin); e != nil {
+					if e == errApplicationUnitSemanticPolicy {
+						terminalReason = "UNIT_SEMANTIC_POLICY_PAUSE"
+						return nil
+					}
 					return e
 				}
 			}

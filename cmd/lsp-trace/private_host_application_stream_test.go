@@ -79,6 +79,7 @@ func controlledApplicationRun(t *testing.T, tool, path string, extraEnv ...strin
 	processReady := make(chan *os.Process, 1)
 	var wg sync.WaitGroup
 	var returns [2]product.CohortRoleReturn
+	var physical [2][3]int // disjoint role writers; read only after wg.Wait
 	for idx, role := range []string{"interpreter", "reviewer"} {
 		wg.Add(1)
 		go func(idx int, role string) {
@@ -134,6 +135,9 @@ func controlledApplicationRun(t *testing.T, tool, path string, extraEnv ...strin
 					t.Errorf("respond %v %s", e, b)
 					return
 				}
+				physical[idx][0]++
+				physical[idx][1] += event.Bundle.Bytes
+				physical[idx][2] += len(raw)
 				if stopped != nil {
 					forged := product.Ready{Protocol: product.CohortProtocol, Role: role, LaunchID: "foreign-after-return", PromptSHA256: pilot.Digest([]byte(product.CohortRolePrompt(role)))}
 					fb, _ := json.Marshal(forged)
@@ -194,6 +198,9 @@ func controlledApplicationRun(t *testing.T, tool, path string, extraEnv ...strin
 		cancel()
 	}
 	wg.Wait()
+	if e != nil {
+		t.Logf("controlled run failure: %v %s", e, errout.String())
+	}
 	var report applicationTerminal
 	if crash && out.Len() == 0 {
 		return applicationTerminal{Status: "KILLED_AFTER_PHYSICAL_REPLY"}, e
@@ -201,10 +208,27 @@ func controlledApplicationRun(t *testing.T, tool, path string, extraEnv ...strin
 	if json.Unmarshal(out.Bytes(), &report) != nil {
 		t.Fatalf("application output %v %s %s", e, out.String(), errout.String())
 	}
+	for _, marker := range extraEnv {
+		if marker == "TEST_COUNT_PHYSICAL=1" {
+			calls, req, resp := physical[0][0]+physical[1][0], physical[0][1]+physical[1][1], physical[0][2]+physical[1][2]
+			if report.Calls != calls || report.RequestBytes != req || report.ResponseBytes != resp {
+				t.Errorf("ASSERT_INDEPENDENT_SCRIPTED_PHYSICAL_BYTES calls=%d request=%d response=%d report=%+v", calls, req, resp, report)
+			}
+			t.Logf("ASSERT_INDEPENDENT_SCRIPTED_PHYSICAL_BYTES A-pass calls=%d request=%d response=%d", calls, req, resp)
+		}
+	}
 	observations, _ := json.Marshal(returns)
 	finalize := exec.CommandContext(ctx, tool, "private-host-application", "finalize", path, ticket.RunID)
 	finalize.Stdin = bytes.NewReader(observations)
 	if b, fe := finalize.CombinedOutput(); fe != nil {
+		var diagnostic struct{ Schema, Class, Reason, Path string }
+		if json.NewDecoder(bytes.NewReader(b)).Decode(&diagnostic) == nil && diagnostic.Schema == "private-application-finalize-refusal.v1" && diagnostic.Class == "HOST_RETURN_REFUSED" && filepath.Base(diagnostic.Path) == diagnostic.Path && strings.HasPrefix(diagnostic.Path, "host-refusal-") {
+			if request, re := readHostApplication(path); re == nil {
+				if record, re := applicationReadBounded(filepath.Join(request.Configuration.Store, diagnostic.Path), 4096); re == nil {
+					t.Logf("SAFE_FINALIZE_OPERAND_OBSERVATION %s", record)
+				}
+			}
+		}
 		t.Errorf("host observation %v %s; run=%v %s", fe, b, e, errout.String())
 	}
 	return report, e

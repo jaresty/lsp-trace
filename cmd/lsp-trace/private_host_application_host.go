@@ -61,18 +61,31 @@ func applicationWriteOnce(path string, raw []byte) error {
 	defer dir.Close()
 	return dir.Sync()
 }
-func applicationTicket(a *product.ApplicationJournal, maxUnits int) (string, error) {
-	remaining := int((16 - a.Head().Reserved.Calls) / 2)
+func applicationTicket(a *product.ApplicationJournal, root string, maxUnits int, calls ...int) (string, error) {
+	unitCalls := 2
+	if len(calls) > 1 {
+		return "", product.ErrInvalid
+	}
+	if len(calls) == 1 {
+		unitCalls = calls[0]
+	}
+	if unitCalls < 2 || unitCalls > 16 {
+		return "", product.ErrInvalid
+	}
+	remaining := int((16 - a.Head().Reserved.Calls) / uint64(unitCalls))
 	if maxUnits > remaining {
 		maxUnits = remaining
 	}
 	if maxUnits < 0 {
 		maxUnits = 0
 	}
-	waits := uint64(2 * (maxUnits + 1))
+	waits := uint64(maxUnits*unitCalls + 2)
 	metadata := uint64(64<<20) + waits*(80<<20)
 	id := pilot.Digest([]byte(fmt.Sprintf("%s/coordinator/%d", a.Head().ApplicationSHA256, a.Head().Sequence)))
 	if _, e := a.ReserveOperation(id, "coordinator_host_envelope", product.ApplicationBounds{ReadHashBytes: metadata, WriteBytes: 16 << 20, Records: 16384 + waits*16384, ParserBytes: metadata, Work: 1 << 20, ActiveNS: uint64(10 * time.Second)}, time.Now()); e != nil {
+		return "", e
+	}
+	if e := applicationPrepareFinalize(a, root, id); e != nil {
 		return "", e
 	}
 	return a.PutRecord(applicationRunTicket{ApplicationSHA256: a.Head().ApplicationSHA256, CursorSHA256: a.Head().CursorSHA256, WaitReservationSHA256: id, Sequence: a.Head().Sequence, StartGlobal: a.Head().Reserved.Calls})
@@ -133,14 +146,46 @@ func validApplicationDigest(id string) bool {
 	}()
 }
 
-func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Reader, stdout, stderr io.Writer) int {
+func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Reader, stdout, stderr io.Writer, lanes ...*applicationFinalizeLane) int {
 	fail := func(s string) int { fmt.Fprintln(stderr, "private application HOST:", s); return 1 }
 	if len(args) < 3 || !validApplicationDigest(args[2]) {
 		return fail("INVALID_TICKET")
 	}
 	ticketID := args[2]
+	var lane *applicationFinalizeLane
+	if args[0] == "finalize" {
+		if len(lanes) != 1 || lanes[0] == nil {
+			return fail("FINALIZE_LANE_REQUIRED")
+		}
+		lane = lanes[0]
+	}
+	if lane.check() != nil {
+		return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
+	}
+	policy, policyErr := applicationUnitEnvelope(r)
+	if policyErr != nil {
+		return fail("UNIT_POLICY_REFUSED")
+	}
+	unitCalls := uint64(policy.MaxCalls)
 	var ticket applicationRunTicket
-	if product.ReadApplicationRecord(r.Configuration.Store, ticketID, &ticket) != nil || ticket.ApplicationSHA256 != product.ApplicationConfigDigest(r.Configuration) {
+	read := applicationReadBounded
+	if args[0] == "finalize" {
+		if len(lanes) != 1 || lanes[0] == nil {
+			return fail("FINALIZE_LANE_REQUIRED")
+		}
+		lane = lanes[0]
+		read = lane.read
+		var reservation product.OperationReservation
+		if lane.object("data", ticketID, &ticket) != nil || lane.object("claim", ticket.WaitReservationSHA256, &reservation) != nil || reservation.EventID != ticket.WaitReservationSHA256 || reservation.Kind != "coordinator_host_envelope" || reservation.Bounds.ActiveNS != uint64(10*time.Second) || reservation.Sequence != ticket.Sequence {
+			return fail("FINALIZE_TICKET_PREPAYMENT_REFUSED")
+		}
+	} else if product.ReadApplicationRecord(r.Configuration.Store, ticketID, &ticket) != nil {
+		return fail("TICKET_REFUSED")
+	}
+	if lane.check() != nil {
+		return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
+	}
+	if ticket.ApplicationSHA256 != applicationFinalizeConfigDigest(r.Configuration, lane) {
 		return fail("TICKET_REFUSED")
 	}
 	switch args[0] {
@@ -185,7 +230,7 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 			if json.Unmarshal(b, &ac) != nil || !validApplicationDigest(ac.UnitID) || ac.Mailbox != filepath.Join(r.Configuration.Store, "units", ac.UnitID[7:], "cohort-mailbox") {
 				return fail("FOREIGN_ACTIVATION")
 			}
-			if ac.Base <= 14 && global > ac.Base && global <= ac.Base+2 {
+			if ac.Base <= 16-unitCalls && global > ac.Base && global <= ac.Base+unitCalls {
 				if product.SubmitCohort(ac.Mailbox, role, global-ac.Base, raw) != nil {
 					return fail("RESPONSE_REFUSED")
 				}
@@ -238,7 +283,7 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 				return deadlineEvent()
 			}
 			// All roles/frontiers/restarts draw from the SAME irrevocably prepaid
-			// coordinator envelope. Each create-only slot buys at most 100ms of
+			// coordinator envelope. Each create-only slot buys at most 80ms of
 			// owned polling AND sleep; quick returns do not refund unused time.
 			childDeadline, windowErr := applicationWaitChildDeadline(r.Configuration.Store, ticket.ApplicationSHA256, ticketID)
 			if windowErr != nil {
@@ -256,6 +301,10 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 					return event("PAUSED_BUDGET")
 				}
 				return fail("WAIT_SLICE_PUBLICATION_FAILED")
+			} else {
+				// Preserve the finite 100-slot pool. Its 8s partition plus
+				// the root-wide 2s finalize lane is the SAME prepaid 10s.
+				pollDeadline = pollDeadline.Add(-20 * time.Millisecond)
 			}
 			pollCtx, pollCancel := context.WithDeadline(ctx, pollDeadline)
 			defer pollCancel()
@@ -276,7 +325,7 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 					if e != nil {
 						continue
 					}
-					if json.Unmarshal(b, &ac) != nil || !validApplicationDigest(ac.UnitID) || ac.Base > 14 || ac.Base < ticket.StartGlobal || ac.Base+2 <= after {
+					if json.Unmarshal(b, &ac) != nil || !validApplicationDigest(ac.UnitID) || ac.Base > 16-unitCalls || ac.Base < ticket.StartGlobal || ac.Base+unitCalls <= after {
 						continue
 					}
 					if ac.Mailbox != filepath.Join(r.Configuration.Store, "units", ac.UnitID[7:], "cohort-mailbox") {
@@ -319,31 +368,40 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 		if len(args) != 3 {
 			return fail("INVALID_FINALIZE")
 		}
-		raw, e := io.ReadAll(io.LimitReader(stdin, 16385))
+		raw, e := lane.observations(stdin)
 		var returns [2]product.CohortRoleReturn
-		if e != nil || len(raw) > 16384 || json.Unmarshal(raw, &returns) != nil {
+		if e != nil || lane.check() != nil || len(raw) > 16384 || json.Unmarshal(raw, &returns) != nil {
 			return fail("INVALID_HOST_OBSERVATIONS")
 		}
-		terminal, e := applicationReadBounded(applicationTerminalPath(r.Configuration.Store, ticketID), 64<<10)
+		terminal, e := read(applicationTerminalPath(r.Configuration.Store, ticketID), 64<<10)
 		if e != nil {
 			return fail("TERMINAL_UNAVAILABLE")
 		}
+		if lane.check() != nil {
+			return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
+		}
 		terminalSHA := pilot.Digest(terminal)
 		var report applicationTerminal
-		if json.Unmarshal(terminal, &report) != nil {
+		if lane.check() != nil || json.Unmarshal(terminal, &report) != nil {
 			return fail("TERMINAL_REFUSED")
 		}
 		ids := map[string]bool{}
 		kind := "HOST_OBSERVED_RETURNS_NOT_AUTHENTICATED"
 		for n, role := range []string{"interpreter", "reviewer"} {
-			b, e := applicationReadBounded(applicationRoleReadyPath(r.Configuration.Store, ticketID, role), 4096)
+			b, e := read(applicationRoleReadyPath(r.Configuration.Store, ticketID, role), 4096)
 			var ready product.Ready
-			if e != nil || json.Unmarshal(b, &ready) != nil {
+			if e != nil || lane.check() != nil || json.Unmarshal(b, &ready) != nil {
 				return fail("READY_UNAVAILABLE")
 			}
+			if lane.check() != nil {
+				return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
+			}
 			ret := returns[n]
-			if ret.Role != role || ret.LaunchID != ready.LaunchID || ids[ret.LaunchID] || ret.TerminalSHA256 != terminalSHA || ret.Status != "RETURNED" || !validApplicationDigest(ret.ReturnSHA256) || ret.Sequence > 16 || ret.Kind != "HOST_OBSERVED" && ret.Kind != "SCRIPTED_CONTRACT" {
-				return fail("HOST_RETURN_REFUSED")
+			if reason := applicationReturnReason(ret, ready, role, terminalSHA, ids[ret.LaunchID]); reason != "" {
+				if lane.check() != nil {
+					return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
+				}
+				return applicationRefusedReturn(lane.root, ticketID, n, ret, ready, role, terminalSHA, reason, ids[ret.LaunchID], stdout, stderr, lane)
 			}
 			ids[ret.LaunchID] = true
 			if ret.Kind == "SCRIPTED_CONTRACT" {
@@ -357,9 +415,17 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 			Accepted                                                                bool
 			SourceCompleteness                                                      string
 		}{"private-application-host-observation.v1", kind, ticket.ApplicationSHA256, ticketID, terminalSHA, report.InventoryHead, returns, 0, false, "UNKNOWN"}
+		if lane.check() != nil {
+			return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
+		}
 		b, _ := json.Marshal(view)
-		path := filepath.Join(r.Configuration.Store, "host-observation-"+ticketID[7:]+".json")
-		if applicationWriteOnce(path, b) != nil {
+		if lane.check() != nil {
+			return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
+		}
+		if applicationFinalizePublish(lane.root, "host-observation-"+ticketID[7:]+".json", b, true, lane) != nil {
+			return fail("HOST_OBSERVATION_PUBLICATION_FAILED")
+		}
+		if lane.check() != nil {
 			return fail("HOST_OBSERVATION_PUBLICATION_FAILED")
 		}
 		return encodeHostProductV3(stdout, view)

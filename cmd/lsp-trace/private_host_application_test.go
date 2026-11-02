@@ -105,6 +105,32 @@ func TestHostApplicationOwnedServer(t *testing.T) {
 				symbols = append(symbols, lsp.DocumentSymbol{Name: name, Kind: 12, Range: lsp.Range{Start: lsp.Position{Line: pos}, End: lsp.Position{Line: pos, Character: uint32(len(line))}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: pos, Character: 5}, End: lsp.Position{Line: pos, Character: 12}}})
 			}
 			result = symbols
+		case "callHierarchy/incomingCalls":
+			if os.Getenv("LSP_HOST_APPLICATION_LARGE_REFERENCES") == "1" {
+				var p lsp.CallHierarchyIncomingCallsParams
+				if json.Unmarshal(m.Params, &p) != nil {
+					os.Exit(2)
+				}
+				if p.Item.Name == "Owned00" {
+					u, e := url.Parse(p.Item.URI)
+					if e != nil {
+						os.Exit(2)
+					}
+					body, e := os.ReadFile(u.Path)
+					if e != nil {
+						os.Exit(2)
+					}
+					lines := strings.Split(string(body), "\n")
+					ranges := []lsp.Range{}
+					for line, text := range lines {
+						if text == "\tOwned00()" {
+							ranges = append(ranges, lsp.Range{Start: lsp.Position{Line: uint32(line), Character: 1}, End: lsp.Position{Line: uint32(line), Character: 8}})
+						}
+					}
+					from := lsp.CallHierarchyItem{Name: "manyReferences", Kind: 12, URI: p.Item.URI, Range: lsp.Range{Start: lsp.Position{Line: 22}, End: lsp.Position{Line: uint32(len(lines) - 2), Character: 1}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: 22, Character: 5}, End: lsp.Position{Line: 22, Character: 19}}}
+					result = []lsp.CallHierarchyIncomingCall{{From: from, FromRanges: ranges}}
+				}
+			}
 		case "textDocument/prepareCallHierarchy":
 			var p lsp.PrepareCallHierarchyParams
 			if json.Unmarshal(m.Params, &p) != nil {

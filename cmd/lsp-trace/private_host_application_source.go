@@ -213,10 +213,14 @@ func deriveApplicationSource(ctx context.Context, r hostApplicationRequest, entr
 	source.AuxiliaryRoot = filepath.Join(unitRoot, "auxiliary")
 	source.Configuration.Store = filepath.Join(unitRoot, "original")
 	source.Configuration.Application = pilot.Digest([]byte(r.ApprovalSHA256 + "/" + entry.Path))
-	source.Configuration.MaxCalls = 2
-	source.Configuration.MaxRequestBytes = 32 << 10
+	unitPolicy, policyErr := applicationUnitEnvelope(r)
+	if policyErr != nil {
+		return source, zero, policyErr
+	}
+	source.Configuration.MaxCalls = unitPolicy.MaxCalls
+	source.Configuration.MaxRequestBytes = unitPolicy.MaxRequestBytes
 	source.Configuration.MaxResponseBytes = r.UnitResponseBytes
-	source.Configuration.MaxTotalBytes = 80 << 10
+	source.Configuration.MaxTotalBytes = unitPolicy.MaxTotalBytes
 	source.Configuration.AllowanceRevision = 1
 	o, e := parseCensusCLIOptions(source.CensusArguments)
 	if e != nil {
@@ -238,7 +242,11 @@ func deriveApplicationSource(ctx context.Context, r hostApplicationRequest, entr
 	return source, f, nil
 }
 func applicationDerivedCohort(r hostApplicationRequest, source product.Config, unitID, unitRoot string) product.CohortConfig {
-	return product.CohortConfig{RolePromptSHA256: r.Configuration.RolePromptSHA256, Requested: source.Requested, Profile: product.CohortProfile, Protocol: product.CohortProtocol, SourceConfigSHA256: product.ConfigDigest(source), ScopeSHA256: source.ScopeSHA256, Store: filepath.Join(unitRoot, "cohort"), Grant: pilot.Digest([]byte(r.ApprovalSHA256 + unitID)), MaxCalls: 2, MaxRequestBytes: 32 << 10, MaxResponseBytes: r.UnitResponseBytes, MaxTotalBytes: 80 << 10, MaxOutputBytes: (256 << 10) - (32 << 10)}
+	p, e := applicationUnitEnvelope(r)
+	if e != nil {
+		return product.CohortConfig{}
+	}
+	return product.CohortConfig{RolePromptSHA256: r.Configuration.RolePromptSHA256, Requested: source.Requested, Profile: product.CohortProfile, Protocol: product.CohortProtocol, SourceConfigSHA256: product.ConfigDigest(source), ScopeSHA256: source.ScopeSHA256, Store: filepath.Join(unitRoot, "cohort"), Grant: pilot.Digest([]byte(r.ApprovalSHA256 + unitID)), MaxCalls: p.MaxCalls, MaxRequestBytes: p.MaxRequestBytes, MaxResponseBytes: r.UnitResponseBytes, MaxTotalBytes: p.MaxTotalBytes, MaxOutputBytes: p.MaxOutputBytes - (32 << 10)}
 }
 func acquireApplicationChild(requestPath string, r hostApplicationRequest, contractID, unitRoot string, out, errout io.Writer) int {
 	var contract struct {
@@ -314,6 +322,12 @@ func acquireApplicationChild(requestPath string, r hostApplicationRequest, contr
 			}
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			// Native count only establishes a lower bound: ten items/frame,
+			// two mandatory roles. Reject known insufficiency before capture or
+			// the original child ledger; encoded packing may need more later.
+			if 2*((count+9)/10) > bound.Configuration.MaxCalls {
+				return errApplicationUnitSemanticPolicy
 			}
 			bound.Configuration.Requested = count
 			bound.Configuration.ApprovalSHA256 = product.ConfigDigest(bound.Configuration)
