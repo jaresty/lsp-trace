@@ -21,7 +21,8 @@ type hostApplicationUnitEnvelope struct {
 	// Explicit whole-unit opt-in, NOT an exchange timeout. Omission preserves
 	// legacy canonical bytes and the 60s limit. The parent prepays this interval
 	// before original acquisition; preparation and semantics share its remainder.
-	UnitTimeoutMS int `json:",omitempty"`
+	UnitTimeoutMS int  `json:",omitempty"`
+	Navigation    bool `json:",omitempty"`
 }
 
 func applicationUnitEnvelope(r hostApplicationRequest) (hostApplicationUnitEnvelope, error) {

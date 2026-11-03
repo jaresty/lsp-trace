@@ -255,7 +255,7 @@ func applicationDerivedCohort(r hostApplicationRequest, source product.Config, u
 	if e != nil {
 		return product.CohortConfig{}
 	}
-	return product.CohortConfig{RolePromptSHA256: r.Configuration.RolePromptSHA256, Requested: source.Requested, Profile: product.CohortProfile, Protocol: product.CohortProtocol, SourceConfigSHA256: product.ConfigDigest(source), ScopeSHA256: source.ScopeSHA256, Store: filepath.Join(unitRoot, "cohort"), Grant: pilot.Digest([]byte(r.ApprovalSHA256 + unitID)), MaxCalls: p.MaxCalls, MaxRequestBytes: p.MaxRequestBytes, MaxResponseBytes: r.UnitResponseBytes, MaxTotalBytes: p.MaxTotalBytes, MaxOutputBytes: p.MaxOutputBytes - (32 << 10)}
+	return product.CohortConfig{Navigation: p.Navigation, RolePromptSHA256: r.Configuration.RolePromptSHA256, Requested: source.Requested, Profile: product.CohortProfile, Protocol: product.CohortProtocol, SourceConfigSHA256: product.ConfigDigest(source), ScopeSHA256: source.ScopeSHA256, Store: filepath.Join(unitRoot, "cohort"), Grant: pilot.Digest([]byte(r.ApprovalSHA256 + unitID)), MaxCalls: p.MaxCalls, MaxRequestBytes: p.MaxRequestBytes, MaxResponseBytes: r.UnitResponseBytes, MaxTotalBytes: p.MaxTotalBytes, MaxOutputBytes: p.MaxOutputBytes - (32 << 10)}
 }
 func acquireApplicationChild(requestPath string, r hostApplicationRequest, contractID, unitRoot string, out, errout io.Writer) int {
 	var contract struct {
