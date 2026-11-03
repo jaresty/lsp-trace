@@ -63,16 +63,7 @@ func NewOwnASTReaderRetainedCheckpointPrivateV3(ctx context.Context, p derived.P
 	if ctx == nil || !limits.valid() {
 		return OwnASTReaderRetainedCheckpointPrivateV3{}, pilot.ErrInvalid
 	}
-	before := p.BudgetSpent()
-	_, assessment, e := derived.ValidateInstabilityRetainedCheckpointPrivateV3(ctx, p, a, exchange)
-	if e != nil {
-		return OwnASTReaderRetainedCheckpointPrivateV3{}, e
-	}
-	exchange, e = pilot.RemainingPageExchangePrivateV3(before, p.BudgetSpent(), exchange)
-	if e != nil {
-		return OwnASTReaderRetainedCheckpointPrivateV3{}, e
-	}
-	v, e := p.Read(ctx, exchange)
+	v, assessment, e := derived.ValidateInstabilityWithEvidenceRetainedCheckpointPrivateV3(ctx, p, a, exchange)
 	if e != nil {
 		return OwnASTReaderRetainedCheckpointPrivateV3{}, e
 	}
@@ -105,6 +96,9 @@ func NewOwnASTReaderRetainedCheckpointPrivateV3(ctx context.Context, p derived.P
 	}
 	s := &ownASTCheckpointStatePrivateV3{projection: p, canonical: v.DerivedCanonicalV5, targets: targets, report: r, maxBytes: maxBytes, reservedBytes: len(header) + len(assessment) + 256}
 	s.self = s
+	if e := ctx.Err(); e != nil {
+		return OwnASTReaderRetainedCheckpointPrivateV3{}, e
+	}
 	return OwnASTReaderRetainedCheckpointPrivateV3{s}, nil
 }
 

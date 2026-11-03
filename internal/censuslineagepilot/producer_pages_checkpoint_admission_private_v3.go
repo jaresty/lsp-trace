@@ -554,6 +554,87 @@ func (b RetainedSelectedBatchPrivateV3) Read(ctx context.Context, exchange PageC
 	}
 	return v, ctx.Err()
 }
+
+// RetainedSelectedBatchBindingPrivateV3 contains assertions, not an owner or a
+// reusable evidence capability. Only the sealed batch can revalidate them.
+type RetainedSelectedBatchBindingPrivateV3 struct {
+	CheckpointSHA256, RuntimeSHA256 string
+	ObjectSHA256                    [4]string
+}
+
+// RevalidateBindingPrivateV3 preserves Read's three fresh source validations and
+// runtime paired-custody read without reparsing or cloning the sealed objects.
+// Its bounded byte-work price is policy accounting, not a physical CPU bound.
+func (b RetainedSelectedBatchPrivateV3) RevalidateBindingPrivateV3(ctx context.Context, expected RetainedSelectedBatchBindingPrivateV3, exchange PageCostPrivateV3) error {
+	if ctx == nil {
+		return ErrInvalid
+	}
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	st := b.state
+	if st == nil || st.self != st || st.owner == nil {
+		return ErrInvalid
+	}
+	s := st.owner
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.valid() || !s.manifest.Revision.Policy.valid() || st.checkpoint != s.checkpoint || !validPageDigestPrivateV3(expected.CheckpointSHA256) || !validPageDigestPrivateV3(expected.RuntimeSHA256) || expected.CheckpointSHA256 != st.checkpoint || expected.RuntimeSHA256 != s.manifest.RuntimeSHA256 {
+		return ErrInvalid
+	}
+	for _, id := range expected.ObjectSHA256 {
+		if !validPageDigestPrivateV3(id) {
+			return ErrInvalid
+		}
+	}
+	// Each selected raw was allocated only after descriptor.Length <= U in
+	// RetainedSelectedReaderPrivateV3.Advance. Recheck the sealed lengths here.
+	// U <= 16 MiB and exactly four objects imply n <= 64 MiB; all arithmetic
+	// below is uint64 and remains below 2^31, except the fixed topology term.
+	u := s.manifest.Revision.Policy.ComputationUnitBytes
+	var n uint64
+	for _, raw := range st.raw {
+		if uint64(len(raw)) > u {
+			return ErrPagesUnitPrivateV3
+		}
+		n += uint64(len(raw))
+	}
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	// The maximum n also bounds both multiplications; explicitly check the
+	// topology addition independently before constructing the reservation.
+	if n > 4*(16<<20) || producerPacketTopologyWorkPrivateV2 > ^uint64(0)-n-64 {
+		return ErrInvalid
+	}
+	cost := PageCostPrivateV3{LogicalBytes: 8 * (n + 1), ReadHashBytes: 16 * (n + 1), Work: n + producerPacketTopologyWorkPrivateV2 + 64}
+	if e := s.ledger.state.reserve(cost, &exchange); e != nil {
+		return e
+	}
+	if e := s.checkSource(ctx, &exchange); e != nil {
+		return e
+	}
+	meta, e := s.selectedObject(ctx, 6, &exchange)
+	if e != nil {
+		return e
+	}
+	if Digest(meta) != s.manifest.RuntimeSHA256 {
+		return ErrInvalid
+	}
+	for j, raw := range st.raw {
+		if e := ctx.Err(); e != nil {
+			return e
+		}
+		if Digest(raw) != expected.ObjectSHA256[j] {
+			return ErrInvalid
+		}
+	}
+	if st.checkpoint != expected.CheckpointSHA256 || s.checkpoint != expected.CheckpointSHA256 || s.manifest.RuntimeSHA256 != expected.RuntimeSHA256 {
+		return ErrInvalid
+	}
+	return ctx.Err()
+}
+
 func (b RetainedSelectedBatchPrivateV3) OwnSource(ctx context.Context, uri string, exchange PageCostPrivateV3) ([]byte, error) {
 	st := b.state
 	if st == nil || st.self != st || !st.owner.valid() {

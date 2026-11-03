@@ -108,6 +108,7 @@ func TestRetainedCheckpointPrivateV3CostWitnessExternalFixture(t *testing.T) {
 	if before != owner.BudgetSpent() {
 		t.Fatal("CW_FLOW_LEDGER: initial spent")
 	}
+	var bindingBytes uint64
 	if mode == "flow" {
 		b, err := owner.SelectedBatch(ctx, 0, grant)
 		if err != nil {
@@ -116,6 +117,9 @@ func TestRetainedCheckpointPrivateV3CostWitnessExternalFixture(t *testing.T) {
 		v, err := b.Read(ctx, grant)
 		if err != nil {
 			t.Fatal(err)
+		}
+		for _, raw := range [][]byte{v.CanonicalSeeds, v.CaptureOrigin, v.SourceArtifact, v.ManifestInput} {
+			bindingBytes += uint64(len(raw))
 		}
 		if v.Ordinal != 0 || v.FullTargetCount != 20 {
 			t.Fatal("CW_FLOW: selected extent")
@@ -176,12 +180,13 @@ func TestRetainedCheckpointPrivateV3CostWitnessExternalFixture(t *testing.T) {
 	// and read-hash costs use independently observed source policy inputs.
 	result := struct {
 		Files                     int
+		BindingBytes              uint64
 		Stage, Source, Allocation pilot.PageCostPrivateV3
 		Expected, Records         []pilot.PageCostPrivateV3
 		Delta                     pilot.PageCostPrivateV3
 		Outcome                   string
 		SourceHashes              map[string]string
-	}{Files: len(envelope.Spec.Members), Stage: pilot.PageCostPrivateV3{LogicalBytes: 256 * n, ReadHashBytes: 256 * n, Work: 1000000}, Source: pilot.PageCostPrivateV3{LogicalBytes: 24 * pn, ReadHashBytes: 32 * pn}, Records: records, Delta: pilot.PageCostPrivateV3{LogicalBytes: after.LogicalBytes - before.LogicalBytes, ReadHashBytes: after.ReadHashBytes - before.ReadHashBytes, WriteBytes: after.WriteBytes - before.WriteBytes, Work: after.Work - before.Work}, Outcome: "FLOW"}
+	}{Files: len(envelope.Spec.Members), BindingBytes: bindingBytes, Stage: pilot.PageCostPrivateV3{LogicalBytes: 256 * n, ReadHashBytes: 256 * n, Work: 1000000}, Source: pilot.PageCostPrivateV3{LogicalBytes: 24 * pn, ReadHashBytes: 32 * pn}, Records: records, Delta: pilot.PageCostPrivateV3{LogicalBytes: after.LogicalBytes - before.LogicalBytes, ReadHashBytes: after.ReadHashBytes - before.ReadHashBytes, WriteBytes: after.WriteBytes - before.WriteBytes, Work: after.Work - before.Work}, Outcome: "FLOW"}
 	// The source identity set is fixed and shared with the internal reader.
 	result.SourceHashes = map[string]string{}
 	for _, name := range []string{"producer_pages_checkpoint_admission_private_v3.go", "variable_scope_private_v2.go", "feature_scope_source_unix.go", "producer_pages_ledger_private_v3.go"} {

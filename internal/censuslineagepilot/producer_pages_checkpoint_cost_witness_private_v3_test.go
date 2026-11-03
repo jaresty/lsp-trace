@@ -32,6 +32,7 @@ import (
 // runtime/coverage export, source overlay, or restored capture owner is used.
 type costWitnessRecordV3 struct {
 	Files                     int
+	BindingBytes              uint64
 	Stage, Source, Allocation PageCostPrivateV3
 	Expected                  []PageCostPrivateV3
 	Records                   []PageCostPrivateV3
@@ -49,6 +50,8 @@ type costWitnessSiteV3 struct{ file, receiver, function, call string }
 
 var costWitnessSitesV3 = map[string]costWitnessSiteV3{
 	"read":       {"producer_pages_checkpoint_admission_private_v3.go", "RetainedSelectedBatchPrivateV3", "Read", ""},
+	"binding":    {"producer_pages_checkpoint_admission_private_v3.go", "RetainedSelectedBatchPrivateV3", "RevalidateBindingPrivateV3", ""},
+	"sealedHash": {"producer_pages_checkpoint_admission_private_v3.go", "RetainedSelectedBatchPrivateV3", "RevalidateBindingPrivateV3", "Digest(raw)"},
 	"stage":      {"producer_pages_checkpoint_admission_private_v3.go", "retainedCheckpointStatePrivateV3", "stageCost", ""},
 	"source":     {"variable_scope_private_v2.go", "FrozenScopePrivateV2", "revalidate", ""},
 	"file":       {"feature_scope_source_unix.go", "", "readScopeDescriptorsPrivate", "ReadAll"},
@@ -131,6 +134,16 @@ func costWitnessResolveV3(p costWitnessProfileV3, site costWitnessSiteV3) (costW
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			c, ok := n.(*ast.CallExpr)
 			if !ok {
+				return true
+			}
+			if site.call == "Digest(raw)" {
+				id, ok := c.Fun.(*ast.Ident)
+				if ok && id.Name == "Digest" && len(c.Args) == 1 {
+					arg, ok := c.Args[0].(*ast.Ident)
+					if ok && arg.Name == "raw" {
+						points = append(points, c.Pos())
+					}
+				}
 				return true
 			}
 			sel, ok := c.Fun.(*ast.SelectorExpr)
@@ -243,7 +256,7 @@ func TestRetainedCheckpointPrivateV3CostWitnessFixture(t *testing.T) {
 		t.Skip("isolated coverage helper only")
 	}
 	switch mode {
-	case "baseline", "read", "outer", "nested", "changed", "grown", "corrupt":
+	case "baseline", "read", "outer", "nested", "changed", "grown", "corrupt", "binding", "binding-outer", "binding-nested":
 	default:
 		t.Fatal("unknown cost mode")
 	}
@@ -294,23 +307,37 @@ func TestRetainedCheckpointPrivateV3CostWitnessFixture(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
+	var bindingN uint64
+	binding := RetainedSelectedBatchBindingPrivateV3{CheckpointSHA256: b.state.checkpoint, RuntimeSHA256: owner.state.manifest.RuntimeSHA256}
+	for i, raw := range b.state.raw {
+		bindingN += uint64(len(raw))
+		binding.ObjectSHA256[i] = Digest(raw)
+	}
+	bindingPrice := PageCostPrivateV3{LogicalBytes: 8 * (bindingN + 1), ReadHashBytes: 16 * (bindingN + 1), Work: bindingN + producerPacketTopologyWorkPrivateV2 + 64}
 	g, tip, before := x.l.Tip()
 	if mode != "baseline" {
 		exchange := grant
-		if mode == "outer" {
+		if mode == "outer" || mode == "binding-outer" {
 			exchange = PageCostPrivateV3{}
 		}
 		if mode == "nested" {
 			exchange = costWitnessSumV3(stage, source, pageLedgerOverheadPrivateV3, pageLedgerOverheadPrivateV3)
 		}
-		_, e = b.Read(ctx, exchange)
+		if mode == "binding-nested" {
+			exchange = costWitnessSumV3(bindingPrice, pageLedgerOverheadPrivateV3)
+		}
+		if strings.HasPrefix(mode, "binding") {
+			e = b.RevalidateBindingPrivateV3(ctx, binding, exchange)
+		} else {
+			_, e = b.Read(ctx, exchange)
+		}
 		switch mode {
-		case "read":
+		case "read", "binding":
 			if e != nil {
 				t.Fatal("CW_SUCCESS", e)
 			}
 			rec.Outcome = "SUCCESS"
-		case "outer", "nested":
+		case "outer", "nested", "binding-outer", "binding-nested":
 			if !errors.Is(e, ErrPagesPausedPrivateV3) {
 				t.Fatal("CW_PAUSE_IDENTITY", e)
 			}
@@ -331,11 +358,17 @@ func TestRetainedCheckpointPrivateV3CostWitnessFixture(t *testing.T) {
 	// Expected amounts come from the operation's policy contract and metadata,
 	// not from classifying ledger records into their own expected work counts.
 	switch mode {
-	case "baseline", "outer":
+	case "baseline", "outer", "binding-outer":
+	case "binding-nested":
+		rec.Expected = []PageCostPrivateV3{bindingPrice}
 	case "nested", "changed", "grown":
 		rec.Expected = []PageCostPrivateV3{stage, source}
-	case "read", "corrupt":
-		rec.Expected = []PageCostPrivateV3{stage, source, source}
+	case "read", "corrupt", "binding":
+		first := stage
+		if mode == "binding" {
+			first = bindingPrice
+		}
+		rec.Expected = []PageCostPrivateV3{first, source, source}
 		for i := 0; i <= 6; i++ {
 			rec.Expected = append(rec.Expected, costWitnessReadPriceV3(producerPageHeaderPrivateV3))
 		}
@@ -347,7 +380,7 @@ func TestRetainedCheckpointPrivateV3CostWitnessFixture(t *testing.T) {
 		for i := uint64(0); i < pages; i++ {
 			rec.Expected = append(rec.Expected, costWitnessReadPriceV3(x.m.Revision.Policy.PayloadBytes+producerPageHeaderPrivateV3+4))
 		}
-		if mode == "read" {
+		if mode == "read" || mode == "binding" {
 			rec.Expected = append(rec.Expected, source)
 		}
 	}
@@ -482,9 +515,15 @@ func costWitnessSourceHashesV3(t *testing.T) map[string]string {
 	return hashes
 }
 func costWitnessMatchV3(mode string, c map[string]uint64, r costWitnessRecordV3) error {
-	want := map[string]uint64{"read": 1, "stage": 1, "source": 3, "file": uint64(3 * r.Files), "descriptor": 7}
+	want := map[string]uint64{"read": 1, "stage": 1, "source": 3, "file": uint64(3 * r.Files), "descriptor": 7, "binding": 0, "sealedHash": 0}
+	if strings.HasPrefix(mode, "binding") {
+		want["read"], want["stage"], want["binding"] = 0, 0, 1
+		if mode == "binding" {
+			want["sealedHash"] = 4
+		}
+	}
 	switch mode {
-	case "outer":
+	case "outer", "binding-outer", "binding-nested":
 		want["source"] = 0
 		want["file"] = 0
 		want["descriptor"] = 0
@@ -500,7 +539,7 @@ func costWitnessMatchV3(mode string, c map[string]uint64, r costWitnessRecordV3)
 		want["source"] = 2
 		want["file"] = uint64(2 * r.Files)
 	}
-	for _, name := range []string{"read", "stage", "source", "file", "descriptor"} {
+	for _, name := range []string{"read", "stage", "source", "file", "descriptor", "binding", "sealedHash"} {
 		v, ok := c[name]
 		if !ok || v != want[name] {
 			return fmt.Errorf("CW_WORK_%s: got %d present=%t want %d", name, v, ok, want[name])
@@ -511,7 +550,7 @@ func costWitnessMatchV3(mode string, c map[string]uint64, r costWitnessRecordV3)
 		return fmt.Errorf("CW_WORK_commit: got %d want %d", c["commit"], len(r.Expected))
 	}
 	pairs := uint64(0)
-	if mode == "read" || mode == "corrupt" {
+	if mode == "read" || mode == "corrupt" || mode == "binding" {
 		pairs = uint64(len(r.Expected) - 5)
 	} // 3 sources/stage/allocation versus 2 on corruption
 	if mode == "corrupt" {
@@ -535,7 +574,7 @@ func costWitnessMatchV3(mode string, c map[string]uint64, r costWitnessRecordV3)
 		return fmt.Errorf("CW_LEDGER_DELTA: got %+v want %+v", r.Delta, total)
 	}
 	outcome := "SUCCESS"
-	if mode == "outer" || mode == "nested" {
+	if mode == "outer" || mode == "nested" || mode == "binding-outer" || mode == "binding-nested" {
 		outcome = "PAUSED"
 	}
 	if mode == "changed" || mode == "grown" || mode == "corrupt" {
@@ -551,10 +590,13 @@ func costWitnessMatchV3(mode string, c map[string]uint64, r costWitnessRecordV3)
 // all four journal currencies reconcile, stage and fresh-source charges match
 // independently executed sites, but other full-flow costs are not minimized.
 func costWitnessFlowMatchV3(c map[string]uint64, r costWitnessRecordV3) error {
-	if c["read"] != 8 || c["stage"] != 10 {
-		return fmt.Errorf("CW_FLOW_STAGES: read=%d stage=%d want 8/10", c["read"], c["stage"])
+	if c["read"] != 7 || c["stage"] != 9 {
+		return fmt.Errorf("CW_FLOW_STAGES: read=%d stage=%d want 7/9", c["read"], c["stage"])
 	}
-	if c["source"] < 24 || c["file"] != c["source"]*uint64(r.Files) {
+	if c["binding"] != 1 || c["sealedHash"] != 4 {
+		return fmt.Errorf("CW_FLOW_BINDING: exits=%d hashes=%d want 1/4", c["binding"], c["sealedHash"])
+	}
+	if c["source"] != 34 || c["file"] != c["source"]*uint64(r.Files) {
 		return fmt.Errorf("CW_FLOW_SOURCE: source=%d file=%d members=%d", c["source"], c["file"], r.Files)
 	}
 	if c["commit"] != uint64(len(r.Records)) {
@@ -564,7 +606,11 @@ func costWitnessFlowMatchV3(c map[string]uint64, r costWitnessRecordV3) error {
 	source.Work = 2 * producerPacketTopologyWorkPrivateV2
 	stageCharge := costWitnessSumV3(r.Stage, pageLedgerOverheadPrivateV3)
 	sourceCharge := costWitnessSumV3(source, pageLedgerOverheadPrivateV3)
-	var stages, sources uint64
+	if r.BindingBytes == 0 || r.BindingBytes > 4*(16<<20) {
+		return fmt.Errorf("CW_FLOW_BINDING_BYTES: %d", r.BindingBytes)
+	}
+	bindingCharge := costWitnessSumV3(PageCostPrivateV3{LogicalBytes: 8 * (r.BindingBytes + 1), ReadHashBytes: 16 * (r.BindingBytes + 1), Work: r.BindingBytes + producerPacketTopologyWorkPrivateV2 + 64}, pageLedgerOverheadPrivateV3)
+	var stages, sources, bindings uint64
 	var total PageCostPrivateV3
 	for _, charged := range r.Records {
 		if charged == stageCharge {
@@ -573,7 +619,13 @@ func costWitnessFlowMatchV3(c map[string]uint64, r costWitnessRecordV3) error {
 		if charged == sourceCharge {
 			sources++
 		}
+		if charged == bindingCharge {
+			bindings++
+		}
 		total = costWitnessSumV3(total, charged)
+	}
+	if bindings != c["binding"] {
+		return fmt.Errorf("CW_FLOW_BINDING_CHARGE: got %d want %d all-currency=%+v", bindings, c["binding"], bindingCharge)
 	}
 	if stages != c["stage"] || sources != c["source"] {
 		return fmt.Errorf("CW_FLOW_MATCH: stage=%d/%d source=%d/%d", stages, c["stage"], sources, c["source"])
@@ -603,13 +655,15 @@ func costWitnessFlowV3(t *testing.T) {
 		t.Fatal(e)
 	}
 	t.Logf("CW_FLOW_MATCH: A-pass counters=%v reservations=%d delta=%+v boundary=one-selected-target-through-three-reference-publication", c, len(r.Records), r.Delta)
-	for _, field := range []string{"read", "stage", "source", "delta"} {
+	for _, field := range []string{"read", "stage", "source", "delta", "binding", "sealedHash", "binding-charge"} {
 		cc := map[string]uint64{}
 		for k, v := range c {
 			cc[k] = v
 		}
 		rc := r
-		if field == "delta" {
+		if field == "binding-charge" {
+			rc.BindingBytes++
+		} else if field == "delta" {
 			rc.Delta.LogicalBytes++
 		} else {
 			cc[field]++
@@ -636,7 +690,7 @@ func TestRetainedCheckpointPrivateV3CostWitnessPairedOperations(t *testing.T) {
 	if !reflect.DeepEqual(br, rr) {
 		t.Fatal("CW_STABILITY: baseline contract drift")
 	}
-	for _, mode := range []string{"read", "outer", "nested", "changed", "grown", "corrupt"} {
+	for _, mode := range []string{"read", "outer", "nested", "changed", "grown", "corrupt", "binding", "binding-outer", "binding-nested"} {
 		t.Run(mode, func(t *testing.T) {
 			measured, r := costWitnessRunV3(t, helper, mode)
 			c, e := costWitnessCountersV3(base, repeat, measured)
@@ -650,7 +704,7 @@ func TestRetainedCheckpointPrivateV3CostWitnessPairedOperations(t *testing.T) {
 			if !reflect.DeepEqual(br.SourceHashes, r.SourceHashes) {
 				t.Fatal("CW_IDENTITY: paired sources differ")
 			}
-			if mode == "outer" || mode == "nested" {
+			if mode == "outer" || mode == "nested" || mode == "binding-outer" || mode == "binding-nested" {
 				badCounters := map[string]uint64{}
 				for k, v := range c {
 					badCounters[k] = v

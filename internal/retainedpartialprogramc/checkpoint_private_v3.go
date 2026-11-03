@@ -212,27 +212,77 @@ func ComputeInstabilityRetainedCheckpointPrivateV3(ctx context.Context, p Projec
 	return AssessmentRetainedCheckpointPrivateV3{s}, nil
 }
 func ValidateInstabilityRetainedCheckpointPrivateV3(ctx context.Context, p ProjectionRetainedCheckpointPrivateV3, a AssessmentRetainedCheckpointPrivateV3, exchange pilot.PageCostPrivateV3) (InstabilityReportRetainedCheckpointPrivateV3, []byte, error) {
+	_, r, raw, e := validateInstabilityEvidenceRetainedCheckpointPrivateV3(ctx, p, a, exchange)
+	return r, raw, e
+}
+
+// The legacy core still performs exactly one fresh Read and preserves its report
+// on error. Its detached evidence remains local until the combined exit passes.
+func validateInstabilityEvidenceRetainedCheckpointPrivateV3(ctx context.Context, p ProjectionRetainedCheckpointPrivateV3, a AssessmentRetainedCheckpointPrivateV3, exchange pilot.PageCostPrivateV3) (ProjectionEvidenceRetainedCheckpointPrivateV3, InstabilityReportRetainedCheckpointPrivateV3, []byte, error) {
 	if !p.valid() || a.state == nil || a.state.self != a.state || a.state.projection != p.state {
-		return InstabilityReportRetainedCheckpointPrivateV3{}, nil, pilot.ErrInvalid
+		return ProjectionEvidenceRetainedCheckpointPrivateV3{}, InstabilityReportRetainedCheckpointPrivateV3{}, nil, pilot.ErrInvalid
 	}
 	v, e := p.Read(ctx, exchange)
 	if e != nil {
-		return InstabilityReportRetainedCheckpointPrivateV3{}, nil, e
+		return ProjectionEvidenceRetainedCheckpointPrivateV3{}, InstabilityReportRetainedCheckpointPrivateV3{}, nil, e
 	}
 	var r InstabilityReportRetainedCheckpointPrivateV3
 	if json.Unmarshal(a.state.raw, &r) != nil || validSeeds(r.Math.Seeds) != nil || r.Math.Outcome == "INCOMPLETE" {
-		return r, nil, pilot.ErrInvalid
+		return v, r, nil, pilot.ErrInvalid
 	}
 	assessed, e := assessPrivateMath(ctx, v.Math, checkpointAssessmentSkeletonPrivateV3(v.Source, r.Math.Seeds), r.Math.Seeds, r.Math.Runs)
 	if e != nil {
-		return r, nil, e
+		return v, r, nil, e
 	}
 	raw, e := marshalCheckpointAssessmentPrivateV3(ctx, InstabilityReportRetainedCheckpointPrivateV3{v.Source, assessed})
 	if e != nil {
-		return r, nil, e
+		return v, r, nil, e
 	}
 	if !bytes.Equal(raw, a.state.raw) {
-		return r, nil, pilot.ErrInvalid
+		return v, r, nil, pilot.ErrInvalid
 	}
-	return r, bytes.Clone(raw), nil
+	return v, r, bytes.Clone(raw), nil
+}
+
+// ValidateInstabilityWithEvidenceRetainedCheckpointPrivateV3 returns detached
+// observations only after the real sealed batch has passed its mandatory exit.
+// No caller-supplied DTO or callback can authorize disclosure through this API.
+func ValidateInstabilityWithEvidenceRetainedCheckpointPrivateV3(ctx context.Context, p ProjectionRetainedCheckpointPrivateV3, a AssessmentRetainedCheckpointPrivateV3, exchange pilot.PageCostPrivateV3) (ProjectionEvidenceRetainedCheckpointPrivateV3, []byte, error) {
+	if !p.valid() {
+		return ProjectionEvidenceRetainedCheckpointPrivateV3{}, nil, pilot.ErrInvalid
+	}
+	return validateInstabilityWithEvidenceRetainedCheckpointPrivateV3(ctx, p, a, exchange, p.state.selected.RevalidateBindingPrivateV3)
+}
+
+// Per-call private seam permits fault injection between assessment and exit in
+// package tests; production always supplies the bound real checker above.
+func validateInstabilityWithEvidenceRetainedCheckpointPrivateV3(ctx context.Context, p ProjectionRetainedCheckpointPrivateV3, a AssessmentRetainedCheckpointPrivateV3, exchange pilot.PageCostPrivateV3, exit func(context.Context, pilot.RetainedSelectedBatchBindingPrivateV3, pilot.PageCostPrivateV3) error) (ProjectionEvidenceRetainedCheckpointPrivateV3, []byte, error) {
+	zero := ProjectionEvidenceRetainedCheckpointPrivateV3{}
+	if ctx == nil || exit == nil {
+		return zero, nil, pilot.ErrInvalid
+	}
+	if e := ctx.Err(); e != nil {
+		return zero, nil, e
+	}
+	before := p.BudgetSpent()
+	v, _, raw, e := validateInstabilityEvidenceRetainedCheckpointPrivateV3(ctx, p, a, exchange)
+	if e != nil {
+		return zero, nil, e
+	}
+	if e = ctx.Err(); e != nil {
+		return zero, nil, e
+	}
+	left, e := pilot.RemainingPageExchangePrivateV3(before, p.BudgetSpent(), exchange)
+	if e != nil {
+		return zero, nil, e
+	}
+	s := p.state.source
+	expected := pilot.RetainedSelectedBatchBindingPrivateV3{CheckpointSHA256: s.CheckpointSHA256, RuntimeSHA256: s.RuntimeMetadataSHA256, ObjectSHA256: s.SelectedObjectSHA256}
+	if e = exit(ctx, expected, left); e != nil {
+		return zero, nil, e
+	}
+	if e = ctx.Err(); e != nil {
+		return zero, nil, e
+	}
+	return v, raw, nil
 }
