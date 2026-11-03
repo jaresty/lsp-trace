@@ -135,6 +135,10 @@ func TestApplicationOriginalFailureDiagnostic(t *testing.T) {
 			}
 			var state applicationState
 			e = a.GetRecord(a.Head().CursorSHA256, &state)
+			var selected applicationCatalogEntry
+			if e == nil && kind == "discovery" {
+				e = a.GetRecord(state.Selected, &selected)
+			}
 			a.Close()
 			if e != nil || state.Inflight == "" || state.Activation != 0 {
 				t.Fatalf("spent state prerequisite %+v %v", state, e)
@@ -149,7 +153,7 @@ func TestApplicationOriginalFailureDiagnostic(t *testing.T) {
 				t.Log("ASSERT_APPLICATION_FAILURE_UNAVAILABLE A-pass SPENT nonzero zero activation")
 				return
 			}
-			var f struct{ Phase, Class, StartupStatus, StartupSHA256 string }
+			var f applicationFailure
 			_ = json.Unmarshal(failure, &f)
 			expectedPhase := "ORIGINAL_SESSION_START"
 			if kind == "discovery" {
@@ -164,6 +168,29 @@ func TestApplicationOriginalFailureDiagnostic(t *testing.T) {
 			}
 			if fe != nil || len(failure) > 4096 || !startupOK || ((kind == "startup" || kind == "readiness") && f.StartupStatus != "AVAILABLE") || f.Phase != expectedPhase || !applicationFailureClass(f.Class) || ((kind == "startup" || kind == "readiness") && f.Class != "UNKNOWN") || !strings.Contains(diag.String(), "SafeDiagnosticStatus=AVAILABLE") {
 				t.Fatalf("ASSERT_APPLICATION_ORIGINAL_FAILURE_DIAGNOSTIC A-fail kind=%s failure=%s fe=%v se=%v diag=%s", kind, failure, fe, se, diag.String())
+			}
+			if kind == "discovery" {
+				unitRoot := filepath.Dir(root)
+				source, _, sourceErr := deriveApplicationSource(context.Background(), r, selected, unitRoot)
+				want := newApplicationFailure(source)
+				identity, _ := os.Lstat(unitRoot)
+				projection := loadApplicationFailure(unitRoot, identity, source)
+				if sourceErr != nil || f.RequestSHA256 != want.RequestSHA256 || f.ProductApplication != want.ProductApplication || f.ScopeSHA256 != want.ScopeSHA256 || f.ProducerConfigSHA256 != want.ProducerConfigSHA256 || projection.Status != "AVAILABLE" || projection.ScopeFailure.Stage != "TERMINAL_DISCOVERY" {
+					t.Fatalf("ASSERT_NATIVE_DISCOVERY_REQUEST_BINDING A-fail err=%v projection=%+v", sourceErr, projection)
+				}
+				source.Configuration.Requested++
+				if loadApplicationFailure(unitRoot, identity, source).Status != "UNAVAILABLE" {
+					t.Fatal("post-discovery request accepted as original binding")
+				}
+				t.Log("ASSERT_NATIVE_DISCOVERY_REQUEST_BINDING A-pass pre-discovery request retained")
+				if f.Class != "DISCOVERY_INCOMPLETE" || f.ScopeFailure.Status != "OBSERVATION_AVAILABLE" || f.ScopeFailure.Stage != "TERMINAL_DISCOVERY" || f.ScopeFailure.Class != "DISCOVERY_INCOMPLETE" || f.ScopeFailure.Subcause != "UNKNOWN" || f.ScopeFailure.DiscoveryAvailability != "AVAILABLE_ERROR_REPORT" || f.ScopeFailure.MemberOrdinal != nil || !strings.Contains(diag.String(), "DetachedStage=TERMINAL_DISCOVERY") || !strings.Contains(diag.String(), "DiscoveryAvailability=AVAILABLE_ERROR_REPORT") {
+					t.Fatalf("ASSERT_NATIVE_DISCOVERY_OBSERVATION_RETAINED A-fail receipt=%s diag=%s", failure, diag.String())
+				}
+				t.Log("ASSERT_NATIVE_DISCOVERY_OBSERVATION_RETAINED A-pass controlled runtime report; zero activation and semantics, sticky inflight spent")
+			} else if kind == "startup" || kind == "readiness" {
+				if f.ScopeFailure.Status != "OBSERVATION_UNAVAILABLE" || f.ScopeFailure.Stage != "UNKNOWN" || f.ScopeFailure.MemberOrdinal != nil {
+					t.Fatalf("phantom discovery observation %+v", f.ScopeFailure)
+				}
 			}
 			if bytes.Contains(append(append(failure, startup...), diag.Bytes()...), []byte(applicationFailureSecret)) {
 				t.Fatal("ASSERT_APPLICATION_FAILURE_PRIVACY A-fail")
@@ -401,6 +428,149 @@ func TestApplicationFailureConcurrentCreateOnly(t *testing.T) {
 		t.Fatalf("ASSERT_APPLICATION_FAILURE_CREATEONLY A-fail success=%d err=%v", success, e)
 	}
 	t.Log("ASSERT_APPLICATION_FAILURE_CREATEONLY A-pass")
+}
+
+func TestApplicationFailureDetachedV2RoundTrip(t *testing.T) {
+	for _, ordinal := range []int{-1, 0, 15} {
+		t.Run(fmt.Sprint(ordinal), func(t *testing.T) {
+			r, root, identity := applicationFailureFixture(t)
+			f := newApplicationFailure(r)
+			o := pilot.ScopeFailureObservationPrivateV2{Stage: "ADAPTER_MEMBER_PREPARE", Class: "LIFECYCLE_CONFLICT", Subcause: "LEASE_TOKEN_MISMATCH", DiscoveryAvailability: "NOT_REACHED_DISCOVERY"}
+			if ordinal >= 0 {
+				o.MemberOrdinal = &ordinal
+			}
+			f.observeScopeFailure(o, true)
+			if o.MemberOrdinal != nil {
+				*o.MemberOrdinal = 99 // receipt owns a copy, not the caller's pointer
+			}
+			st, _ := os.Lstat(r.AuxiliaryRoot)
+			if e := publishApplicationFailure(context.Background(), r, st, f, "ORIGINAL_CENSUS_DISCOVERY", nil, nil, 0, 0, false, false); e != nil {
+				t.Fatal(e)
+			}
+			raw, e := readApplicationFailureFile(r.AuxiliaryRoot, applicationFailureSelector, applicationFailureMaxBytes)
+			if e != nil || validateApplicationFailure(raw) != nil || !bytes.Contains(raw, []byte(applicationFailureSchemaV2)) {
+				t.Fatalf("v2 canonical roundtrip err=%v", e)
+			}
+			p := loadApplicationFailure(root, identity, r)
+			wantOrdinal := "UNKNOWN"
+			if f.ScopeFailure.MemberOrdinal != nil {
+				wantOrdinal = fmt.Sprint(*f.ScopeFailure.MemberOrdinal)
+			}
+			var out bytes.Buffer
+			reportApplicationFailure(&out, root, identity, r)
+			if p.Status != "AVAILABLE" || p.ScopeFailure.Status != "OBSERVATION_AVAILABLE" || p.ScopeFailure.Stage != o.Stage || p.ScopeFailure.Class != o.Class || p.ScopeFailure.Subcause != o.Subcause || p.ScopeFailure.DiscoveryAvailability != o.DiscoveryAvailability || !strings.Contains(out.String(), "MemberOrdinal="+wantOrdinal) {
+				t.Fatalf("detached roundtrip %+v output=%s", p, out.String())
+			}
+			if (p.ScopeFailure.MemberOrdinal == nil) != (f.ScopeFailure.MemberOrdinal == nil) || (p.ScopeFailure.MemberOrdinal != nil && *p.ScopeFailure.MemberOrdinal != *f.ScopeFailure.MemberOrdinal) {
+				t.Fatal("nullable ordinal changed")
+			}
+			if f.ScopeFailure.MemberOrdinal == nil && !bytes.Contains(raw, []byte(`"MemberOrdinal":null`)) {
+				t.Fatal("unknown ordinal was not explicit null")
+			}
+			t.Log("ASSERT_APPLICATION_DETACHED_V2_ROUNDTRIP A-pass")
+		})
+	}
+}
+
+func TestApplicationFailureDetachedV2Controls(t *testing.T) {
+	for _, kind := range []string{"stage", "class", "subcause", "availability", "status", "ordinal-negative", "ordinal-bound", "case-label", "duplicate", "case-alias", "unknown-field", "truncated", "foreign-v1", "request-arguments", "writer-secret", "absent"} {
+		t.Run(kind, func(t *testing.T) {
+			r, root, identity := applicationFailureFixture(t)
+			f := newApplicationFailure(r)
+			f.ScopeFailure = applicationScopeFailure{Status: "OBSERVATION_AVAILABLE", Stage: "DISCOVERY_ACCOUNTING", Class: "DISCOVERY_INCOMPLETE", Subcause: "UNKNOWN", DiscoveryAvailability: "AVAILABLE_ERROR_REPORT"}
+			st, _ := os.Lstat(r.AuxiliaryRoot)
+			if kind == "writer-secret" {
+				f.ScopeFailure.Stage = applicationFailureSecret
+			}
+			if kind == "absent" {
+				f.observeScopeFailure(pilot.ScopeFailureObservationPrivateV2{}, false)
+			}
+			if e := publishApplicationFailure(context.Background(), r, st, f, "ORIGINAL_CENSUS_DISCOVERY", pilot.ErrScopeDiscoveryIncompletePrivateV2, nil, 0, 0, false, false); e != nil {
+				t.Fatal(e)
+			}
+			path := filepath.Join(r.AuxiliaryRoot, applicationFailureSelector)
+			raw, _ := os.ReadFile(path)
+			_ = json.Unmarshal(raw, &f)
+			rejectGeneral := false
+			switch kind {
+			case "stage":
+				f.ScopeFailure.Stage = applicationFailureSecret
+			case "class":
+				f.ScopeFailure.Class = applicationFailureSecret
+			case "subcause":
+				f.ScopeFailure.Subcause = applicationFailureSecret
+			case "availability":
+				f.ScopeFailure.DiscoveryAvailability = applicationFailureSecret
+			case "status":
+				f.ScopeFailure.Status = applicationFailureSecret
+			case "ordinal-negative", "ordinal-bound":
+				n := -1
+				if kind == "ordinal-bound" {
+					n = 16
+				}
+				f.ScopeFailure.MemberOrdinal = &n
+			case "case-label":
+				f.ScopeFailure.Stage = "discovery_accounting"
+			case "foreign-v1":
+				f.Schema = "private-application-acquisition-failure.v1"
+				rejectGeneral = true
+			case "request-arguments":
+				// No independent session/generation is claimed by detached accounting.
+				r.CensusArguments = append(r.CensusArguments, "foreign-request")
+				rejectGeneral = true
+			}
+			raw, _ = json.Marshal(f)
+			switch kind {
+			case "foreign-v1":
+				// Exact former field set: no v2 observation member. Keep bytes immutable.
+				i := bytes.Index(raw, []byte(`,"ScopeFailure":`))
+				if i < 0 {
+					t.Fatal("missing observation field")
+				}
+				raw = append(bytes.Clone(raw[:i]), '}')
+			case "duplicate":
+				raw = bytes.Replace(raw, []byte(`"Stage":"DISCOVERY_ACCOUNTING"`), []byte(`"Stage":"DISCOVERY_ACCOUNTING","Stage":"DISCOVERY_ACCOUNTING"`), 1)
+				rejectGeneral = true
+			case "case-alias":
+				raw = bytes.Replace(raw, []byte(`"Stage":`), []byte(`"stage":`), 1)
+				rejectGeneral = true
+			case "unknown-field":
+				raw = bytes.Replace(raw, []byte(`"ScopeFailure":{`), []byte(`"ScopeFailure":{"Unknown":true,`), 1)
+				rejectGeneral = true
+			case "truncated":
+				raw = raw[:len(raw)-1]
+				rejectGeneral = true
+			}
+			if e := os.WriteFile(path, raw, 0600); e != nil {
+				t.Fatal(e)
+			}
+			before := bytes.Clone(raw)
+			p := loadApplicationFailure(root, identity, r)
+			var out bytes.Buffer
+			reportApplicationFailure(&out, root, identity, r)
+			if kind == "foreign-v1" && publishApplicationFailure(context.Background(), r, st, newApplicationFailure(r), "ORIGINAL_CENSUS_DISCOVERY", nil, nil, 0, 0, false, false) == nil {
+				t.Fatal("v2 publisher overwrote historical v1")
+			}
+			after, _ := os.ReadFile(path)
+			want := "AVAILABLE"
+			if rejectGeneral {
+				want = "UNAVAILABLE"
+			}
+			if p.Status != want || p.ScopeFailure.Status != "OBSERVATION_UNAVAILABLE" || p.ScopeFailure.Stage != "UNKNOWN" || p.ScopeFailure.MemberOrdinal != nil || bytes.Contains(out.Bytes(), []byte(applicationFailureSecret)) || !bytes.Equal(before, after) {
+				t.Fatalf("ASSERT_APPLICATION_DETACHED_V2_CONTROL A-fail kind=%s projection=%+v output=%s", kind, p, out.String())
+			}
+			if !rejectGeneral && p.Class != "DISCOVERY_INCOMPLETE" {
+				t.Fatal("invalid detached label erased general failure class")
+			}
+			if kind == "writer-secret" && bytes.Contains(raw, []byte(applicationFailureSecret)) {
+				t.Fatal("writer leaked unknown label")
+			}
+			if kind == "foreign-v1" && validateApplicationFailure(raw) == nil {
+				t.Fatal("v1 interpreted as v2")
+			}
+			t.Log("ASSERT_APPLICATION_DETACHED_V2_CONTROL A-pass")
+		})
+	}
 }
 
 func TestApplicationFailureStartupAttemptBinding(t *testing.T) {

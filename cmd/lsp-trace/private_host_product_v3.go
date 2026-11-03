@@ -432,12 +432,15 @@ func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, f
 		err = current.manager.WithReadySessionLease(live, sessionruntime.SessionLeaseRequest{SessionID: id.SessionID, Generation: id.Generation, Workspace: o.Workspace}, func(leased context.Context) error {
 			phase = "ORIGINAL_CENSUS_DISCOVERY"
 			var origin pilot.EnumerationOriginPrivateV2
+			var report pilot.ScopeDiscoveryReportPrivateV2
 			var e error
 			if discovered == nil {
-				origin, _, e = pilot.DiscoverScopePrivateV2(leased, frozen, runtime.manager, id)
+				origin, report, e = pilot.DiscoverScopePrivateV2(leased, frozen, runtime.manager, id)
+				failure.observeScopeFailure(report.FailureObservationPrivateV2())
 			} else {
 				var terminal pilot.TerminalDiscoveryOutcomePrivateV2
-				origin, terminal, _, e = pilot.DiscoverScopeOutcomePrivateV2(leased, frozen, runtime.manager, id)
+				origin, terminal, report, e = pilot.DiscoverScopeOutcomePrivateV2(leased, frozen, runtime.manager, id)
+				failure.observeScopeFailure(report.FailureObservationPrivateV2())
 				terminalReason = terminal.Reason()
 			}
 			if e != nil {

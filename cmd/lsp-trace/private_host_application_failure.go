@@ -18,6 +18,8 @@ import (
 	product "lsp-trace/internal/privatehostproductv3"
 )
 
+// Future attempts use v2; historical v1 receipts are neither reinterpreted nor rewritten.
+const applicationFailureSchemaV2 = "private-application-acquisition-failure.v2"
 const applicationFailureSelector = "acquisition-failure.json"
 const applicationStartupSelector = "original-startup.json"
 const applicationFailureMaxBytes = 4096
@@ -39,10 +41,62 @@ type applicationFailure struct {
 	CleanupStatus                                                                string
 	StartupStatus, StartupSHA256                                                 string
 	StartupAttemptID                                                             string
+	ScopeFailure                                                                 applicationScopeFailure
+}
+
+// Detached accounting only: not origin authority, completion, or a discovery payload.
+// MemberOrdinal is explicitly nullable; the admitted scope contains at most 16 members.
+type applicationScopeFailure struct {
+	Status, Stage, Class, Subcause, DiscoveryAvailability string
+	MemberOrdinal                                         *int
+}
+
+func unavailableApplicationScopeFailure() applicationScopeFailure {
+	return applicationScopeFailure{Status: "OBSERVATION_UNAVAILABLE", Stage: "UNKNOWN", Class: "UNKNOWN", Subcause: "UNKNOWN", DiscoveryAvailability: "UNKNOWN"}
+}
+
+func applicationScopeFailureStage(s string) bool {
+	switch s {
+	case "ADAPTER_ADMISSION", "ADAPTER_ACTIVE_LEASE", "ADAPTER_SOURCE_REVALIDATION", "ADAPTER_WORKSPACE_BINDING", "ADAPTER_METADATA", "ADAPTER_MEMBER_ACTIVE_LEASE", "ADAPTER_MEMBER_PREPARE", "ADAPTER_MEMBER_SUPPLY_VALIDATION", "ADAPTER_RETAINED_GUARD_BINDING", "ADAPTER_GUARD_REVALIDATION", "DISCOVERY_ADMISSION", "DOCUMENT_SYMBOL_DISCOVERY", "DISCOVERY_SERIALIZATION", "TERMINAL_DISCOVERY", "DISCOVERY_ACCOUNTING", "DISCOVERY_SCOPE_REVALIDATION", "DISCOVERY_BATCH_PLANNING", "DISCOVERY_SOURCE_BINDING", "DISCOVERY_QUERY_DECLARATION", "DISCOVERY_ORIGIN_ENCODING", "DISCOVERY_BATCH_BINDING", "DISCOVERY_FINAL_REVALIDATION":
+		return true
+	}
+	return false
+}
+
+func boundedApplicationScopeFailure(f applicationScopeFailure) applicationScopeFailure {
+	unavailable := unavailableApplicationScopeFailure()
+	if f.Status != "OBSERVATION_AVAILABLE" || !applicationScopeFailureStage(f.Stage) || !applicationFailureClass(f.Class) {
+		return unavailable
+	}
+	switch f.Subcause {
+	case "UNKNOWN", "MANAGER_CLOSED", "SESSION_NOT_READY", "PROTOCOL_OWNED", "LEASE_CLOSING", "LEASE_TOKEN_MISMATCH", "LANGUAGE_ID_CONFLICT":
+	default:
+		return unavailable
+	}
+	switch f.DiscoveryAvailability {
+	case "NOT_REACHED_ADAPTER", "NOT_REACHED_DISCOVERY", "AVAILABLE_ERROR_REPORT", "DISCOVERY_REPORT_UNAVAILABLE", "DISCOVERY_ENCODING_FAILED", "DISCOVERY_ENCODING_BOUND":
+	default:
+		return unavailable
+	}
+	if f.MemberOrdinal != nil {
+		if *f.MemberOrdinal < 0 || *f.MemberOrdinal >= 16 {
+			return unavailable
+		}
+		n := *f.MemberOrdinal
+		f.MemberOrdinal = &n
+	}
+	return f
+}
+
+func (f *applicationFailure) observeScopeFailure(o pilot.ScopeFailureObservationPrivateV2, present bool) {
+	f.ScopeFailure = unavailableApplicationScopeFailure()
+	if present {
+		f.ScopeFailure = boundedApplicationScopeFailure(applicationScopeFailure{Status: "OBSERVATION_AVAILABLE", Stage: o.Stage, Class: o.Class, Subcause: o.Subcause, DiscoveryAvailability: o.DiscoveryAvailability, MemberOrdinal: o.MemberOrdinal})
+	}
 }
 
 func newApplicationFailure(r hostProductRequestV3) applicationFailure {
-	return applicationFailure{Schema: "private-application-acquisition-failure.v1", RequestSHA256: hostProductRequestDigestV3(r), ProductApplication: r.Configuration.Application, ScopeSHA256: r.Configuration.ScopeSHA256, ProducerConfigSHA256: r.Configuration.ProducerConfigSHA256, ContextStatus: "UNKNOWN", CleanupStatus: "UNKNOWN", StartupStatus: "UNAVAILABLE"}
+	return applicationFailure{Schema: applicationFailureSchemaV2, ScopeFailure: unavailableApplicationScopeFailure(), RequestSHA256: hostProductRequestDigestV3(r), ProductApplication: r.Configuration.Application, ScopeSHA256: r.Configuration.ScopeSHA256, ProducerConfigSHA256: r.Configuration.ProducerConfigSHA256, ContextStatus: "UNKNOWN", CleanupStatus: "UNKNOWN", StartupStatus: "UNAVAILABLE"}
 }
 
 func applicationFailurePhase(s string) bool {
@@ -72,7 +126,7 @@ func validateApplicationFailure(raw []byte) error {
 	canonical, _ := json.Marshal(f)
 	// Canonical closed object also rejects duplicates, aliases, omitted fields,
 	// trailing data and case-insensitive JSON field matches.
-	if !bytes.Equal(raw, canonical) || f.Schema != "private-application-acquisition-failure.v1" || !validApplicationDigest(f.RequestSHA256) || !validApplicationDigest(f.ProductApplication) || !validApplicationDigest(f.ScopeSHA256) || !validApplicationDigest(f.ProducerConfigSHA256) || !applicationFailurePhase(f.Phase) || !applicationFailureClass(f.Class) || f.StopCalls < 0 || f.StopCalls > 1 || f.JoinCalls < 0 || f.JoinCalls > 1 || (f.RunSessionExit != nil && (*f.RunSessionExit < 0 || *f.RunSessionExit > 255)) {
+	if !bytes.Equal(raw, canonical) || f.Schema != applicationFailureSchemaV2 || !validApplicationDigest(f.RequestSHA256) || !validApplicationDigest(f.ProductApplication) || !validApplicationDigest(f.ScopeSHA256) || !validApplicationDigest(f.ProducerConfigSHA256) || !applicationFailurePhase(f.Phase) || !applicationFailureClass(f.Class) || f.StopCalls < 0 || f.StopCalls > 1 || f.JoinCalls < 0 || f.JoinCalls > 1 || (f.RunSessionExit != nil && (*f.RunSessionExit < 0 || *f.RunSessionExit > 255)) {
 		return product.ErrInvalid
 	}
 	switch f.ContextStatus {
@@ -218,6 +272,7 @@ func applicationStartupMatches(raw []byte, attemptID string) bool {
 }
 
 func publishApplicationFailure(ctx context.Context, r hostProductRequestV3, rootIdentity os.FileInfo, f applicationFailure, phase string, cause error, code *int, stops, joins int, cleanupOK bool, startupOwned bool) error {
+	f.ScopeFailure = boundedApplicationScopeFailure(f.ScopeFailure)
 	f.Phase, f.Class = phase, pilot.ScopeFailureClassPrivateV2(cause)
 	f.RunSessionExit, f.StopCalls, f.JoinCalls = code, stops, joins
 	if ctx.Err() == nil {
@@ -254,10 +309,13 @@ func publishApplicationFailure(ctx context.Context, r hostProductRequestV3, root
 	return manageddiagnostic.PublishHardened(r.AuxiliaryRoot, applicationFailureSelector, raw, validateApplicationFailure)
 }
 
-type applicationFailureProjection struct{ Status, Phase, Class, ContextStatus, StartupStatus, StartupOutcome, StartupRecordsStatus, StartupPhase, StartupTerminal string }
+type applicationFailureProjection struct {
+	Status, Phase, Class, ContextStatus, StartupStatus, StartupOutcome, StartupRecordsStatus, StartupPhase, StartupTerminal string
+	ScopeFailure                                                                                                            applicationScopeFailure
+}
 
 func loadApplicationFailure(unitRoot string, unitIdentity os.FileInfo, source hostProductRequestV3) applicationFailureProjection {
-	unavailable := applicationFailureProjection{Status: "UNAVAILABLE", Phase: "UNKNOWN", Class: "UNKNOWN", ContextStatus: "UNKNOWN", StartupStatus: "UNAVAILABLE", StartupOutcome: "UNKNOWN", StartupRecordsStatus: "UNAVAILABLE", StartupPhase: "UNKNOWN", StartupTerminal: "UNKNOWN"}
+	unavailable := applicationFailureProjection{ScopeFailure: unavailableApplicationScopeFailure(), Status: "UNAVAILABLE", Phase: "UNKNOWN", Class: "UNKNOWN", ContextStatus: "UNKNOWN", StartupStatus: "UNAVAILABLE", StartupOutcome: "UNKNOWN", StartupRecordsStatus: "UNAVAILABLE", StartupPhase: "UNKNOWN", StartupTerminal: "UNKNOWN"}
 	st, e := os.Lstat(unitRoot)
 	if e != nil || unitIdentity == nil || !os.SameFile(st, unitIdentity) || !st.IsDir() || st.Mode().Perm() != 0700 || source.AuxiliaryRoot != filepath.Join(unitRoot, "auxiliary") {
 		return unavailable
@@ -277,6 +335,8 @@ func loadApplicationFailure(unitRoot string, unitIdentity os.FileInfo, source ho
 	p.Phase = f.Phase
 	p.Class = f.Class
 	p.ContextStatus = f.ContextStatus
+	// Unknown/future detached labels do not erase a valid general receipt.
+	p.ScopeFailure = boundedApplicationScopeFailure(f.ScopeFailure)
 	if f.StartupStatus == "AVAILABLE" {
 		startup, e := readApplicationFailureFile(source.AuxiliaryRoot, applicationStartupSelector, manageddiagnostic.StartupDiagnosticsMaxBytes)
 		if e == nil && pilot.Digest(startup) == f.StartupSHA256 && applicationStartupMatches(startup, f.StartupAttemptID) {
@@ -315,5 +375,9 @@ func loadApplicationFailure(unitRoot string, unitIdentity os.FileInfo, source ho
 }
 func reportApplicationFailure(w io.Writer, unitRoot string, identity os.FileInfo, source hostProductRequestV3) {
 	p := loadApplicationFailure(unitRoot, identity, source)
-	fmt.Fprintf(w, "private application: SafeDiagnosticStatus=%s Phase=%s Class=%s ContextStatus=%s StartupStatus=%s StartupOutcome=%s StartupRecordsStatus=%s StartupPhase=%s StartupTerminal=%s\n", p.Status, p.Phase, p.Class, p.ContextStatus, p.StartupStatus, p.StartupOutcome, p.StartupRecordsStatus, p.StartupPhase, p.StartupTerminal)
+	ordinal := "UNKNOWN"
+	if p.ScopeFailure.MemberOrdinal != nil {
+		ordinal = fmt.Sprintf("%d", *p.ScopeFailure.MemberOrdinal)
+	}
+	fmt.Fprintf(w, "private application: SafeDiagnosticStatus=%s Phase=%s Class=%s ContextStatus=%s StartupStatus=%s StartupOutcome=%s StartupRecordsStatus=%s StartupPhase=%s StartupTerminal=%s DetachedStatus=%s DetachedStage=%s DetachedClass=%s DetachedSubcause=%s DiscoveryAvailability=%s MemberOrdinal=%s\n", p.Status, p.Phase, p.Class, p.ContextStatus, p.StartupStatus, p.StartupOutcome, p.StartupRecordsStatus, p.StartupPhase, p.StartupTerminal, p.ScopeFailure.Status, p.ScopeFailure.Stage, p.ScopeFailure.Class, p.ScopeFailure.Subcause, p.ScopeFailure.DiscoveryAvailability, ordinal)
 }
