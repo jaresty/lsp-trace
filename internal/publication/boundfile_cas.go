@@ -45,6 +45,12 @@ func DigestForTest(raw []byte) string {
 }
 
 func CompareAndReplaceBoundFile(ctx context.Context, root *Root, selector string, predecessor BoundFilePredecessor, raw []byte, verify func([]byte) error) (*CompareAndReplaceReceipt, error) {
+	return compareAndReplaceBoundFile(ctx, root, selector, predecessor, raw, verify, nil)
+}
+
+// readExisting is an invocation-local observation seam; production always reads
+// through the held publication root while owning its existing CAS lock.
+func compareAndReplaceBoundFile(ctx context.Context, root *Root, selector string, predecessor BoundFilePredecessor, raw []byte, verify func([]byte) error, readExisting func(string, int64) ([]byte, error)) (*CompareAndReplaceReceipt, error) {
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		return nil, errors.New("bound file CAS unsupported platform")
 	}
@@ -62,7 +68,19 @@ func CompareAndReplaceBoundFile(ctx context.Context, root *Root, selector string
 		return nil, err
 	}
 	defer unlock()
-	existing, err := root.ReadSelectorWithAbsence(selector, 1<<20)
+	if readExisting == nil {
+		readExisting = root.ReadSelectorWithAbsence
+	}
+	// A predecessor already declares its exact length. Do not read a larger
+	// replacement merely to discover that its digest/length is stale. Retain
+	// the generic ceiling, and use a minimal existence probe for absent/empty.
+	readLimit := uint64(1 << 20)
+	if predecessor.Absent || predecessor.ByteLength == 0 {
+		readLimit = 1
+	} else if predecessor.ByteLength < readLimit {
+		readLimit = predecessor.ByteLength
+	}
+	existing, err := readExisting(selector, int64(readLimit))
 	if err != nil {
 		if !predecessor.Absent || !errors.Is(err, os.ErrNotExist) {
 			return &CompareAndReplaceReceipt{}, ErrStalePredecessor
