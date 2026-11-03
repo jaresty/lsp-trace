@@ -5,9 +5,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"path/filepath"
@@ -33,13 +36,84 @@ func applicationTerminalPath(root, ticket string) string {
 	return filepath.Join(root, "terminal-"+ticket[7:]+".json")
 }
 func applicationWriteOnce(path string, raw []byte) error {
-	if len(raw) > 64<<10 {
+	if len(raw) == 0 || len(raw) > 64<<10 {
 		return product.ErrInvalid
 	}
-	f, e := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	parent := filepath.Dir(path)
+	before, e := os.Lstat(parent)
 	if e != nil {
 		return e
 	}
+	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return product.ErrInvalid
+	}
+	root, e := os.OpenRoot(parent)
+	if e != nil {
+		return e
+	}
+	defer root.Close()
+	dir, e := root.OpenFile(".", os.O_RDONLY, 0)
+	if e != nil {
+		return e
+	}
+	defer dir.Close()
+	held, e := dir.Stat()
+	if e != nil || !os.SameFile(before, held) {
+		return product.ErrInvalid
+	}
+	name := filepath.Base(path)
+	// Existing destinations are never modified or retroactively enrolled.
+	if _, se := root.Lstat(name); se == nil {
+		return os.ErrExist
+	} else if !os.IsNotExist(se) {
+		return se
+	}
+	// The fixed create-only intent is a spent identity even if every later IO
+	// fails. Sync it BEFORE making any final inode visible. One intent admits
+	// at most one stage and one completion witness; retries cannot grow orphans.
+	intent := applicationPublicationIntent(name)
+	if e = root.Mkdir(intent, 0700); e != nil {
+		return e
+	}
+	intentDir, ie := root.OpenFile(intent, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	if ie != nil {
+		return ie
+	}
+	ie = intentDir.Sync()
+	intentClose := intentDir.Close()
+	if ie != nil || intentClose != nil {
+		return errors.Join(ie, intentClose)
+	}
+	if ie := dir.Sync(); ie != nil {
+		return ie
+	}
+	var nonce [16]byte
+	if _, e = rand.Read(nonce[:]); e != nil {
+		return e
+	}
+	stage := ".application-" + name + "-" + hex.EncodeToString(nonce[:])
+	if len(stage) > 255 {
+		return product.ErrInvalid
+	}
+	f, e := root.OpenFile(stage, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if e != nil {
+		return e
+	}
+	// Never unlink a pathname on failure: even a checked inode can be replaced
+	// between stat and unlink. Leave the single bounded, unadmitted orphan.
+	// A duplicate descriptor retains the exclusive publication lock while the
+	// writer's own Close is checked before publication. Readers never block.
+	if e = unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); e != nil {
+		f.Close()
+		return e
+	}
+	guardFD, e := unix.FcntlInt(f.Fd(), unix.F_DUPFD_CLOEXEC, 0)
+	if e != nil {
+		f.Close()
+		return e
+	}
+	guard := os.NewFile(uintptr(guardFD), stage)
+	defer guard.Close()
 	n, e := f.Write(raw)
 	if e == nil && n != len(raw) {
 		e = io.ErrShortWrite
@@ -54,12 +128,32 @@ func applicationWriteOnce(path string, raw []byte) error {
 	if ce != nil {
 		return ce
 	}
-	dir, e := os.Open(filepath.Dir(path))
+	// The final name does not exist until synced, closed bytes are ready. The
+	// platform primitive refuses even a concurrent destination (including symlinks).
+	if e = applicationPublishNoReplace(dir, stage, name); e != nil {
+		return e
+	}
+	// The lock alone is not commit evidence: a crash or failed Sync releases it.
+	// No completion witness is created on any required durability failure.
+	if e = dir.Sync(); e != nil {
+		return e
+	}
+	if e = dir.Close(); e != nil {
+		return e
+	}
+	st, e := guard.Stat()
 	if e != nil {
 		return e
 	}
-	defer dir.Close()
-	return dir.Sync()
+	visible, e := root.Lstat(name)
+	if e != nil || !os.SameFile(st, visible) || applicationFileIdentity(st) != applicationFileIdentity(visible) {
+		return product.ErrInvalid
+	}
+	// This empty create-only witness records an ALREADY completed durability
+	// boundary. It needs no further durability IO: losing this advisory witness
+	// on a crash causes a false negative only, never admission of unsynced data.
+	// Its exact name binds the target, held inode/metadata and payload digest.
+	return root.Mkdir(filepath.Join(intent, applicationPublicationCompletion(name, st, raw)), 0700)
 }
 func applicationTicket(a *product.ApplicationJournal, root string, maxUnits int, calls ...int) (string, error) {
 	unitCalls := 2
@@ -80,6 +174,11 @@ func applicationTicket(a *product.ApplicationJournal, root string, maxUnits int,
 		maxUnits = 0
 	}
 	waits := uint64(maxUnits*unitCalls + 2)
+	// The existing metadata/work envelope includes the publication protocol:
+	// per create-only target <=1 intent directory, <=1 stage/final inode, <=1
+	// empty completion directory. Failure never allocates another stage for that
+	// target. Admission adds <=4 fixed stats/read, never an enumeration.
+	// Finalize partitions 128 records/slot from this SAME root-wide envelope.
 	metadata := uint64(64<<20) + waits*(80<<20)
 	id := pilot.Digest([]byte(fmt.Sprintf("%s/coordinator/%d", a.Head().ApplicationSHA256, a.Head().Sequence)))
 	if _, e := a.ReserveOperation(id, "coordinator_host_envelope", product.ApplicationBounds{ReadHashBytes: metadata, WriteBytes: 16 << 20, Records: 16384 + waits*16384, ParserBytes: metadata, Work: 1 << 20, ActiveNS: uint64(10 * time.Second)}, time.Now()); e != nil {
@@ -308,10 +407,17 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 			}
 			pollCtx, pollCancel := context.WithDeadline(ctx, pollDeadline)
 			defer pollCancel()
-			if raw, e := applicationReadBounded(applicationTerminalPath(r.Configuration.Store, ticketID), 64<<10); e == nil {
+			raw, terminalErr := applicationReadBounded(applicationTerminalPath(r.Configuration.Store, ticketID), 64<<10)
+			if terminalErr == nil {
+				if !applicationValidTerminal(raw) {
+					return fail("TERMINAL_REFUSED")
+				}
 				event := applicationHostEvent{Event: "TERMINAL", ApplicationSHA256: ticket.ApplicationSHA256, RunID: ticketID, TerminalSHA256: pilot.Digest(raw)}
 				pollCancel()
 				return encodeHostProductV3(stdout, event)
+			}
+			if !os.IsNotExist(terminalErr) {
+				return fail("TERMINAL_REFUSED")
 			}
 			readyRaw, re := applicationReadBounded(applicationRoleReadyPath(r.Configuration.Store, ticketID, role), 4096)
 			var ready product.Ready
@@ -382,7 +488,7 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 		}
 		terminalSHA := pilot.Digest(terminal)
 		var report applicationTerminal
-		if lane.check() != nil || json.Unmarshal(terminal, &report) != nil {
+		if lane.check() != nil || !applicationValidTerminal(terminal) || json.Unmarshal(terminal, &report) != nil {
 			return fail("TERMINAL_REFUSED")
 		}
 		ids := map[string]bool{}

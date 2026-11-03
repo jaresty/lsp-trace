@@ -95,11 +95,17 @@ func applicationFinalizeRead(root *os.Root, name string, limit int, lanes ...*ap
 		return nil, e
 	}
 	b, e := applicationFinalizeReadFile(f, limit, lanes...)
+	if e == nil {
+		e = applicationPublicationAdmitted(root, name, f, b, lanes...)
+	}
 	ce := f.Close()
 	return b, errors.Join(e, ce, applicationFinalizeCheck(lanes...))
 }
 func applicationFinalizeReadFile(f *os.File, limit int, lanes ...*applicationFinalizeLane) ([]byte, error) {
 	if e := applicationFinalizeCheck(lanes...); e != nil {
+		return nil, e
+	}
+	if e := applicationPublicationLock(f, lanes...); e != nil {
 		return nil, e
 	}
 	st, e := f.Stat()
@@ -118,6 +124,13 @@ func applicationFinalizeReadFile(f *os.File, limit int, lanes ...*applicationFin
 	}
 	b, e := io.ReadAll(io.LimitReader(input, int64(limit)+1))
 	if e != nil || len(b) > limit || int64(len(b)) != st.Size() {
+		return nil, product.ErrInvalid
+	}
+	last, e := f.Stat()
+	if ce := applicationFinalizeCheck(lanes...); ce != nil {
+		return nil, ce
+	}
+	if e != nil || applicationFileIdentity(last) != applicationFileIdentity(st) {
 		return nil, product.ErrInvalid
 	}
 	return b, nil

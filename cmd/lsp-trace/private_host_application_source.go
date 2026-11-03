@@ -19,6 +19,12 @@ import (
 	product "lsp-trace/internal/privatehostproductv3"
 )
 
+// Match native source.prunedDirectory: workspace-relative prefix, never basename.
+func applicationPrunedDirectory(prune, relative string) bool {
+	relative = filepath.ToSlash(relative)
+	return relative == prune || strings.HasPrefix(relative, prune+"/")
+}
+
 func applicationFileIdentity(st os.FileInfo) string {
 	v, ok := st.Sys().(*syscall.Stat_t)
 	if !ok {
@@ -31,6 +37,9 @@ func advanceApplicationDiscovery(ctx context.Context, r hostApplicationRequest, 
 	o, e := parseCensusCLIOptions(r.Template.CensusArguments)
 	if e != nil {
 		return e
+	}
+	if literals, ok := applicationQualifiedLiteralIncludes(o.Includes); ok {
+		return advanceApplicationLiteralDiscovery(ctx, r, o, literals, a, s)
 	}
 	for !s.DiscoveryFinished {
 		if e = ctx.Err(); e != nil {
@@ -110,7 +119,7 @@ func advanceApplicationDiscovery(ctx context.Context, r hostApplicationRequest, 
 				if st.IsDir() && st.Mode()&os.ModeSymlink == 0 {
 					prune := false
 					for _, p := range o.PrunedDirectories {
-						if p == name || p == relative {
+						if applicationPrunedDirectory(p, relative) {
 							prune = true
 						}
 					}

@@ -123,7 +123,7 @@ func decodeHostApplicationRaw(raw []byte, validateTemplate bool, lanes ...*appli
 	if ce := gate(); ce != nil {
 		return r, ce
 	}
-	if !bytes.Equal(raw, canonical) || r.Schema != "private-host-application-request.v1" || r.ApprovalSHA256 != requestDigest || r.Configuration.ApprovalSHA256 != configDigest || r.Configuration.UnitPolicySHA256 != unitDigest || r.Configuration.ProducerConfigSHA256 != unitDigest || r.Configuration.SourceRoot != o.Workspace || r.Configuration.RevisionAssertion != r.Template.RevisionAssertion || r.Template.RuntimeGrantSHA256 != "" || r.Template.Configuration.ApprovalSHA256 != "" || r.Template.Configuration.Requested != 0 || r.Template.Configuration.ScopeSHA256 != "" || r.Template.Configuration.ProducerConfigSHA256 != "" || r.MaxUnitsPerRun < 1 || r.MaxUnitsPerRun > 16 || r.UnitResponseBytes < 1024 || r.UnitResponseBytes > 8192 || r.UnitTimeoutMS < 1 || r.UnitTimeoutMS > 60000 || e != nil || len(o.Sources) != 1 || o.Sources[0] != "." || !o.PrivateEnumerationProjection || r.Template.ExchangeTimeoutMS > 60000 || r.Template.OperationTimeoutMS > 240000 || r.Configuration.ProducerExecutableSHA256 != r.Template.ServerSHA256 {
+	if !bytes.Equal(raw, canonical) || r.Schema != "private-host-application-request.v1" || r.ApprovalSHA256 != requestDigest || r.Configuration.ApprovalSHA256 != configDigest || r.Configuration.UnitPolicySHA256 != unitDigest || r.Configuration.ProducerConfigSHA256 != unitDigest || r.Configuration.SourceRoot != o.Workspace || r.Configuration.RevisionAssertion != r.Template.RevisionAssertion || r.Template.RuntimeGrantSHA256 != "" || r.Template.Configuration.ApprovalSHA256 != "" || r.Template.Configuration.Requested != 0 || r.Template.Configuration.ScopeSHA256 != "" || r.Template.Configuration.ProducerConfigSHA256 != "" || r.MaxUnitsPerRun < 1 || r.MaxUnitsPerRun > 16 || r.UnitResponseBytes < 1024 || r.UnitResponseBytes > 8192 || e != nil || len(o.Sources) != 1 || o.Sources[0] != "." || !o.PrivateEnumerationProjection || r.Template.ExchangeTimeoutMS > 60000 || r.Template.OperationTimeoutMS < 1 || r.Template.OperationTimeoutMS > 240000 || r.Configuration.ProducerExecutableSHA256 != r.Template.ServerSHA256 {
 		return r, product.ErrInvalid
 	}
 	if ce := gate(); ce != nil {
@@ -148,6 +148,7 @@ type applicationState struct {
 	LastPage                                     string
 	Activation                                   int
 	ChildPolicyConsumed                          pilot.PageCostPrivateV3
+	LiteralDiscovery                             applicationLiteralDiscovery `json:",omitzero"`
 }
 type applicationDirectory struct{ Path, Next, Identity string }
 type applicationCatalogEntry = product.ApplicationCatalogEntry
@@ -170,6 +171,9 @@ type applicationTerminal struct {
 	Authority                                                     int
 	Accepted                                                      bool
 	FeatureIdentity, AbsenceInference                             string
+	SelectionDomain                                               string                      `json:",omitempty"`
+	UnvisitedExtent                                               string                      `json:",omitempty"`
+	LiteralDiscovery                                              applicationLiteralDiscovery `json:",omitzero"`
 }
 
 func applicationTerminalFor(a *product.ApplicationJournal, s applicationState, status string) applicationTerminal {
@@ -178,7 +182,13 @@ func applicationTerminalFor(a *product.ApplicationJournal, s applicationState, s
 	if s.DiscoveryFinished {
 		denominator = fmt.Sprintf("%d", s.SelectedCount)
 	}
-	return applicationTerminal{Schema: "private-host-application-terminal.v1", Status: status, Accounting: "KNOWN_LOWER_BOUND_NOT_EXACT_WHOLE_HISTORY_OR_AUTHENTICATION", SourceCompleteness: "UNKNOWN", InventoryHead: h.LastCompletePublicationSHA256, Units: s.Units, Targets: s.Targets, Calls: int(h.Observed.Calls), RequestBytes: int(h.Observed.RequestBytes), ResponseBytes: int(h.Observed.ResponseBytes), Discovered: s.Entries, Selected: s.SelectedCount, Excluded: s.Excluded, SourceGaps: s.SourceGaps, Denominator: denominator, Reserved: h.Reserved, OwnedIO: a.IO(), CatalogBytes: s.CatalogBytes, ViewBytes: s.ViewBytes, KnownOwnedWork: h.Observed, ChildLedgerPolicyDebits: s.ChildPolicyConsumed, ReservationToKnownOwnedRatio: fmt.Sprintf("read-policy/known-owned=%d/%d;write-policy/known-owned=%d/%d;active-policy/exchange-elapsed-ns=%d/%d", h.Reserved.ReadHashBytes, h.Observed.ReadHashBytes, h.Reserved.WriteBytes, h.Observed.WriteBytes, h.Reserved.ActiveNS, h.Observed.ActiveNS), ExcludedAccounting: "provider internals CPU/IO; HOST outer framing; model billing; actual HOST cleanup/authentication; reservations and child usage are not added", FeatureIdentity: "UNRESOLVED", AbsenceInference: "PROHIBITED"}
+	terminal := applicationTerminal{Schema: "private-host-application-terminal.v1", Status: status, Accounting: "KNOWN_LOWER_BOUND_NOT_EXACT_WHOLE_HISTORY_OR_AUTHENTICATION", SourceCompleteness: "UNKNOWN", InventoryHead: h.LastCompletePublicationSHA256, Units: s.Units, Targets: s.Targets, Calls: int(h.Observed.Calls), RequestBytes: int(h.Observed.RequestBytes), ResponseBytes: int(h.Observed.ResponseBytes), Discovered: s.Entries, Selected: s.SelectedCount, Excluded: s.Excluded, SourceGaps: s.SourceGaps, Denominator: denominator, Reserved: h.Reserved, OwnedIO: a.IO(), CatalogBytes: s.CatalogBytes, ViewBytes: s.ViewBytes, KnownOwnedWork: h.Observed, ChildLedgerPolicyDebits: s.ChildPolicyConsumed, ReservationToKnownOwnedRatio: fmt.Sprintf("read-policy/known-owned=%d/%d;write-policy/known-owned=%d/%d;active-policy/exchange-elapsed-ns=%d/%d", h.Reserved.ReadHashBytes, h.Observed.ReadHashBytes, h.Reserved.WriteBytes, h.Observed.WriteBytes, h.Reserved.ActiveNS, h.Observed.ActiveNS), ExcludedAccounting: "provider internals CPU/IO; HOST outer framing; model billing; actual HOST cleanup/authentication; reservations and child usage are not added", FeatureIdentity: "UNRESOLVED", AbsenceInference: "PROHIBITED"}
+	if s.LiteralDiscovery.RootIdentity != "" {
+		terminal.SelectionDomain = "APPROVED_SELECTION_DOMAIN_ONLY"
+		terminal.UnvisitedExtent = "UNKNOWN_OUTSIDE_APPROVED_SELECTION; EXCLUDED_COUNTS_OBSERVED_ONLY"
+		terminal.LiteralDiscovery = s.LiteralDiscovery
+	}
+	return terminal
 }
 func saveApplicationState(a *product.ApplicationJournal, s applicationState) error {
 	id, e := a.PutRecord(s)
@@ -201,6 +211,21 @@ func (w applicationFullWriter) Write(p []byte) (int, error) {
 func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	stdout = applicationFullWriter{stdout}
 	fail := func(class string) int { fmt.Fprintln(stderr, "private application:", class); return 1 }
+	var startup *applicationStartupNotifier
+	// Opt-in transport requires the already-issued explicit RunID. Strip only
+	// this exact spelling so every legacy invocation retains its original path.
+	if len(args) >= 4 && args[0] == "run" {
+		if len(args) != 5 || args[3] != "--startup-notify-fd" || !validApplicationDigest(args[2]) {
+			return fail("INVALID_STARTUP_NOTIFY_INVOCATION")
+		}
+		var err error
+		startup, err = openApplicationStartupNotifier(args[4])
+		if err != nil {
+			return fail("STARTUP_NOTIFY_REFUSED")
+		}
+		defer startup.close() // EOF on early failure, cancellation and panic too
+		args = args[:3]
+	}
 	if len(args) == 1 && args[0] == "prompts" {
 		return runPrivateHostCohort([]string{"prompts"}, stdin, stdout, stderr)
 	}
@@ -242,6 +267,11 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 	remaining := time.Until(time.Unix(0, r.Configuration.Grant.ExpiresUnixNano))
 	if remaining > 240*time.Second {
 		remaining = 240 * time.Second
+	}
+	// A caller's shorter operation limit also bounds every phase of this run;
+	// it does not create another unit entitlement or reset the stored deadline.
+	if operation := time.Duration(r.Template.OperationTimeoutMS) * time.Millisecond; operation < remaining {
+		remaining = operation
 	}
 	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
@@ -347,13 +377,11 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		}
 		return report("PAUSED_AMBIGUOUS_SPENT_UNIT_NO_REPLAY", 1)
 	}
-	if !s.DiscoveryFinished {
-		if e = advanceApplicationDiscovery(ctx, r, a, &s); e != nil {
-			if errors.Is(e, product.ErrPaused) {
-				return report("PAUSED_BUDGET", 0)
-			}
-			return report("FAILED_SOURCE_DISCOVERY_UNKNOWN", 1)
+	if e = advanceApplicationDiscovery(ctx, r, a, &s); e != nil {
+		if errors.Is(e, product.ErrPaused) {
+			return report("PAUSED_BUDGET", 0)
 		}
+		return report("FAILED_SOURCE_DISCOVERY_UNKNOWN", 1)
 	}
 	if args[0] == "discover" {
 		return report("DISCOVERY_COMPLETE", 0)
@@ -486,9 +514,20 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 			return report("FAILED_MAILBOX", 1)
 		}
 		s.Activation++
-		if e = a.WriteActivation(s.Activation, applicationActivation{mailbox.Directory, unitID, base}); e != nil {
+		activation := applicationActivation{mailbox.Directory, unitID, base}
+		if e = a.WriteActivation(s.Activation, activation); e != nil {
 			closeOwner()
 			return report("FAILED_ACTIVATION", 1)
+		}
+		// The startup packet discloses no source or role identity. It is sent
+		// once AFTER durable activation and inside the SAME prepaid unitCtx.
+		// The original child inherited no notifier FD (CLOEXEC), and no fresh
+		// clock, wait identity, semantic slot or grant is created here.
+		if startup != nil && !startup.attempted {
+			if e = startup.emit(unitCtx, applicationActivationPacket(s.ApplicationSHA256, runID, unitID, s.Activation, activation)); e != nil {
+				closeOwner()
+				return report("FAILED_STARTUP_NOTIFICATION", 1)
+			}
 		}
 		for mailbox.CheckReady() != nil {
 			select {
@@ -508,9 +547,9 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 			closeOwner()
 			return report("FAILED_RECOVERY_CURSOR", 1)
 		}
-		backendCtx, backendCancel := context.WithTimeout(unitCtx, time.Duration(r.UnitTimeoutMS)*time.Millisecond)
-		cohort, runErr := product.RunCohortRetained(backendCtx, source.Configuration, cc, owner, product.ApplicationCohortBackend{Journal: a, UnitID: unitID, Mailbox: mailbox, MaxResponseBytes: uint64(r.UnitResponseBytes)})
-		backendCancel()
+		// No new unit window after original acquisition or preparation. unitCtx is
+		// rooted in the parent's durable PREPAY_CHILD deadline and operation/expiry.
+		cohort, runErr := product.RunCohortRetained(unitCtx, source.Configuration, cc, owner, product.ApplicationCohortBackend{Journal: a, UnitID: unitID, Mailbox: mailbox, MaxResponseBytes: uint64(r.UnitResponseBytes)})
 		closeErr := closeOwner()
 		// Preparation may refuse before a cohort report exists. Preserve the spent
 		// inflight unit and known costs; the application terminal, not a fabricated

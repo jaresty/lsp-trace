@@ -21,7 +21,9 @@ const applicationFinalizeAttempts = 16
 const applicationFinalizeSlice = 125 * time.Millisecond
 
 // This is a partition of coordinator_host_envelope, never an added reservation:
-// 16*(512 KiB read/parser, 32 records, 4096 work, 64 KiB write, 125ms).
+// 16*(512 KiB read/parser, 128 records, 4096 work, 64 KiB write, 125ms).
+// The 128-record partition includes fixed intent/completion/name observations
+// (at most four admission stats plus one identity recheck/read), not another allowance.
 // It fits its existing 64MiB metadata base, 16MiB writes, 16384 records,
 // 1Mi work and 10s active slice. Remaining wait-only active time is 8s.
 // Calls/request/response/wire/output semantic currencies remain unchanged.
@@ -72,7 +74,7 @@ func applicationFinalizeDispatch(args []string, stdin io.Reader, out, errout io.
 	if len(args) != 3 || !validApplicationDigest(args[2]) {
 		return fail("INVALID_FINALIZE")
 	}
-	raw, e := applicationReadBounded(args[1], 64<<10)
+	raw, e := applicationReadLocatorBounded(args[1], 64<<10)
 	if e != nil {
 		return fail("FINALIZE_LOCATOR_REFUSED")
 	}
