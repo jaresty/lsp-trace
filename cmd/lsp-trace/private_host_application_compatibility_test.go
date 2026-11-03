@@ -86,7 +86,7 @@ func TestHostApplicationCompatibilityOneFileTwenty(t *testing.T) {
 	}
 	tool := buildApplicationTool(t, base)
 	report, e := controlledApplicationRun(t, tool, path, "TEST_COUNT_PHYSICAL=1")
-	if e != nil || report.Status != "PROVISIONAL" || report.Units != 1 || report.Targets != 20 || report.Calls != 4 || report.RequestBytes <= 0 || report.ResponseBytes <= 0 || report.Reserved.Calls != 4 || report.Reserved.RequestBytes > 1<<20 || report.Reserved.ResponseBytes > 64<<10 || report.Reserved.WireBytes > 8<<20 || report.Reserved.OutputBytes > 4<<20 {
+	if e != nil || report.Status != "PAUSED_UNIT_SLICE" || report.Denominator != "UNKNOWN" || report.Units != 1 || report.Targets != 20 || report.Calls != 4 || report.RequestBytes <= 0 || report.ResponseBytes <= 0 || report.Reserved.Calls != 4 || report.Reserved.RequestBytes > 1<<20 || report.Reserved.ResponseBytes > 64<<10 || report.Reserved.WireBytes > 8<<20 || report.Reserved.OutputBytes > 4<<20 {
 		t.Fatalf("ASSERT_ONE_FILE_NATIVE_TWENTY_REVIEWED %+v err=%v", report, e)
 	}
 	a, openErr := product.OpenApplication(r.Configuration, time.Now())

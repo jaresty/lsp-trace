@@ -76,7 +76,7 @@ func applicationLiteralNames(includes []string, directory string) []string {
 	return names
 }
 
-func advanceApplicationLiteralDiscovery(ctx context.Context, r hostApplicationRequest, o censusCLIOptions, literals []string, a *product.ApplicationJournal, s *applicationState) error {
+func advanceApplicationLiteralDiscovery(ctx context.Context, r hostApplicationRequest, o censusCLIOptions, literals []string, a *product.ApplicationJournal, s *applicationState, allowHandoff bool) error {
 	if s.DiscoveryFinished {
 		// Completion is not a reusable pathname capability. A restart pays for
 		// a fresh fixed-path observation before returning the stored denominator.
@@ -125,11 +125,11 @@ func advanceApplicationLiteralDiscovery(ctx context.Context, r hostApplicationRe
 			root.Close()
 		}
 	}()
-	// Each invocation is inside the durable directory/page reservation below:
-	// <=68 validations/directory or 32 candidates/page. Each has <=64 component
-	// no-follow opens/closes, one fstat and two fixed MAXPATHLEN observations.
-	// Directory work prepays 9932; page work prepays 5216, including one
-	// additional approved-root Lstat per validation; name bytes stay <1MiB.
+	// Initial and handoff root/ancestry/current checks share the directory
+	// reservation; ancestor depths form a bounded staircase, not repeated
+	// maximum-depth walks. Pages cover at most 32 candidates. Work 9932/5216
+	// covers no-follow opens/closes, fstat, canonical-name observations and
+	// approved-root Lstat checks; name bytes stay <1MiB.
 	// No source-directory enumeration is performed.
 	stat := func(p string) (os.FileInfo, error) {
 		f, opens, e := applicationLiteralOpenAt(rootFile, p)
@@ -237,6 +237,19 @@ func advanceApplicationLiteralDiscovery(ctx context.Context, r hostApplicationRe
 			chain = append(chain, ancestor)
 			id = ancestor.Parent
 		}
+		validateDirectory := func() error {
+			if e := check(".", s.LiteralDiscovery.RootIdentity); e != nil {
+				return e
+			}
+			for n := len(chain) - 1; n >= 0; n-- {
+				if e := check(chain[n].Path, chain[n].Identity); e != nil {
+					return e
+				}
+			}
+			return check(s.Directory, s.DirectoryIdentity)
+		}
+		// Candidate processing and pending resumes use the charged source checks.
+		// Handoff repeats full root/ancestry/current validation before closing.
 		for n := len(chain) - 1; n >= 0; n-- {
 			if e := check(chain[n].Path, chain[n].Identity); e != nil {
 				return e
@@ -244,6 +257,25 @@ func advanceApplicationLiteralDiscovery(ctx context.Context, r hostApplicationRe
 		}
 		if e := check(s.Directory, s.DirectoryIdentity); e != nil {
 			return e
+		}
+		handoff := func() error {
+			if e := validateDirectory(); e != nil {
+				return e
+			}
+			e := rootFile.Close()
+			rootFile = nil
+			re := root.Close()
+			root = nil
+			if e != nil {
+				return e
+			}
+			if re != nil {
+				return re
+			}
+			return ctx.Err()
+		}
+		if allowHandoff && s.Selected != "" {
+			return handoff()
 		}
 		parentID, e := a.PutRecord(applicationLiteralAncestor{s.Directory, s.DirectoryIdentity, s.LiteralDiscovery.Parent})
 		if e != nil {
@@ -355,10 +387,16 @@ func advanceApplicationLiteralDiscovery(ctx context.Context, r hostApplicationRe
 					if e = flush(); e != nil {
 						return e
 					}
+					if allowHandoff && s.Selected != "" {
+						return handoff()
+					}
 				}
 			}
 			if e = flush(); e != nil {
 				return e
+			}
+			if allowHandoff && s.Selected != "" {
+				return handoff()
 			}
 		}
 		if e = check(s.Directory, s.DirectoryIdentity); e != nil {

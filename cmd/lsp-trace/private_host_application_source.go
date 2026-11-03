@@ -34,12 +34,18 @@ func applicationFileIdentity(st os.FileInfo) string {
 }
 
 func advanceApplicationDiscovery(ctx context.Context, r hostApplicationRequest, a *product.ApplicationJournal, s *applicationState) error {
+	return advanceApplicationDiscoveryWithHandoff(ctx, r, a, s, true)
+}
+
+// The distinct discover operation drains the catalog; run yields pending work.
+// Neither operation rewrites the approved selection or configuration.
+func advanceApplicationDiscoveryWithHandoff(ctx context.Context, r hostApplicationRequest, a *product.ApplicationJournal, s *applicationState, allowHandoff bool) error {
 	o, e := parseCensusCLIOptions(r.Template.CensusArguments)
 	if e != nil {
 		return e
 	}
 	if literals, ok := applicationQualifiedLiteralIncludes(o.Includes); ok {
-		return advanceApplicationLiteralDiscovery(ctx, r, o, literals, a, s)
+		return advanceApplicationLiteralDiscovery(ctx, r, o, literals, a, s, allowHandoff)
 	}
 	for !s.DiscoveryFinished {
 		if e = ctx.Err(); e != nil {
@@ -58,6 +64,16 @@ func advanceApplicationDiscovery(ctx context.Context, r hostApplicationRequest, 
 		dir, e := os.Open(path)
 		if e != nil {
 			return e
+		}
+		// Pending work is returned only after a fresh charged directory observation.
+		if allowHandoff {
+			if e = applicationDiscoveryDirectoryCheck(ctx, path, s.DirectoryIdentity); e != nil {
+				dir.Close()
+				return e
+			}
+			if s.Selected != "" {
+				return applicationDiscoveryDirectoryHandoff(ctx, dir, path, s.DirectoryIdentity)
+			}
 		}
 		for {
 			if e = ctx.Err(); e != nil {
@@ -158,11 +174,25 @@ func advanceApplicationDiscovery(ctx context.Context, r hostApplicationRequest, 
 						dir.Close()
 						return e
 					}
+					if allowHandoff && s.Selected != "" {
+						if re != nil && re != io.EOF {
+							dir.Close()
+							return re
+						}
+						return applicationDiscoveryDirectoryHandoff(ctx, dir, path, s.DirectoryIdentity)
+					}
 				}
 			}
 			if e = flush(); e != nil {
 				dir.Close()
 				return e
+			}
+			if allowHandoff && s.Selected != "" {
+				if re != nil && re != io.EOF {
+					dir.Close()
+					return re
+				}
+				return applicationDiscoveryDirectoryHandoff(ctx, dir, path, s.DirectoryIdentity)
 			}
 			if re == io.EOF {
 				break
@@ -195,6 +225,32 @@ func advanceApplicationDiscovery(ctx context.Context, r hostApplicationRequest, 
 	}
 	return nil
 }
+
+// The catalog commit remains an unfinished cursor: no pop and no saved OS
+// offset. Any unprocessed names are reobserved under new reservations on resume.
+func applicationDiscoveryDirectoryCheck(ctx context.Context, path, identity string) error {
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	st, e := os.Lstat(path)
+	if e != nil || !st.IsDir() || st.Mode()&os.ModeSymlink != 0 || applicationFileIdentity(st) != identity {
+		return product.ErrInvalid
+	}
+	return ctx.Err()
+}
+
+func applicationDiscoveryDirectoryHandoff(ctx context.Context, dir *os.File, path, identity string) error {
+	e := applicationDiscoveryDirectoryCheck(ctx, path, identity)
+	closeErr := dir.Close()
+	if e != nil {
+		return e
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return ctx.Err()
+}
+
 func deriveApplicationSource(ctx context.Context, r hostApplicationRequest, entry applicationCatalogEntry, unitRoot string) (hostProductRequestV3, pilot.FrozenScopePrivateV2, error) {
 	source := r.Template
 	var zero pilot.FrozenScopePrivateV2

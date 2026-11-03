@@ -58,7 +58,7 @@ func readinessCombinedTwenty(t *testing.T, r hostApplicationRequest, path, base,
 		}
 	}
 	report, e := controlledApplicationRun(t, tool, path, markers...)
-	if e != nil || report.Status != "PROVISIONAL" || report.Units != 1 || report.Targets != 20 || report.Calls != 4 || report.Selected != 1 || report.Discovered != 1 || report.Denominator != "1" || report.Reserved.ActiveNS > uint64(240*time.Second) || report.Reserved.Calls != 8 || report.Reserved.RequestBytes > 1<<20 || report.Reserved.ResponseBytes > 64<<10 || report.Reserved.WireBytes > 8<<20 || report.Reserved.OutputBytes > 4<<20 {
+	if e != nil || report.Status != "PAUSED_UNIT_SLICE" || report.Units != 1 || report.Targets != 20 || report.Calls != 4 || report.Selected != 1 || report.Discovered != 1 || report.Denominator != "UNKNOWN" || report.Reserved.ActiveNS > uint64(240*time.Second) || report.Reserved.Calls != 8 || report.Reserved.RequestBytes > 1<<20 || report.Reserved.ResponseBytes > 64<<10 || report.Reserved.WireBytes > 8<<20 || report.Reserved.OutputBytes > 4<<20 {
 		t.Fatalf("ASSERT_COMBINED_LITERAL_UNIT180_TWENTY A-fail report=%+v err=%v", report, e)
 	}
 	if os.Getenv("TEST_FIXTURE_DISCOVERY_DELAY") == "1" {
@@ -218,7 +218,7 @@ func TestHostApplicationReadinessLiteralRestart(t *testing.T) {
 			before := a.Head().Reserved.ActiveNS
 			e = advanceApplicationDiscovery(context.Background(), r, a, &s)
 			if mode == "resume" {
-				if e != nil || !s.DiscoveryFinished || s.SelectedCount != 1 {
+				if e != nil || s.DiscoveryFinished || s.SelectedCount != 1 || s.Selected == "" {
 					t.Fatal("ASSERT_LITERAL_RESTART_RESUME", s, e)
 				}
 			} else if e == nil || s.DiscoveryFinished || s.SelectedCount != 0 {

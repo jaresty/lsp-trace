@@ -377,16 +377,25 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		}
 		return report("PAUSED_AMBIGUOUS_SPENT_UNIT_NO_REPLAY", 1)
 	}
-	if e = advanceApplicationDiscovery(ctx, r, a, &s); e != nil {
-		if errors.Is(e, product.ErrPaused) {
-			return report("PAUSED_BUDGET", 0)
-		}
-		return report("FAILED_SOURCE_DISCOVERY_UNKNOWN", 1)
-	}
 	if args[0] == "discover" {
+		if e = advanceApplicationDiscoveryWithHandoff(ctx, r, a, &s, false); e != nil {
+			if errors.Is(e, product.ErrPaused) {
+				return report("PAUSED_BUDGET", 0)
+			}
+			return report("FAILED_SOURCE_DISCOVERY_UNKNOWN", 1)
+		}
 		return report("DISCOVERY_COMPLETE", 0)
 	}
-	for count := 0; s.Selected != "" && count < r.MaxUnitsPerRun; count++ {
+	for count := 0; count < r.MaxUnitsPerRun; count++ {
+		if e = advanceApplicationDiscovery(ctx, r, a, &s); e != nil {
+			if errors.Is(e, product.ErrPaused) {
+				return report("PAUSED_BUDGET", 0)
+			}
+			return report("FAILED_SOURCE_DISCOVERY_UNKNOWN", 1)
+		}
+		if s.Selected == "" {
+			break
+		}
 		if e = ctx.Err(); e != nil {
 			return report("CANCELLED_OR_DEADLINE", 1)
 		}
@@ -593,7 +602,7 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		}
 		s.LastPage = pub
 	}
-	if s.Selected != "" {
+	if s.Selected != "" || !s.DiscoveryFinished {
 		return report("PAUSED_UNIT_SLICE", 0)
 	}
 	return report("PROVISIONAL", 0)
