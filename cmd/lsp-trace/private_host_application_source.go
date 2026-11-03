@@ -16,7 +16,9 @@ import (
 
 	"lsp-trace/internal/censusacquisition"
 	pilot "lsp-trace/internal/censuslineagepilot"
+	"lsp-trace/internal/manageddiagnostic"
 	product "lsp-trace/internal/privatehostproductv3"
+	"lsp-trace/sessionruntime"
 )
 
 // Match native source.prunedDirectory: workspace-relative prefix, never basename.
@@ -370,6 +372,15 @@ func acquireApplicationChild(requestPath string, r hostApplicationRequest, contr
 		return 1
 	}
 	deps := productionCensusRunnerDependencies()
+	// Only this owned application route needs the existing startup sink. A sink
+	// without the manager's bounded store would persist only UNAVAILABLE facts.
+	newManager := deps.newManager
+	deps.newManager = func(cfg sessionruntime.Config) (*sessionruntime.Manager, error) {
+		if cfg.Diagnostics == nil {
+			cfg.Diagnostics = manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: manageddiagnostic.StartupDiagnosticsMaxRecords, MaxBytes: manageddiagnostic.StartupDiagnosticsMaxBytes})
+		}
+		return newManager(cfg)
+	}
 	deps.runPrivateInventory = func(o censusCLIOptions, c censusCoreConfig, stdout, stderr io.Writer) int {
 		return acquireHostProductWithHookV3(ctx, source, frozen, o, c, stdout, stderr, 2*time.Second, func(bound *hostProductRequestV3, origin pilot.EnumerationOriginPrivateV2) error {
 			var frame struct {

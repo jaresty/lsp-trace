@@ -465,6 +465,9 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		unitCtx, unitCancel := context.WithDeadline(ctx, unitDeadline)
 		defer unitCancel()
 		childctx, childcancel := context.WithTimeout(unitCtx, 20*time.Second)
+		// Capture the prepaid unit identity before the child may create auxiliary
+		// diagnostics. A replaced unit must never supply a failure projection.
+		failureUnitIdentity, _ := os.Lstat(unitRoot)
 		child := exec.CommandContext(childctx, exe, "private-host-application", "acquire", args[1], contractID, unitRoot)
 		child.Stdout = io.Discard
 		child.Stderr = io.Discard
@@ -472,6 +475,7 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		childcancel()
 		if e != nil {
 			fmt.Fprintln(stderr, "private application: ORIGINAL_PROCESS_SPENT")
+			reportApplicationFailure(stderr, unitRoot, failureUnitIdentity, source)
 			return report("FAILED_ORIGINAL_PROCESS_SPENT", 1)
 		}
 		if terminalRaw, te := applicationReadBounded(filepath.Join(source.AuxiliaryRoot, "application-terminal-discovery.json"), 4096); te == nil {

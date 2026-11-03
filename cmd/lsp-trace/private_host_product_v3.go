@@ -357,8 +357,16 @@ func acquireHostProductWithCleanupV3(ctx context.Context, r hostProductRequestV3
 func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, frozen pilot.FrozenScopePrivateV2, o censusCLIOptions, c censusCoreConfig, out, errout io.Writer, cleanupGrace time.Duration, discovered func(*hostProductRequestV3, pilot.EnumerationOriginPrivateV2) error) (resultCode int) {
 	var err error
 	phase := "ORIGINAL_RETENTION_ROOTS"
+	failure := newApplicationFailure(r) // before discovery changes Requested/config
+	rootIdentity, _ := os.Lstat(r.AuxiliaryRoot)
+	var sessionCode *int
+	stops, joins := 0, 0
+	cleanupOK, startupOwned := false, false
 	defer func() {
 		if resultCode != 0 {
+			if discovered != nil && publishApplicationFailure(ctx, r, rootIdentity, failure, phase, err, sessionCode, stops, joins, cleanupOK, startupOwned) != nil {
+				fmt.Fprintln(errout, "private application: SafeDiagnosticStatus=UNAVAILABLE")
+			}
 			product.DeliverEarlyFailure(r.Configuration, phase, pilot.ScopeFailureClassPrivateV2(err))
 		}
 	}()
@@ -393,12 +401,15 @@ func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, f
 	}
 	defer ledger.Close()
 	current := c.runner
+	if discovered != nil && current.diagnosticRoot == "" && current.diagnosticSelector == "" {
+		current.diagnosticRoot, current.diagnosticSelector = r.AuxiliaryRoot, applicationStartupSelector
+	}
+	startupOwned = current.diagnosticRoot == r.AuxiliaryRoot && current.diagnosticSelector == applicationStartupSelector
 	current.parent = ctx
 	current.shutdownManagedByCaller = true
 	var id censusacquisition.SessionIdentity
-	stops, joins := 0, 0
-	cleanupOK := false
 	current.observeStart = func(s sessionruntime.StartResult) {
+		failure.StartupAttemptID = string(s.AttemptID)
 		id = censusacquisition.SessionIdentity{SessionID: s.SessionID, Generation: s.Generation}
 	}
 	current.observeStop = func(s session.LifecycleResult) { stops++; cleanupOK = string(s.Failure) == "" }
@@ -417,6 +428,7 @@ func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, f
 		if runtime == nil || runtime.manager != current.manager {
 			return 1
 		}
+		phase = "ORIGINAL_SESSION_LEASE"
 		err = current.manager.WithReadySessionLease(live, sessionruntime.SessionLeaseRequest{SessionID: id.SessionID, Generation: id.Generation, Workspace: o.Workspace}, func(leased context.Context) error {
 			phase = "ORIGINAL_CENSUS_DISCOVERY"
 			var origin pilot.EnumerationOriginPrivateV2
@@ -435,6 +447,7 @@ func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, f
 				return nil
 			}
 			if discovered != nil {
+				phase = "ORIGINAL_DISCOVERY_BINDING"
 				if e = discovered(&r, origin); e != nil {
 					if e == errApplicationUnitSemanticPolicy {
 						terminalReason = "UNIT_SEMANTIC_POLICY_PAUSE"
@@ -483,6 +496,7 @@ func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, f
 		}
 		return 0
 	})
+	sessionCode = &code
 	if code != 0 || err != nil || stops != 1 || joins != 1 || !cleanupOK {
 		return 1
 	}
@@ -498,6 +512,7 @@ func acquireHostProductWithHookV3(ctx context.Context, r hostProductRequestV3, f
 		}
 		return 0
 	}
+	phase = "ORIGINAL_TRANSFER"
 	transfer.Cleanup = product.Lifecycle{OriginalStopCalls: stops, OriginalJoinCalls: joins, InnerGraceful: cleanupOK, RoleCleanup: "UNOBSERVED_HOST_ROLE_RETURN"}
 	if product.WriteTransfer(filepath.Join(r.AuxiliaryRoot, "transfer.json"), transfer) != nil {
 		return 1
