@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"lsp-trace/internal/censuscontinuation"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -164,6 +166,26 @@ func retainControlledCheckpointReviewActorsV2(t *testing.T, request Request, sub
 	}
 	retain(binding, body)
 	return binding, harness, prior
+}
+
+// Synthetic review retention is intentional setup; the snapshot is taken only
+// afterward. Default real registration must refuse before any checkpoint effects.
+func assertSyntheticCheckpointProvenanceRefusalV2(t *testing.T, request Request, stateDir string, subject programcrepresentative.ProgramCRepresentativeQualificationSubjectV2, implementationSource controlledCheckpointImplementationReaderV2) {
+	t.Helper()
+	envelope, harness, _ := retainControlledCheckpointReviewV2(t, request, subject)
+	installControlledActorDeclarationV2(t, harness)
+	before := workflowStateSnapshot(t, stateDir)
+	for _, kind := range []inventorysuccessor.MultiSeedOperationKindV2{inventorysuccessor.MultiSeedDenominatorOperationV2, inventorysuccessor.MultiSeedLineageOperationV2, inventorysuccessor.MultiSeedSuccessorOperationV2} {
+		observed := inventorysuccessor.MultiSeedOperationObservationsV2{}
+		result, err := runMultiSeedCheckpointV2(context.Background(), MultiSeedCheckpointRequestV2{Workflow: request, Envelope: envelope, ImplementationSource: implementationSource, MaxImplementationSourceBytes: programcrepresentative.MaxArtifactCanonicalBytesV2, Operation: kind}, func(v inventorysuccessor.MultiSeedOperationObservationsV2) { observed = v })
+		if !errors.Is(err, censuscontinuation.ErrQualificationProvenanceV2) {
+			t.Fatalf("SYNTHETIC_CHECKPOINT_EXACT_PROVENANCE_REFUSAL kind=%s: %v", kind, err)
+		}
+		if observed != (inventorysuccessor.MultiSeedOperationObservationsV2{}) || !reflect.DeepEqual(result, inventorysuccessor.MultiSeedOperationResultV2{}) || !reflect.DeepEqual(before, workflowStateSnapshot(t, stateDir)) {
+			t.Fatalf("SYNTHETIC_CHECKPOINT_ZERO_PUBLICATION_CAS_STATE kind=%s: %+v", kind, observed)
+		}
+	}
+	t.Log("SYNTHETIC_CHECKPOINT_EXACT_PROVENANCE_REFUSAL PASS: default real registration; zero publication/CAS and byte-identical state/heads; B reconstruction not reached")
 }
 
 func runControlledMultiSeedCheckpointAssertionsV2(t *testing.T, request Request, stateDir string, subject programcrepresentative.ProgramCRepresentativeQualificationSubjectV2, implementationSource controlledCheckpointImplementationReaderV2, wantD, wantG uint64) {

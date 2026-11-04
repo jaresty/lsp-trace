@@ -102,8 +102,13 @@ func checkpointFilesV2(t *testing.T, directory string) map[string]string {
 	return out
 }
 func TestMultiSeedV2ControlledThreeCAS(t *testing.T) {
-	t.Log("procedure: test-archive-only reviewed context; actual three private operations with close/reopen; exact snapshot; fresh-root byte-identical replay with zero publication/CAS; no production pins asserted")
+	t.Log("procedure: default synthetic review provenance refusal; only explicit legacy-overlay context executes test-archive three private operations, exact snapshot and byte-identical replay; not genuine qualification")
 	ctx := context.Background()
+	if !controlledLegacyContextV2(t) {
+		request, stateDir, _, _, subject, _ := ownerBoundaryFixtureV2(t)
+		assertSyntheticCheckpointProvenanceRefusalV2(t, request, stateDir, subject, controlledCheckpointImplementationReaderV2{root: filepath.Clean(filepath.Join("..", ".."))})
+		return
+	}
 	q := controlledCheckpointQualificationV2(t)
 	directory, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

@@ -57,9 +57,6 @@ func ownerBoundaryFixtureV2(t *testing.T) (Request, string, ownerBoundarySourceV
 	request, stateDir := multiSeedRetainedCheckpointFixtureV2(t)
 	reader := controlledCheckpointImplementationReaderV2{root: filepath.Clean(filepath.Join("..", ".."))}
 	subject, err := BuildProgramCMultiSeedQualificationSubjectV2(ctx, request, reader, programcrepresentative.MaxArtifactCanonicalBytesV2)
-	if errors.Is(err, programcrepresentative.ErrMultiSeedV2ReviewRequired) {
-		t.Skip("controlled owner guard requires disposable declaration-data overlay; production remains unissued")
-	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,6 +112,7 @@ type OwnerBoundaryCaseForTestsV2 struct {
 	Source   programcrepresentative.QualificationEvidenceSourceV2
 	Identity inventorysuccessor.WorkflowIdentity
 	Snapshot func() map[string]string
+	Legacy   bool
 }
 
 func OwnerBoundaryFixtureForTestsV2(t *testing.T, forgedReview bool) OwnerBoundaryCaseForTestsV2 {
@@ -129,13 +127,13 @@ func OwnerBoundaryFixtureForTestsV2(t *testing.T, forgedReview bool) OwnerBounda
 		}
 		source.harness = h
 	}
-	return OwnerBoundaryCaseForTestsV2{Evidence: source.ProgramCMultiSeedQualificationEvidenceV2, Expected: expected, Envelope: raw, Source: source, Identity: request.Identity, Snapshot: func() map[string]string { return workflowStateSnapshot(t, dir) }}
+	return OwnerBoundaryCaseForTestsV2{Legacy: controlledLegacyContextV2(t), Evidence: source.ProgramCMultiSeedQualificationEvidenceV2, Expected: expected, Envelope: raw, Source: source, Identity: request.Identity, Snapshot: func() map[string]string { return workflowStateSnapshot(t, dir) }}
 }
 func TestMultiSeedOwnerBoundaryV2(t *testing.T) {
 	ctx := context.Background()
 	request, stateDir, source, expected, subject, raw := ownerBoundaryFixtureV2(t)
 	t.Run("A_UNREGISTERED_ACTOR_AUTHORITY_REFUSAL", func(t *testing.T) {
-		// Registered genuine actors and forged actors are deliberately independent.
+		// Independently declared actors and forged actors are deliberately independent.
 		binding, fakeHarness, _ := retainControlledCheckpointReviewActorsV2(t, request, subject, "forged-writer", "forged-reviewer")
 		forgedRaw, err := source.objects.Resolve(ctx, binding)
 		if err != nil {
@@ -159,7 +157,30 @@ func TestMultiSeedOwnerBoundaryV2(t *testing.T) {
 		}
 		t.Log("A_UNREGISTERED_ACTOR_AUTHORITY_REFUSAL PASS: canonical fake closure refused by independent registered provenance; zero authority and writes/CAS")
 	})
-	t.Run("B_FALSE_EMPTY_AUTHORITY_REFUSAL", func(t *testing.T) {
+	// These ingress guards must execute even when synthetic provenance refuses.
+	t.Run("ZERO_CAPABILITY_AND_CROSS_SUBJECT_REFUSAL", func(t *testing.T) {
+		before := workflowStateSnapshot(t, stateDir)
+		operation, err := inventorysuccessor.NewMultiSeedCheckpointOperationV2(nil, inventorysuccessor.MultiSeedDenominatorOperationV2, request.SuccessorWorkflowKey, request.SuccessorHeadKey, request.Identity, censuscontinuation.VerifiedQualificationV2{})
+		if !errors.Is(err, censuscontinuation.ErrQualificationUnavailableV2) || operation != nil {
+			t.Fatal("B_ZERO_CAPABILITY_BEFORE_STORAGE_REFUSAL")
+		}
+		foreign := expected
+		foreign.CorpusIdentity.FrozenCorpusSHA256 = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+		if q, err := source.ProgramCMultiSeedQualificationEvidenceV2.VerifyQualificationEnvelopeV2(ctx, foreign, raw, source); err == nil {
+			t.Fatal("B_CROSS_SUBJECT_OWNER_REFUSAL")
+		} else if _, err = q.SubjectBindingV2(); err == nil {
+			t.Fatal("B_CROSS_SUBJECT_AUTHORITY_ESCAPE")
+		}
+		if !reflect.DeepEqual(before, workflowStateSnapshot(t, stateDir)) {
+			t.Fatal("INGRESS_REFUSAL_STORAGE_CHANGED")
+		}
+	})
+	legacy := controlledLegacyContextV2(t)
+	name := "SyntheticReviewProvenanceRefusal"
+	if legacy {
+		name = "LegacyQualifiedFalseEmptyReconstruction"
+	}
+	t.Run(name, func(t *testing.T) {
 		attacker := source
 		attacker.falseEmpty = true
 		calculation, err := programcrepresentative.CheckQualificationCalculationV2(ctx, expected, raw, attacker)
@@ -183,6 +204,19 @@ func TestMultiSeedOwnerBoundaryV2(t *testing.T) {
 		before := workflowStateSnapshot(t, stateDir)
 		// Extra attacker callbacks are ignored: the concrete owner reconstructs.
 		q, err := source.ProgramCMultiSeedQualificationEvidenceV2.VerifyQualificationEnvelopeV2(ctx, expected, raw, attacker)
+		if !legacy {
+			if !errors.Is(err, censuscontinuation.ErrQualificationProvenanceV2) {
+				t.Fatalf("SYNTHETIC_FALSE_EMPTY_EXACT_PROVENANCE_REFUSAL: %v", err)
+			}
+			if _, capabilityErr := q.SubjectBindingV2(); !errors.Is(capabilityErr, censuscontinuation.ErrQualificationUnavailableV2) {
+				t.Fatalf("SYNTHETIC_FALSE_EMPTY_INVALID_CAPABILITY: %v", capabilityErr)
+			}
+			if !reflect.DeepEqual(before, workflowStateSnapshot(t, stateDir)) {
+				t.Fatal("SYNTHETIC_FALSE_EMPTY_STORAGE_CHANGED")
+			}
+			t.Log("SYNTHETIC_FALSE_EMPTY_EXACT_PROVENANCE_REFUSAL PASS: calculation is nonauthoritative; B reconstruction not reached")
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,17 +230,6 @@ func TestMultiSeedOwnerBoundaryV2(t *testing.T) {
 		}
 		if a.D != 24 || a.G != 48 || a.C != 2 || a.E != 1 || a.R != 1 {
 			t.Fatalf("B_FALSE_EMPTY_AUTHORITY_REFUSAL: genuine inventory changed %+v", a)
-		}
-		operation, err := inventorysuccessor.NewMultiSeedCheckpointOperationV2(nil, inventorysuccessor.MultiSeedDenominatorOperationV2, request.SuccessorWorkflowKey, request.SuccessorHeadKey, request.Identity, censuscontinuation.VerifiedQualificationV2{})
-		if !errors.Is(err, censuscontinuation.ErrQualificationUnavailableV2) || operation != nil {
-			t.Fatal("B_ZERO_CAPABILITY_BEFORE_STORAGE_REFUSAL")
-		}
-		foreign := expected
-		foreign.CorpusIdentity.FrozenCorpusSHA256 = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-		if q, err := source.ProgramCMultiSeedQualificationEvidenceV2.VerifyQualificationEnvelopeV2(ctx, foreign, raw, source); err == nil {
-			t.Fatal("B_CROSS_SUBJECT_OWNER_REFUSAL")
-		} else if _, err = q.SubjectBindingV2(); err == nil {
-			t.Fatal("B_CROSS_SUBJECT_AUTHORITY_ESCAPE")
 		}
 		if !reflect.DeepEqual(before, workflowStateSnapshot(t, stateDir)) {
 			t.Fatal("B_FALSE_EMPTY_AUTHORITY_REFUSAL: storage changed")

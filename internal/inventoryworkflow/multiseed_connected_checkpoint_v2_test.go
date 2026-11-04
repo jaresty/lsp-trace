@@ -26,8 +26,22 @@ import (
 // imported historical store, or positive qualification test token is involved.
 func multiSeedRetainedCheckpointFixtureV2(t *testing.T) (Request, string) {
 	t.Helper()
+	return multiSeedRetainedCheckpointFixtureAtV2(t, t.TempDir(), t.TempDir())
+}
+
+// Only directory ownership is extracted: temporary callers retain their prior
+// cleanup behavior; persistent preparation supplies fresh private directories.
+func multiSeedRetainedCheckpointFixtureAtV2(t *testing.T, publicationDir, stateDirectory string) (Request, string) {
+	t.Helper()
+	controlledLegacyContextV2(t) // Fail closed on an explicitly invalid test context before fixture operations.
+	for _, dir := range []string{publicationDir, stateDirectory} {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("FRESH_CHECKPOINT_DIRECTORIES_REQUIRED: %s: %v", dir, err)
+		}
+	}
 	ctx := context.Background()
-	pubDir, err := filepath.EvalSymlinks(t.TempDir())
+	pubDir, err := filepath.EvalSymlinks(publicationDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +124,7 @@ func multiSeedRetainedCheckpointFixtureV2(t *testing.T) (Request, string) {
 	if err = os.WriteFile(ledgerPath, ledgerRaw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	stateDir, err := filepath.EvalSymlinks(t.TempDir())
+	stateDir, err := filepath.EvalSymlinks(stateDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +295,7 @@ func assertMultiSeedRetainedAccountingV2(t *testing.T, e censuscontinuation.Prog
 }
 
 func TestMultiSeedV2ConnectedCheckpoint(t *testing.T) {
-	t.Log("procedure: actual retained four-constituent Native publications -> six runs each -> terminal reconstruction -> v2 expected context -> subject -> qualified denominator/lineage -> three separate CAS operations with reopen")
+	t.Log("procedure: four retained controlled Native constituents -> six runs each -> terminal reconstruction -> subject; default refuses synthetic review provenance; explicit legacy-overlay alone continues to denominator/lineage and three CAS operations")
 	request, stateDir := multiSeedRetainedCheckpointFixtureV2(t)
 	before := workflowStateSnapshot(t, stateDir)
 	root, err := request.ProgramC.OpenState()
@@ -301,6 +315,9 @@ func TestMultiSeedV2ConnectedCheckpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantD, wantG := assertMultiSeedRetainedAccountingV2(t, evidence, expected)
+	if wantD != 24 || wantG != 48 {
+		t.Fatalf("CONNECTED_CONTROLLED_D24_G48: D=%d G=%d", wantD, wantG)
+	}
 	if err = root.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -326,6 +343,10 @@ func TestMultiSeedV2ConnectedCheckpoint(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !controlledLegacyContextV2(t) {
+		assertSyntheticCheckpointProvenanceRefusalV2(t, request, stateDir, subject, implementationSource)
+		return
 	}
 	runControlledMultiSeedCheckpointAssertionsV2(t, request, stateDir, subject, implementationSource, wantD, wantG)
 }

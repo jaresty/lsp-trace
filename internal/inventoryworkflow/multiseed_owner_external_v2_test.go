@@ -57,8 +57,22 @@ func TestMultiSeedExternalOwnerBoundaryV2(t *testing.T) {
 		}
 		t.Log("A_EXTERNAL_UNREGISTERED_PROVENANCE PASS")
 	})
-	t.Run("B_EXTERNAL_GENUINE_REVIEW_FALSE_EMPTY", func(t *testing.T) {
-		f := inventoryworkflow.OwnerBoundaryFixtureForTestsV2(t, false)
+	f := inventoryworkflow.OwnerBoundaryFixtureForTestsV2(t, false)
+	t.Run("EXTERNAL_ZERO_CAPABILITY_BEFORE_STORAGE", func(t *testing.T) {
+		before := f.Snapshot()
+		op, err := inventorysuccessor.NewMultiSeedCheckpointOperationV2(nil, inventorysuccessor.MultiSeedDenominatorOperationV2, "workflow", "head", f.Identity, censuscontinuation.VerifiedQualificationV2{})
+		if !errors.Is(err, censuscontinuation.ErrQualificationUnavailableV2) || op != nil {
+			t.Fatal("B_EXTERNAL_ZERO_CAPABILITY_BEFORE_OPEN")
+		}
+		if !reflect.DeepEqual(before, f.Snapshot()) {
+			t.Fatal("B_EXTERNAL_ZERO_STORAGE_EFFECTS")
+		}
+	})
+	name := "ExternalSyntheticReviewProvenanceRefusal"
+	if f.Legacy {
+		name = "B_EXTERNAL_GENUINE_REVIEW_FALSE_EMPTY"
+	}
+	t.Run(name, func(t *testing.T) {
 		bad := falseEmptyExternalAdapterV2{f.Source}
 		calc, err := programcrepresentative.CheckQualificationCalculationV2(ctx, f.Expected, f.Envelope, bad)
 		if err != nil {
@@ -77,6 +91,19 @@ func TestMultiSeedExternalOwnerBoundaryV2(t *testing.T) {
 		}
 		before := f.Snapshot()
 		q, err := f.Evidence.VerifyQualificationEnvelopeV2(ctx, f.Expected, f.Envelope, bad)
+		if !f.Legacy {
+			if !errors.Is(err, censuscontinuation.ErrQualificationProvenanceV2) {
+				t.Fatalf("EXTERNAL_SYNTHETIC_EXACT_PROVENANCE_REFUSAL: %v", err)
+			}
+			if _, capabilityErr := q.SubjectBindingV2(); !errors.Is(capabilityErr, censuscontinuation.ErrQualificationUnavailableV2) {
+				t.Fatalf("EXTERNAL_SYNTHETIC_INVALID_CAPABILITY: %v", capabilityErr)
+			}
+			if !reflect.DeepEqual(before, f.Snapshot()) {
+				t.Fatal("B_EXTERNAL_ZERO_STORAGE_EFFECTS")
+			}
+			t.Log("EXTERNAL_SYNTHETIC_EXACT_PROVENANCE_REFUSAL PASS: B reconstruction not reached")
+			return
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,10 +114,6 @@ func TestMultiSeedExternalOwnerBoundaryV2(t *testing.T) {
 		a, err = d.AccountingV2()
 		if err != nil || a.C != 2 || a.E != 1 || a.R != 1 || a.D != 24 || a.G != 48 {
 			t.Fatalf("B_EXTERNAL_GENUINE_REVIEW_FALSE_EMPTY: owner did not reconstruct COMPLETE %+v %v", a, err)
-		}
-		op, err := inventorysuccessor.NewMultiSeedCheckpointOperationV2(nil, inventorysuccessor.MultiSeedDenominatorOperationV2, "workflow", "head", f.Identity, censuscontinuation.VerifiedQualificationV2{})
-		if !errors.Is(err, censuscontinuation.ErrQualificationUnavailableV2) || op != nil {
-			t.Fatal("B_EXTERNAL_ZERO_CAPABILITY_BEFORE_OPEN")
 		}
 		if !reflect.DeepEqual(before, f.Snapshot()) {
 			t.Fatal("B_EXTERNAL_ZERO_STORAGE_EFFECTS")
