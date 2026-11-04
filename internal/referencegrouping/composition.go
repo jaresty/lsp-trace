@@ -138,8 +138,22 @@ func ComposeQualified(input AdmittedInput, policy GroupingPolicy, verified Verif
 	if len(input.artifact.canonical) == 0 || len(policy.canonical) == 0 || !verified.Matches(policy, input, epoch) {
 		return CompositionReceipt{}, errors.New("unqualified composition")
 	}
-	if err := validateCompositionLimits(limits); err != nil {
+	doc, err := projectPolicyDocument(input, policy, epoch, CompositionBindings{
+		InputID: input.ID(), InputDigest: input.Digest(), InputByteLength: input.ByteLength(),
+		PolicyID: policy.ID(), PolicyDigest: policy.Digest(), PolicyByteLength: policy.ByteLength(),
+		QualificationReceiptCommitment: CompositionCommitment{verified.receiptID, verified.receiptDigest, verified.receiptByteLength},
+	}, limits)
+	if err != nil {
 		return CompositionReceipt{}, err
+	}
+	return compositionFromDocument(doc, limits)
+}
+
+// projectPolicyDocument is projection mechanics only. It neither checks nor
+// creates qualification. Only ComposeQualified may turn it into a receipt.
+func projectPolicyDocument(input AdmittedInput, policy GroupingPolicy, epoch uint64, bindings CompositionBindings, limits CompositionLimits) (compositionDocument, error) {
+	if err := validateCompositionLimits(limits); err != nil {
+		return compositionDocument{}, err
 	}
 	rules := make(map[string]GroupingPolicyRule, len(policy.doc.Rules))
 	for _, r := range policy.Rules() {
@@ -147,7 +161,7 @@ func ComposeQualified(input AdmittedInput, policy GroupingPolicy, verified Verif
 	}
 	contributions := input.Contributions()
 	if len(contributions) > limits.MaxOccurrences {
-		return CompositionReceipt{}, errors.New("occurrence bound")
+		return compositionDocument{}, errors.New("occurrence bound")
 	}
 	kindCounts := make(map[string]int)
 	for _, c := range contributions {
@@ -156,11 +170,7 @@ func ComposeQualified(input AdmittedInput, policy GroupingPolicy, verified Verif
 	seenKind := make(map[string]int)
 	doc := compositionDocument{
 		Family: compositionFamily, Version: compositionVersion, Epoch: epoch,
-		Bindings: CompositionBindings{
-			InputID: input.ID(), InputDigest: input.Digest(), InputByteLength: input.ByteLength(),
-			PolicyID: policy.ID(), PolicyDigest: policy.Digest(), PolicyByteLength: policy.ByteLength(),
-			QualificationReceiptCommitment: CompositionCommitment{verified.receiptID, verified.receiptDigest, verified.receiptByteLength},
-		},
+		Bindings:          bindings,
 		Occurrences:       make([]CompositionOccurrence, 0, len(contributions)),
 		PairContributions: []PairContribution{}, SeparateLayerContributions: []PairContribution{},
 		Custody: input.EndpointCustody(),
@@ -168,13 +178,13 @@ func ComposeQualified(input AdmittedInput, policy GroupingPolicy, verified Verif
 	for _, c := range contributions {
 		rule, ok := rules[c.Kind]
 		if !ok {
-			return CompositionReceipt{}, errors.New("missing policy rule")
+			return compositionDocument{}, errors.New("missing policy rule")
 		}
 		seenKind[c.Kind]++
 		predecessor := input.PredecessorIdentityForContribution(c)
 		custody := input.CustodyIdentityForOccurrence(c.OccurrenceIdentity)
 		if predecessor == "" || custody == "" {
-			return CompositionReceipt{}, errors.New("missing source identity")
+			return compositionDocument{}, errors.New("missing source identity")
 		}
 		o := CompositionOccurrence{
 			OccurrenceIdentity: c.OccurrenceIdentity, Kind: c.Kind, From: c.From, To: c.To, Ordinal: c.Ordinal,
@@ -213,11 +223,11 @@ func ComposeQualified(input AdmittedInput, policy GroupingPolicy, verified Verif
 			o.TerminalDisposition = "NORMALIZED"
 			doc.Accounting.Normalized++
 			if rule.Normalization != "BY_KIND_MULTIPLICITY" || kindCounts[c.Kind] <= 0 {
-				return CompositionReceipt{}, errors.New("unsupported normalization")
+				return compositionDocument{}, errors.New("unsupported normalization")
 			}
 			denominator, err := checkedCompositionProduct(rule.Weight.Denominator, kindCounts[c.Kind])
 			if err != nil {
-				return CompositionReceipt{}, err
+				return compositionDocument{}, err
 			}
 			pair.Weight = reduceRational(Rational{rule.Weight.Numerator, denominator})
 			doc.PairContributions = append(doc.PairContributions, pair)
@@ -227,13 +237,13 @@ func ComposeQualified(input AdmittedInput, policy GroupingPolicy, verified Verif
 			pair.Layer = rule.Layer
 			doc.SeparateLayerContributions = append(doc.SeparateLayerContributions, pair)
 		default:
-			return CompositionReceipt{}, errors.New("unsupported action")
+			return compositionDocument{}, errors.New("unsupported action")
 		}
 		doc.Accounting.Terminal++
 		doc.Occurrences = append(doc.Occurrences, o)
 	}
 	if len(doc.PairContributions)+len(doc.SeparateLayerContributions) > limits.MaxPairContributions {
-		return CompositionReceipt{}, errors.New("pair contribution bound")
+		return compositionDocument{}, errors.New("pair contribution bound")
 	}
 	sort.Slice(doc.PairContributions, func(i, j int) bool {
 		return doc.PairContributions[i].CanonicalKey() < doc.PairContributions[j].CanonicalKey()
@@ -242,14 +252,14 @@ func ComposeQualified(input AdmittedInput, policy GroupingPolicy, verified Verif
 		return doc.SeparateLayerContributions[i].CanonicalKey() < doc.SeparateLayerContributions[j].CanonicalKey()
 	})
 	if err := validatePairArithmetic(append(append([]PairContribution(nil), doc.PairContributions...), doc.SeparateLayerContributions...), limits); err != nil {
-		return CompositionReceipt{}, err
+		return compositionDocument{}, err
 	}
 	digest, err := pairWeightDigest(doc.PairContributions, doc.SeparateLayerContributions)
 	if err != nil {
-		return CompositionReceipt{}, err
+		return compositionDocument{}, err
 	}
 	doc.PairWeightDigest = digest
-	return compositionFromDocument(doc, limits)
+	return doc, nil
 }
 
 func ParseCompositionReceipt(raw []byte, limits CompositionLimits) (CompositionReceipt, error) {
