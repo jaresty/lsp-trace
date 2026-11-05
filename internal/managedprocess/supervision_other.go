@@ -8,6 +8,9 @@ import (
 	"os/exec"
 )
 
+func censusLocalDarwinGroupPrivateWindow(_ int, _ *privateProviderWindow) GroupCensusObservation {
+	return GroupCensusObservation{Limit: 64, Bounded: true, Truncated: true, Err: ErrPrivateProviderWindow}
+}
 func localDarwinSupported() bool { return false }
 func configureLocalDarwin(*exec.Cmd) error {
 	return errors.New("managedprocess: local Darwin supervision unavailable on this platform")

@@ -406,6 +406,27 @@ const DocumentSourceUnavailable session.Failure = "DOCUMENT_SOURCE_UNAVAILABLE"
 // Supply and version are returned only after a confirmed complete write (or the
 // historical unchanged-document cache hit, which returns no new Supply).
 func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) DocumentResult {
+	if w := privateProviderWindowFrom(ctx); w != nil {
+		if !w.exactOwner(m, req.SessionID, req.Generation) {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		if !privateProviderWindowInner(ctx) {
+			return privateProviderWindowRun(w, ctx, DocumentResult{Failure: privateProviderWindowUnjoined}, func(inner context.Context) DocumentResult { return m.PrepareDocument(inner, req) })
+		}
+		if len(req.URI) > 4096 || len(req.LanguageID) > 4096 || !w.enter("prepare") {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		req.PreparedNoFollow, req.CaptureSupply = true, true
+		result := m.prepareDocumentAccounted(ctx, req, false)
+		if result.Failure != "" {
+			// Required preparation was admitted. Do not refund, retry, or release
+			// ownership: only successful completion becomes permanently impossible.
+			w.mu.Lock()
+			w.preparationFailed = true
+			w.mu.Unlock()
+		}
+		return result
+	}
 	return m.prepareDocumentAccounted(ctx, req, false)
 }
 
@@ -413,6 +434,9 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 // already prepared document and returns evidence from that exact successful
 // write. Callers must complete their own privacy admission before invoking it.
 func (m *Manager) RefreshDocumentSupply(ctx context.Context, req DocumentRequest) DocumentResult {
+	if privateProviderWindowFrom(ctx) != nil {
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
 	if !req.CaptureSupply {
 		return DocumentResult{Failure: DocumentSupplyUnavailable}
 	}
@@ -500,6 +524,10 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		m.mu.Unlock()
 		return DocumentResult{Failure: DocumentSupplyUnavailable}
 	}
+	if w := privateProviderWindowFrom(ctx); w != nil && !w.exactOwnerLocked(m, r, req.SessionID, req.Generation) {
+		m.mu.Unlock()
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
 	// Exclude binding while a preparation may read checkout bytes. The counter
 	// spans both the source read and final supply installation, including errors.
 	r.retainedScopePreparing++
@@ -512,6 +540,10 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	workspace := filepath.Clean(r.record.Profile.Workspace().String())
 	registeredWorkspace := r.record.Profile.Workspace().String()
 	configured := r.languageID
+	if _, private := r.process.(*privateProviderWindowChild); private && privateProviderWindowFrom(ctx) == nil {
+		m.mu.Unlock()
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
 	retainedSource, retained := r.seedSources[req.URI]
 	if privateGroupingResourcesFrom(ctx) != nil && retained {
 		m.mu.Unlock()
@@ -543,6 +575,9 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 			return DocumentResult{Failure: DocumentSupplyUnavailable}
 		}
 		sourceLimit := MaxDocumentSupplyBytes
+		if w := privateProviderWindowFrom(ctx); w != nil {
+			sourceLimit = int(w.spec.bounds.SourceBytes)
+		}
 		if resources := privateGroupingResourcesFrom(ctx); resources != nil {
 			if !resources.valid(ctx, m) {
 				return DocumentResult{Failure: DocumentSupplyUnavailable}
@@ -599,6 +634,10 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	if r == nil || r.record.Generation != req.Generation {
 		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: session.StaleGeneration}, diagnosticEventTerminalFailure)
+	}
+	if w := privateProviderWindowFrom(ctx); w != nil && !w.exactOwnerLocked(m, r, req.SessionID, req.Generation) {
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: DocumentSupplyUnavailable}, diagnosticEventTerminalFailure)
 	}
 	if m.closed || r.record.State != session.Ready || r.protocolOwned || !m.validSessionLeaseLocked(ctx, r) {
 		subcause := m.lifecycleSubcauseLocked(r)
@@ -868,6 +907,12 @@ func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyOb
 // owning the exact generation's stdin/stdout stream. Concurrent transactions
 // and lifecycle operations are rejected rather than queued.
 func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
+	if w := privateProviderWindowFrom(parent); w != nil && !privateProviderWindowInner(parent) {
+		if !w.exactOwner(m, req.SessionID, req.Generation) {
+			return RoundTripResult{Failure: session.LifecycleConflict}
+		}
+		return privateProviderWindowRun(w, parent, RoundTripResult{Failure: privateProviderWindowUnjoined}, func(inner context.Context) RoundTripResult { return m.RoundTrip(inner, req) })
+	}
 	// The private envelope is validated before lineage, Params copies, pending
 	// requests, writes or native effects. Other private/ordinary paths are unchanged.
 	if resources := privateGroupingResourcesFrom(parent); resources != nil && !resources.admit(parent, m, req) {
@@ -918,6 +963,21 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 }
 
 func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool, transaction *privateB4Transaction) RoundTripResult {
+	window := privateProviderWindowFrom(parent)
+	if window != nil {
+		if !privateProviderWindowInner(parent) {
+			if !window.exactOwner(m, req.SessionID, req.Generation) {
+				return RoundTripResult{Failure: session.LifecycleConflict}
+			}
+			return privateProviderWindowRun(window, parent, RoundTripResult{Failure: privateProviderWindowUnjoined}, func(inner context.Context) RoundTripResult {
+				return m.roundTripWithPrivateTransaction(inner, req, classify, transaction)
+			})
+		}
+		if !window.admitTransaction(m, req) {
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+	}
+	wire := m.privateProviderWindowWire(parent)
 	if req.directionalV5 != nil && (transaction == nil || transaction.directionalV5 != req.directionalV5) {
 		return RoundTripResult{Failure: session.ToolNotImplemented}
 	}
@@ -961,6 +1021,14 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	if req.Generation != r.record.Generation {
 		m.mu.Unlock()
 		return m.finishCallHierarchyLayer1GenericRefusal(req.callHierarchyLayer1GenericAttempt, RoundTripResult{Failure: session.StaleGeneration}, callHierarchyLayer1GenericRefusalGeneration, session.StaleGeneration)
+	}
+	if window != nil && !window.exactOwnerLocked(m, r, req.SessionID, req.Generation) {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.LifecycleConflict}
+	}
+	if _, private := r.process.(*privateProviderWindowChild); private && window == nil {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.LifecycleConflict}
 	}
 	if r.record.State != session.Ready || r.protocolOwned || !m.validSessionLeaseLocked(parent, r) {
 		m.mu.Unlock()
@@ -1153,7 +1221,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		return m.finishRoundTrip(req.SessionID, &ownedTransport{child: child}, result, session.SessionPoisoned, true)
 	}
 	writeCapture := newFramedWriteCaptureBounded(checkedWriter{child.Stdin()}, requestFrameCap)
-	writer := lspwire.NewWriter(writeCapture, m.wire)
+	writer := lspwire.NewWriter(writeCapture, wire)
 	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
 	requestParams := req.Params
 	if eligibleOwnedMethodRequest(req) {
@@ -1296,9 +1364,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		stdout = io.TeeReader(stdout, genericResponseCapture)
 	}
 	if m.cWireObserver == nil && decodeEntry == nil && retainEntry == nil {
-		reader = lspwire.NewReader(stdout, m.wire)
+		reader = lspwire.NewReader(stdout, wire)
 	} else {
-		reader = lspwire.NewReaderObservedAtDecode(stdout, m.wire, m.cWireObserver, decodeEntry, retainEntry)
+		reader = lspwire.NewReaderObservedAtDecode(stdout, wire, m.cWireObserver, decodeEntry, retainEntry)
 	}
 	if req.callHierarchyLayer1GenericAttempt != nil && captureCap == 0 {
 		captureCap = maxBytes
@@ -1313,7 +1381,15 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointCumulativeWire) {
 			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 		}
+		if window != nil && !window.frame() {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		}
 		go func() {
+			if window != nil && req.directionalV5 == nil {
+				msg, frame, raw, retained, err := lspwire.ReadPrivateBoundedFrameObservedAtDecode(child.Stdout(), wire, int64(window.spec.bounds.FrameBytes), captureCap, m.cWireObserver, decodeEntry, retainEntry)
+				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
+				return
+			}
 			if resources := privateGroupingResourcesFrom(parent); resources != nil {
 				cap, ok := resources.beginFrame()
 				if !ok {
@@ -1442,6 +1518,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 					failure = session.SessionCrashed
 				}
 				return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+			}
+			if window != nil && read.message.Kind() == lspwire.KindRequest {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.ToolNotImplemented, true)
 			}
 			if account, ok := adr0011work.AccountFromContext(parent); ok {
 				if err := account.ChargeMessagesProcessed(account.Snapshot().Identity, 1); err != nil {
@@ -1897,6 +1976,7 @@ type privateB4DecodedTestHooks struct {
 }
 
 type Manager struct {
+	privateProviderWindow                        *privateProviderWindow
 	directionalV5                                *privateDirectionalV5
 	mu                                           sync.Mutex
 	limits                                       Limits
@@ -2099,11 +2179,19 @@ func canonicalLocalWorkspaceURI(raw string) (string, string, error) {
 
 // DeriveWorkspace synchronously derives a READY sibling session from private parent authority.
 func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceRequest) DeriveWorkspaceResult {
+	// Derivation is not part of a single-window schedule, even for its owner.
+	if privateProviderWindowFrom(ctx) != nil {
+		return DeriveWorkspaceResult{Failure: session.LifecycleConflict}
+	}
 	m.mu.Lock()
 	parent := m.sessions[req.SessionID]
 	if parent == nil {
 		m.mu.Unlock()
 		return DeriveWorkspaceResult{Failure: session.SessionNotFound}
+	}
+	if m.privateWindowGenerationLocked(parent) {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.LifecycleConflict}
 	}
 	if parent.record.Generation != req.Generation {
 		m.mu.Unlock()
@@ -2247,11 +2335,21 @@ func (m *Manager) SessionLanguageID(sessionID string, generation uint64) (string
 }
 
 func (m *Manager) WithReadySessionLease(ctx context.Context, req SessionLeaseRequest, callback func(context.Context) error) error {
+	if w := privateProviderWindowFrom(ctx); w != nil && !privateProviderWindowInner(ctx) {
+		if !w.exactOwner(m, req.SessionID, req.Generation) {
+			return errSessionLeaseConflict
+		}
+		return privateProviderWindowRun(w, ctx, error(ErrPrivateProviderWindowUnjoined), func(inner context.Context) error { return m.WithReadySessionLease(inner, req, callback) })
+	}
 	if ctx == nil || callback == nil {
 		return errSessionLeaseConflict
 	}
 	m.mu.Lock()
 	r := m.sessions[req.SessionID]
+	if w := privateProviderWindowFrom(ctx); w != nil && !w.exactOwnerLocked(m, r, req.SessionID, req.Generation) {
+		m.mu.Unlock()
+		return errSessionLeaseConflict
+	}
 	if m.closed || r == nil || r.record.SessionID != req.SessionID || r.record.Generation != req.Generation ||
 		r.record.Profile.Workspace().String() != req.Workspace || r.record.State != session.Ready ||
 		r.protocolOwned || r.lifecycleOwned || r.leaseClosing || r.leaseCount != 0 || m.workers >= m.limits.MaxChildren {
@@ -2319,7 +2417,14 @@ func (m *Manager) invalidateSessionLeaseLocked(r *runtimeSession) context.Cancel
 	return cancel
 }
 
-func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
+func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
+	if w := privateProviderWindowFrom(ctx); w != nil {
+		return w.startWindow(ctx, m, req)
+	}
+	return m.start(ctx, req)
+}
+
+func (m *Manager) start(ctx context.Context, req StartRequest) (result StartResult) {
 	seedSources := map[string][]byte{}
 	if req.SeedBinding != nil {
 		outcome := seedbinding.ValidateMechanical(ctx, req.Profile.Workspace().String(), *req.SeedBinding, m.seedRevisionAuthority)
@@ -2337,7 +2442,14 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 			result.CustodyProvenance = provenance
 		}(outcome.Provenance)
 	}
-	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
+	var attemptID manageddiagnostic.StartupAttemptID
+	var attemptSequence uint64
+	var attemptStarted time.Time
+	if w := privateProviderWindowFrom(ctx); w != nil {
+		attemptID, attemptSequence, attemptStarted = w.spec.attempt, w.spec.sequence, w.spec.started
+	} else {
+		attemptID, attemptSequence, attemptStarted = m.beginStartupAttempt()
+	}
 	defer func() {
 		result.AttemptID = attemptID
 		if result.SessionID != "" && result.Generation != 0 {
@@ -2360,6 +2472,10 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 	id := req.Profile.SessionKey().String()
 	m.mu.Lock()
 	if current := m.sessions[id]; current != nil {
+		if privateProviderWindowFrom(ctx) != nil || (m.privateWindowGenerationLocked(current) && current.protocolOwned && current.transientIdentity == "") {
+			m.mu.Unlock()
+			return StartResult{Failure: session.LifecycleConflict}
+		}
 		result := StartResult{SessionID: id, Generation: current.record.Generation, State: current.record.State}
 		m.mu.Unlock()
 		return result
@@ -2375,7 +2491,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 	identity := managedprocess.ObserveIdentity(req.Process, req.Profile.ProfileName(), req.Profile.Workspace().String())
 	// Start is deliberately before admission. The production managedprocess gate
 	// returns UNAVAILABLE before command construction, pipes, or process creation.
-	child, observed := m.starter.Start(ctx, req.Process)
+	child, observed := m.privateProviderWindowStartChild(ctx, req.Process)
 	if observed.Kind == managedprocess.StartUnavailable {
 		return StartResult{SessionID: id, Failure: session.ProcessContainmentUnavailable, Start: observed}
 	}
@@ -2386,14 +2502,12 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.sessions[id] != nil || len(m.sessions) >= m.limits.MaxSessions {
-		_ = child.Teardown(context.Background())
-		_ = child.Close()
+		m.cleanupRejectedStartupChildLocked(child)
 		return StartResult{SessionID: id, Failure: session.LifecycleConflict, Start: observed}
 	}
 	m.algebra.RegisterLifecycle(id, 1, session.Initializing, false)
 	if admission := m.algebra.Admit(id, 0); admission.Kind != session.AdmissionFree {
-		_ = child.Teardown(context.Background())
-		_ = child.Close()
+		m.cleanupRejectedStartupChildLocked(child)
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
 	}
 	record := Record{SessionID: id, Profile: req.Profile, Routing: RoutingMetadata{
@@ -2420,8 +2534,25 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 	r.transientIdentity = transientIdentity
 	r.diagnosticGeneration = m.newDiagnosticGeneration(attemptID, id, 1)
 	m.sessions[id] = r
+	if w := privateProviderWindowFrom(ctx); w != nil {
+		w.mu.Lock()
+		w.ownedRecord = r
+		w.mu.Unlock()
+	}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
+}
+
+// Called with Manager.mu held, and returns with it held. The existing private
+// startup callback/window worker owns the rejected child across both I/O calls.
+// Rejection never installs or commits a record: an ordinary collision is intact.
+func (m *Manager) cleanupRejectedStartupChildLocked(child Child) {
+	if _, private := child.(*privateProviderWindowChild); private {
+		m.mu.Unlock()
+		defer m.mu.Lock()
+	}
+	_ = child.Teardown(context.Background())
+	_ = child.Close()
 }
 
 const transientIdentityAttempts = 8
@@ -2429,20 +2560,44 @@ const transientIdentityAttempts = 8
 func (m *Manager) failTransientIdentityStartLocked(id string, r *runtimeSession, identityFailure session.Failure, observed managedprocess.StartObservation) StartResult {
 	result := StartResult{SessionID: id, Failure: identityFailure, Start: observed, transientFailure: transientIdentityStartFailure{Identity: identityFailure}}
 	intent := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: 1, Operation: session.LifecycleStop, CallerID: "sessionruntime-transient-identity", ChildRisk: true})
+	privateChild, private := r.process.(*privateProviderWindowChild)
+	if private {
+		// Reserve the exact failed key before dropping the lock. No identity or
+		// readiness success is installed, and competing lifecycle work is refused.
+		r.record.State, r.protocolOwned = session.Poisoned, true
+		m.sessions[id] = r
+		privateChild.window.mu.Lock()
+		privateChild.window.ownedRecord = r
+		privateChild.window.mu.Unlock()
+		m.mu.Unlock()
+	}
 	teardown := r.process.Teardown(context.Background())
 	resources := r.process.Close()
+	if private {
+		m.mu.Lock()
+		// Never complete/release algebra or overwrite a successor after I/O.
+		// CompleteLifecycleObserved below separately validates the exact intent.
+		if m.sessions[id] != r {
+			result.transientFailure.Cleanup = session.LifecycleConflict
+			return result
+		}
+	}
 	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
+	joined := !private || privateChild.cleanupJoined()
 	cleanup := session.LifecycleResult{Failure: session.LifecycleConflict}
 	if intent.Failure == "" && intent.IntentID != "" {
 		cleanup = m.algebra.CompleteLifecycleObserved(id, intent.IntentID, session.LifecycleCompletion{
 			ShutdownComplete: true, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed,
-			TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death,
-			StderrDrainComplete: true, Reaped: death, InitializationPending: true,
+			TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death && joined,
+			StderrDrainComplete: joined, Reaped: death, InitializationPending: true,
 		})
 	} else if intent.Failure != "" {
 		cleanup.Failure = intent.Failure
 	}
 	if cleanup.Failure == "" && death && resources.Kind == managedprocess.ResourcesClosed && m.algebra.ReleaseStopped(id, 1) {
+		if private {
+			delete(m.sessions, id)
+		}
 		return result
 	}
 	result.transientFailure.Cleanup = cleanup.Failure
@@ -2491,8 +2646,20 @@ func (m *Manager) TransientSessionIdentity(id string, generation uint64) (string
 }
 
 func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint64, deadline time.Time) ReadinessSnapshot {
+	if w := privateProviderWindowFrom(ctx); w != nil {
+		w.mu.Lock()
+		valid := deadline.Equal(w.deadline) && w.liveLocked()
+		w.mu.Unlock()
+		if !valid || !w.spec.matches(m) {
+			return ReadinessSnapshot{State: ReadinessFailed, Failure: session.LifecycleConflict}
+		}
+	}
 	m.mu.Lock()
 	r := m.sessions[id]
+	if w := privateProviderWindowFrom(ctx); w != nil && !w.exactOwnerLocked(m, r, id, generation) {
+		m.mu.Unlock()
+		return ReadinessSnapshot{State: ReadinessFailed, Failure: session.LifecycleConflict}
+	}
 	if r == nil {
 		m.mu.Unlock()
 		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.SessionNotFound}
@@ -2505,6 +2672,10 @@ func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint
 		snapshot := m.readiness[existing].snapshot
 		m.mu.Unlock()
 		return snapshot
+	}
+	if _, private := r.process.(*privateProviderWindowChild); private && m.workers >= m.limits.MaxChildren {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.ResourceExhausted}
 	}
 	if r.protocolOwned {
 		m.mu.Unlock()
@@ -2536,6 +2707,10 @@ func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint
 }
 
 func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child wireChild, opID string, generation uint64, workspace string) {
+	if private, ok := child.(*privateProviderWindowChild); ok {
+		m.runPrivateProviderWindowReadiness(private.window.ctx, private, opID, generation, workspace)
+		return
+	}
 	ctx := parent
 	cancel := func() {}
 	if deadline.IsZero() {
@@ -2908,14 +3083,27 @@ func (m *Manager) Readiness(id string) (ReadinessSnapshot, bool) {
 }
 
 func (m *Manager) WaitReadiness(ctx context.Context, id string) (ReadinessSnapshot, bool) {
+	w := privateProviderWindowFrom(ctx)
+	if w != nil && !w.spec.matches(m) {
+		return ReadinessSnapshot{}, false
+	}
 	m.mu.Lock()
 	op, ok := m.readiness[id]
 	if !ok {
 		m.mu.Unlock()
 		return ReadinessSnapshot{}, false
 	}
-	done := op.done
 	snapshot := op.snapshot
+	if w != nil {
+		r := m.sessions[snapshot.SessionID]
+		if !w.exactOwnerLocked(m, r, snapshot.SessionID, snapshot.Generation) ||
+			snapshot.ID != id || snapshot.AttemptID != w.spec.attempt || r.attemptID != w.spec.attempt ||
+			m.readinessIDs[snapshot.SessionID+":"+strconv.FormatUint(snapshot.Generation, 10)] != id {
+			m.mu.Unlock()
+			return ReadinessSnapshot{}, false
+		}
+	}
+	done := op.done
 	m.mu.Unlock()
 	if snapshot.State != ReadinessPending {
 		return snapshot, true
@@ -2924,6 +3112,13 @@ func (m *Manager) WaitReadiness(ctx context.Context, id string) (ReadinessSnapsh
 	case <-done:
 		return m.Readiness(id)
 	case <-ctx.Done():
+		if w := privateProviderWindowFrom(ctx); w != nil {
+			w.mu.Lock()
+			w.expired = true
+			w.mu.Unlock()
+			w.cancel()
+			snapshot.State, snapshot.Failure = ReadinessFailed, privateProviderWindowUnjoined
+		}
 		return snapshot, true
 	}
 }
@@ -2955,6 +3150,9 @@ func (m *Manager) BeginRequest(id string, generation uint64, deadline time.Time)
 	if generation != r.record.Generation {
 		return lspwire.RequestKey{}, session.StaleGeneration
 	}
+	if m.privateWindowGenerationLocked(r) {
+		return lspwire.RequestKey{}, session.LifecycleConflict
+	}
 	if len(r.requests) >= m.limits.MaxRequests {
 		return lspwire.RequestKey{}, session.ResourceExhausted
 	}
@@ -2970,6 +3168,9 @@ func (m *Manager) CancelRequest(id string, key lspwire.RequestKey) (lspwire.Canc
 	r := m.sessions[id]
 	if r == nil || key.Generation != r.record.Generation {
 		return lspwire.CancelNotPending, nil
+	}
+	if m.privateWindowGenerationLocked(r) {
+		return lspwire.CancelNotPending, errors.New("sessionruntime: private window owns pending requests")
 	}
 	if r.protocolOwned {
 		return lspwire.CancelNotPending, errors.New("sessionruntime: protocol stream exclusively owned; cancel the operation context")
@@ -2993,6 +3194,9 @@ func (m *Manager) CompleteResponse(id string, key lspwire.ResponseKey) lspwire.R
 	if r == nil {
 		return lspwire.ResponseUnknown
 	}
+	if m.privateWindowGenerationLocked(r) {
+		return lspwire.ResponseUnknown
+	}
 	d := r.pending.Accept(key)
 	if d == lspwire.ResponseAccepted {
 		delete(r.requests, key)
@@ -3006,6 +3210,9 @@ func (m *Manager) Expire(now time.Time) int {
 	defer m.mu.Unlock()
 	n := 0
 	for id, r := range m.sessions {
+		if m.privateWindowGenerationLocked(r) {
+			continue
+		}
 		for key, request := range r.requests {
 			if request.Terminal == "" && !request.Deadline.IsZero() && !now.Before(request.Deadline) {
 				request.Terminal = session.RequestTimeout
@@ -3067,6 +3274,10 @@ const reapReconciliationTimeout = 250 * time.Millisecond
 func (m *Manager) reconcileFailedReap(ctx context.Context, id string) session.Failure {
 	m.mu.Lock()
 	r := m.sessions[id]
+	if w := privateProviderWindowFrom(ctx); w != nil && (r == nil || !w.exactOwnerLocked(m, r, id, r.record.Generation)) {
+		m.mu.Unlock()
+		return session.LifecycleConflict
+	}
 	if r == nil || r.reap == nil {
 		m.mu.Unlock()
 		return ""
@@ -3124,6 +3335,16 @@ func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool
 }
 
 func (m *Manager) terminateWithShutdownResponsePrivateV2(ctx context.Context, id, caller string, restart bool, responseBudget *acceptedShutdownResponsePrivateV2) session.LifecycleResult {
+	w := privateProviderWindowFrom(ctx)
+	if w != nil {
+		// Ownership survives expiry: cleanup must not require a live window.
+		w.mu.Lock()
+		generation := w.start.Generation
+		w.mu.Unlock()
+		if !w.exactOwner(m, id, generation) {
+			return session.LifecycleResult{Failure: session.LifecycleConflict}
+		}
+	}
 	if failure := m.reconcileFailedReap(ctx, id); failure != "" {
 		return session.LifecycleResult{Failure: failure}
 	}
@@ -3135,6 +3356,10 @@ func (m *Manager) terminateWithShutdownResponsePrivateV2(ctx context.Context, id
 		}
 	}()
 	r := m.sessions[id]
+	// Rebind after reconciliation before copies, cached replay or admission.
+	if w != nil && (r == nil || !w.exactOwnerLocked(m, r, id, r.record.Generation)) {
+		return session.LifecycleResult{Failure: session.LifecycleConflict}
+	}
 	if r == nil {
 		for i := len(m.operationIDs) - 1; i >= 0; i-- {
 			existing := m.operations[m.operationIDs[i]]
@@ -3146,6 +3371,9 @@ func (m *Manager) terminateWithShutdownResponsePrivateV2(ctx context.Context, id
 			}
 		}
 		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	if _, private := r.process.(*privateProviderWindowChild); private && restart {
+		return session.LifecycleResult{Failure: session.LifecycleConflict}
 	}
 	if m.closed || r.leaseCount != 0 || (r.protocolOwned && !r.lifecycleOwned) {
 		return session.LifecycleResult{State: r.record.State, Generation: r.record.Generation, Failure: session.LifecycleConflict}
@@ -3300,19 +3528,29 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	cleanExit := teardown.Death.Kind == managedprocess.DeathExited && death
 	shutdownComplete := shutdown.acknowledged && (shutdown.exitNotified || cleanExit)
 	observed := session.LifecycleCompletion{ShutdownComplete: shutdownComplete, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationPending: true}
+	privateJoined := true
+	privateChild, privateWindow := child.(*privateProviderWindowChild)
+	if privateWindow {
+		privateJoined = privateChild.cleanupJoined()
+		observed.NoContainedSurvivors = privateJoined
+		observed.StderrDrainComplete = privateJoined
+	}
 
 	m.mu.Lock()
 	completed := m.algebra.CompleteLifecycleObserved(operation.SessionID, operation.ID, observed)
 	r := m.sessions[operation.SessionID]
 	m.observe(operation.SessionID, operation.Generation, "teardown", completed.State, completed.Failure)
-	if completed.Failure != "" || !death || resources.Kind != managedprocess.ResourcesClosed {
+	if completed.Failure != "" || !death || resources.Kind != managedprocess.ResourcesClosed || !privateJoined {
 		operation.State, operation.Failure = OperationFailed, completed.Failure
 		if operation.Failure == "" {
 			operation.Failure = session.SessionReapIncomplete
 		}
 		if r != nil {
 			r.record.State = session.Poisoned
-			r.protocolOwned, r.lifecycleOwned = false, false
+			// Ordinary failure behavior is unchanged. The private window keeps
+			// the exact session/protocol/leases and its reserved owner until
+			// cleanup is actually confirmed; expiry never recovers success.
+			r.protocolOwned, r.lifecycleOwned = privateWindow, privateWindow
 			if operation.Failure == session.SessionReapIncomplete && resources.Kind == managedprocess.ResourcesClosed {
 				if _, ok := child.(reapReconciler); ok {
 					r.reap = &reapReconciliation{generation: operation.Generation, child: child, resources: resources}
@@ -3350,6 +3588,11 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		}
 		m.mu.Lock()
 		delete(m.sessions, operation.SessionID)
+		if privateWindow {
+			privateChild.window.mu.Lock()
+			privateChild.window.lifecycleJoined = true
+			privateChild.window.mu.Unlock()
+		}
 		operation.State = OperationComplete
 		m.finishOperation(operation)
 		m.mu.Unlock()
@@ -3443,6 +3686,9 @@ func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, ge
 }
 
 func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending *lspwire.Pending, generation uint64, budget *acceptedShutdownResponsePrivateV2) shutdownObservation {
+	if private, ok := child.(*privateProviderWindowChild); ok {
+		return m.privateProviderWindowShutdown(private, pending, generation)
+	}
 	key := pending.Begin(generation)
 	id := strconv.FormatUint(key.ID, 10)
 	writeCounter := &shutdownCountingWriterPrivateV2{source: child.Stdin()}
@@ -3587,6 +3833,10 @@ func (m *Manager) Operation(id string) (OperationSnapshot, bool) {
 }
 
 func (m *Manager) Shutdown(ctx context.Context) error {
+	// A per-window context never authorizes a manager-wide operation.
+	if privateProviderWindowFrom(ctx) != nil {
+		return errors.New("sessionruntime: private window cannot shut down manager")
+	}
 	m.mu.Lock()
 	m.closed = true
 	var leaseCancels []context.CancelCauseFunc

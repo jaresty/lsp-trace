@@ -311,9 +311,26 @@ func TestSupervisedSuccessPreservesExactOutcome(t *testing.T) {
 }
 func TestSupervisedTimeoutCancellationAndExitKinds(t *testing.T) {
 	withSupervisorDefaults(t)
-	supervisorWall = 50 * time.Millisecond
 	t.Setenv("PROGRAMC_TEST_WORKER", "hang")
+	originalInitialRSS := supervisorInitialRSS
+	defer func() { supervisorInitialRSS = originalInitialRSS }()
+	observedBootstrap := false
+	supervisorInitialRSS = func(ctx context.Context, pid int) (int64, error) {
+		rss, err := originalInitialRSS(ctx, pid)
+		if err == nil {
+			observedBootstrap = true
+			// Hold only the successful real sample until the original launch
+			// window expires; do not restart or extend its absolute deadline.
+			<-ctx.Done()
+		}
+		return rss, err
+	}
 	_, _, failed := ComputeSupervised(context.Background(), nil, 1)
+	supervisorInitialRSS = originalInitialRSS // other exit-kind cases use the real hook directly
+	if !observedBootstrap {
+		t.Fatalf("ASSERT_TIMEOUT_BOOTSTRAP_READINESS: real initial RSS unavailable: failure=%v", failed)
+	}
+	t.Log("ASSERT_TIMEOUT_BOOTSTRAP_READINESS: PASS")
 	requireCode(t, failed, CodeTimeout)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -332,23 +349,92 @@ func TestProcessGroupCleanup(t *testing.T) {
 	pidfile := t.TempDir() + "/pid"
 	t.Setenv("PROGRAMC_TEST_WORKER", "child")
 	t.Setenv("PROGRAMC_TEST_PIDFILE", pidfile)
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	_, _, failed := ComputeSupervised(ctx, nil, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	originalInitialRSS := supervisorInitialRSS
+	defer func() { supervisorInitialRSS = originalInitialRSS }()
+	var ownedRoot atomic.Int64
+	supervisorInitialRSS = func(ctx context.Context, pid int) (int64, error) {
+		rss, err := originalInitialRSS(ctx, pid)
+		if err == nil {
+			ownedRoot.Store(int64(pid))
+		}
+		return rss, err
+	}
+	result := make(chan *SupervisionFailure, 1)
+	go func() {
+		_, _, failed := ComputeSupervised(ctx, nil, 1)
+		result <- failed
+	}()
+	joined := false
+	defer func() {
+		cancel() // emergency cancellation is independent of the trial
+		if !joined {
+			<-result // finish Compute before global hooks are restored
+		}
+	}()
+	watchdog := time.NewTimer(5 * time.Second)
+	defer watchdog.Stop()
+	var pid, pgid int
+	var readErr, parseErr, groupErr, aliveErr, stateErr error
+	var state string
+	readState := func(pid int) (string, error) {
+		stateCtx, stateCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer stateCancel()
+		out, err := exec.CommandContext(stateCtx, "/bin/ps", "-o", "state=", "-p", strconv.Itoa(pid)).Output()
+		state := strings.TrimSpace(string(out))
+		if err != nil {
+			return state, err
+		}
+		if len(strings.Fields(state)) != 1 || !strings.ContainsRune("IRSTUZ", rune(state[0])) || strings.TrimLeft(state[1:], "<>+NELsVXW") != "" {
+			return state, fmt.Errorf("invalid descendant state %q", state)
+		}
+		return state, nil
+	}
+	for {
+		select {
+		case failed := <-result:
+			joined = true
+			t.Fatalf("ASSERT_DESCENDANT_READINESS: Compute ended before readiness: root=%d pid=%d pgid=%d readErr=%v parseErr=%v groupErr=%v aliveErr=%v state=%q stateErr=%v failure=%v", ownedRoot.Load(), pid, pgid, readErr, parseErr, groupErr, aliveErr, state, stateErr, failed)
+		case <-watchdog.C:
+			t.Fatalf("ASSERT_DESCENDANT_READINESS: watchdog: root=%d pid=%d pgid=%d readErr=%v parseErr=%v groupErr=%v aliveErr=%v state=%q stateErr=%v", ownedRoot.Load(), pid, pgid, readErr, parseErr, groupErr, aliveErr, state, stateErr)
+		default:
+		}
+		raw, err := os.ReadFile(pidfile)
+		readErr = err
+		if readErr == nil {
+			pid, parseErr = strconv.Atoi(strings.TrimSpace(string(raw)))
+			if parseErr == nil && pid > 1 && ownedRoot.Load() > 1 {
+				pgid, groupErr = syscall.Getpgid(pid)
+				aliveErr = syscall.Kill(pid, 0)
+				if groupErr == nil && pgid == int(ownedRoot.Load()) && aliveErr == nil {
+					state, stateErr = readState(pid)
+					if stateErr == nil && !strings.HasPrefix(state, "Z") {
+						break
+					}
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Logf("ASSERT_DESCENDANT_READINESS: PASS root=%d pid=%d pgid=%d state=%q stateErr=%v", ownedRoot.Load(), pid, pgid, state, stateErr)
+	cancel() // trial cancellation occurs only after the real descendant is ready
+	var failed *SupervisionFailure
+	select {
+	case failed = <-result:
+		joined = true
+	case <-watchdog.C:
+		t.Fatal("ASSERT_PROCESS_GROUP_CLEANUP: Compute join watchdog")
+	}
 	requireCode(t, failed, CodeCancelled)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		raw, err := os.ReadFile(pidfile)
-		if err == nil {
-			pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
-			err = syscall.Kill(pid, 0)
-			if err == syscall.ESRCH || processIsZombie(pid) {
-				t.Log("ASSERT_PROCESS_GROUP_CLEANUP: PASS")
-				return
-			}
+		err := syscall.Kill(pid, 0) // the same saved positive PID, never a missing-file zero
+		if err == syscall.ESRCH || processIsZombie(pid) {
+			t.Logf("ASSERT_PROCESS_GROUP_CLEANUP: PASS pid=%d", pid)
+			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("ASSERT_PROCESS_GROUP_CLEANUP: descendant remains running or pid unavailable: %v", err)
+			t.Fatalf("ASSERT_PROCESS_GROUP_CLEANUP: descendant remains running: pid=%d pgid=%d err=%v", pid, pgid, err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -742,22 +828,64 @@ func TestWaitStartsAfterExactGroupIdentity(t *testing.T) {
 		waits.Add(1)
 		return cmd.Wait()
 	}
-	var observations atomic.Int32
+	var observations, waitsAtFirstIdentity atomic.Int32
+	waitsAtFirstIdentity.Store(-1)
 	supervisorGroupState = func(ctx context.Context, pgid int) ([]processGroupMember, error) {
-		observation := observations.Add(1)
-		if observation == 1 && waits.Load() != 0 {
-			t.Fatalf("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: waits=%d", waits.Load())
+		if observations.Add(1) == 1 {
+			waitsAtFirstIdentity.Store(waits.Load())
 		}
 		return processGroupState(ctx, pgid)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	_, _, failed := ComputeSupervised(ctx, nil, 1)
-	requireCode(t, failed, CodeCancelled)
+	initialRSS := supervisorInitialRSS
+	rssReady := make(chan struct{}, 1)
+	supervisorInitialRSS = func(ctx context.Context, pid int) (int64, error) {
+		rss, err := initialRSS(ctx, pid)
+		if err == nil {
+			rssReady <- struct{}{}
+		}
+		return rss, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	returned := make(chan *SupervisionFailure, 1)
+	go func() {
+		_, _, failed := ComputeSupervised(ctx, nil, 1)
+		returned <- failed
+	}()
+	joined := false
+	defer func() {
+		// Emergency cleanup is not the trial stimulus. Always join before
+		// withSupervisorDefaults restores the hooks, even on assertion failure.
+		cancel()
+		if !joined {
+			<-returned
+		}
+	}()
+	watchdog := time.NewTimer(5 * time.Second)
+	defer watchdog.Stop()
+	select {
+	case <-rssReady:
+		// Bootstrap is real and successful before the cancellation trial.
+		t.Log("ASSERT_WAIT_INITIAL_RSS_READY: PASS")
+	case failed := <-returned:
+		joined = true
+		t.Fatalf("ASSERT_WAIT_INITIAL_RSS_READY: supervision returned before readiness: %v", failed)
+	case <-watchdog.C:
+		cancel()
+		failed := <-returned
+		joined = true
+		t.Fatalf("ASSERT_WAIT_INITIAL_RSS_READY: watchdog expired before readiness: %v", failed)
+	}
+	cancel()
+	failed := <-returned
+	joined = true
+	if waitsAtFirstIdentity.Load() != 0 {
+		t.Fatalf("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: first identity waits=%d", waitsAtFirstIdentity.Load())
+	}
 	if waits.Load() != 1 {
 		t.Fatalf("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: waits=%d", waits.Load())
 	}
-	t.Log("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: PASS")
+	requireCode(t, failed, CodeCancelled)
+	t.Logf("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: PASS first_identity_waits=%d final_waits=%d observations=%d", waitsAtFirstIdentity.Load(), waits.Load(), observations.Load())
 }
 
 func TestIdentityTimeoutReapsDirectChildOnce(t *testing.T) {

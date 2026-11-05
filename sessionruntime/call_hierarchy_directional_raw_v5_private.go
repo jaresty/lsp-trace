@@ -375,6 +375,23 @@ func finalizeDirectionalReservationPrivate(reservation directionalraw.Reservatio
 }
 
 func (m *Manager) ExecuteCallHierarchyDirectionsPrivate(ctx context.Context, req DirectionalCallHierarchyRequestPrivate) (result DirectionalCallHierarchyResultPrivate, err error) {
+	if w := privateProviderWindowFrom(ctx); w != nil && !privateProviderWindowInner(ctx) {
+		if !w.spec.plan.Calls || req.Symbol != "" || req.Line == nil || req.Character == nil || len(req.URI) > 4096 || !req.Deadline.Equal(w.deadline) {
+			return result, ErrPrivateProviderWindow
+		}
+		if !w.exactOwner(m, req.SessionID, req.Generation) {
+			return result, ErrPrivateProviderWindow
+		}
+		type outcome struct {
+			result DirectionalCallHierarchyResultPrivate
+			err    error
+		}
+		observed := privateProviderWindowRun(w, ctx, outcome{DirectionalCallHierarchyResultPrivate{Failure: privateProviderWindowUnjoined}, ErrPrivateProviderWindowUnjoined}, func(inner context.Context) outcome {
+			r, e := m.ExecuteCallHierarchyDirectionsPrivate(inner, req)
+			return outcome{r, e}
+		})
+		return observed.result, observed.err
+	}
 	if ctx == nil {
 		return result, errors.New("nil context")
 	}
@@ -441,6 +458,20 @@ func (m *Manager) ExecuteCallHierarchyDirectionsPrivate(ctx context.Context, req
 }
 
 func (m *Manager) RoundTripDirectionalPrivate(ctx context.Context, req RoundTripRequest) (RoundTripResult, directionalraw.Lease) {
+	if w := privateProviderWindowFrom(ctx); w != nil && !privateProviderWindowInner(ctx) {
+		if !w.exactOwner(m, req.SessionID, req.Generation) {
+			return RoundTripResult{Failure: session.LifecycleConflict}, directionalraw.Lease{}
+		}
+		type outcome struct {
+			result RoundTripResult
+			lease  directionalraw.Lease
+		}
+		got := privateProviderWindowRun(w, ctx, outcome{result: RoundTripResult{Failure: privateProviderWindowUnjoined}}, func(inner context.Context) outcome {
+			r, l := m.RoundTripDirectionalPrivate(inner, req)
+			return outcome{r, l}
+		})
+		return got.result, got.lease
+	}
 	r, ok := directionalraw.FromContext(ctx)
 	if !ok || r.IdentityPrivate() == "" || !directionalraw.Allowed(req.Method) || req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
 		return RoundTripResult{Failure: session.ToolNotImplemented}, directionalraw.Lease{}

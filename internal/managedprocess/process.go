@@ -227,6 +227,10 @@ func (m *Manager) start(ctx context.Context, spec Spec, stdoutWriter io.Writer) 
 	if m.factory == nil {
 		return nil, StartObservation{Kind: StartFailed, Reason: "command factory unavailable", Evidence: evidence, Limitations: limitations}
 	}
+	window := privateProviderWindowFrom(ctx)
+	if window != nil && !window.valid(m) {
+		return nil, StartObservation{Kind: StartUnavailable, Reason: "private provider window unavailable", Evidence: evidence, Limitations: limitations}
+	}
 	cmd, err := m.factory(ctx, spec)
 	if err != nil {
 		return nil, StartObservation{Kind: StartFailed, Reason: "command construction failed", Err: err, Evidence: evidence, Limitations: limitations}
@@ -249,12 +253,27 @@ func (m *Manager) start(ctx context.Context, spec Spec, stdoutWriter io.Writer) 
 	}
 	stderr := &boundedBuffer{limit: m.options.StderrLimit}
 	stderrDelivery := &deliveryWriter{writer: stderr}
-	cmd.Stderr = stderrDelivery
+	var stderrPipe io.ReadCloser
+	if window == nil {
+		cmd.Stderr = stderrDelivery
+	} else {
+		stderrPipe, err = cmd.StderrPipe()
+		if err != nil {
+			_ = stdin.Close()
+			if stdout != nil {
+				_ = stdout.Close()
+			}
+			return nil, StartObservation{Kind: StartFailed, Reason: "stderr pipe failed", Err: err, Evidence: evidence}
+		}
+	}
 	if m.localDarwin {
 		if err := configureLocalDarwin(cmd); err != nil {
 			_ = stdin.Close()
 			if stdout != nil {
 				_ = stdout.Close()
+			}
+			if stderrPipe != nil {
+				_ = stderrPipe.Close()
 			}
 			return nil, StartObservation{Kind: StartUnavailable, Reason: "local Darwin supervision unavailable", Err: err, Evidence: LocalDarwinSupervisionOnly, Limitations: localDarwinLimitations}
 		}
@@ -264,9 +283,23 @@ func (m *Manager) start(ctx context.Context, spec Spec, stdoutWriter io.Writer) 
 		if stdout != nil {
 			_ = stdout.Close()
 		}
+		if stderrPipe != nil {
+			_ = stderrPipe.Close()
+		}
 		return nil, StartObservation{Kind: StartFailed, Reason: "process start failed", Err: err, Evidence: evidence, Limitations: limitations}
 	}
 	p := &Process{cmd: cmd, stdin: stdin, stdout: stdout, stdoutDelivery: stdoutDelivery, stderr: stderr, stderrDelivery: stderrDelivery, gracePeriod: m.options.GracePeriod, done: make(chan struct{}), evidence: evidence, localDarwin: m.localDarwin}
+	p.privateWindow = window
+	if stderrPipe != nil {
+		p.privateStderrDone = make(chan struct{})
+		go func() {
+			err := window.copyStderr(stderrPipe, stderrDelivery)
+			stderrDelivery.mu.Lock()
+			stderrDelivery.err = errors.Join(stderrDelivery.err, err)
+			stderrDelivery.mu.Unlock()
+			close(p.privateStderrDone)
+		}()
+	}
 	go p.reap()
 	return p, StartObservation{Kind: StartStarted, Evidence: evidence, Limitations: limitations}
 }
@@ -283,16 +316,23 @@ type Process struct {
 	evidence       string
 	localDarwin    bool
 
-	waitOnce  sync.Once
-	death     DeathObservation
-	closeOnce sync.Once
-	resources ResourceObservation
+	privateWindow     *privateProviderWindow
+	privateStderrDone chan struct{}
+	waitOnce          sync.Once
+	death             DeathObservation
+	closeOnce         sync.Once
+	resources         ResourceObservation
 }
 
 func (p *Process) Stdin() io.WriteCloser { return p.stdin }
 func (p *Process) Stdout() io.ReadCloser { return p.stdout }
 
 func (p *Process) reap() {
+	// The private reader owns stderr; join it before cmd.Wait can close its
+	// descriptor. Cancellation/teardown still belongs to this exact Process.
+	if p.privateStderrDone != nil {
+		<-p.privateStderrDone
+	}
 	err := p.cmd.Wait()
 	p.death = deathFromWait(p.cmd, err, p.stderr.snapshot())
 	p.death.StdoutDelivery = p.stdoutDelivery.snapshot()
@@ -324,7 +364,7 @@ func (p *Process) ReconcileReap(ctx context.Context) TeardownObservation {
 		return observation
 	}
 	if p.localDarwin {
-		observation.Census = censusLocalDarwinGroup(p.cmd.Process.Pid, 64)
+		observation.Census = p.censusPrivateWindow()
 		var exitErr *exec.ExitError
 		if observation.Census.Members == 0 && !observation.Census.Truncated && errors.As(observation.Census.Err, &exitErr) && exitErr.ExitCode() == 1 {
 			// Darwin ps reports an empty process group with status 1.
@@ -347,7 +387,7 @@ func (p *Process) Teardown(ctx context.Context) TeardownObservation {
 	phases := []TeardownPhase{PhaseInterrupt}
 	census := GroupCensusObservation{}
 	if p.localDarwin {
-		census = censusLocalDarwinGroup(p.cmd.Process.Pid, 64)
+		census = p.censusPrivateWindow()
 	}
 	select {
 	case <-p.done:
@@ -383,6 +423,9 @@ func (p *Process) Teardown(ctx context.Context) TeardownObservation {
 		<-p.done
 	}
 	phases = append(phases, PhaseReap)
+	if p.privateWindow != nil && p.localDarwin {
+		census = p.censusPrivateWindow()
+	}
 	return TeardownObservation{Phases: phases, Death: p.death, Census: census}
 }
 

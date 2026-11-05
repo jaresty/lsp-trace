@@ -15,6 +15,33 @@ import (
 	"time"
 )
 
+func censusLocalDarwinGroupPrivateWindow(pid int, b *privateProviderWindow) GroupCensusObservation {
+	ctx, cancel, ok := b.beginCensus()
+	if !ok {
+		return GroupCensusObservation{ProcessGroupID: pid, Limit: 64, Bounded: true, Truncated: true, Err: ErrPrivateProviderWindow, Evidence: LocalDarwinSupervisionOnly}
+	}
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/ps", "-o", "pid=", "-g", strconv.Itoa(pid))
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return GroupCensusObservation{Err: err}
+	}
+	if err = cmd.Start(); err != nil {
+		return GroupCensusObservation{Err: err}
+	}
+	result := parsePrivateCensus(stdout, b)
+	result.ProcessGroupID = pid
+	if result.Truncated {
+		_ = cmd.Process.Kill()
+	}
+	result.Err = errors.Join(result.Err, cmd.Wait(), ctx.Err())
+	var exitErr *exec.ExitError
+	if result.Members == 0 && !result.Truncated && ctx.Err() == nil && errors.As(result.Err, &exitErr) && exitErr.ExitCode() == 1 {
+		result.Err = nil
+	}
+	return result
+}
+
 func localDarwinSupported() bool { return true }
 
 func configureLocalDarwin(cmd *exec.Cmd) error {
