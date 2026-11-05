@@ -13,7 +13,17 @@ import (
 
 // readPreparedNoFollow walks every component from / using directory descriptors.
 // The bytes are read from the same verified regular leaf descriptor.
-func readPreparedNoFollow(workspace, document string) ([]byte, error) {
+func readPreparedNoFollow(workspace, document string, privateLimit ...int) ([]byte, error) {
+	limit := MaxDocumentSupplyBytes
+	if len(privateLimit) > 1 {
+		return nil, errors.New("invalid prepared source bound")
+	}
+	if len(privateLimit) == 1 {
+		if privateLimit[0] <= 0 || privateLimit[0] > MaxDocumentSupplyBytes {
+			return nil, errors.New("invalid prepared source bound")
+		}
+		limit = privateLimit[0]
+	}
 	if !filepath.IsAbs(workspace) || filepath.Clean(workspace) != workspace || !filepath.IsAbs(document) || filepath.Clean(document) != document || workspace == "/" {
 		return nil, errors.New("noncanonical prepared root or document")
 	}
@@ -51,8 +61,8 @@ func readPreparedNoFollow(workspace, document string) ([]byte, error) {
 	if err != nil || !info.Mode().IsRegular() {
 		return nil, errors.New("prepared leaf not regular")
 	}
-	text, err := io.ReadAll(io.LimitReader(file, MaxDocumentSupplyBytes+1))
-	if err != nil || len(text) == 0 || len(text) > MaxDocumentSupplyBytes {
+	text, err := io.ReadAll(io.LimitReader(file, int64(limit)+1))
+	if err != nil || len(text) == 0 || len(text) > limit {
 		return nil, errors.New("prepared leaf empty or unbounded")
 	}
 	return text, nil

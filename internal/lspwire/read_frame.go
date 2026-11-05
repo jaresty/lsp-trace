@@ -1,6 +1,7 @@
 package lspwire
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -124,6 +125,83 @@ func (r *Reader) ReadWithFrame() (Message, ReadFrameObservation, error) {
 		FrameBytes:  capture.bytes,
 		FrameSHA256: "sha256:" + hex.EncodeToString(capture.digest.Sum(nil)),
 	}, nil
+}
+
+// ReadPrivateBoundedFrame acquires a frame without bufio read-ahead or an
+// unbounded ReadString. It is opt-in; ordinary Reader semantics are unchanged.
+// The source must enforce its operation-wide residual before every underlying
+// read. Header rejection consumes at most headerLimit+1 bytes; body overshoot
+// is rejected at the header, BEFORE body allocation/read. Limits are concrete,
+// not normalized here, and the retained cap is independent of acquisition.
+func ReadPrivateBoundedFrame(source io.Reader, limits Limits, maxFrame, retain int64) (Message, ReadFrameObservation, []byte, bool, error) {
+	return ReadPrivateBoundedFrameObservedAtDecode(source, limits, maxFrame, retain, nil, nil, nil)
+}
+
+// ReadPrivateBoundedFrameObservedAtDecode preserves the existing Reader's wire,
+// decode and retention notifications, including panic isolation, on already
+// bounded memory ONLY. Native framing rejection never claims a JSON decode.
+func ReadPrivateBoundedFrameObservedAtDecode(source io.Reader, limits Limits, maxFrame, retain int64, observer Observer, entry, retainEntry func()) (Message, ReadFrameObservation, []byte, bool, error) {
+	fail := func(err error) (Message, ReadFrameObservation, []byte, bool, error) {
+		return Message{}, ReadFrameObservation{}, nil, false, err
+	}
+	if source == nil || limits.MaxHeaderBytes <= 0 || limits.MaxHeaderBytes > 64<<10 || limits.MaxBodyBytes <= 0 || limits.MaxBodyBytes > 16<<20 || maxFrame <= 0 || maxFrame > (16<<20)+(64<<10) || retain < 0 || retain > maxFrame {
+		return fail(ErrInvalidFrameCaptureLimit)
+	}
+	// A fixed hard ceiling precedes all dynamic allocation. Only admitted header
+	// bytes are appended; the rejecting extra byte never expands the buffer.
+	header := make([]byte, 0, int(limits.MaxHeaderBytes))
+	lineStart, length := 0, int64(-1)
+	var one [1]byte
+	for {
+		if _, err := io.ReadFull(source, one[:]); err != nil {
+			return fail(err)
+		}
+		if int64(len(header)) >= limits.MaxHeaderBytes || int64(len(header)) >= maxFrame {
+			return fail(ErrHeaderTooLarge)
+		}
+		header = append(header, one[0])
+		if one[0] != '\n' {
+			continue
+		}
+		line := strings.TrimRight(string(header[lineStart:]), "\r\n")
+		lineStart = len(header)
+		if line == "" {
+			break
+		}
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return fail(ErrInvalidContentLength)
+		}
+		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
+			if length >= 0 {
+				return fail(ErrDuplicateContentLength)
+			}
+			n, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+			if err != nil || n < 0 {
+				return fail(ErrInvalidContentLength)
+			}
+			length = n
+		}
+	}
+	if length < 0 {
+		return fail(ErrMissingContentLength)
+	}
+	if length > limits.MaxBodyBytes || length > maxFrame-int64(len(header)) {
+		return fail(ErrFrameTooLarge)
+	}
+	frame := make([]byte, len(header)+int(length))
+	copy(frame, header)
+	if _, err := io.ReadFull(source, frame[len(header):]); err != nil {
+		return fail(err)
+	}
+	// Reuse both grammar and notification mechanisms. The legacy buffered reader
+	// sees bounded memory, never the native stream; there is no second native read.
+	reader := NewReaderObservedAtDecode(bytes.NewReader(frame), limits, observer, entry, retainEntry)
+	if retain > 0 {
+		return reader.ReadWithFrameIfWithin(retain)
+	}
+	message, observation, err := reader.ReadWithFrame()
+	return message, observation, nil, false, err
 }
 
 // WriteDirectionalReserved builds exactly one owned frame. Prefix/header are

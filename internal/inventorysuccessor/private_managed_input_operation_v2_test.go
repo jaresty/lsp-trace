@@ -178,6 +178,36 @@ func ControlledManagedInputOwnerForTest(t *testing.T, uncertain bool) (*PrivateM
 	return owner, x.k.root
 }
 
+func TestPrivateManagedInputResourceChargeBindingV2(t *testing.T) {
+	_, x := controlledManagedOwnerV2(t)
+	b := managedBindingTestV2(x)
+	for _, body := range []int64{0, 1024, 128 << 10} {
+		m, err := sessionruntime.New(sessionruntime.Config{Starter: managedNeverStartV2{}, Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 8, MaxChildren: 4, MaxCancels: 4, MaxTombstones: 16, MaxObservations: 128, MaxOperations: 4}, Wire: lspwire.Limits{MaxBodyBytes: body, MaxHeaderBytes: 128}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.Manager = m
+		e, ok := m.PrivateGroupingResourceEnvelope()
+		if !ok {
+			t.Fatal("ASSERT_RESOURCE_CHARGE_ENVELOPE")
+		}
+		bounds := e.Bounds()
+		c, err := privateManagedInputChargeV2(b, time.Now())
+		if err != nil || c.RequestBytes != bounds.RequestBytes || c.ResponseBytes != bounds.ResponseBytes || c.WireBytes != bounds.WireBytes {
+			t.Fatalf("ASSERT_RESOURCE_CHARGE_BINDING: charge=%+v bounds=%+v err=%v", c, bounds, err)
+		}
+		t.Logf("RESOURCE_COST body=%d bounds=%+v charge=%+v", body, bounds, c)
+	}
+}
+func TestPrivateManagedInputResourcePilotRefusalV2(t *testing.T) {
+	m := new(sessionruntime.Manager)
+	r := PreflightPrivateManagedPilotV2(m)
+	if r.Disposition != "REFUSED" || r.PrivateSubsetWireBound <= 8<<20 || r.SemanticRequests != 52 || r.ClientRequests != 56 || r.Slots != 150 {
+		t.Fatal("ASSERT_RESOURCE_FULL_SCHEDULE_REFUSAL", r)
+	}
+	t.Logf("ASSERT_RESOURCE_FULL_SCHEDULE_REFUSAL: %+v", r)
+}
+
 func TestPrivateManagedInputChargeProfileV2(t *testing.T) {
 	_, x := controlledManagedOwnerV2(t)
 	b := managedBindingTestV2(x)

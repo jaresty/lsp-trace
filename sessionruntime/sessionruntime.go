@@ -420,6 +420,9 @@ func (m *Manager) RefreshDocumentSupply(ctx context.Context, req DocumentRequest
 }
 
 func (m *Manager) prepareDocumentAccounted(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
+	if resources := privateGroupingResourcesFrom(ctx); resources != nil && !resources.prepare(ctx, m, req) {
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
 	account, ok := adr0011work.AccountFromContext(ctx)
 	if !ok {
 		return m.prepareDocument(ctx, req, refresh)
@@ -510,6 +513,10 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	registeredWorkspace := r.record.Profile.Workspace().String()
 	configured := r.languageID
 	retainedSource, retained := r.seedSources[req.URI]
+	if privateGroupingResourcesFrom(ctx) != nil && retained {
+		m.mu.Unlock()
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
 	retainedSource = append([]byte(nil), retainedSource...)
 	diagnosticGeneration, identity := r.diagnosticGeneration, r.identity
 	m.mu.Unlock()
@@ -535,7 +542,14 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 			u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.Opaque != "" || u.User != nil {
 			return DocumentResult{Failure: DocumentSupplyUnavailable}
 		}
-		text, err = readPreparedNoFollow(workspace, path)
+		sourceLimit := MaxDocumentSupplyBytes
+		if resources := privateGroupingResourcesFrom(ctx); resources != nil {
+			if !resources.valid(ctx, m) {
+				return DocumentResult{Failure: DocumentSupplyUnavailable}
+			}
+			sourceLimit = int(resources.envelope.Bounds().SourceBytes)
+		}
+		text, err = readPreparedNoFollow(workspace, path, sourceLimit)
 		if err != nil || !utf8.Valid(text) {
 			return DocumentResult{Failure: DocumentSupplyUnavailable}
 		}
@@ -576,6 +590,9 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 
 	if m.documentFinalHook != nil {
 		m.documentFinalHook()
+	}
+	if resources := privateGroupingResourcesFrom(ctx); resources != nil && !resources.valid(ctx, m) {
+		return finishDocument(DocumentResult{Failure: DocumentSupplyUnavailable}, diagnosticEventTerminalFailure)
 	}
 	m.mu.Lock()
 	r = m.sessions[req.SessionID]
@@ -851,6 +868,11 @@ func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyOb
 // owning the exact generation's stdin/stdout stream. Concurrent transactions
 // and lifecycle operations are rejected rather than queued.
 func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
+	// The private envelope is validated before lineage, Params copies, pending
+	// requests, writes or native effects. Other private/ordinary paths are unchanged.
+	if resources := privateGroupingResourcesFrom(parent); resources != nil && !resources.admit(parent, m, req) {
+		return RoundTripResult{Failure: session.ResourceExhausted}
+	}
 	req.callHierarchyLayer1GenericAttempt = newCallHierarchyLayer1GenericAttemptLineage(req)
 	attempt := req.callHierarchyLayer1GenericAttempt
 	if attempt != nil && attempt.causalOutcome.class == callHierarchyLayer1GenericCausalOutcomePreEffectRefusal {
@@ -860,6 +882,10 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 	}
 	if req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
 		return m.finishCallHierarchyLayer1GenericRefusal(attempt, RoundTripResult{Failure: session.ToolNotImplemented}, callHierarchyLayer1GenericRefusalPrivateAccountingNotImplemented, session.Failure("private-accounting-not-implemented"))
+	}
+	if privateGroupingResourcesFrom(parent) != nil {
+		// Grouping has its own bounded raw acquisition, not a C17/P2 receipt.
+		return m.roundTrip(parent, req, nil)
 	}
 	if req.ADR0011PrivateP2 && (req.Method == "textDocument/definition" || req.Method == "textDocument/references") {
 		private := &privateB4Reservation{method: req.Method, nonCustodial: true}
@@ -1288,6 +1314,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 		}
 		go func() {
+			if resources := privateGroupingResourcesFrom(parent); resources != nil {
+				cap, ok := resources.beginFrame()
+				if !ok {
+					reads <- readResult{err: ErrPrivateGroupingOwned}
+					return
+				}
+				e := resources.envelope
+				retain := captureCap
+				if retain > cap {
+					retain = cap
+				}
+				msg, frame, raw, retained, err := lspwire.ReadPrivateBoundedFrameObservedAtDecode(privateGroupingResourceReader{child.Stdout(), resources, ctx}, lspwire.Limits{MaxBodyBytes: int64(e.body), MaxHeaderBytes: int64(e.header)}, cap, retain, m.cWireObserver, decodeEntry, retainEntry)
+				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
+				return
+			}
 			if req.directionalV5 != nil {
 				msg, frame, raw, err := reader.ReadDirectionalReserved(maxBytes, req.directionalV5.lease)
 				read := readResult{message: msg, frame: frame, raw: raw, bodyBytes: int64(len(raw)), retained: raw != nil, err: err}

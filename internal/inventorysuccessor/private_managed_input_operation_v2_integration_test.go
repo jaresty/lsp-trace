@@ -1,6 +1,7 @@
 package inventorysuccessor_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -49,7 +50,7 @@ type managedOperationStarter struct{ child *managedOperationPipe }
 func (s managedOperationStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
 	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
 }
-func managedOperationFixture(t *testing.T) (*sessionruntime.Manager, methodresult.PrivateManagedGroupingRequest, func() int, string) {
+func managedOperationFixture(t *testing.T, rawAttack ...string) (*sessionruntime.Manager, methodresult.PrivateManagedGroupingRequest, func() int, string) {
 	t.Helper()
 	workspace, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -85,6 +86,10 @@ func managedOperationFixture(t *testing.T) (*sessionruntime.Manager, methodresul
 			case "initialize":
 				result = `{"serverInfo":{"name":"controlled-io-pipe","version":"fixture-v1"},"capabilities":{"positionEncoding":"utf-16","documentSymbolProvider":true,"referencesProvider":true,"definitionProvider":true}}`
 			case "textDocument/documentSymbol":
+				if len(rawAttack) != 0 {
+					_, _ = io.WriteString(out, rawAttack[0])
+					return
+				}
 				result = `[{"name":"Query","kind":12,"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":15}},"selectionRange":{"start":{"line":1,"character":5},"end":{"line":1,"character":10}}}]`
 			case "textDocument/references", "textDocument/definition":
 				result = fmt.Sprintf(`[{"uri":%q,"range":{"start":{"line":1,"character":5},"end":{"line":1,"character":10}}}]`, uri)
@@ -124,6 +129,61 @@ func managedOperationFixture(t *testing.T) (*sessionruntime.Manager, methodresul
 	t.Cleanup(func() { root.Close() })
 	q := methodresult.PrivateManagedGroupingRequest{Session: sessionruntime.SessionLeaseRequest{SessionID: s.SessionID, Generation: s.Generation, Workspace: workspace}, URI: uri, OccurrenceID: "controlled", Revision: "declared", Privacy: "private", OccurrenceAdmissionPolicyID: "ordinal", CompositionPolicyID: "identity", Line: 1, Character: 6, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, Root: root, Deadline: time.Now().Add(10 * time.Second)}
 	return m, q, func() int { mu.Lock(); defer mu.Unlock(); return effects }, pubpath
+}
+
+func TestPrivateManagedInputResourceRawFrameV2(t *testing.T) {
+	for _, attack := range []string{string(bytes.Repeat([]byte("x"), 8192)), "Content-Length: nope\r\n\r\n", "Content-Length: 4611686018427387904\r\n\r\n"} {
+		m, q, effects, _ := managedOperationFixture(t, attack)
+		owner, _ := inventorysuccessor.ControlledManagedInputOwnerForTest(t, false)
+		binding, err := methodresult.PrivateManagedGroupingOperationBinding(m, q, "ACQUIRE", sessionruntime.PrivateGroupingOwnedHandoff{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		q.Operation, err = owner.Reserve(context.Background(), fmt.Sprintf("sha256:%064x", len(attack)), binding)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = methodresult.AcquirePrivateManagedGroupingInput(context.Background(), m, q); err == nil || effects() != 2 {
+			t.Fatalf("ASSERT_RESOURCE_MANAGER_RAW_REJECT: err=%v effects=%d", err, effects())
+		}
+	}
+}
+
+func TestPrivateManagedInputResourceSourceBoundaryV2(t *testing.T) {
+	for _, size := range []int{16 << 10, (16 << 10) + 1} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			m, q, effects, _ := managedOperationFixture(t)
+			u, err := url.Parse(q.URI)
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := make([]byte, size)
+			copy(text, "package fixture\nfunc Query() {}\n")
+			for i := len("package fixture\nfunc Query() {}\n"); i < len(text); i++ {
+				text[i] = ' '
+			}
+			if err := os.WriteFile(u.Path, text, 0644); err != nil {
+				t.Fatal(err)
+			}
+			owner, _ := inventorysuccessor.ControlledManagedInputOwnerForTest(t, false)
+			binding, err := methodresult.PrivateManagedGroupingOperationBinding(m, q, "ACQUIRE", sessionruntime.PrivateGroupingOwnedHandoff{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			q.Operation, err = owner.Reserve(context.Background(), fmt.Sprintf("sha256:%064x", size), binding)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = methodresult.AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+			if size > 16<<10 {
+				if err == nil || effects() != 0 {
+					t.Fatalf("ASSERT_RESOURCE_SOURCE_BEFORE_SEND: err=%v effects=%d", err, effects())
+				}
+			} else if err != nil || effects() == 0 {
+				t.Fatalf("ASSERT_RESOURCE_SOURCE_AT_CAP: err=%v effects=%d", err, effects())
+			}
+		})
+	}
 }
 
 // These attacks intentionally use only the pre-repair public API. They must

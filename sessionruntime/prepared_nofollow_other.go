@@ -4,6 +4,6 @@ package sessionruntime
 
 import "errors"
 
-func readPreparedNoFollow(_, _ string) ([]byte, error) {
+func readPreparedNoFollow(_, _ string, _ ...int) ([]byte, error) {
 	return nil, errors.New("descriptor-bound no-follow prepared supply unsupported")
 }

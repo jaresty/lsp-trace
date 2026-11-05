@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/publication"
 	"lsp-trace/sessionruntime"
 )
@@ -87,6 +86,7 @@ type privateManagedInputOperationV2 struct {
 	failed         bool
 	handoff        sessionruntime.PrivateGroupingOwnedHandoff
 	source         string
+	envelope       sessionruntime.PrivateGroupingResourceEnvelope
 }
 
 func validPrivateManagedBindingV2(b PrivateManagedInputBindingV2) bool {
@@ -136,20 +136,31 @@ func samePrivateManagedBindingV2(a, b PrivateManagedInputBindingV2) bool {
 }
 
 // privateManagedInputChargeV2 is a CLOSED logical currency contract, independent
-// of caller caps. S=existing no-follow source ceiling; Q=closed query/output
-// ceiling; N=3 native operations with <=32KiB query requests. The 64KiB/four
-// message transaction settings are post-decode checks, not frame admission:
-// reserve nine default-limit wire frames per request and possible cancellation.
+// of caller caps. S=runtime-enforced private no-follow source ceiling (+1);
+// Q=closed query/output ceiling. Three native operations admit <=32KiB params.
+// The 64KiB/four-message transaction settings remain post-decode checks; concrete
+// runtime-owned body/header/frame and shared residuals bound raw acquisition.
 // P=7 records (six predecessors + input). O=1024 occurrences. The
 // multiplicities bound adapter passes, including initial replay, failure after
 // either R or D, all publications and readbacks, and TWO kernel verifications
 // (reserve/observe). Kernel metadata costs are not physical RAM/CPU/IO proofs.
 // No pilot proposal numbers, caller expenditure knobs, refunds or replay credit.
 func privateManagedInputChargeV2(b PrivateManagedInputBindingV2, now time.Time) (countersV2, error) {
+	e, ok := b.Manager.PrivateGroupingResourceEnvelope()
+	if !ok {
+		return countersV2{}, ErrPrivateManagedInputOperationV2
+	}
+	return privateManagedInputEnvelopeChargeV2(b, now, e)
+}
+func privateManagedInputEnvelopeChargeV2(b PrivateManagedInputBindingV2, now time.Time, e sessionruntime.PrivateGroupingResourceEnvelope) (countersV2, error) {
 	if !validPrivateManagedBindingV2(b) || !now.Before(b.Deadline) || b.Deadline.Sub(now) > 15*time.Second {
 		return countersV2{}, ErrPrivateManagedInputOperationV2
 	}
-	const s uint64 = sessionruntime.MaxDocumentSupplyBytes
+	bounds := e.Bounds()
+	if bounds.SourceReadBytes == 0 {
+		return countersV2{}, ErrPrivateManagedInputOperationV2
+	}
+	s := bounds.SourceReadBytes // includes the rejecting +1 byte
 	const q uint64 = sessionruntime.PrivateGroupingQueryMaxBytes
 	const p uint64 = 7
 	const o uint64 = 1024
@@ -157,15 +168,13 @@ func privateManagedInputChargeV2(b PrivateManagedInputBindingV2, now time.Time) 
 	const verifyRecords uint64 = 2 * 4096
 	captureReq, captureResp, native, messages := uint64(0), uint64(0), uint64(0), uint64(0)
 	if b.Mode == "ACQUIRE" {
-		// JSON escaping of source+URI+language plus fixed notification fields.
-		// Include three possible cancellation messages plus frame headers. Reader
-		// MaxBytes checks follow decode; reserve up to nine frames per transaction
-		// (four notifications + four controls + the rejecting extra frame).
-		captureReq = 6*(s+2*4096) + 4096 + 6*(32<<10) + 7*(64<<10)
-		wire := lspwire.DefaultLimits()
-		captureResp = 3 * 9 * uint64(wire.MaxBodyBytes+wire.MaxHeaderBytes+1)
-		native = 7 // preparation + three native requests + possible cancellation
-		messages = 1 + 3*9 + 3
+		// Includes source/URI/language JSON escaping, request/cancel framing, and
+		// all rejecting header bytes; never substitute the retained-byte cap.
+		// Four notifications + four controls + the rejecting extra frame per method.
+		captureReq = bounds.RequestBytes
+		captureResp = bounds.ResponseBytes
+		native = bounds.NativeRequests
+		messages = bounds.Messages
 	}
 	// Each parser/hash/copy pass is charged at its admitted byte ceiling, even on
 	// partial failure. Replay needs no capture and performs no publication.
@@ -190,6 +199,33 @@ func privateManagedInputChargeV2(b PrivateManagedInputBindingV2, now time.Time) 
 	}, nil
 }
 
+// PrivateManagedPilotPreflightV2 is a finite compatibility calculation, not a
+// grant or provider receipt. The private path covers D/R+documentSymbol only;
+// initialization, shutdown, CALLS, and typed process supervision remain unknown.
+// A full-schedule FIT is deliberately impossible until those paths are covered.
+type PrivateManagedPilotPreflightV2 struct {
+	Disposition, Bound, Scope                                                  string
+	SemanticRequests, ClientRequests, Slots, WireLimit, PrivateSubsetWireBound uint64
+}
+
+func PreflightPrivateManagedPilotV2(m *sessionruntime.Manager) PrivateManagedPilotPreflightV2 {
+	r := PrivateManagedPilotPreflightV2{Disposition: "REFUSED", Bound: "UNKNOWN_RUNTIME_ENVELOPE", Scope: "PRIVATE_R_D_ONLY; INIT_SHUTDOWN_CALLS_UNCOVERED", SemanticRequests: 52, ClientRequests: 56, Slots: 150, WireLimit: 8 << 20}
+	e, ok := m.PrivateGroupingResourceEnvelope()
+	if !ok {
+		return r
+	}
+	b := e.Bounds()
+	// Fixed preregistered 52 semantic requests, nine possible frames each.
+	// One source notification plus each request's sixfold params/framing/cancel.
+	// Hard runtime caps make these products finite well below uint64 overflow.
+	r.PrivateSubsetWireBound = 6*(b.SourceBytes+2*4096) + 8192 + 52*(6*(32<<10)+8192+9*(b.FrameBytes+1))
+	r.Bound = "FULL_SCHEDULE_PATHS_UNCOVERED"
+	if r.PrivateSubsetWireBound > r.WireLimit {
+		r.Bound = "SEMANTIC_RAW_WIRE_BOUND_EXCEEDS_8MIB"
+	}
+	return r
+}
+
 // Reserve publishes the existing cumulative kernel reservation first. ONLY a
 // confirmed successful commit returns a capability. Accounting artifacts may
 // have been written on errors; no downstream permission escapes those errors.
@@ -201,10 +237,11 @@ func (o *PrivateManagedInputOwnerV2) Reserve(ctx context.Context, attempt string
 		return fail()
 	}
 	now := time.Now()
-	c, err := privateManagedInputChargeV2(b, now)
-	if err == nil && !b.Manager.PrivateGroupingWireWithinDefaultEnvelope() {
-		err = ErrPrivateManagedInputOperationV2
+	envelope, ok := b.Manager.PrivateGroupingResourceEnvelope()
+	if !ok {
+		return fail()
 	}
+	c, err := privateManagedInputEnvelopeChargeV2(b, now, envelope)
 	if err != nil {
 		return fail()
 	}
@@ -228,7 +265,7 @@ func (o *PrivateManagedInputOwnerV2) Reserve(ctx context.Context, attempt string
 		return fail()
 	}
 	o.head = h.Identity
-	return PrivateManagedInputOperationV2{&privateManagedInputOperationV2{owner: o, binding: b, attempt: attempt, head: h.Identity}}, nil
+	return PrivateManagedInputOperationV2{&privateManagedInputOperationV2{owner: o, binding: b, attempt: attempt, head: h.Identity, envelope: envelope}}, nil
 }
 
 // Consume retires the capability BEFORE checking binding or returning a context.
@@ -244,11 +281,21 @@ func (p PrivateManagedInputOperationV2) consumeFixed(ctx context.Context, b Priv
 		return nil, nil, ErrPrivateManagedInputOperationV2
 	}
 	s.used = true
-	if ctx.Err() != nil || !samePrivateManagedBindingV2(s.binding, b) || !time.Now().Before(s.binding.Deadline) {
+	currentEnvelope, envelopeOK := b.Manager.PrivateGroupingResourceEnvelope()
+	if ctx.Err() != nil || !envelopeOK || currentEnvelope != s.envelope || !samePrivateManagedBindingV2(s.binding, b) || !time.Now().Before(s.binding.Deadline) {
 		s.failed = true
 		return nil, nil, ErrPrivateManagedInputOperationV2
 	}
 	c, cancel := context.WithDeadline(ctx, s.binding.Deadline)
+	if b.Mode == "ACQUIRE" {
+		bounded, err := b.Manager.PrivateGroupingEnvelopeContext(c, s.envelope, b.Deadline)
+		if err != nil {
+			cancel()
+			s.failed = true
+			return nil, nil, ErrPrivateManagedInputOperationV2
+		}
+		c = bounded
+	}
 	s.execution = c
 	s.cancel = cancel
 	return c, cancel, nil

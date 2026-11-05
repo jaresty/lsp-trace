@@ -17,10 +17,9 @@ import (
 
 var ErrPrivateGroupingOwned = errors.New("private grouping owned handoff refused")
 
-// PrivateGroupingWireWithinDefaultEnvelope is read-only metadata for the private
-// prepaid operation. Transaction MaxBytes is a post-decode cumulative check, so
-// the reservation must also cover the reader's whole rejecting frame. Larger or
-// unknown reader configurations refuse rather than borrowing more funding.
+// PrivateGroupingWireWithinDefaultEnvelope is legacy read-only metadata, not
+// resource-enforcement evidence. The fixed prepaid owner uses the opaque concrete
+// PrivateGroupingResourceEnvelope instead. Preserve this older predicate's behavior.
 func (m *Manager) PrivateGroupingWireWithinDefaultEnvelope() bool {
 	if m == nil {
 		return false
@@ -79,6 +78,15 @@ func (m *Manager) CapturePrivateGroupingOwned(ctx context.Context, req PrivateGr
 		return fail()
 	}
 	if m == nil || ctx == nil || req.URI == "" || req.OccurrenceID == "" || req.Revision == "" || strings.TrimSpace(req.Revision) != req.Revision || req.Privacy == "" || (!req.References && !req.Definitions) || req.Deadline.IsZero() || !time.Now().Before(req.Deadline) || req.Deadline.After(time.Now().Add(15*time.Second)) {
+		return fail()
+	}
+	envelope, ok := m.PrivateGroupingResourceEnvelope()
+	if !ok {
+		return fail()
+	}
+	var envelopeErr error
+	ctx, envelopeErr = m.PrivateGroupingEnvelopeContext(ctx, envelope, req.Deadline)
+	if envelopeErr != nil {
 		return fail()
 	}
 	if f := m.CheckActiveSessionLeasePrivateV2(ctx, req.Session); f != "" {
