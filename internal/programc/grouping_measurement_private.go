@@ -17,6 +17,29 @@ const GroupingMeasurementMaxSlotsPrivate = 128
 const GroupingMeasurementMaxJudgmentsPrivate = 4096
 const groupingMeasurementMaxCount = 1 << 30
 
+// Notification only: no source, case, partition, counters, report or mutable
+// identity is exposed. Production leaves this nil. Controlled test workers may
+// observe/block at these checkpoints; notification is never completion proof.
+type groupingMeasurementStagePrivate uint8
+
+const (
+	measurementCheckerEntryPrivate groupingMeasurementStagePrivate = iota + 1
+	measurementCaseEvaluatedPrivate
+)
+
+var groupingMeasurementObserverPrivate func(groupingMeasurementStagePrivate, int)
+
+func notifyGroupingMeasurementPrivate(stage groupingMeasurementStagePrivate, ordinal int) {
+	observer := groupingMeasurementObserverPrivate
+	if observer == nil {
+		return
+	}
+	// Diagnostics cannot skip required work or turn a panic into fake success.
+	// This mirrors notification isolation: only the observer panic is recovered.
+	defer func() { _ = recover() }()
+	observer(stage, ordinal)
+}
+
 // A label is a controlled independent declaration, not source-derived truth.
 type GroupingPairJudgmentPrivate struct{ Left, Right, Label string }
 type groupingJudgmentRowPrivate struct{ ID, Left, Right, Label string }
@@ -298,6 +321,7 @@ func ExecuteGroupingMeasurementBatchPrivate(b GroupingMeasurementBatchPrivate) (
 			return GroupingMeasurementResultPrivate{}, err
 		}
 		arms[arm] = a
+		notifyGroupingMeasurementPrivate(measurementCaseEvaluatedPrivate, len(d.Rows))
 	}
 	keys := make([]string, 0, len(arms))
 	for k := range arms {
@@ -427,6 +451,7 @@ func measurementRatesPrivate(c GroupingPairCountsPrivate) []GroupingMeasurementR
 	return out
 }
 func CheckGroupingMeasurementBatchPrivate(b GroupingMeasurementBatchPrivate, raw []byte) error {
+	notifyGroupingMeasurementPrivate(measurementCheckerEntryPrivate, 0)
 	if len(b.canonical) == 0 || len(raw) == 0 || len(raw) > rg.EvaluationMaxBytesPrivate {
 		return errors.New("missing/oversized expected batch or report")
 	}

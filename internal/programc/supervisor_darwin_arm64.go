@@ -77,10 +77,31 @@ func (w *cappedBuffer) Bytes() []byte {
 func (w *cappedBuffer) String() string { return string(w.Bytes()) }
 func (w *cappedBuffer) Exceeded() bool { w.mu.Lock(); defer w.mu.Unlock(); return w.exceeded }
 
-func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome, SupervisionObservation, *SupervisionFailure) {
-	var zero Outcome
+func supervisePrivateWorker(ctx context.Context, requestData workerRequest) (privateSupervisorResult, SupervisionObservation, *SupervisionFailure) {
+	var zero privateSupervisorResult
 	observation := SupervisionObservation{Ceiling: ObservationCeiling}
-	request, err := json.Marshal(workerRequest{Version: workerVersion, Input: input, Seed: seed})
+	started := time.Now()
+	deadline := started.Add(supervisorWall)
+	if parent, ok := ctx.Deadline(); ok && parent.Before(deadline) {
+		deadline = parent
+	}
+	windowFailure := func() *SupervisionFailure {
+		if err := ctx.Err(); err != nil {
+			return failure(CodeCancelled, err)
+		}
+		if !time.Now().Before(deadline) {
+			return failure(CodeTimeout, errors.New("shared wall limit exceeded"))
+		}
+		return nil
+	}
+	if failed := windowFailure(); failed != nil {
+		return zero, observation, failed
+	}
+	windowCtx, cancelWindow := context.WithDeadline(ctx, deadline)
+	defer cancelWindow()
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	request, err := json.Marshal(requestData)
 	if err != nil {
 		return zero, observation, failure(CodeInternalAdmission, err)
 	}
@@ -104,12 +125,15 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	stderr := &cappedBuffer{limit: MaxWorkerStderrBytes}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	started := time.Now()
+	defer stdin.Close()
+	if failed := windowFailure(); failed != nil {
+		return zero, observation, failed
+	}
 	if err = cmd.Start(); err != nil {
 		return zero, observation, failure(CodeNonzeroExit, err)
 	}
 	pid := cmd.Process.Pid
-	decodeWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
+	decodeWorker := func(waitErr error) (privateSupervisorResult, *SupervisionFailure) {
 		if stdout.Exceeded() {
 			return zero, failure(CodeOutputLimit, errors.New("worker stdout limit exceeded"))
 		}
@@ -117,15 +141,41 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			return zero, classifyTerminatedWorker(waitErr, stderr.String())
 		}
 		var response workerResponse
-		if decodeErr := strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &response); decodeErr != nil || response.Version != workerVersion || (response.Outcome == nil) == (response.Failure == nil) {
+		var decodeErr error
+		if requestData.Version == workerVersion {
+			var legacy legacyWorkerResponse
+			decodeErr = strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &legacy)
+			response = workerResponse{Version: legacy.Version, Outcome: legacy.Outcome, Failure: legacy.Failure}
+			if (legacy.Outcome == nil) == (legacy.Failure == nil) {
+				decodeErr = errors.New("invalid legacy response family")
+			}
+		} else {
+			decodeErr = strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &response)
+		}
+		if decodeErr != nil || response.Version != requestData.Version {
 			return zero, failure(CodeMalformedOutput, errors.New("invalid worker response"))
 		}
 		if response.Failure != nil {
+			if response.Outcome != nil || response.Bundle != nil || len(response.Report) != 0 {
+				return zero, failure(CodeMalformedOutput, errors.New("mixed worker response families"))
+			}
 			return zero, response.Failure
 		}
-		return reconstruct(input, seed, response.Outcome)
+		if requestData.Version == bundleWorkerVersionPrivate {
+			var canonical bytes.Buffer
+			if stderr.Exceeded() || writeWorkerResponse(&canonical, response) != 0 || !bytes.Equal(canonical.Bytes(), stdout.Bytes()) {
+				return zero, failure(CodeMalformedOutput, errors.New("noncanonical checked-bundle response or stderr overflow"))
+			}
+			report, failed := acceptBundleResponsePrivate(requestData, response)
+			return privateSupervisorResult{report: report}, failed
+		}
+		if response.Outcome == nil || response.Bundle != nil || len(response.Report) != 0 {
+			return zero, failure(CodeMalformedOutput, errors.New("invalid legacy response family"))
+		}
+		out, failed := reconstruct(requestData.Input, requestData.Seed, response.Outcome)
+		return privateSupervisorResult{legacy: out}, failed
 	}
-	group, groupErr := establishProcessGroupIdentity(pid)
+	group, groupErr := establishProcessGroupIdentity(windowCtx, pid)
 	if groupErr != nil {
 		killErr := supervisorProcessKill(cmd.Process)
 		if killErr != nil && !errors.Is(killErr, os.ErrProcessDone) {
@@ -134,28 +184,57 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 		_ = supervisorCommandWait(cmd) // the sole Wait owner reaps only after Kill succeeded or the child was already done
 		return zero, observation, cleanupFailure(failure(CodeMemoryUnsupported, groupErr), groupErr)
 	}
-	finishWorker := func(cleanupErr error, nominal *SupervisionFailure) (Outcome, *SupervisionFailure) {
+	var delivery <-chan error
+	finishWorker := func(cleanupErr error, nominal *SupervisionFailure) (privateSupervisorResult, *SupervisionFailure) {
+		// Closing the parent's pipe releases any blocked writer before Wait.
+		_ = stdin.Close()
+		if delivery != nil {
+			<-delivery
+			delivery = nil
+		}
 		if cleanupErr != nil {
 			return zero, cleanupFailure(nominal, cleanupErr)
 		}
 		waitErr := supervisorCommandWait(cmd)
-		out, terminalFailure := decodeWorker(waitErr)
+		if cmd.ProcessState != nil {
+			notifySupervisorPrivate(supervisorReapedPrivate)
+		}
+		if nominal == nil {
+			nominal = windowFailure()
+		}
+		var out privateSupervisorResult
+		var terminalFailure *SupervisionFailure
+		if nominal == nil {
+			notifySupervisorPrivate(supervisorBeforeVerifyPrivate)
+			nominal = windowFailure()
+			if nominal == nil {
+				out, terminalFailure = decodeWorker(waitErr)
+				notifySupervisorPrivate(supervisorAfterVerifyPrivate)
+			}
+		}
+		if nominal == nil {
+			nominal = windowFailure()
+		}
+		observation.ElapsedNanos = time.Since(started).Nanoseconds()
 		if nominal != nil {
 			terminalFailure = nominal
 			out = zero
 		}
 		return out, terminalFailure
 	}
-	finishExitedWorker := func(nominal *SupervisionFailure) (Outcome, *SupervisionFailure) {
+	finishExitedWorker := func(nominal *SupervisionFailure) (privateSupervisorResult, *SupervisionFailure) {
 		return finishWorker(terminateWorkerGroup(group), nominal)
 	}
 	stopWorker := func(nominal *SupervisionFailure) *SupervisionFailure {
 		_, terminalFailure := finishExitedWorker(nominal)
 		return terminalFailure
 	}
-	peak, err := supervisorInitialRSS(pid)
+	peak, err := supervisorInitialRSS(windowCtx, pid)
 	if err != nil {
-		if processGroupLeaderZombie(group) {
+		if nominal := windowFailure(); nominal != nil {
+			return zero, observation, stopWorker(nominal)
+		}
+		if processGroupLeaderZombie(windowCtx, group) {
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
 			out, terminalFailure := finishExitedWorker(failure(CodeMemoryUnsupported, err))
 			return out, observation, terminalFailure
@@ -167,18 +246,33 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	if peak > supervisorRSSBytes {
 		return zero, observation, stopWorker(failure(CodeMemoryLimit, fmt.Errorf("sampled tree RSS %d exceeds %d", peak, supervisorRSSBytes)))
 	}
-	if _, err = stdin.Write(request); err != nil {
-		return zero, observation, stopWorker(failure(CodeNonzeroExit, err))
+	if failed := windowFailure(); failed != nil {
+		return zero, observation, stopWorker(failed)
 	}
-	if err = stdin.Close(); err != nil {
-		return zero, observation, stopWorker(failure(CodeNonzeroExit, err))
-	}
+	written := make(chan error, 1)
+	delivery = written
+	go func() {
+		_, writeErr := stdin.Write(request)
+		closeErr := stdin.Close()
+		if writeErr == nil {
+			writeErr = closeErr
+		}
+		notifySupervisorPrivate(supervisorDeliveryFinishedPrivate)
+		written <- writeErr
+	}()
 	ticker := time.NewTicker(supervisorPoll)
 	defer ticker.Stop()
-	timer := time.NewTimer(supervisorWall)
-	defer timer.Stop()
 	for {
 		select {
+		case err := <-delivery:
+			delivery = nil
+			if err != nil {
+				nominal := windowFailure()
+				if nominal == nil {
+					nominal = failure(CodeNonzeroExit, err)
+				}
+				return zero, observation, stopWorker(nominal)
+			}
 		case <-ctx.Done():
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
 			return zero, observation, stopWorker(failure(CodeCancelled, ctx.Err()))
@@ -190,7 +284,7 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
 				return zero, observation, stopWorker(failure(CodeCancelled, err))
 			}
-			if processGroupLeaderZombie(group) {
+			if processGroupLeaderZombie(windowCtx, group) {
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
 				out, terminalFailure := finishExitedWorker(nil)
 				return out, observation, terminalFailure
@@ -199,10 +293,14 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
 				return zero, observation, stopWorker(failure(CodeOutputLimit, errors.New("worker stdout limit exceeded")))
 			}
-			rss, e := treeRSS(pid)
+			rss, e := treeRSS(windowCtx, pid)
 			if e != nil {
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
-				return zero, observation, stopWorker(failure(CodeMemoryUnsupported, e))
+				nominal := windowFailure()
+				if nominal == nil {
+					nominal = failure(CodeMemoryUnsupported, e)
+				}
+				return zero, observation, stopWorker(nominal)
 			}
 			observation.Samples++
 			if rss > observation.PeakTreeRSSBytes {
@@ -216,8 +314,14 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	}
 }
 
-func processGroupState(pgid int) ([]processGroupMember, error) {
-	out, err := exec.Command(supervisorPSPath, "-axo", "pid=,pgid=,state=").Output()
+func supervisorPSOutput(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, supervisorPSPath, args...)
+	cmd.WaitDelay = 100 * time.Millisecond
+	return cmd.Output()
+}
+
+func processGroupState(ctx context.Context, pgid int) ([]processGroupMember, error) {
+	out, err := supervisorPSOutput(ctx, "-axo", "pid=,pgid=,state=")
 	if err != nil {
 		return nil, err
 	}
@@ -242,8 +346,8 @@ func processGroupState(pgid int) ([]processGroupMember, error) {
 	return members, nil
 }
 
-func processStart(pid int) (string, error) {
-	out, err := exec.Command(supervisorPSPath, "-o", "lstart=", "-p", strconv.Itoa(pid)).Output()
+func processStart(ctx context.Context, pid int) (string, error) {
+	out, err := supervisorPSOutput(ctx, "-o", "lstart=", "-p", strconv.Itoa(pid))
 	start := strings.TrimSpace(string(out))
 	if err != nil || start == "" {
 		return "", errors.New("worker process-group start identity unavailable")
@@ -251,15 +355,15 @@ func processStart(pid int) (string, error) {
 	return start, nil
 }
 
-func establishProcessGroupIdentity(pid int) (processGroupIdentity, error) {
+func establishProcessGroupIdentity(ctx context.Context, pid int) (processGroupIdentity, error) {
 	deadline := supervisorCleanupNow().Add(time.Second)
 	var last error
 	for {
-		members, err := supervisorGroupState(pid)
+		members, err := supervisorGroupState(ctx, pid)
 		if err == nil {
 			for _, member := range members {
 				if member.PID == pid && member.PGID == pid {
-					start, startErr := supervisorProcessStart(pid)
+					start, startErr := supervisorProcessStart(ctx, pid)
 					if startErr == nil {
 						return processGroupIdentity{PID: pid, PGID: pid, Start: start}, nil
 					}
@@ -272,21 +376,21 @@ func establishProcessGroupIdentity(pid int) (processGroupIdentity, error) {
 		} else {
 			last = err
 		}
-		if !supervisorCleanupNow().Before(deadline) {
+		if ctx.Err() != nil || !supervisorCleanupNow().Before(deadline) {
 			return processGroupIdentity{}, last
 		}
 		supervisorCleanupWait(supervisorPoll)
 	}
 }
 
-func processGroupLeaderZombie(group processGroupIdentity) bool {
-	members, err := supervisorGroupState(group.PGID)
+func processGroupLeaderZombie(ctx context.Context, group processGroupIdentity) bool {
+	members, err := supervisorGroupState(ctx, group.PGID)
 	if err != nil {
 		return false
 	}
 	for _, member := range members {
 		if member.PID == group.PID && member.PGID == group.PGID && strings.HasPrefix(member.State, "Z") {
-			start, startErr := supervisorProcessStart(group.PID)
+			start, startErr := supervisorProcessStart(ctx, group.PID)
 			return startErr == nil && start == group.Start
 		}
 	}
@@ -302,16 +406,18 @@ func cleanupFailure(nominal *SupervisionFailure, _ error) *SupervisionFailure {
 }
 
 func terminateWorkerGroup(group processGroupIdentity) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	deadline := supervisorCleanupNow().Add(time.Second)
 	for {
-		members, err := supervisorGroupState(group.PGID)
+		members, err := supervisorGroupState(ctx, group.PGID)
 		if err != nil {
 			return err
 		}
 		live, leader := false, false
 		for _, member := range members {
 			if member.PID == group.PID && member.PGID == group.PGID {
-				start, startErr := supervisorProcessStart(group.PID)
+				start, startErr := supervisorProcessStart(ctx, group.PID)
 				if startErr != nil || start != group.Start {
 					return errors.New("worker process-group identity changed")
 				}
@@ -327,21 +433,29 @@ func terminateWorkerGroup(group processGroupIdentity) error {
 		if !leader {
 			return errors.New("worker process-group leader identity unavailable")
 		}
-		if supervisorCleanupNow().After(deadline) {
+		if ctx.Err() != nil || supervisorCleanupNow().After(deadline) {
 			return errors.New("process group remained live after bounded cleanup")
 		}
 		// Re-observe the exact leader identity immediately before the group signal.
 		// Darwin exposes no atomic identity-and-signal primitive, so failure to
 		// retain custody here fails closed without signaling.
-		confirm, confirmErr := supervisorGroupState(group.PGID)
+		confirm, confirmErr := supervisorGroupState(ctx, group.PGID)
 		if confirmErr != nil {
 			return confirmErr
 		}
-		confirmed := false
+		confirmed, confirmedLive := false, false
 		for _, member := range confirm {
 			confirmed = confirmed || (member.PID == group.PID && member.PGID == group.PGID)
+			confirmedLive = confirmedLive || !strings.HasPrefix(member.State, "Z")
 		}
-		start, startErr := supervisorProcessStart(group.PID)
+		// A dying Darwin process may transition ?E -> Z between snapshots.
+		// Reuse the existing terminal-group rule at this confirmation point:
+		// no live members means no further signal; the sole Wait owner reaps.
+		// Any still-live group retains the exact identity/signal checks below.
+		if !confirmedLive {
+			return nil
+		}
+		start, startErr := supervisorProcessStart(ctx, group.PID)
 		if !confirmed || startErr != nil || start != group.Start {
 			return errors.New("worker process-group signal custody unavailable")
 		}
@@ -363,24 +477,24 @@ func classifyTerminatedWorker(waitErr error, stderr string) *SupervisionFailure 
 	return failure(CodeNonzeroExit, errors.New(detail))
 }
 
-func initialTreeRSS(root int) (int64, error) {
+func initialTreeRSS(ctx context.Context, root int) (int64, error) {
 	deadline := time.Now().Add(2 * time.Second)
 	var err error
 	for {
 		var rss int64
-		rss, err = treeRSS(root)
+		rss, err = treeRSS(ctx, root)
 		if err == nil {
 			return rss, nil
 		}
-		if time.Now().After(deadline) {
+		if ctx.Err() != nil || time.Now().After(deadline) {
 			return 0, err
 		}
 		time.Sleep(time.Millisecond)
 	}
 }
 
-func treeRSS(root int) (int64, error) {
-	out, err := exec.Command(supervisorPSPath, "-axo", "pid=,ppid=,rss=").Output()
+func treeRSS(ctx context.Context, root int) (int64, error) {
+	out, err := supervisorPSOutput(ctx, "-axo", "pid=,ppid=,rss=")
 	if err != nil {
 		return 0, err
 	}

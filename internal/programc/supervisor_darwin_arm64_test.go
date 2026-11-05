@@ -34,6 +34,9 @@ func TestMain(m *testing.M) {
 				fmt.Fprintf(os.Stderr, "record test worker identity: %v\n", err)
 				os.Exit(12)
 			}
+			if handled, code := runTypedBundleFixtureWorkerPrivateTest(mode); handled {
+				os.Exit(code)
+			}
 			if mode == "delayed-private" {
 				// initialTreeRSS has a two-second acquisition bound. Keep this
 				// fixture alive beyond that entire window so the test never
@@ -154,6 +157,11 @@ func writeTestWorkerPIDRecord(descendant processIdentity) error {
 }
 
 func testWorkerMode() {
+	if os.Getenv("PROGRAMC_TEST_WORKER") == "never-read" {
+		for {
+			time.Sleep(time.Second)
+		}
+	}
 	if os.Getenv("PROGRAMC_TEST_WORKER") == "fast-child" {
 		cmd := exec.Command("/bin/sleep", "30")
 		if err := cmd.Start(); err != nil {
@@ -172,6 +180,38 @@ func testWorkerMode() {
 			os.Exit(12)
 		}
 		_ = cmd.Process.Release()
+		return
+	}
+	if mode := os.Getenv("PROGRAMC_TEST_WORKER"); strings.HasPrefix(mode, "typed-response-") || mode == "legacy-null-extension" {
+		var checked bytes.Buffer
+		_, code := RunPrivateWorker([]string{workerArgument}, os.Stdin, &checked, os.Stderr)
+		if code != 0 {
+			os.Exit(code)
+		}
+		raw := checked.Bytes()
+		switch mode {
+		case "legacy-null-extension":
+			raw = append(bytes.TrimSuffix(raw, []byte("}\n")), []byte(",\"report\":null,\"checked_bundle\":null}\n")...)
+		case "typed-response-truncated":
+			raw = raw[:len(raw)/2]
+		case "typed-response-duplicate":
+			raw = bytes.Replace(raw, []byte(`{"version":`), []byte(`{"version":"wrong","version":`), 1)
+		case "typed-response-stderr":
+			_, _ = os.Stderr.Write(bytes.Repeat([]byte("x"), int(MaxWorkerStderrBytes)+1))
+		case "typed-response-digest", "typed-response-foreign":
+			var response workerResponse
+			if err := json.Unmarshal(raw, &response); err != nil || response.Bundle == nil {
+				os.Exit(122)
+			}
+			if mode == "typed-response-digest" {
+				response.Bundle.Digest = "foreign"
+			} else {
+				response.Bundle.Expected.ID = "foreign"
+			}
+			_ = writeWorkerResponse(os.Stdout, response)
+			return
+		}
+		_, _ = os.Stdout.Write(raw)
 		return
 	}
 	_, _ = io.Copy(io.Discard, os.Stdin)
@@ -320,7 +360,7 @@ func processIsZombie(pid int) bool {
 
 func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
 	withSupervisorDefaults(t)
-	supervisorProcessStart = func(int) (string, error) { return "start", nil }
+	supervisorProcessStart = func(context.Context, int) (string, error) { return "start", nil }
 	kills := 0
 	supervisorGroupKill = func(pid int, signal syscall.Signal) error {
 		if pid != -42 || signal != syscall.SIGKILL {
@@ -330,7 +370,7 @@ func TestTerminateWorkerGroupConfirmsLiveDescendantGone(t *testing.T) {
 		return nil
 	}
 	observations := 0
-	supervisorGroupState = func(int) ([]processGroupMember, error) {
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) {
 		observations++
 		if observations <= 2 {
 			return []processGroupMember{{PID: 42, PGID: 42, State: "S"}, {PID: 43, PGID: 42, State: "S"}}, nil
@@ -362,7 +402,7 @@ func TestTerminateWorkerGroupTerminalAndFailureStates(t *testing.T) {
 			withSupervisorDefaults(t)
 			kills := 0
 			supervisorGroupKill = func(int, syscall.Signal) error { kills++; return nil }
-			supervisorGroupState = func(int) ([]processGroupMember, error) { return tc.members, tc.stateErr }
+			supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) { return tc.members, tc.stateErr }
 			err := terminateWorkerGroup(identity)
 			if (tc.stateErr == nil && err != nil) || (tc.stateErr != nil && err == nil) || kills != 0 {
 				t.Fatalf("ASSERT_GROUP_TERMINAL_%s err=%v kills=%d", tc.name, err, kills)
@@ -374,11 +414,11 @@ func TestTerminateWorkerGroupTerminalAndFailureStates(t *testing.T) {
 
 func TestTerminateWorkerGroupPersistentLiveIsBounded(t *testing.T) {
 	withSupervisorDefaults(t)
-	supervisorProcessStart = func(int) (string, error) { return "start", nil }
+	supervisorProcessStart = func(context.Context, int) (string, error) { return "start", nil }
 	now := time.Unix(0, 0)
 	supervisorCleanupNow = func() time.Time { return now }
 	supervisorCleanupWait = func(d time.Duration) { now = now.Add(d) }
-	supervisorGroupState = func(int) ([]processGroupMember, error) {
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) {
 		return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "start"}}, nil
 	}
 	kills := 0
@@ -398,8 +438,8 @@ func TestTerminateWorkerGroupPersistentLiveIsBounded(t *testing.T) {
 
 func TestCleanupFailureSupersedesNominalOutcome(t *testing.T) {
 	withSupervisorDefaults(t)
-	supervisorProcessStart = func(int) (string, error) { return "start", nil }
-	supervisorGroupState = func(int) ([]processGroupMember, error) { return nil, errors.New("ps unavailable") }
+	supervisorProcessStart = func(context.Context, int) (string, error) { return "start", nil }
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) { return nil, errors.New("ps unavailable") }
 	failed := cleanupFailure(failure(CodeTimeout, errors.New("60s wall limit exceeded")), errors.New("ps unavailable"))
 	requireCode(t, failed, CodeCleanupFailure)
 	if strings.Contains(failed.Message, "ps unavailable") {
@@ -410,7 +450,7 @@ func TestCleanupFailureSupersedesNominalOutcome(t *testing.T) {
 func TestFinishWorkerCleansDescendantsOrFailsCleanup(t *testing.T) {
 	withSupervisorDefaults(t)
 	calls := 0
-	supervisorGroupState = func(int) ([]processGroupMember, error) {
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) {
 		calls++
 		if calls == 1 {
 			return []processGroupMember{{PID: 43, PGID: 42, State: "S"}}, nil
@@ -426,8 +466,8 @@ func TestFinishWorkerCleansDescendantsOrFailsCleanup(t *testing.T) {
 
 func TestTerminateWorkerGroupRejectsChangedIdentityWithoutSignal(t *testing.T) {
 	withSupervisorDefaults(t)
-	supervisorProcessStart = func(int) (string, error) { return "reused", nil }
-	supervisorGroupState = func(int) ([]processGroupMember, error) {
+	supervisorProcessStart = func(context.Context, int) (string, error) { return "reused", nil }
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) {
 		return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "reused"}}, nil
 	}
 	kills := 0
@@ -441,9 +481,9 @@ func TestTerminateWorkerGroupRejectsChangedIdentityWithoutSignal(t *testing.T) {
 
 func TestTerminateWorkerGroupESRCHIsComplete(t *testing.T) {
 	withSupervisorDefaults(t)
-	supervisorProcessStart = func(int) (string, error) { return "start", nil }
+	supervisorProcessStart = func(context.Context, int) (string, error) { return "start", nil }
 	observations := 0
-	supervisorGroupState = func(int) ([]processGroupMember, error) {
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) {
 		observations++
 		if observations <= 2 {
 			return []processGroupMember{{PID: 42, PGID: 42, State: "S", Start: "start"}}, nil
@@ -703,12 +743,12 @@ func TestWaitStartsAfterExactGroupIdentity(t *testing.T) {
 		return cmd.Wait()
 	}
 	var observations atomic.Int32
-	supervisorGroupState = func(pgid int) ([]processGroupMember, error) {
+	supervisorGroupState = func(ctx context.Context, pgid int) ([]processGroupMember, error) {
 		observation := observations.Add(1)
 		if observation == 1 && waits.Load() != 0 {
 			t.Fatalf("ASSERT_WAIT_STARTS_AFTER_EXACT_GROUP_IDENTITY: waits=%d", waits.Load())
 		}
-		return processGroupState(pgid)
+		return processGroupState(ctx, pgid)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -726,7 +766,9 @@ func TestIdentityTimeoutReapsDirectChildOnce(t *testing.T) {
 	now := time.Unix(0, 0)
 	supervisorCleanupNow = func() time.Time { return now }
 	supervisorCleanupWait = func(d time.Duration) { now = now.Add(d) }
-	supervisorGroupState = func(int) ([]processGroupMember, error) { return nil, errors.New("identity unavailable") }
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) {
+		return nil, errors.New("identity unavailable")
+	}
 	var waits atomic.Int32
 	killedPID := 0
 	supervisorCommandWait = func(cmd *exec.Cmd) error { waits.Add(1); return cmd.Wait() }
@@ -745,7 +787,9 @@ func TestIdentityTimeoutKillFailureDoesNotWait(t *testing.T) {
 	now := time.Unix(0, 0)
 	supervisorCleanupNow = func() time.Time { return now }
 	supervisorCleanupWait = func(d time.Duration) { now = now.Add(d) }
-	supervisorGroupState = func(int) ([]processGroupMember, error) { return nil, errors.New("identity unavailable") }
+	supervisorGroupState = func(context.Context, int) ([]processGroupMember, error) {
+		return nil, errors.New("identity unavailable")
+	}
 	var waits atomic.Int32
 	supervisorCommandWait = func(*exec.Cmd) error {
 		waits.Add(1)
@@ -775,7 +819,7 @@ func TestInitialRSSCleanExitCleansFastDescendant(t *testing.T) {
 	pidfile := filepath.Join(t.TempDir(), "pids")
 	t.Setenv("PROGRAMC_TEST_WORKER", "fast-child")
 	t.Setenv("PROGRAMC_TEST_PIDFILE", pidfile)
-	supervisorInitialRSS = func(int) (int64, error) {
+	supervisorInitialRSS = func(context.Context, int) (int64, error) {
 		deadline := time.Now().Add(time.Second)
 		for time.Now().Before(deadline) {
 			p, err := readWatchdogPIDs(pidfile, true)
@@ -855,7 +899,7 @@ func TestTreeRSSAggregatesDescendants(t *testing.T) {
 		t.Fatal(err)
 	}
 	supervisorPSPath = path
-	got, err := treeRSS(100)
+	got, err := treeRSS(context.Background(), 100)
 	if err != nil || got != 15*1024 {
 		t.Fatalf("ASSERT_DESCENDANT_RSS_AGGREGATION got=%d err=%v", got, err)
 	}

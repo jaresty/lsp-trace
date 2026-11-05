@@ -10,6 +10,9 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	rg "lsp-trace/internal/referencegrouping"
+	"lsp-trace/internal/strictjson"
 )
 
 const (
@@ -61,10 +64,25 @@ type SupervisionFailure struct {
 func (f *SupervisionFailure) Error() string { return string(f.Code) + ": " + f.Message }
 
 type workerRequest struct {
+	Version        string                    `json:"version"`
+	Input          []byte                    `json:"input"`
+	Seed           uint64                    `json:"seed"`
+	BundleExpected *rg.CompositionCommitment `json:"bundle_expected,omitempty"`
+}
+
+// Preserve the original private legacy field universe, including rejection of
+// newly reserved typed fields even when their JSON value is null.
+type legacyWorkerRequest struct {
 	Version string `json:"version"`
 	Input   []byte `json:"input"`
 	Seed    uint64 `json:"seed"`
 }
+type legacyWorkerResponse struct {
+	Version string              `json:"version"`
+	Outcome *workerOutcome      `json:"outcome,omitempty"`
+	Failure *SupervisionFailure `json:"failure,omitempty"`
+}
+
 type workerOutcome struct {
 	Outcome       string      `json:"outcome"`
 	ProfileID     string      `json:"profile_id"`
@@ -77,9 +95,11 @@ type workerOutcome struct {
 	Communities   []Community `json:"communities"`
 }
 type workerResponse struct {
-	Version string              `json:"version"`
-	Outcome *workerOutcome      `json:"outcome,omitempty"`
-	Failure *SupervisionFailure `json:"failure,omitempty"`
+	Version string                        `json:"version"`
+	Outcome *workerOutcome                `json:"outcome,omitempty"`
+	Failure *SupervisionFailure           `json:"failure,omitempty"`
+	Report  []byte                        `json:"report,omitempty"`
+	Bundle  *checkedBundleResponsePrivate `json:"checked_bundle,omitempty"`
 }
 
 func failure(code SupervisionCode, err error) *SupervisionFailure {
@@ -118,8 +138,36 @@ func RunPrivateWorker(args []string, stdin io.Reader, stdout, stderr io.Writer) 
 	if len(args) != 1 || args[0] != workerArgument {
 		return false, 0
 	}
+	// Bound the outer request bytes before parsing can allocate JSON/base64 state.
+	raw, readErr := io.ReadAll(io.LimitReader(stdin, MaxWorkerInputBytes+1))
 	var request workerRequest
-	if err := strictDecode(stdin, MaxWorkerInputBytes, &request); err != nil || request.Version != workerVersion {
+	decodeErr := readErr
+	if decodeErr == nil && int64(len(raw)) <= MaxWorkerInputBytes {
+		var header struct {
+			Version string `json:"version"`
+		}
+		decodeErr = json.Unmarshal(raw, &header)
+		if decodeErr == nil && header.Version == workerVersion {
+			var legacy legacyWorkerRequest
+			decodeErr = strictDecode(bytes.NewReader(raw), MaxWorkerInputBytes, &legacy)
+			request = workerRequest{Version: legacy.Version, Input: legacy.Input, Seed: legacy.Seed}
+		} else if decodeErr == nil {
+			// Header selection is not admission: selected typed requests must
+			// retain duplicate-free raw object keys before decoding loses them.
+			if header.Version == bundleWorkerVersionPrivate {
+				decodeErr = strictjson.RejectDuplicates(raw)
+			}
+			if decodeErr == nil {
+				decodeErr = strictDecode(bytes.NewReader(raw), MaxWorkerInputBytes, &request)
+			}
+		}
+	} else if decodeErr == nil {
+		decodeErr = errors.New("worker input limit exceeded")
+	}
+	if decodeErr == nil && request.Version == bundleWorkerVersionPrivate {
+		return true, writeWorkerResponse(stdout, executeBundleWorkerPrivate(request))
+	}
+	if decodeErr != nil || request.Version != workerVersion || request.BundleExpected != nil {
 		return true, writeWorkerResponse(stdout, workerResponse{Version: workerVersion, Failure: failure(CodeInternalAdmission, fmt.Errorf("invalid worker request"))})
 	}
 	out, failed := Compute(request.Input, request.Seed)
@@ -153,6 +201,11 @@ func ComputeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 		ctx = context.Background()
 	}
 	return computeSupervised(ctx, input, seed)
+}
+
+func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome, SupervisionObservation, *SupervisionFailure) {
+	result, observation, failed := supervisePrivateWorker(ctx, workerRequest{Version: workerVersion, Input: input, Seed: seed})
+	return result.legacy, observation, failed
 }
 
 func reconstruct(input []byte, expectedSeed uint64, wire *workerOutcome) (Outcome, *SupervisionFailure) {
