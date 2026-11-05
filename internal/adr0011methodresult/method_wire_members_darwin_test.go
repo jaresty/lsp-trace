@@ -68,7 +68,7 @@ func TestADR0011ManagedMethodWireMembers(t *testing.T) {
 				if item.Ordinal != ordinal || item.Kind != tc.kind || item.URI != "file:///w/a.go" {
 					t.Fatalf("ASSERT_ADR0011_MANAGED_MEMBER_ORDINAL: case=%s ordinal=%d item=%+v", tc.name, ordinal, item)
 				}
-				if tc.kind == LocationLink && (item.Range.Start != (Position{2, 1}) || item.TargetRange == nil || item.TargetRange.Start != (Position{1, 0}) || item.OriginSelectionRange == nil || item.OriginSelectionRange.Start != (Position{0, 1})) {
+				if tc.kind == LocationLink && (item.Range.Start != (Position{Line: 2, Character: 1}) || item.TargetRange == nil || item.TargetRange.Start != (Position{Line: 1, Character: 0}) || item.OriginSelectionRange == nil || item.OriginSelectionRange.Start != (Position{Line: 0, Character: 1})) {
 					t.Fatalf("ASSERT_ADR0011_MANAGED_LINK_RANGES: case=%s ordinal=%d item=%+v", tc.name, ordinal, item)
 				}
 			}

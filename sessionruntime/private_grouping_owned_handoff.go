@@ -12,9 +12,24 @@ import (
 	"unicode/utf8"
 
 	"lsp-trace/internal/adr0011querytarget"
+	"lsp-trace/internal/lspwire"
 )
 
 var ErrPrivateGroupingOwned = errors.New("private grouping owned handoff refused")
+
+// PrivateGroupingWireWithinDefaultEnvelope is read-only metadata for the private
+// prepaid operation. Transaction MaxBytes is a post-decode cumulative check, so
+// the reservation must also cover the reader's whole rejecting frame. Larger or
+// unknown reader configurations refuse rather than borrowing more funding.
+func (m *Manager) PrivateGroupingWireWithinDefaultEnvelope() bool {
+	if m == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d := lspwire.DefaultLimits()
+	return m.wire.MaxBodyBytes >= 0 && m.wire.MaxBodyBytes <= d.MaxBodyBytes && m.wire.MaxHeaderBytes >= 0 && m.wire.MaxHeaderBytes <= d.MaxHeaderBytes
+}
 
 // PrivateGroupingOwnedRequest selects methods, not authority. Revision remains a
 // caller assertion. This private entry neither starts a session nor grants one.

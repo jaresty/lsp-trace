@@ -13,7 +13,8 @@ func TestPrivateManagedGroupingExternalEntry(t *testing.T) {
 	if err != nil || len(result.Input.Contributions()) != 4 || len(result.Predecessors) != 4 {
 		t.Fatalf("ASSERT_PRIVATE_EXTERNAL_OWNED_ENTRY: %v", err)
 	}
-	if err := result.Replay(request.Root); err != nil {
+	_, replayRequest := methodresult.PrivateManagedGroupingFixtureForExternalTest(t, result)
+	if err := result.ReplayReserved(context.Background(), replayRequest.Operation); err != nil {
 		t.Fatalf("ASSERT_PRIVATE_EXTERNAL_NATIVE_REPLAY: %v", err)
 	}
 	// Copying even valid public snapshots loses the private issued originals.

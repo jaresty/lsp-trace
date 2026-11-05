@@ -72,10 +72,10 @@ func TestDefinitionShapesRetainOrdinalsAndRanges(t *testing.T) {
 				if item.Ordinal != i || item.Kind != tc.kind || item.URI != "file:///w/a.go" {
 					t.Fatalf("ASSERT_DEFINITION_ITEM_FIDELITY: %+v", item)
 				}
-				if item.Kind == Location && (item.Range.Start != (Position{1, 2}) || item.TargetRange != nil || item.OriginSelectionRange != nil) {
+				if item.Kind == Location && (item.Range.Start != (Position{Line: 1, Character: 2}) || item.TargetRange != nil || item.OriginSelectionRange != nil) {
 					t.Fatalf("ASSERT_LOCATION_RANGE: %+v", item)
 				}
-				if item.Kind == LocationLink && (item.Range.Start != (Position{2, 1}) || item.TargetRange == nil || item.TargetRange.Start != (Position{1, 0}) || item.OriginSelectionRange == nil || item.OriginSelectionRange.Start != (Position{0, 1})) {
+				if item.Kind == LocationLink && (item.Range.Start != (Position{Line: 2, Character: 1}) || item.TargetRange == nil || item.TargetRange.Start != (Position{Line: 1, Character: 0}) || item.OriginSelectionRange == nil || item.OriginSelectionRange.Start != (Position{Line: 0, Character: 1})) {
 					t.Fatalf("ASSERT_LINK_DISTINCT_RANGES: %+v", item)
 				}
 			}
@@ -94,7 +94,7 @@ func TestReferencesNullAndExactRepeatedLocations(t *testing.T) {
 			t.Fatalf("ASSERT_REFERENCES_SHAPE: raw=%s result=%+v failure=%v", tc.raw, got, failure)
 		}
 		for i, item := range got.Items {
-			if item.Ordinal != i || item.Kind != Location || item.Range.End != (Position{1, 5}) {
+			if item.Ordinal != i || item.Kind != Location || item.Range.End != (Position{Line: 1, Character: 5}) {
 				t.Fatalf("ASSERT_REFERENCE_OCCURRENCE_NOT_DEDUPED: %+v", item)
 			}
 		}
@@ -182,7 +182,7 @@ func TestUnknownExtensionCannotHideDuplicateKey(t *testing.T) {
 
 	valid := `{"uri":"file:///w/a.go","range":{"start":{"line":2147483647,"character":0},"end":{"line":2147483647,"character":0}},"extension":{"x":1}}`
 	got, failure = Parse(methodResult(t, transport.MethodDefinition, valid), 1)
-	if failure != nil || len(got.Items) != 1 || got.Items[0].Range.Start != (Position{2147483647, 0}) || got.Items[0].Range.End != got.Items[0].Range.Start {
+	if failure != nil || len(got.Items) != 1 || got.Items[0].Range.Start != (Position{Line: 2147483647, Character: 0}) || got.Items[0].Range.End != got.Items[0].Range.Start {
 		t.Fatalf("ASSERT_EMPTY_MAXIMUM_RANGE_PRESERVED: result=%+v failure=%+v", got, failure)
 	}
 }

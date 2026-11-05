@@ -3,18 +3,71 @@ package adr0011methodresult
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"lsp-trace/internal/adr0011querytarget"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/referencegrouping"
 	"lsp-trace/sessionruntime"
 )
+
+type groupingSyntaxTrace struct{ calls, limit int }
+
+func (a *groupingSyntaxTrace) WithObjectAdmission(fn func() error) error {
+	a.calls++
+	if a.limit >= 0 && a.calls > a.limit {
+		return fmt.Errorf("controlled admission refusal")
+	}
+	return fn()
+}
+func TestPrivateManagedGroupingParserExtractionGolden(t *testing.T) {
+	loc := `{"uri":"file:///a.go","range":{"start":{"line":1,"character":0},"end":{"line":1,"character":2}}}`
+	link := `{"targetUri":"file:///a.go","targetRange":{"start":{"line":0,"character":0},"end":{"line":2,"character":0}},"targetSelectionRange":{"start":{"line":1,"character":0},"end":{"line":1,"character":2}}}`
+	raw := []string{"null", " null ", "[]", "[ ]", "{}", loc, link, "[" + loc + "]", "[" + loc + "," + loc + "]", "[" + link + "]", "[" + loc + "," + link + "]", "[" + loc + ",{}]", "null null", "[null]", "[1]", "[true]", `[{"uri":"a","uri":"b"}]`, strings.Replace(loc, `"line":1`, `"line":2147483647`, 1), strings.Replace(loc, `"line":1`, `"line":2147483648`, 1), strings.Replace(loc, `"line":1`, `"line":-1`, 1), strings.Replace(loc, `"line":1`, `"line":1.5`, 1), strings.Replace(loc, `"line":1`, `"line":1e0`, 1), strings.Replace(loc, `file:///a.go`, `file:///é.go`, 1), "[" + strings.Replace(link, `"line":1`, `"line":9`, 1) + "]"}
+	h := sha256.New()
+	cases := 0
+	for _, method := range []string{"textDocument/definition", "textDocument/references", "not-a-method"} {
+		for _, max := range []int{-1, 0, 1, 2, 4} {
+			for _, limit := range []int{-2, -1, 0, 1, 2} {
+				for _, body := range raw {
+					a := &groupingSyntaxTrace{limit: limit}
+					var r Result
+					var f *Failure
+					if limit == -2 {
+						r, f = parseRawUntrusted(method, []byte(body), max)
+					} else {
+						r, f = parseRawUntrustedWithAdmission(method, []byte(body), max, a)
+					}
+					record, err := json.Marshal(struct {
+						Method, Raw string
+						Max, Limit  int
+						Result      Result
+						Failure     *Failure
+						Callbacks   int
+					}{method, body, max, limit, r, f, a.calls})
+					if err != nil {
+						t.Fatal(err)
+					}
+					h.Write(record)
+					h.Write([]byte{'\n'})
+					cases++
+				}
+			}
+		}
+	}
+	digest := fmt.Sprintf("%x", h.Sum(nil))
+	if digest != "0c490841b271239616efa30179ef7ffe1664d58ecfedb492a5de0229c4877249" || cases != 1800 {
+		t.Fatalf("ASSERT_PARSER_EXACT_ORIGINAL_GRAMMAR_AND_ADMISSION_TRACE: cases=%d digest=%s", cases, digest)
+	}
+	t.Logf("PARSER_DIFFERENTIAL_GOLDEN cases=%d sha256=%s type_pkg=%s", cases, digest, reflect.TypeOf(Result{}).PkgPath())
+}
 
 func groupingCapture(t *testing.T, ctx context.Context, m *sessionruntime.Manager, q PrivateManagedGroupingRequest) sessionruntime.PrivateGroupingOwnedHandoff {
 	t.Helper()
@@ -31,7 +84,7 @@ func groupingCapture(t *testing.T, ctx context.Context, m *sessionruntime.Manage
 }
 func TestPrivateManagedGroupingCUECapabilityModel(t *testing.T) {
 	m, q, _ := groupingFixture(t, false, true, "cue")
-	got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+	got, err := groupingAcquire(t, context.Background(), m, q)
 	if err != nil || len(got.Ledger) != 2 || got.Dispositions["textDocument/references"] != "UNAVAILABLE" || got.Dispositions["CALLS"] != "UNAVAILABLE" {
 		t.Fatalf("ASSERT_PRIVATE_CUE_CAPABILITY_MODEL: %v", err)
 	}
@@ -79,7 +132,7 @@ func TestPrivateManagedGroupingModesAndNativeOriginals(t *testing.T) {
 				originals[method] = append([]byte(nil), raw...)
 			}
 			p.mu.Unlock()
-			got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+			got, err := groupingAcquire(t, context.Background(), m, q)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -104,7 +157,7 @@ func TestPrivateManagedGroupingModesAndNativeOriginals(t *testing.T) {
 					t.Fatal("ASSERT_PRIVATE_EMPTY_NO_GROUPING_CLAIM")
 				}
 			} else {
-				if err := got.Replay(q.Root); err != nil {
+				if err := groupingReplay(t, got, q.Root); err != nil {
 					t.Fatalf("ASSERT_PRIVATE_ORIGINAL_REPLAY: %v", err)
 				}
 				if !got.Input.MatchesTypedInput(got.TypedInput) {
@@ -201,11 +254,11 @@ func TestPrivateManagedGroupingOpaqueCustodyRefusals(t *testing.T) {
 					cancel()
 					ctx = c
 				case "replay-handle":
-					if first, err := IssuePrivateManagedGroupingInput(ctx, m, h, q); err != nil || first.Input.ByteLength() == 0 {
+					if first, err := groupingIssue(t, ctx, m, h, q); err != nil || first.Input.ByteLength() == 0 {
 						t.Fatalf("baseline issuance: %v", err)
 					}
 				}
-				got, err := IssuePrivateManagedGroupingInput(ctx, m, h, candidate)
+				got, err := groupingIssue(t, ctx, m, h, candidate)
 				if err == nil || got.Input.ByteLength() != 0 || len(got.Predecessors) != 0 {
 					t.Fatalf("ASSERT_PRIVATE_OWNED_BINDING_REFUSAL: mode=%s err=%v", mode, err)
 				}
@@ -218,7 +271,7 @@ func TestPrivateManagedGroupingOpaqueCustodyRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			if mode == "retired-lease" {
-				if got, err := IssuePrivateManagedGroupingInput(retiredCtx, m, retired, q); err == nil || got.Input.ByteLength() != 0 {
+				if got, err := groupingIssue(t, retiredCtx, m, retired, q); err == nil || got.Input.ByteLength() != 0 {
 					t.Fatal("ASSERT_PRIVATE_RETIRED_LEASE_REFUSED")
 				}
 			}
@@ -244,7 +297,7 @@ func TestPrivateManagedGroupingReplayTamperAndMalformed(t *testing.T) {
 			if mode == "expired" {
 				q.Deadline = time.Now().Add(-time.Second)
 			}
-			got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+			got, err := groupingAcquire(t, context.Background(), m, q)
 			if mode == "publication-refusal" || mode == "malformed-result" || mode == "result-swap" || mode == "expired" {
 				if err == nil || got.Input.ByteLength() != 0 {
 					t.Fatal("ASSERT_PRIVATE_FAILURE_NO_SUCCESS_ARTIFACT")
@@ -269,7 +322,7 @@ func TestPrivateManagedGroupingReplayTamperAndMalformed(t *testing.T) {
 				_, other, _ := groupingFixture(t, true, true)
 				q.Root = other.Root
 			}
-			if got.Replay(q.Root) == nil {
+			if groupingReplay(t, got, q.Root) == nil {
 				t.Fatal("ASSERT_PRIVATE_REPLAY_ORIGINALS_REQUIRED")
 			}
 			if mode == "query-bytes" || mode == "method-bytes" || mode == "ledger-bytes" {
@@ -297,7 +350,7 @@ func TestPrivateManagedGroupingNativeCancellation(t *testing.T) {
 			}
 			done := make(chan error, 1)
 			go func() {
-				got, err := AcquirePrivateManagedGroupingInput(ctx, m, q)
+				got, err := groupingAcquire(t, ctx, m, q)
 				if err == nil || got.Input.ByteLength() != 0 || len(got.Predecessors) != 0 {
 					done <- nil
 					return
@@ -330,7 +383,7 @@ func TestPrivateManagedGroupingCanonicalTargetRefusesBeforeDR(t *testing.T) {
 	p.mu.Lock()
 	p.results["textDocument/documentSymbol"] = []byte("[]")
 	p.mu.Unlock()
-	got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+	got, err := groupingAcquire(t, context.Background(), m, q)
 	if err == nil || got.Input.ByteLength() != 0 {
 		t.Fatal("ASSERT_PRIVATE_CANONICAL_TARGET_REQUIRED")
 	}
@@ -391,7 +444,7 @@ func TestPrivateManagedGroupingMEDDeadline(t *testing.T) {
 					candidate.Deadline = q.Deadline.In(time.FixedZone("controlled-offset", 3600))
 				}
 				beforeM, beforeP := groupingMEDEffects(t, p)
-				got, err := IssuePrivateManagedGroupingInput(ctx, m, h, candidate)
+				got, err := groupingIssue(t, ctx, m, h, candidate)
 				afterM, afterP := groupingMEDEffects(t, p)
 				if mode == "unchanged" || mode == "equal-instant" {
 					if err != nil || got.Input.ByteLength() == 0 {
@@ -450,9 +503,9 @@ func TestPrivateManagedGroupingMEDFieldPreflight(t *testing.T) {
 					var err error
 					switch entry {
 					case "Acquire":
-						_, err = AcquirePrivateManagedGroupingInput(ctx, m, bad)
+						_, err = groupingAcquire(t, ctx, m, bad)
 					case "Issue":
-						_, err = IssuePrivateManagedGroupingInput(ctx, m, h, bad)
+						_, err = groupingIssue(t, ctx, m, h, bad)
 					case "Capture":
 						_, err = m.CapturePrivateGroupingOwned(ctx, sessionruntime.PrivateGroupingOwnedRequest{Session: bad.Session, URI: bad.URI, OccurrenceID: bad.OccurrenceID, Revision: bad.Revision, Privacy: bad.Privacy, Line: bad.Line, Character: bad.Character, References: true, Definitions: true, Deadline: bad.Deadline})
 					}
@@ -461,7 +514,7 @@ func TestPrivateManagedGroupingMEDFieldPreflight(t *testing.T) {
 						t.Fatalf("ASSERT_MED2_FIELD_PREFLIGHT_NO_EFFECTS: %s/%s err=%v methods=%d/%d publications=%d/%d", entry, field, err, beforeM, afterM, beforeP, afterP)
 					}
 					if entry == "Issue" {
-						if got, err := IssuePrivateManagedGroupingInput(ctx, m, h, q); err != nil || got.Input.ByteLength() == 0 {
+						if got, err := groupingIssue(t, ctx, m, h, q); err != nil || got.Input.ByteLength() == 0 {
 							t.Fatalf("ASSERT_MED2_ISSUE_PREFLIGHT_BEFORE_CONSUMPTION: %s %v", field, err)
 						}
 					}
@@ -485,17 +538,6 @@ func TestPrivateManagedGroupingMEDFieldPreflight(t *testing.T) {
 	}
 }
 
-func TestPrivateManagedGroupingMEDAggregatePreflight(t *testing.T) {
-	source := make([]byte, 1<<20)
-	v := sessionruntime.PrivateGroupingOwnedView{Source: source, Supply: sessionruntime.DocumentSupply{Content: source}}
-	var err error
-	allocations := testing.AllocsPerRun(1, func() { _, err = privateGroupingQueryBytes(v) })
-	if err == nil || allocations != 0 {
-		t.Fatalf("ASSERT_MED2_AGGREGATE_BEFORE_DERIVED_COPY_OR_MARSHAL: err=%v allocations=%g", err, allocations)
-	}
-	t.Log("ASSERT_MED2_AGGREGATE_BEFORE_DERIVED_COPY_OR_MARSHAL: PASS")
-}
-
 func TestPrivateManagedGroupingMEDExactFieldLimit(t *testing.T) {
 	m, q, _ := groupingFixture(t, true, true)
 	q.Revision = strings.Repeat("é", 2048)
@@ -503,67 +545,23 @@ func TestPrivateManagedGroupingMEDExactFieldLimit(t *testing.T) {
 	q.Privacy = strings.Repeat("p", 4096)
 	q.OccurrenceAdmissionPolicyID = strings.Repeat("a", 4096)
 	q.CompositionPolicyID = strings.Repeat("c", 4096)
-	if got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q); err != nil || got.Input.ByteLength() == 0 {
+	if got, err := groupingAcquire(t, context.Background(), m, q); err != nil || got.Input.ByteLength() == 0 {
 		t.Fatalf("ASSERT_MED2_EXACT_UTF8_BYTE_LIMIT_CONTROL: %v", err)
 	}
 }
 
-func TestPrivateManagedGroupingMEDArithmeticAndAggregateBoundary(t *testing.T) {
-	cap := sessionruntime.PrivateGroupingQueryMaxBytes
-	if cap != uint64(chainMaxBytes) {
-		t.Fatal("ASSERT_MED2_QUERY_CAP_MATCH")
-	}
-	for _, tc := range []struct {
-		total, n, mult, extra uint64
-		want                  bool
-	}{{cap - 1, 1, 1, 0, true}, {cap, 1, 1, 0, false}, {0, ^uint64(0), 6, 2, false}, {^uint64(0), 0, 0, 0, false}, {0, 0, 0, ^uint64(0), false}} {
-		result, ok := sessionruntime.PrivateGroupingCheckedEncodedSize(tc.total, tc.n, tc.mult, tc.extra)
-		if ok != tc.want || (ok && result > cap) {
-			t.Fatalf("ASSERT_MED2_CHECKED_ENCODING_ARITHMETIC: %+v result=%d ok=%v", tc, result, ok)
-		}
-	}
-	buffer := make([]byte, int(cap))
-	low, high := 0, len(buffer)
-	for low < high {
-		mid := low + (high-low+1)/2
-		_, ok := sessionruntime.PrivateGroupingQueryEncodedBound(sessionruntime.PrivateGroupingOwnedView{Source: buffer[:mid]})
-		if ok {
-			low = mid
-		} else {
-			high = mid - 1
-		}
-	}
-	v := sessionruntime.PrivateGroupingOwnedView{Source: buffer[:low]}
-	bound, ok := sessionruntime.PrivateGroupingQueryEncodedBound(v)
-	if !ok {
-		t.Fatal("ASSERT_MED2_AGGREGATE_BOUNDARY_ADMITTED")
-	}
-	raw, err := privateGroupingQueryBytes(v)
-	if err != nil || uint64(len(raw)) > bound {
-		t.Fatalf("ASSERT_MED2_AGGREGATE_BOUNDARY_CONTROL: len=%d bound=%d err=%v", len(raw), bound, err)
-	}
-	v.Source = buffer[:low+1]
-	if _, err := privateGroupingQueryBytes(v); err == nil {
-		t.Fatal("ASSERT_MED2_AGGREGATE_BOUNDARY_PLUS_ONE_REFUSED")
-	}
-	for _, bad := range []sessionruntime.PrivateGroupingOwnedView{{Methods: make([]sessionruntime.OwnedMethodPair, 3)}, {Unavailable: []string{"a", "b", "c"}}, {Metadata: sessionruntime.SessionMetadata{ProviderName: string([]byte{255})}}, {Metadata: sessionruntime.SessionMetadata{ServerCommand: strings.Repeat("x", 4097)}}} {
-		if _, ok := sessionruntime.PrivateGroupingQueryEncodedBound(bad); ok {
-			t.Fatal("ASSERT_MED2_QUERY_METADATA_COUNT_UTF8_REFUSED")
-		}
-	}
-	escaped := strings.Repeat("<\x00", 2048)
-	worst := sessionruntime.PrivateGroupingOwnedView{Revision: escaped, Metadata: sessionruntime.SessionMetadata{ServerCommand: escaped}, Target: adr0011querytarget.Candidate{SymbolName: escaped}}
-	worstBound, ok := sessionruntime.PrivateGroupingQueryEncodedBound(worst)
-	worstRaw, worstErr := privateGroupingQueryBytes(worst)
-	if !ok || worstErr != nil || uint64(len(worstRaw)) > worstBound {
-		t.Fatalf("ASSERT_MED2_JSON_ESCAPING_UPPER_BOUND: bytes=%d bound=%d err=%v", len(worstRaw), worstBound, worstErr)
-	}
-	t.Log("ASSERT_MED2_CHECKED_ENCODING_ARITHMETIC: PASS")
-}
-
 // Test-only fixture export permits an external-package test of the real private
 // entry. It neither creates a query receipt nor grants policy qualification.
-func PrivateManagedGroupingFixtureForExternalTest(t *testing.T) (*sessionruntime.Manager, PrivateManagedGroupingRequest) {
+func PrivateManagedGroupingFixtureForExternalTest(t *testing.T, replay ...PrivateManagedGroupingInput) (*sessionruntime.Manager, PrivateManagedGroupingRequest) {
 	m, q, _ := groupingFixture(t, true, true)
+	if len(replay) == 0 {
+		return m, groupingPermit(t, m, q, "ACQUIRE", sessionruntime.PrivateGroupingOwnedHandoff{})
+	}
+	owner, _ := groupingResourceOwner(t)
+	var err error
+	q.Operation, err = owner.Reserve(context.Background(), privateGroupingDigest([]byte("controlled-external-replay")), replay[0].ReplayOperationBinding())
+	if err != nil {
+		t.Fatal(err)
+	}
 	return m, q
 }

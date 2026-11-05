@@ -168,7 +168,7 @@ func TestPrivateManagedGroupingControlledBaseline(t *testing.T) {
 
 func TestPrivateManagedGroupingReceiptToTypedInput(t *testing.T) {
 	m, q, _ := groupingFixture(t, true, true)
-	got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+	got, err := groupingAcquire(t, context.Background(), m, q)
 	if err != nil || len(got.Input.Contributions()) != 4 {
 		t.Fatalf("ASSERT_PRIVATE_OWNED_RECEIPT_TO_TYPED_INPUT: err=%v contributions=%d", err, len(got.Input.Contributions()))
 	}

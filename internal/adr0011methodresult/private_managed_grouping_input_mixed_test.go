@@ -56,7 +56,7 @@ func TestPrivateManagedGroupingMixedZeroMethodsRefusesWithoutDroppingCalls(t *te
 	m, q, _ := groupingFixture(t, false, false)
 	q.Calls = calls
 	q.Kinds = append(q.Kinds, programcadmission.TypedCalls)
-	got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+	got, err := groupingAcquire(t, context.Background(), m, q)
 	if err == nil || got.Input.ByteLength() != 0 {
 		t.Fatal("ASSERT_PRIVATE_MIXED_ZERO_METHODS_NOT_SILENTLY_DROPPED")
 	}
@@ -67,7 +67,7 @@ func TestPrivateManagedGroupingMixedExistingCalls(t *testing.T) {
 	m, q, _ := groupingFixture(t, true, true)
 	q.Calls = calls
 	q.Kinds = append(q.Kinds, programcadmission.TypedCalls)
-	got, err := AcquirePrivateManagedGroupingInput(context.Background(), m, q)
+	got, err := groupingAcquire(t, context.Background(), m, q)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestPrivateManagedGroupingMixedExistingCalls(t *testing.T) {
 			t.Fatal("ASSERT_PRIVATE_MIXED_NO_CALLS_RELABEL")
 		}
 	}
-	if err := got.Replay(q.Root); err != nil {
+	if err := groupingReplay(t, got, q.Root); err != nil {
 		t.Fatal(err)
 	}
 	t.Log("ASSERT_PRIVATE_MIXED_ORIGINAL_CALLS_BYTES: PASS")
