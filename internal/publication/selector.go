@@ -464,7 +464,25 @@ func writeAll(w io.Writer, data []byte) error {
 	return nil
 }
 
-func readPublished(parent *os.Root, name string) ([]byte, error) {
+// publishedReadLimit admits a one-byte mismatch sentinel before any file is opened.
+func publishedReadLimit(expectedLen uint64) (int64, error) {
+	maxInt := uint64(^uint(0) >> 1)
+	if expectedLen >= maxInt || expectedLen >= uint64(1<<63-1) {
+		return 0, errors.New("published reread length is not representable")
+	}
+	return int64(expectedLen + 1), nil
+}
+
+// readPublishedBytes bounds actual reader consumption, not just the returned slice.
+func readPublishedBytes(reader io.Reader, limit int64) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(reader, limit))
+}
+
+func readPublished(parent *os.Root, name string, expectedLen uint64) ([]byte, error) {
+	limit, err := publishedReadLimit(expectedLen)
+	if err != nil {
+		return nil, err
+	}
 	file, err := parent.Open(name)
 	if err != nil {
 		return nil, err
@@ -477,7 +495,7 @@ func readPublished(parent *os.Root, name string) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("published target is not a regular file")
 	}
-	return io.ReadAll(file)
+	return readPublishedBytes(file, limit)
 }
 
 func createTemporarySibling(parent *os.Root) (*os.File, string, error) {
@@ -570,7 +588,7 @@ func (p *Publisher) Publish(req Request) Result {
 	tracePublication(req, "NO_REPLACE", "HARD_LINK_INSTALLED", true)
 	cleanup = target.parent.Remove(tmpName) == nil
 	_ = cleanup // post-install cleanup cannot change the committed outcome
-	persisted, err := readPublished(target.parent, target.name)
+	persisted, err := readPublished(target.parent, target.name, uint64(len(req.Bytes)))
 	if err != nil {
 		tracePublication(req, "REREAD_EQUAL", "REREAD_FAILED", false)
 		tracePublication(req, "EXIT", "REREAD_FAILED", false)
