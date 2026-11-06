@@ -21,6 +21,8 @@ type recordReplay struct {
 	err    error
 	ctx    *replayContext
 	visits map[string]int
+	// Closed constructor normalization; nil for all ordinary validation replay.
+	privateNormalize func(*runner, string, string, string, any) (RequestRecord, error)
 }
 type replayContext struct {
 	context.Context
@@ -167,6 +169,14 @@ func (p *recordReplay) invoke(c *runner, target, method, id string, params any) 
 		return p.fail("missing request for %s %s", target, method)
 	}
 	rec := p.source.Requests[p.next]
+	if p.privateNormalize != nil {
+		var err error
+		rec, err = p.privateNormalize(c, target, method, id, params)
+		if err != nil {
+			p.err = fmt.Errorf("private actual-record normalization: %w", err)
+			return p.fail("private actual-record normalization")
+		}
+	}
 	if rec.TargetID != target || rec.Method != method || rec.NodeID != id || rec.Context != c.result.Request.Context || rec.Before != c.result.Usage {
 		return p.fail("request %s owner/operation/pre-usage mismatch", rec.ID)
 	}

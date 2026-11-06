@@ -190,6 +190,9 @@ type sessionLeaseToken struct {
 	session    *runtimeSession
 	generation uint64
 	nonce      uint64
+	// A bounded native evidence take owns protocol exclusion until this
+	// existing lease callback actually returns, including after cancellation.
+	directionalTaken bool
 }
 
 type StartRequest struct {
@@ -2366,6 +2369,9 @@ func (m *Manager) WithReadySessionLease(ctx context.Context, req SessionLeaseReq
 	defer func() {
 		m.mu.Lock()
 		if r.leaseCount == 1 && token.manager == m && token.session == r && token.generation == r.record.Generation {
+			if token.directionalTaken {
+				r.protocolOwned = false
+			}
 			r.leaseToken, r.leaseCancel = nil, nil
 			r.leaseNonce++
 			r.leaseClosing = false

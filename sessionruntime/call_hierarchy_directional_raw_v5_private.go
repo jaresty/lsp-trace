@@ -229,7 +229,7 @@ func (m *Manager) prepareDirectionalItemPrivate(ctx context.Context, req Directi
 		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, err
 	}
 	observed, lease := m.RoundTripDirectionalPrivate(reservation.Context(ctx), RoundTripRequest{SessionID: req.SessionID, Generation: req.Generation, Method: "textDocument/prepareCallHierarchy", Params: raw, Deadline: req.Deadline, MaxMessages: req.MaxMessages, MaxBytes: req.MaxBytes})
-	clear(raw)
+	defer clear(raw)
 	if observed.Failure != "" {
 		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New(string(observed.Failure))
 	}
@@ -253,6 +253,9 @@ func (m *Manager) prepareDirectionalItemPrivate(ctx context.Context, req Directi
 	var same lsp.CallHierarchyItem
 	if err := selected.DecodePrivate(&same); err != nil || same.URI != items[0].URI || same.Name != items[0].Name {
 		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("prepared semantic identity unavailable")
+	}
+	if err := detachDirectionalEvidencePrivateV2(ctx, "textDocument/prepareCallHierarchy", raw, lease, []directionalraw.Observation{selected.Observation()}); err != nil {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, err
 	}
 	return items[0], selected, nil
 }
@@ -363,6 +366,9 @@ func (m *Manager) executeDirectionalCallPrivate(ctx context.Context, req Directi
 	if observed.ServerError != nil {
 		return receipt, isNull, fmt.Errorf("rpc %d: %s", observed.ServerError.Code, observed.ServerError.Message)
 	}
+	if err := detachDirectionalEvidencePrivateV2(ctx, method, raw, lease, observations); err != nil {
+		return receipt, isNull, err
+	}
 	return receipt, isNull, nil
 }
 
@@ -398,12 +404,24 @@ func (m *Manager) ExecuteCallHierarchyDirectionsPrivate(ctx context.Context, req
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
-	document := m.PrepareDocument(ctx, DocumentRequest{SessionID: req.SessionID, Generation: req.Generation, URI: req.URI, LanguageID: req.LanguageID})
+	companion, _ := ctx.Value(privateDirectionalEvidenceKeyV2{}).(*privateDirectionalEvidenceV2)
+	document := m.PrepareDocument(ctx, DocumentRequest{SessionID: req.SessionID, Generation: req.Generation, URI: req.URI, LanguageID: req.LanguageID, CaptureSupply: companion != nil, PreparedNoFollow: companion != nil})
 	if document.Failure != "" {
 		result.Failure = document.Failure
 		return result, errors.New(string(document.Failure))
 	}
+	if companion != nil {
+		if document.Supply == nil || len(document.Supply.Content) > 16<<10 || len(document.Supply.Params) > PrivateDirectionalEvidenceMaxBytesV2 {
+			return result, ErrPrivateDirectionalEvidenceV2
+		}
+		companion.view.Supply = *document.Supply
+		companion.view.Supply.Content = append([]byte(nil), document.Supply.Content...)
+		companion.view.Supply.Params = append(json.RawMessage(nil), document.Supply.Params...)
+	}
 	reservation := directionalraw.NewReservation(fmt.Sprintf("directions:%s:%d:%d", req.SessionID, req.Generation, time.Now().UnixNano()))
+	if companion != nil {
+		companion.view.OperationID = reservation.IdentityPrivate()
+	}
 	defer func() { finalizeDirectionalReservationPrivate(reservation, &result, &err) }()
 	item, selected, err := m.prepareDirectionalItemPrivate(ctx, req, reservation)
 	if err != nil {
