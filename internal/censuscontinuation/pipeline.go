@@ -58,16 +58,19 @@ const StatusPaused ContinuationStatus = "PAUSED"
 func (s StopAfter) valid() bool { return s == "" || s == StopAfterDescribeRequests }
 
 type Request struct {
-	Handoff      CommittedHandoff
-	Workspace    string
-	Contract     ContinuationContract
-	Worker       Worker
-	WorkerV2     WorkerV2
-	Store        Store
-	FreshCapture *FreshCaptureDependencies
-	StopAfter    StopAfter
+	// PrivateAllMode is exclusive with the legacy CALLS handoff.
+	PrivateAllMode *PrivateAllModeHandoff `json:"private_all_mode,omitempty"`
+	Handoff        CommittedHandoff
+	Workspace      string
+	Contract       ContinuationContract
+	Worker         Worker
+	WorkerV2       WorkerV2
+	Store          Store
+	FreshCapture   *FreshCaptureDependencies
+	StopAfter      StopAfter
 }
 type ResumeRequest struct {
+	PrivateAllMode        *PrivateAllModeResume `json:"private_all_mode,omitempty"`
 	Selector              string
 	Workspace             string
 	UseCommittedWorkspace bool
@@ -113,6 +116,7 @@ func preconditionCause(code string) PreconditionCause {
 }
 
 type Result struct {
+	PrivateAllMode           *PrivateAllModeResult `json:"private_all_mode,omitempty"`
 	Status                   ContinuationStatus
 	CensusID                 string
 	HandoffID                string
@@ -247,6 +251,9 @@ type pipelineState struct {
 func Run(ctx context.Context, req Request) Result { return runWithHooks(ctx, req, nil) }
 
 func runWithHooks(ctx context.Context, req Request, hook stageHook) Result {
+	if req.PrivateAllMode != nil {
+		return runPrivateAllMode(ctx, req)
+	}
 	if err := req.Handoff.Validate(); err != nil {
 		return preconditionFailure(req, "HANDOFF_VALIDATE")
 	}
@@ -428,6 +435,9 @@ func preconditionFailure(req Request, code string) Result {
 func Resume(ctx context.Context, req ResumeRequest) Result { return resumeWithHooks(ctx, req, nil) }
 
 func resumeWithHooks(ctx context.Context, req ResumeRequest, hook stageHook) Result {
+	if req.PrivateAllMode != nil {
+		return resumePrivateAllMode(ctx, req)
+	}
 	if req.Store == nil || !validDigest(req.Selector) || !req.StopAfter.valid() {
 		return Result{Err: errors.New("invalid resume request")}
 	}
