@@ -25,6 +25,8 @@ type PrivateDirectionalRequestObservationV2 struct {
 	Method                string
 	RequestID, Generation uint64
 	Params, Result        json.RawMessage
+	RequestFrame          []byte
+	ResponseFrames        [][]byte
 	Wire                  directionalraw.CompletionMetadataPrivate
 	Observations          []directionalraw.Observation
 }
@@ -109,11 +111,15 @@ func detachDirectionalEvidencePrivateV2(ctx context.Context, method string, para
 	if !ok || meta.ResultLengthPrivate == 0 || meta.ResultLengthPrivate > PrivateDirectionalEvidenceMaxBytesV2 || len(params) > PrivateDirectionalEvidenceMaxBytesV2 || len(c.view.Requests) >= 3 || len(observations) > 1024 {
 		return ErrPrivateDirectionalEvidenceV2
 	}
+	requestFrame, responseFrames, ok := lease.CompletedFramesPrivate(meta.RequestIDPrivate, meta.GenerationPrivate, 2*PrivateDirectionalEvidenceMaxBytesV2, c.view.Request.MaxMessages)
+	if !ok {
+		return ErrPrivateDirectionalEvidenceV2
+	}
 	raw, err := io.ReadAll(io.LimitReader(lease.ReaderPrivate(), int64(meta.ResultLengthPrivate)+1))
 	if err != nil || uint64(len(raw)) != meta.ResultLengthPrivate {
 		return ErrPrivateDirectionalEvidenceV2
 	}
-	c.view.Requests = append(c.view.Requests, PrivateDirectionalRequestObservationV2{Ordinal: len(c.view.Requests), Method: method, RequestID: meta.RequestIDPrivate, Generation: meta.GenerationPrivate, Params: append(json.RawMessage(nil), params...), Result: raw, Wire: meta, Observations: append([]directionalraw.Observation(nil), observations...)})
+	c.view.Requests = append(c.view.Requests, PrivateDirectionalRequestObservationV2{Ordinal: len(c.view.Requests), Method: method, RequestID: meta.RequestIDPrivate, Generation: meta.GenerationPrivate, Params: append(json.RawMessage(nil), params...), Result: raw, RequestFrame: requestFrame, ResponseFrames: responseFrames, Wire: meta, Observations: append([]directionalraw.Observation(nil), observations...)})
 	return nil
 }
 

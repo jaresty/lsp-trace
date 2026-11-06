@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -372,30 +371,10 @@ func TestSessionLeaseExactPoisonCancelsActiveRoundTripOnce(t *testing.T) {
 }
 
 func TestSessionLeaseSourceGuardsAllSessionMapMutations(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("source location unavailable")
+	if err := sessionMapSourceGuard(sessionMapGuardSource(t)); err != nil {
+		t.Fatalf("ASSERT_SESSION_MAP_REVIEWED_PROTECTIONS: %v", err)
 	}
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(file), "sessionruntime.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(source)
-	if got := strings.Count(text, "m.sessions[id] = r"); got != 2 {
-		t.Fatalf("session map assignments changed: %d", got)
-	}
-	if got := strings.Count(text, "delete(m.sessions, operation.SessionID)"); got != 1 {
-		t.Fatalf("session map deletions changed: %d", got)
-	}
-	for _, guard := range []string{
-		"if current := m.sessions[id]; current != nil",
-		"if m.sessions[id] != nil || len(m.sessions) >= m.limits.MaxSessions",
-		"if m.closed || r.leaseCount != 0 || (r.protocolOwned && !r.lifecycleOwned)",
-	} {
-		if !strings.Contains(text, guard) {
-			t.Fatalf("missing lease mutation guard %q", guard)
-		}
-	}
+	t.Log("ASSERT_SESSION_MAP_REVIEWED_PROTECTIONS: PASS; three installs and two removals, reviewed ownership protections")
 }
 
 func TestSessionLeaseLifecycleConflictAndShutdownCancellation(t *testing.T) {

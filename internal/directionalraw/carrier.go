@@ -340,7 +340,42 @@ func (r *resultReader) Read(dst []byte) (int, error) {
 // Reads into caller-owned decoder scratch are not retained raw custody copies.
 func (l Lease) ReaderPrivate() io.Reader { return &resultReader{record: l.record} }
 
-// CompletedMetadataPrivate authenticates retained bytes without copying or
+// CompletedFramesPrivate detaches immutable originals only from this live,
+// completed record. The caller supplies an admitted cumulative bound BEFORE any
+// slice allocation/copy. Responses retain read order, including pre-completion
+// server messages; the last is the completion frame. No authority is minted.
+func (l Lease) CompletedFramesPrivate(id, generation uint64, maxBytes, maxFrames int) ([]byte, [][]byte, bool) {
+	if l.record == nil || maxBytes <= 0 || maxBytes > 131072 || maxFrames < 1 || maxFrames > 32 {
+		return nil, nil, false
+	}
+	p := l.record
+	s := p.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || !p.complete || p.failure != "" || p.id != id || p.generation != generation || len(p.frames) < 2 || len(p.frames)-1 > maxFrames {
+		return nil, nil, false
+	}
+	request, response := p.frames["request-frame"], p.frames["response-frame"]
+	if len(request) == 0 || len(response) == 0 || len(request) > 65536 || len(response) > 65536 || len(request) > maxBytes || len(response) > maxBytes-len(request) {
+		return nil, nil, false
+	}
+	total := len(request) + len(response)
+	for i := 2; i < len(p.frames); i++ {
+		b, ok := p.frames["external-frame-"+fmt.Sprint(i)]
+		if !ok || len(b) == 0 || len(b) > 65536 || len(b) > maxBytes-total {
+			return nil, nil, false
+		}
+		total += len(b)
+	}
+	responses := make([][]byte, 0, len(p.frames)-1)
+	for i := 2; i < len(p.frames); i++ {
+		responses = append(responses, append([]byte(nil), p.frames["external-frame-"+fmt.Sprint(i)]...))
+	}
+	responses = append(responses, append([]byte(nil), response...))
+	return append([]byte(nil), request...), responses, true
+}
+
+// CompletedMetadataPrivate commits retained bytes without copying or
 // exposing them. All digests are computed while the reservation remains live.
 func (l Lease) CompletedMetadataPrivate() (CompletionMetadataPrivate, bool) {
 	if l.record == nil {

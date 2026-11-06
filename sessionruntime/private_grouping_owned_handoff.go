@@ -71,13 +71,26 @@ type PrivateGroupingOwnedView struct {
 // the ordinary bounded native transaction machinery, without enabling C16/C17
 // public flags or accepting a caller-owned result as custody.
 func (m *Manager) CapturePrivateGroupingOwned(ctx context.Context, req PrivateGroupingOwnedRequest) (PrivateGroupingOwnedHandoff, error) {
+	return m.capturePrivateGroupingOwned(ctx, req, false)
+}
+
+// CapturePrivateGroupingQueryOwned performs genuine query/source selection for
+// CALLS-only input, without inventing a references or definition request.
+func (m *Manager) CapturePrivateGroupingQueryOwned(ctx context.Context, req PrivateGroupingOwnedRequest) (PrivateGroupingOwnedHandoff, error) {
+	if req.References || req.Definitions {
+		return PrivateGroupingOwnedHandoff{}, ErrPrivateGroupingOwned
+	}
+	return m.capturePrivateGroupingOwned(ctx, req, true)
+}
+
+func (m *Manager) capturePrivateGroupingOwned(ctx context.Context, req PrivateGroupingOwnedRequest, queryOnly bool) (PrivateGroupingOwnedHandoff, error) {
 	fail := func() (PrivateGroupingOwnedHandoff, error) {
 		return PrivateGroupingOwnedHandoff{}, ErrPrivateGroupingOwned
 	}
 	if !privateGroupingOwnedRequestFieldsValid(req) {
 		return fail()
 	}
-	if m == nil || ctx == nil || req.URI == "" || req.OccurrenceID == "" || req.Revision == "" || strings.TrimSpace(req.Revision) != req.Revision || req.Privacy == "" || (!req.References && !req.Definitions) || req.Deadline.IsZero() || !time.Now().Before(req.Deadline) || req.Deadline.After(time.Now().Add(15*time.Second)) {
+	if m == nil || ctx == nil || req.URI == "" || req.OccurrenceID == "" || req.Revision == "" || strings.TrimSpace(req.Revision) != req.Revision || req.Privacy == "" || (!req.References && !req.Definitions && !queryOnly) || req.Deadline.IsZero() || !time.Now().Before(req.Deadline) || req.Deadline.After(time.Now().Add(15*time.Second)) {
 		return fail()
 	}
 	envelope, ok := m.PrivateGroupingResourceEnvelope()
@@ -190,7 +203,10 @@ func (m *Manager) ConsumePrivateGroupingOwned(ctx context.Context, h PrivateGrou
 	m.mu.Lock()
 	r := m.sessions[c.request.Session.SessionID]
 	token, _ := ctx.Value(sessionLeaseContextKey{}).(*sessionLeaseToken)
-	valid := c.manager == m && !c.consumed && c.token != nil && token == c.token && r != nil && r.record.Generation == c.request.Session.Generation && m.validSessionLeaseLocked(ctx, r) && !r.protocolOwned && !r.lifecycleOwned && ctx.Err() == nil && time.Now().Before(c.request.Deadline)
+	// Only TAKE on this exact active lease can lend existing exclusion. The
+	// token is opaque Manager custody, not a caller-authored ownership flag.
+	borrowed := r != nil && token != nil && token == c.token && token.directionalTaken && r.protocolOwned && m.directionalContextPrivateV2(ctx, r, c.request.Deadline)
+	valid := c.manager == m && !c.consumed && c.token != nil && token == c.token && r != nil && r.record.Generation == c.request.Session.Generation && m.validSessionLeaseLocked(ctx, r) && (!r.protocolOwned || borrowed) && !r.lifecycleOwned && ctx.Err() == nil && time.Now().Before(c.request.Deadline)
 	if valid {
 		_, valid = PrivateGroupingQueryEncodedBound(c.view)
 	}
@@ -210,7 +226,13 @@ func (m *Manager) ConsumePrivateGroupingOwned(ctx context.Context, h PrivateGrou
 	c.consumed = true
 	r.protocolOwned = true
 	m.mu.Unlock()
-	defer func() { m.mu.Lock(); r.protocolOwned = false; m.mu.Unlock() }()
+	defer func() {
+		if !borrowed {
+			m.mu.Lock()
+			r.protocolOwned = false
+			m.mu.Unlock()
+		}
+	}()
 	// The consumer gets independent copies, never the retained backing slices.
 	view := c.view
 	view.Source = append([]byte(nil), view.Source...)

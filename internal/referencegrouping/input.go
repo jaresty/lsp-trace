@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"lsp-trace/internal/programcadmission"
+	"lsp-trace/internal/programccompose"
 )
 
 const (
@@ -478,6 +479,7 @@ func validateRequest(req InputRequest, occurrences []programcadmission.TypedOccu
 }
 func predecessorContract(role string) (string, string, bool) {
 	contracts := map[string][2]string{
+		"NATIVE_EVIDENCE":   {"calls/native-evidence.json", PrivateNativeEvidenceSchemaV2},
 		"OCCURRENCE_LEDGER": {"ledgers/occurrences.json", "lsp-trace.private.program-c-occurrence-ledger.v1"}, "ACQUISITION_RECEIPT": {"calls/acquisition.json", "lsp-trace.private.program-c-acquisition-receipt.v1"}, "RETAINED_COMPOSITE": {"calls/composite.json", "lsp-trace.private.program-c-composite.v1"}, "METHOD_QUERY": {"methods/query.json", "lsp-trace.private.program-c-method-query.v0"}, "METHOD_EVIDENCE": {"methods/evidence.json", programcadmission.MethodEvidenceFamily}, "METHOD_MAPPING_RECEIPT": {"methods/mapping-receipt.json", "lsp-trace.private.program-c-method-mapping-receipt.v1"},
 	}
 	contract, ok := contracts[role]
@@ -491,6 +493,12 @@ func validateRequiredPredecessors(selectors map[string]string, occurrences []pro
 		} else {
 			required["METHOD_QUERY"], required["METHOD_EVIDENCE"], required["METHOD_MAPPING_RECEIPT"] = true, true, true
 		}
+	}
+	if selectors["NATIVE_EVIDENCE"] != "" {
+		if !required["RETAINED_COMPOSITE"] {
+			return errors.New("native proof without calls")
+		}
+		required["NATIVE_EVIDENCE"] = true
 	}
 	if len(selectors) != len(required) {
 		return errors.New("predecessor set mismatch")
@@ -911,6 +919,20 @@ type admittedMethodMappingReceipt struct {
 func replaySuppliedPredecessors(d document, supplied map[string]PredecessorRecord) error {
 	replayed := make([]programcadmission.TypedOccurrence, 0, len(d.Contributions))
 	if composite, ok := supplied["calls/composite.json"]; ok {
+		shape, err := programccompose.Validate(composite.Bytes)
+		if err != nil {
+			return err
+		}
+		proof, present := supplied["calls/native-evidence.json"]
+		native := shape.Compatibility.AcquisitionSemantics == "ONE_ACTUAL_DIRECTIONAL_INVOCATION_TWO_VALIDATED_VIEWS"
+		if native != present {
+			return errors.New("native proof path mismatch")
+		}
+		if native {
+			if err := ReplayPrivateNativeEvidenceV2(proof.Bytes, composite.Bytes); err != nil {
+				return err
+			}
+		}
 		admitted, err := programcadmission.Admit(composite.Bytes)
 		if err != nil {
 			return errors.New("invalid retained composite")

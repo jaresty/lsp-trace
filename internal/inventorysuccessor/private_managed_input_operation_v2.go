@@ -457,7 +457,8 @@ type PrivateManagedGroupingRequest struct {
 	// Optional already-admitted CALLS; never relabeled from D/R or constructed here.
 	Calls programcadmission.CompositeProjectionAdmission
 	// Operation is confirmed existing-kernel expenditure authority, not source custody.
-	Operation PrivateManagedInputOperationV2
+	Operation   PrivateManagedInputOperationV2
+	nativeProof []byte // only the fixed mixed producer fills this; never a public admission DTO
 }
 
 // PrivateManagedGroupingOperationBinding constructs a typed expenditure request,
@@ -585,7 +586,7 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 		}
 		out, err = privateGroupingBuild(v, q, queryOriginal)
 		if err != nil {
-			return err
+			return fmt.Errorf("private grouping build: %w", err)
 		}
 		if len(out.Ledger) == 0 {
 			return nil
@@ -855,7 +856,18 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 		// The unchanged typed boundary rejects selected zero-occurrence method
 		// families. Do not silently discard a separately supplied CALLS input.
 		if selected[programcadmission.TypedCalls] {
-			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
+			if len(q.nativeProof) == 0 || len(q.Kinds) != 1 {
+				return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
+			}
+			typed, err := programcadmission.PrepareTypedInput(programcadmission.TypedInputRequest{Kinds: q.Kinds, Calls: q.Calls})
+			if err != nil {
+				return PrivateManagedGroupingInput{}, err
+			}
+			out.TypedInput = typed
+			for _, o := range typed.Occurrences {
+				out.Ledger = append(out.Ledger, PrivateManagedGroupingOccurrence{o.Identity, string(o.Kind), o.From, o.To, o.Ordinal})
+			}
+			return privateGroupingAssemble(out, query, programcadmission.MethodProjectionAdmission{}, q)
 		}
 		return out, nil
 	}
@@ -958,6 +970,9 @@ func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, meth
 		return PrivateManagedGroupingInput{}, err
 	}
 	out.Predecessors = []referencegrouping.PredecessorRecord{{Role: "METHOD_QUERY", Selector: "methods/query.json", Schema: "lsp-trace.private.program-c-method-query.v0", Bytes: query}, {Role: "METHOD_EVIDENCE", Selector: "methods/evidence.json", Schema: programcadmission.MethodEvidenceFamily, Bytes: methods.CanonicalBytes()}, {Role: "METHOD_MAPPING_RECEIPT", Selector: "methods/mapping-receipt.json", Schema: "lsp-trace.private.program-c-method-mapping-receipt.v1", Bytes: mapped}, {Role: "OCCURRENCE_LEDGER", Selector: "ledgers/occurrences.json", Schema: "lsp-trace.private.program-c-occurrence-ledger.v1", Bytes: ledger}}
+	if len(methodRows) == 0 {
+		out.Predecessors = out.Predecessors[3:]
+	}
 	projection, err := programcadmission.PreparePrivateLeidenProjection(out.TypedInput)
 	if err != nil {
 		return PrivateManagedGroupingInput{}, err
@@ -969,7 +984,7 @@ func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, meth
 		// and scalar envelope fields. Check before cloning/marshalling metadata.
 		bindingBound, ok := sessionruntime.PrivateGroupingCheckedEncodedSize(16<<10, uint64(len(retained)), 6, 0)
 		if !ok {
-			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
+			return PrivateManagedGroupingInput{}, fmt.Errorf("%w: composite binding bound bytes=%d", ErrPrivateManagedGrouping, len(retained))
 		}
 		binding, err := privateGroupingJSON(projection.CompositeSourceBinding(), bindingBound)
 		if err != nil {
@@ -977,10 +992,48 @@ func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, meth
 		}
 		out.Predecessors = append(out.Predecessors, referencegrouping.PredecessorRecord{Role: "RETAINED_COMPOSITE", Selector: "calls/composite.json", Schema: "lsp-trace.private.program-c-composite.v1", Bytes: retained}, referencegrouping.PredecessorRecord{Role: "ACQUISITION_RECEIPT", Selector: "calls/acquisition.json", Schema: "lsp-trace.private.program-c-acquisition-receipt.v1", Bytes: binding})
 	}
+	if len(q.nativeProof) > 0 {
+		out.Predecessors = append(out.Predecessors, referencegrouping.PredecessorRecord{Role: "NATIVE_EVIDENCE", Selector: "calls/native-evidence.json", Schema: referencegrouping.PrivateNativeEvidenceSchemaV2, Bytes: q.nativeProof})
+	}
+	// The new path has a checked aggregate retention budget BEFORE BuildInput's
+	// encoding and before any publication. Original paths retain their old bounds.
+	if len(q.nativeProof) > 0 {
+		if len(out.Predecessors)+1 > 8 {
+			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
+		}
+		var total uint64
+		for _, p := range out.Predecessors {
+			if uint64(len(p.Bytes)) > (1<<20)-total {
+				return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
+			}
+			total += uint64(len(p.Bytes))
+		}
+		metadata := make([]referencegrouping.PredecessorRecord, len(out.Predecessors))
+		for i, p := range out.Predecessors {
+			metadata[i] = referencegrouping.PredecessorRecord{Role: p.Role, Selector: p.Selector, Schema: p.Schema, ClaimedDigest: privateGroupingDigest(p.Bytes)}
+		}
+		bound, ok := referencegrouping.PrivateNativeEncodedBoundV2(struct {
+			Rows         any
+			Custody      any
+			Predecessors any
+		}{rows, custody, metadata}, 1<<20)
+		if !ok || total > 1<<20 || bound > (1<<20)-total || 65536 > (1<<20)-total-bound {
+			return PrivateManagedGroupingInput{}, fmt.Errorf("%w: aggregate retention bound total=%d encoding=%d ok=%v", ErrPrivateManagedGrouping, total, bound, ok)
+		}
+	}
 	n := len(rows)
 	artifact, err := referencegrouping.BuildInput(referencegrouping.InputRequest{TypedInput: out.TypedInput, Predecessors: out.Predecessors, OccurrenceLedgerBytes: ledger, EndpointCustody: custody, OccurrenceAdmissionPolicyID: q.OccurrenceAdmissionPolicyID, CompositionPolicyID: q.CompositionPolicyID, PrivacyPolicy: q.Privacy, EligibleKinds: []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, Limits: referencegrouping.ResourceLimits{MaxArtifacts: 8, MaxNodes: 1024, MaxOccurrences: 1024, MaxContributions: 1024, MaxCanonicalBytes: 1 << 20, MaxStringBytes: 4096}, CandidateOutcomes: outcomes, Accounting: referencegrouping.Accounting{Candidates: n, Included: n, Terminal: true}})
 	if err != nil {
 		return PrivateManagedGroupingInput{}, err
+	}
+	if len(q.nativeProof) > 0 {
+		total := len(artifact.CanonicalBytes())
+		for _, p := range out.Predecessors {
+			if len(p.Bytes) > (1<<20)-total {
+				return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
+			}
+			total += len(p.Bytes)
+		}
 	}
 	out.Input, err = referencegrouping.ParseAndAdmit(artifact.CanonicalBytes(), out.Predecessors, privateGroupingParseLimits())
 	if err != nil {

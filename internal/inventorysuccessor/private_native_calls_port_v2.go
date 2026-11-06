@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/directionalraw"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/programccompose"
+	"lsp-trace/internal/referencegrouping"
 	"lsp-trace/sessionruntime"
 	"net/url"
 )
@@ -24,11 +26,7 @@ type PrivateNativeCallsRequestV2 struct {
 	Directional       sessionruntime.DirectionalCallHierarchyRequestPrivate
 	Revision, Privacy string
 }
-type PrivateNativeRawJoinV2 struct {
-	OriginalRequestOrdinal, ElementOrdinal, RangeOrdinal, ViewIndex, EdgeLocalOrdinal int
-	Direction, RelationID                                                             string
-	Range                                                                             graph.Range
-}
+type PrivateNativeRawJoinV2 = referencegrouping.PrivateNativeRawJoinV2
 type PrivateNativeCallsResultV2 struct {
 	Observations     []sessionruntime.PrivateDirectionalRequestObservationV2
 	ParentSupply     sessionruntime.DocumentSupply
@@ -39,11 +37,16 @@ type PrivateNativeCallsResultV2 struct {
 	Admission        programcadmission.Result
 	RawJoins         []PrivateNativeRawJoinV2
 	ParentInvocation graph.Invocation
+	nativeEvidence   []byte // fixed producer continuation only; never supplied by caller
 }
 
 // A fixed private constructor; no caller DTO, manual Complete, new grant, client
 // execution, generic capture engine, or public admission path is accepted here.
 func ConstructNativeCallsPrivateV2(ctx context.Context, m *sessionruntime.Manager, q PrivateNativeCallsRequestV2) (PrivateNativeCallsResultV2, error) {
+	return constructNativeCallsPrivateV2(ctx, m, q, false)
+}
+
+func constructNativeCallsPrivateV2(ctx context.Context, m *sessionruntime.Manager, q PrivateNativeCallsRequestV2, retain bool) (PrivateNativeCallsResultV2, error) {
 	var out PrivateNativeCallsResultV2
 	if ctx == nil || m == nil || len(q.Revision) == 0 || len(q.Revision) > 4096 || len(q.Privacy) == 0 || len(q.Privacy) > 4096 || len(q.Session.Workspace) > 4096 {
 		return out, ErrPrivateNativeConstructorV2
@@ -79,6 +82,20 @@ func ConstructNativeCallsPrivateV2(ctx context.Context, m *sessionruntime.Manage
 				return ErrPrivateNativeConstructorV2
 			}
 			rawSize += uint64(len(r.Params)) + uint64(len(r.Result))
+			// Frame detachment admits <=128KiB and <=32 responses per request.
+			if len(r.RequestFrame) > 65536 || len(r.ResponseFrames) > 32 {
+				return ErrPrivateNativeConstructorV2
+			}
+			frameBytes := len(r.RequestFrame)
+			for _, frame := range r.ResponseFrames {
+				if len(frame) > 65536 || len(frame) > 131072-frameBytes {
+					return ErrPrivateNativeConstructorV2
+				}
+				frameBytes += len(frame)
+			}
+			if retain {
+				rawSize += uint64(frameBytes)
+			}
 		}
 		nativeBound, ok := privateNativeEncodedSizeV2(rawSize, 64, 1<<20)
 		if !ok || nativeBound > 4<<20 {
@@ -147,6 +164,26 @@ func ConstructNativeCallsPrivateV2(ctx context.Context, m *sessionruntime.Manage
 			return err
 		}
 		out.Admission, err = programcadmission.Admit(out.Composite.Bytes)
+		if err != nil {
+			return err
+		}
+		if !retain {
+			return nil
+		}
+		proof := referencegrouping.PrivateNativeEvidenceV2{Schema: referencegrouping.PrivateNativeEvidenceSchemaV2, Parent: p, Invocation: inv, Sources: out.Sources, Inputs: out.Inputs, RawJoins: out.RawJoins}
+		proof.Parent.Requests = nil
+		for _, r := range v.Requests {
+			spans, _ := directionalraw.Elements(r.Result)
+			status := "OBSERVED_NONEMPTY"
+			if len(spans) == 0 {
+				status = "OBSERVED_EMPTY"
+			}
+			proof.Requests = append(proof.Requests, referencegrouping.PrivateNativeRequestV2{Ordinal: r.Ordinal, Method: r.Method, RequestID: r.RequestID, Generation: r.Generation, Params: r.Params, Result: r.Result, RequestFrame: r.RequestFrame, ResponseFrames: r.ResponseFrames, Wire: r.Wire, Observations: r.Observations, Status: status})
+		}
+		for i := range out.Views {
+			proof.OriginalOrdinals[i] = out.Views[i].OriginalOrdinals
+		}
+		out.nativeEvidence, err = referencegrouping.EncodePrivateNativeEvidenceV2(proof, out.Composite.Bytes)
 		return err
 	}()
 	if err != nil {

@@ -254,7 +254,26 @@ func (m *Manager) prepareDirectionalItemPrivate(ctx context.Context, req Directi
 	if err := selected.DecodePrivate(&same); err != nil || same.URI != items[0].URI || same.Name != items[0].Name {
 		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, errors.New("prepared semantic identity unavailable")
 	}
-	if err := detachDirectionalEvidencePrivateV2(ctx, "textDocument/prepareCallHierarchy", raw, lease, []directionalraw.Observation{selected.Observation()}); err != nil {
+	// Retain the actual observer stream while this exact request is still live.
+	// Selection alone omits the request and all selected/unselected response frames.
+	call := observed.directionalV5
+	call.execution.mu.Lock()
+	var observations []directionalraw.Observation
+	for _, accepted := range call.execution.accepted {
+		if accepted.key == call.key && accepted.method == "textDocument/prepareCallHierarchy" {
+			if len(accepted.observations) > 1024 {
+				call.execution.mu.Unlock()
+				return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, ErrPrivateDirectionalEvidenceV2
+			}
+			observations = append(observations, accepted.observations...)
+			break
+		}
+	}
+	call.execution.mu.Unlock()
+	if len(observations) == 0 {
+		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, ErrPrivateDirectionalEvidenceV2
+	}
+	if err := detachDirectionalEvidencePrivateV2(ctx, "textDocument/prepareCallHierarchy", raw, lease, observations); err != nil {
 		return lsp.CallHierarchyItem{}, directionalraw.PreparedSelection{}, err
 	}
 	return items[0], selected, nil
