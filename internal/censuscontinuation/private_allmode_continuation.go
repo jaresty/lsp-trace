@@ -40,6 +40,18 @@ type privateAllModeMaterial struct {
 	raw  []byte
 }
 
+// Same retains process-local expected handoff identity, not a caller hash claim.
+func (h PrivateAllModeHandoff) Same(other PrivateAllModeHandoff) bool {
+	return h.id != "" && h.id == other.id && len(h.entries) > 0 && len(other.entries) == len(h.entries) && &h.entries[0] == &other.entries[0]
+}
+
+// PreparePrivateAllModeSourceIntents exposes only bounded metadata preparation
+// for the upper producer bridge's pre-Put preflight. No source admission occurs.
+func PreparePrivateAllModeSourceIntents(ctx context.Context, h PrivateAllModeHandoff, c ContinuationContract, store Store, workspace string) (PrivateAllModeResult, error) {
+	out, _, err := preparePrivateAllMode(ctx, h, c, store, workspace)
+	return out, err
+}
+
 func privateAllModeFailure(err error) Result {
 	return Result{PrivateStage: "PRIVATE_SOURCE_INTENTS", PrivateCode: "PRIVATE_ALLMODE_REFUSED", Err: err}
 }

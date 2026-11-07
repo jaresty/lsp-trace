@@ -247,6 +247,9 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 	if err = operation.completeFixed(execution); err != nil {
 		return fail(err)
 	}
+	// The source token remained private through lease/window join and confirmed
+	// Observe. No failed or uncertain producer can expose source originals.
+	out.sourceConfirmed = true
 	// The initial exact replay above is paid by this mixed reservation. A later
 	// replay must not silently reuse the old D/R-only operation quote.
 	if plan.Calls {

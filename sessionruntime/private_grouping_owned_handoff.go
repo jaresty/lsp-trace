@@ -49,6 +49,9 @@ type privateGroupingCapture struct {
 	request  PrivateGroupingOwnedRequest
 	view     PrivateGroupingOwnedView
 	consumed bool
+	// These markers are Manager-owned and never derived from a borrowed view.
+	sourceConsumedSuccessfully bool
+	sourceTaken                bool
 }
 
 // PrivateGroupingOwnedView is a borrowed diagnostic copy, not an issuance token.
@@ -249,6 +252,9 @@ func (m *Manager) ConsumePrivateGroupingOwned(ctx context.Context, h PrivateGrou
 	}
 	m.mu.Lock()
 	live := ctx.Err() == nil && m.validSessionLeaseLocked(ctx, r) && !m.closed && time.Now().Before(c.request.Deadline)
+	if live {
+		c.sourceConsumedSuccessfully = true
+	}
 	m.mu.Unlock()
 	if !live {
 		return ErrPrivateGroupingOwned

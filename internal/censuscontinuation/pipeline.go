@@ -58,6 +58,7 @@ const StatusPaused ContinuationStatus = "PAUSED"
 func (s StopAfter) valid() bool { return s == "" || s == StopAfterDescribeRequests }
 
 type Request struct {
+	PrivateSources *PrivateAllModeSourcesRequest `json:"private_sources,omitempty"`
 	// PrivateAllMode is exclusive with the legacy CALLS handoff.
 	PrivateAllMode *PrivateAllModeHandoff `json:"private_all_mode,omitempty"`
 	Handoff        CommittedHandoff
@@ -70,7 +71,8 @@ type Request struct {
 	StopAfter      StopAfter
 }
 type ResumeRequest struct {
-	PrivateAllMode        *PrivateAllModeResume `json:"private_all_mode,omitempty"`
+	PrivateSources        *PrivateAllModeSourcesResume `json:"private_sources,omitempty"`
+	PrivateAllMode        *PrivateAllModeResume        `json:"private_all_mode,omitempty"`
 	Selector              string
 	Workspace             string
 	UseCommittedWorkspace bool
@@ -116,7 +118,8 @@ func preconditionCause(code string) PreconditionCause {
 }
 
 type Result struct {
-	PrivateAllMode           *PrivateAllModeResult `json:"private_all_mode,omitempty"`
+	PrivateSources           *PrivateAllModeSourcesResult `json:"private_sources,omitempty"`
+	PrivateAllMode           *PrivateAllModeResult        `json:"private_all_mode,omitempty"`
 	Status                   ContinuationStatus
 	CensusID                 string
 	HandoffID                string
@@ -251,6 +254,9 @@ type pipelineState struct {
 func Run(ctx context.Context, req Request) Result { return runWithHooks(ctx, req, nil) }
 
 func runWithHooks(ctx context.Context, req Request, hook stageHook) Result {
+	if req.PrivateSources != nil {
+		return runPrivateAllModeSources(ctx, req)
+	}
 	if req.PrivateAllMode != nil {
 		return runPrivateAllMode(ctx, req)
 	}
@@ -435,6 +441,9 @@ func preconditionFailure(req Request, code string) Result {
 func Resume(ctx context.Context, req ResumeRequest) Result { return resumeWithHooks(ctx, req, nil) }
 
 func resumeWithHooks(ctx context.Context, req ResumeRequest, hook stageHook) Result {
+	if req.PrivateSources != nil {
+		return resumePrivateAllModeSources(ctx, req)
+	}
 	if req.PrivateAllMode != nil {
 		return resumePrivateAllMode(ctx, req)
 	}

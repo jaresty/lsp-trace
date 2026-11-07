@@ -437,6 +437,10 @@ type PrivateManagedGroupingInput struct {
 	dispositionsOriginal map[string]string
 	replayBinding        PrivateManagedInputBindingV2
 	sourceOriginal       string
+	sourceEvidence       sessionruntime.PrivateGroupingSourceEvidence
+	sourceQueryOriginal  []byte
+	sourceInputOriginal  referencegrouping.AdmittedInput
+	sourceConfirmed      bool
 }
 type privateGroupingPublication struct {
 	selector, digest string
@@ -585,6 +589,7 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 			return err
 		}
 		out, err = privateGroupingBuild(v, q, queryOriginal)
+		out.sourceQueryOriginal = queryOriginal
 		if err != nil {
 			return fmt.Errorf("private grouping build: %w", err)
 		}
@@ -619,12 +624,22 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 		}
 		out.publications = append(out.publications, privateGroupingPublication{selector, digest, append([]byte(nil), raw...)})
 		out.originals = privateGroupingClonePredecessors(out.Predecessors)
+		// R/D query bytes are also public diagnostics in Predecessors. Retain
+		// only the already-created private clone; C-only query bytes never enter
+		// the public predecessor list. No additional copy or allowance is added.
+		for _, p := range out.originals {
+			if p.Role == "METHOD_QUERY" {
+				out.sourceQueryOriginal = p.Bytes
+				break
+			}
+		}
 		out.ledgerOriginal = append([]PrivateManagedGroupingOccurrence(nil), out.Ledger...)
 		out.dispositionsOriginal = make(map[string]string, len(out.Dispositions))
 		for method, disposition := range out.Dispositions {
 			out.dispositionsOriginal[method] = disposition
 		}
 		out.inputOriginal = append([]byte(nil), raw...)
+		out.sourceInputOriginal = out.Input
 		out.replayBinding, err = PrivateManagedGroupingOperationBinding(m, q, "REPLAY", h)
 		if err != nil {
 			return err
@@ -634,6 +649,14 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 	})
 	if err != nil {
 		return PrivateManagedGroupingInput{}, errors.Join(ErrPrivateManagedGrouping, err)
+	}
+	// Keep the token private until the enclosing producer confirms completion.
+	// Taking reuses the existing original lease; no source acquisition or query.
+	if len(out.ledgerOriginal) != 0 {
+		out.sourceEvidence, err = m.TakePrivateGroupingSourceEvidence(ctx, h)
+		if err != nil {
+			return PrivateManagedGroupingInput{}, errors.Join(ErrPrivateManagedGrouping, err)
+		}
 	}
 	return out, nil
 }
