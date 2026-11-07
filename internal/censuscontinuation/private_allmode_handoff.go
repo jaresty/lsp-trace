@@ -52,9 +52,69 @@ type PrivateAllModeHandoff struct {
 	id      string
 	wire    privateAllModeHandoffWire
 	entries []PrivateAllModeEntry
+	// Scalar from the constructor's already-computed wire bytes. Not serialized
+	// and not an admission, identity, replay or independent validation token.
+	retainedWireBytes uint64
 }
 
 func (h PrivateAllModeHandoff) ID() string { return h.id }
+
+// RetainedPayloadUpper observes already-admitted, immutable payload lengths.
+// Charge canonical + parsed-document logical payload representations (2x) for
+// every READY entry, including repeated/shared inputs and entries for which no
+// SourceOriginals were supplied. The case's detached projection is separately
+// retained. Complete wire/schedule/entry metadata is covered by 2x the cached
+// constructor wire length. This is not a physical Go heap/sizeof assertion.
+// No payload is copied, marshaled, parsed, evaluated, replayed or admitted here.
+func (h PrivateAllModeHandoff) RetainedPayloadUpper() (uint64, bool) {
+	if h.id == "" || len(h.entries) < 7 || len(h.entries) > privateAllModeMaxSlots || len(h.wire.Entries) != len(h.entries) || len(h.wire.Schedule) != len(h.entries) || h.retainedWireBytes == 0 || h.retainedWireBytes > uint64(rg.EvaluationMaxBytesPrivate) {
+		return 0, false
+	}
+	var upper uint64
+	add := func(n uint64) bool {
+		if n > (^uint64(0)-upper)/2 {
+			return false
+		}
+		upper += 2 * n
+		return true
+	}
+	if !add(h.retainedWireBytes) {
+		return 0, false
+	}
+	for i, e := range h.entries {
+		w := h.wire.Entries[i]
+		if e.Slot.Ordinal != i || e.Slot != h.wire.Schedule[i] || e.Slot != w.Slot || e.Disposition != w.Disposition || e.Lineage != w.Lineage || e.MissingReason != w.MissingReason {
+			return 0, false
+		}
+		switch e.Disposition {
+		case PrivateAllModeReady:
+			b := w.Binding           // commitments established by the existing constructor
+			p := e.Case.Projection() // opaque value header only, not canonical bytes
+			if e.Input.ID() == "" || e.Policy.ID() == "" || e.Case.ID() == "" || e.Result.ID() == "" || p.ID() == "" ||
+				b.Bindings.Input.ID != e.Input.ID() || b.Bindings.Input.Digest != e.Input.Digest() || b.Bindings.Input.ByteLength != e.Input.ByteLength() ||
+				b.Bindings.Policy.ID != e.Policy.ID() || b.Bindings.Policy.Digest != e.Policy.Digest() || b.Bindings.Policy.ByteLength != e.Policy.ByteLength() ||
+				b.Case.ID != e.Case.ID() || b.Case.Digest != e.Case.ID() ||
+				b.Result.ID != e.Result.ID() || b.Result.Digest != e.Result.Digest() || b.Result.ByteLength != e.Result.ByteLength() ||
+				b.Projection.ID != p.ID() || b.Projection.Digest != p.Digest() || b.Projection.ByteLength != p.ByteLength() {
+				return 0, false
+			}
+			// Case has no ByteLength accessor; use its constructor-validated
+			// commitment, never Case.CanonicalBytes or a fresh binding/replay.
+			for _, n := range [...]int{e.Input.ByteLength(), e.Policy.ByteLength(), b.Case.ByteLength, e.Result.ByteLength(), p.ByteLength()} {
+				if n <= 0 || n > rg.EvaluationMaxBytesPrivate || !add(uint64(n)) {
+					return 0, false
+				}
+			}
+		case PrivateAllModeDeclaredMissing:
+			if e.Input.ID() != "" || e.Policy.ID() != "" || e.Case.ID() != "" || e.Result.ID() != "" {
+				return 0, false
+			}
+		default:
+			return 0, false
+		}
+	}
+	return upper, true
+}
 
 func privateAllModeString(s string) bool {
 	return s != "" && len(s) <= rg.EvaluationMaxStringPrivate && utf8.ValidString(s)
@@ -130,5 +190,5 @@ func NewPrivateAllModeHandoff(workspace, revision string, schedule []PrivateAllM
 	if err != nil || len(raw) > rg.EvaluationMaxBytesPrivate {
 		return bad()
 	}
-	return PrivateAllModeHandoff{id: digestOf(raw), wire: w, entries: append([]PrivateAllModeEntry(nil), entries...)}, nil
+	return PrivateAllModeHandoff{id: digestOf(raw), wire: w, entries: append([]PrivateAllModeEntry(nil), entries...), retainedWireBytes: uint64(len(raw))}, nil
 }
