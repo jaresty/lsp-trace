@@ -67,6 +67,12 @@ type suppliedSourceResponseWire struct {
 // deadline and caps, rejects all execution dependencies, then delegates source
 // checkpoint/proof validation to the existing Resume (no alternate admission).
 func BindSuppliedSourceResponse(ctx context.Context, q SuppliedSourceResponseRequest) (BoundSuppliedSourceResponse, error) {
+	return bindSuppliedSourceResponse(ctx, q, 0)
+}
+
+// extraRetained is set only by the upper opaque handoff after concrete Runner
+// validation. It is an allowance under the existing ceiling, never a new grant.
+func bindSuppliedSourceResponse(ctx context.Context, q SuppliedSourceResponseRequest, extraRetained uint64) (BoundSuppliedSourceResponse, error) {
 	bad := func(s string) (BoundSuppliedSourceResponse, error) {
 		return BoundSuppliedSourceResponse{}, errors.New(s)
 	}
@@ -78,56 +84,31 @@ func BindSuppliedSourceResponse(ctx context.Context, q SuppliedSourceResponseReq
 	if s == nil || s.stop != StopAfterPrivateSourceRequests || q.Attempt.CheckpointID != s.checkpoint || q.Limits.MaxAdapterBytes > s.contract.PacketMaxResponseBytes() || q.Limits.MaxSemanticBytes > s.contract.PacketMaxResponseBytes() {
 		return bad("supplied source response expected/attempt/limits")
 	}
-	if err := preflight(ctx, s.request, s.contract, r.Store, r.Workspace, s.stop); err != nil {
+	if extraRetained > 0 {
+		if err := sourceAcquisitionSuppliedPreflight(ctx, q, extraRetained); err != nil {
+			return BoundSuppliedSourceResponse{}, err
+		}
+	}
+	out, sourceDigest, err := sourceResponseJoin(ctx, r, q.Record, q.Attempt)
+	if err != nil {
 		return BoundSuppliedSourceResponse{}, err
-	}
-	resumed := Resume(ctx, r)
-	if resumed.Err != nil {
-		return BoundSuppliedSourceResponse{}, resumed.Err
-	}
-	if resumed.PrivateSources == nil {
-		return bad("supplied source response missing regenerated sources")
-	}
-	if ctx.Err() != nil || !time.Now().Before(s.request.Deadline) {
-		return bad("supplied source response cancelled or deadline after Resume")
-	}
-	out := resumed.PrivateSources
-	// Record consists entirely of comparable value fields. Compare every field
-	// before marshaling any caller-controlled Record; a public reseal is not proof.
-	found := false
-	for _, record := range out.Requests {
-		if record == q.Record && record.RecordID == q.Attempt.RequestRecordID && record.Envelope.AdmissionID == q.Attempt.SourceUnitID && record.Lineage.PacketID == q.Attempt.SourceUnitID {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return bad("supplied source response exact request mismatch")
-	}
-	var sourceDigest string
-	for _, a := range s.admissions {
-		unit, err := a.Unit()
-		if err != nil || unit.ID != q.Attempt.SourceUnitID {
-			continue
-		}
-		for _, regenerated := range out.Units {
-			if reflect.DeepEqual(unit, regenerated) {
-				sourceDigest = unit.SourceDigest
-				break
-			}
-		}
-		if sourceDigest != "" {
-			break
-		}
-	}
-	if sourceDigest == "" {
-		return bad("supplied source response opaque admission mismatch")
 	}
 	// No new candidate canonical copies, response digest, JSON serialization or
 	// identity input is constructed before both existing aggregate ceilings fit.
 	retained, ok := sourceResponseRetainedUpper(s, out)
 	if !ok {
 		return bad("supplied source response retained bound")
+	}
+	if extraRetained > 0 {
+		handoff, valid := s.handoff.RetainedPayloadUpper()
+		cached, validSum := sourceResponseAdd(handoff, s.regeneration.response)
+		if !valid || !validSum || cached != retained {
+			return bad("source acquisition cached/actual response bound mismatch")
+		}
+	}
+	retained, ok = sourceResponseAdd(retained, extraRetained)
+	if !ok {
+		return bad("supplied source response additional retained overflow")
 	}
 	recordUpper, ok := sourceResponseRecordUpper(q.Record)
 	if !ok {
@@ -182,6 +163,56 @@ func BindSuppliedSourceResponse(ctx context.Context, q SuppliedSourceResponseReq
 		return bad("supplied source response cancelled or expired at publication")
 	}
 	return BoundSuppliedSourceResponse{&boundSourceResponseState{wire.BindingID, raw, candidate, bounds}}, nil
+}
+
+// sourceResponseJoin is shared by prepare-only acquisition and the adopted
+// supplied binder. It performs the existing exact Resume and opaque unit join;
+// lower candidates and public Records are never source eligibility.
+func sourceResponseJoin(ctx context.Context, r ResumeRequest, requested describerequest.Record, attempt SuppliedSourceAttempt) (*PrivateAllModeSourcesResult, string, error) {
+	bad := func(s string) (*PrivateAllModeSourcesResult, string, error) { return nil, "", errors.New(s) }
+	if ctx == nil || ctx.Err() != nil || r.PrivateSources == nil || r.Worker != nil || r.WorkerV2 != nil || r.FreshCapture != nil {
+		return bad("supplied source response join preflight")
+	}
+	s := r.PrivateSources.Expected.state
+	if s == nil || s.stop != StopAfterPrivateSourceRequests || attempt.CheckpointID != s.checkpoint || len(attempt.ID) == 0 || len(attempt.ID) > 256 || strings.TrimSpace(attempt.ID) != attempt.ID {
+		return bad("supplied source response expected/attempt")
+	}
+	if err := preflight(ctx, s.request, s.contract, r.Store, r.Workspace, s.stop); err != nil {
+		return nil, "", err
+	}
+	resumed := Resume(ctx, r)
+	if resumed.Err != nil {
+		return nil, "", resumed.Err
+	}
+	if resumed.PrivateSources == nil {
+		return bad("supplied source response missing regenerated sources")
+	}
+	if ctx.Err() != nil || !time.Now().Before(s.request.Deadline) {
+		return bad("supplied source response cancelled or deadline after Resume")
+	}
+	out := resumed.PrivateSources
+	found := false
+	for _, record := range out.Requests {
+		if record == requested && record.RecordID == attempt.RequestRecordID && record.Envelope.AdmissionID == attempt.SourceUnitID && record.Lineage.PacketID == attempt.SourceUnitID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return bad("supplied source response exact request mismatch")
+	}
+	for _, a := range s.admissions {
+		unit, err := a.Unit()
+		if err != nil || unit.ID != attempt.SourceUnitID {
+			continue
+		}
+		for _, regenerated := range out.Units {
+			if reflect.DeepEqual(unit, regenerated) && unit.SourceDigest != "" {
+				return out, unit.SourceDigest, nil
+			}
+		}
+	}
+	return bad("supplied source response opaque admission mismatch")
 }
 
 func (b BoundSuppliedSourceResponse) ID() string {
@@ -351,6 +382,20 @@ func sourceResponseRetainedUpper(s *expected, out *PrivateAllModeSourcesResult) 
 			return 0, false
 		}
 	}
+	output, ok := sourceResponseOutputUpper(out)
+	if !ok || !addProduct(output, 2) {
+		return 0, false
+	}
+	return total, true
+}
+
+// The same complete output metadata charge is shared by original cache sizing
+// and the adopted supplied binder. It is length-only, with no defensive copies.
+func sourceResponseOutputUpper(out *PrivateAllModeSourcesResult) (uint64, bool) {
+	if out == nil {
+		return 0, false
+	}
+	intents := uint64(len(out.Outcomes))
 	output, ok := sourceResponseMul(intents, 2048)
 	if !ok {
 		return 0, false
@@ -401,10 +446,7 @@ func sourceResponseRetainedUpper(s *expected, out *PrivateAllModeSourcesResult) 
 			return 0, false
 		}
 	}
-	if !addProduct(output, 2) {
-		return 0, false
-	}
-	return total, true
+	return output, true
 }
 
 // All arithmetic precedes candidate canonical copies/hash/marshal. The actual

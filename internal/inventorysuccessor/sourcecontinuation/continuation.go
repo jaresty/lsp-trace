@@ -70,6 +70,7 @@ type PrivateAllModeSourcesResult struct {
 	Units                                                             []tp.PrivateSourceUnit
 	Requests                                                          []describerequest.Record
 	Expected                                                          PrivateAllModeSourcesExpected `json:"-"`
+	regeneration                                                      sourceRegenerationEnvelope
 }
 
 // Record alone is only wire format. This opaque expectation retains actual
@@ -82,6 +83,14 @@ type expected struct {
 	stop                       cc.StopAfter
 	checkpoint, baseCheckpoint string
 	admissions                 []inv.PrivateSourceAdmission
+	regeneration               sourceRegenerationEnvelope
+}
+
+// Private, original-preparation sizing state. No wire/identity field, caller
+// measurement, resource grant, or physical heap assertion is introduced.
+type sourceRegenerationEnvelope struct {
+	response, source, lower uint64
+	workspace, digest       string
 }
 type PrivateAllModeSourcesResume struct {
 	Version         string
@@ -356,8 +365,88 @@ func prepare(ctx context.Context, base cc.PrivateAllModeResult, h cc.PrivateAllM
 	}
 	out.CheckpointID = digest(raw)
 	mats = append(mats, material{"private_source_checkpoint", raw})
+	// Cache only after the original bounded preparation/serialization succeeds.
+	// The scalar is not serialized, so all existing persisted bytes/IDs stay exact.
+	if materialBytes, ok := sourceResponseAdd(uint64(total), uint64(len(raw))); ok {
+		out.regeneration = sourcePreparationEnvelope(base, h, c, q, stop, admissions, out, materialBytes, workspace)
+	}
 	return out, mats, admissions, nil
 }
+
+// sourcePreparationEnvelope retains only checked scalars/header strings from
+// already constructed, original preparation. It performs no canonical copies,
+// marshal, parse, hash, replay, source admission, or fresh sizing acquisition.
+func sourcePreparationEnvelope(base cc.PrivateAllModeResult, h cc.PrivateAllModeHandoff, c cc.ContinuationContract, q PrivateAllModeSourcesRequest, stop cc.StopAfter, admissions []inv.PrivateSourceAdmission, out PrivateAllModeSourcesResult, materialBytes uint64, workspace string) sourceRegenerationEnvelope {
+	bad := sourceRegenerationEnvelope{}
+	lowerPeak, lowerHeld, ok := base.RegenerationPayloadUpper()
+	if !ok || materialBytes == 0 || len(out.Units) == 0 {
+		return bad
+	}
+	output, ok := sourceResponseOutputUpper(&out)
+	if !ok {
+		return bad
+	}
+	for _, u := range out.Units {
+		if len(u.SourceDigest) != 71 {
+			return bad
+		}
+	}
+	temporary := &expected{handoff: h, contract: c, request: q, stop: stop, admissions: admissions}
+	response, ok := sourceResponseRetainedUpper(temporary, &out)
+	if !ok {
+		return bad
+	}
+	handoff, ok := h.RetainedPayloadUpper()
+	if !ok || response <= handoff {
+		return bad
+	}
+	response -= handoff // checked subtraction: ALL READY retention is added early.
+	// Existing response envelope already includes originals*4, source*12,
+	// intent metadata, projection/definition work and two complete output uppers.
+	serialization, ok := sourceResponseMul(materialBytes, 4)
+	if !ok {
+		return bad
+	}
+	source, ok := sourceResponseAdd(response, lowerHeld, serialization)
+	if !ok {
+		return bad
+	}
+	// During lower regeneration the upper source projections/requests have not
+	// been rebuilt. Count the held originals/definitions/objects/admissions and
+	// one prior output plus lower's complete workspace/material peak instead.
+	held := uint64(32768)
+	add := func(n uint64) bool { var ok bool; held, ok = sourceResponseAdd(held, n); return ok }
+	for _, o := range q.Originals {
+		if o.Bound() == 0 || !add(o.Bound()) {
+			return bad
+		}
+	}
+	for _, d := range q.Definitions {
+		b, ok := d.EncodedBound()
+		if !ok || !add(b) {
+			return bad
+		}
+	}
+	for _, o := range q.Objects {
+		if !add(uint64(len(o.Bytes))) {
+			return bad
+		}
+	}
+	for _, a := range admissions {
+		if a.Bound() <= 0 || !add(uint64(a.Bound())) {
+			return bad
+		}
+	}
+	if !add(output) {
+		return bad
+	}
+	lower, ok := sourceResponseAdd(held, lowerPeak)
+	if !ok {
+		return bad
+	}
+	return sourceRegenerationEnvelope{response: response, source: source, lower: lower, workspace: workspace, digest: out.Units[0].SourceDigest}
+}
+
 func paused(out PrivateAllModeSourcesResult) Result {
 	return Result{Result: cc.Result{Status: cc.StatusPaused, HandoffID: out.HandoffID, CheckpointID: out.CheckpointID, PrivateStage: out.Stage, RequestCount: out.Counts.Requests, PreparationCount: out.Counts.Admitted}, PrivateSources: &out}
 }
@@ -405,7 +494,7 @@ func Run(ctx context.Context, req Request) Result {
 	for n := range q.Objects {
 		q.Objects[n].Bytes = append([]byte(nil), q.Objects[n].Bytes...)
 	}
-	out.Expected = PrivateAllModeSourcesExpected{&expected{*req.PrivateAllMode, req.Contract, q, req.StopAfter, out.CheckpointID, base.CheckpointID, admissions}}
+	out.Expected = PrivateAllModeSourcesExpected{&expected{*req.PrivateAllMode, req.Contract, q, req.StopAfter, out.CheckpointID, base.CheckpointID, admissions, out.regeneration}}
 	return paused(out)
 }
 func Resume(ctx context.Context, req ResumeRequest) Result {

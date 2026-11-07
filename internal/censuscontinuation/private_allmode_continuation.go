@@ -30,7 +30,20 @@ type PrivateAllModeResult struct {
 	Nominations                                                []targetpacket.PrivateNomination
 	Intents                                                    []targetpacket.PrivateSourceIntent
 	Diagnostics                                                []PrivateAllModeDiagnostic
+	// Successful preparation's existing workspace/material envelope only.
+	// Private scalars are neither serialized identity nor restart/admission proof.
+	regenerationPeak, regenerationRetained uint64
 }
+
+// RegenerationPayloadUpper reads only scalars established after the original
+// bounded preparation succeeds. It copies/parses/marshals/hashes no payload.
+// Peak covers the existing projection/nomination workspace plus four material
+// totals (serialization/hash/verification buffers). Retained covers the lower
+// metadata result while the upper source preparation runs after lower Resume.
+func (r PrivateAllModeResult) RegenerationPayloadUpper() (peak, retained uint64, ok bool) {
+	return r.regenerationPeak, r.regenerationRetained, r.CheckpointID != "" && r.regenerationRetained > 0 && r.regenerationPeak >= r.regenerationRetained
+}
+
 type privateAllModeCheckpoint struct {
 	Version, Stage, Status, ClaimCeiling, HandoffID, ContractID, Workspace, Revision string
 	Artifacts                                                                        []ArtifactRef
@@ -268,6 +281,13 @@ func preparePrivateAllMode(ctx context.Context, h PrivateAllModeHandoff, c Conti
 	}
 	mats = append(mats, privateAllModeMaterial{"private_checkpoint", raw})
 	out.CheckpointID = digestOf(raw)
+	// These lengths already exist: no fresh serialization merely to size work.
+	// Leave the cache invalid on arithmetic failure; legacy preparation behavior
+	// is unchanged and a new acquisition will refuse the absent scalar.
+	if upper > 0 && total > 0 && uint64(total) <= (^uint64(0)-uint64(upper))/4 && uint64(len(ob)) <= ^uint64(0)/2 {
+		out.regenerationPeak = uint64(upper) + 4*uint64(total)
+		out.regenerationRetained = 2 * uint64(len(ob))
+	}
 	return out, mats, nil
 }
 

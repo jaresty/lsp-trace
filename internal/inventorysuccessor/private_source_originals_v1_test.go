@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	cc "lsp-trace/internal/censuscontinuation"
 	"lsp-trace/internal/describerequest"
@@ -322,6 +323,438 @@ func TestSuppliedRetainedHandoff(t *testing.T) {
 		t.Fatal("ASSERT_ABSENT_READY_NO_PUBLICATION")
 	}
 	t.Log("ASSERT_HANDOFF_ALL_READY_PAYLOADS: PASS; ASSERT_HANDOFF_SCALAR_READONLY: PASS; ASSERT_HANDOFF_IDENTITY_UNCHANGED: PASS; ASSERT_ABSENT_READY_CONSTANT_COUNTS: PASS; ASSERT_ABSENT_READY_SMALL_FITS: PASS; ASSERT_ABSENT_READY_PARENT_REFUSAL: PASS", smallOut.Counts)
+}
+
+// Observation only: no producer callback, mutation or production test hook.
+// Any join/metadata regeneration/Runner plan entry makes the early guard fail,
+// including metadata work which can precede the first StoreGet.
+type earlyWorkContext struct {
+	context.Context
+	regenerated, plan bool
+}
+
+func (c *earlyWorkContext) Err() error {
+	for depth := 1; depth <= 12; depth++ {
+		pc, _, _, ok := runtime.Caller(depth)
+		if !ok {
+			break
+		}
+		name := runtime.FuncForPC(pc).Name()
+		if strings.HasSuffix(name, "sourcecontinuation.sourceResponseJoin") || strings.HasSuffix(name, "censuscontinuation.preparePrivateAllMode") {
+			c.regenerated = true
+		}
+		if strings.HasSuffix(name, "describeworker.(*Runner).PrepareSourceAcquisition") {
+			c.plan = true
+		}
+	}
+	return c.Context.Err()
+}
+
+func TestSuppliedEarly(t *testing.T) {
+	runner, marker := acquireRunner(t)
+	served, _, contract, q := sourceStageFixture(t, "positive", false)
+	absent, _, _, _ := sourceStageFixture(t, "positive", false)
+	inv.ControlledSourceProjectionNoReadmitForTest(t, served)
+	ctx, cancel := context.WithDeadline(context.Background(), q.Deadline)
+	defer cancel()
+	baseSlots, baseEntries, _ := sourceStageEntries(t, served.Input, []string{"RD", "C", "CRD", "D", "CD", "R", "CR"}, 0, []byte("source selection\n"), "CONTROLLED_SOURCE_MODE")
+	build := func(selector []byte, rationale string) (cc.PrivateAllModeHandoff, *sc.PrivateAllModeSourcesResult, *sourceStageStore) {
+		slots, entries, _ := sourceStageEntries(t, absent.Input, []string{"RD", "RD", "RD", "RD"}, 7, selector, rationale)
+		h, e := cc.NewPrivateAllModeHandoff(qWorkspace(q), "source-controlled-revision", append(append([]cc.PrivateAllModeSlot(nil), baseSlots...), slots...), append(append([]cc.PrivateAllModeEntry(nil), baseEntries...), entries...))
+		if e != nil {
+			t.Fatal("ASSERT_EARLY_SETUP", e)
+		}
+		store := &sourceStageStore{MemoryStore: cc.NewMemoryStore()}
+		pause := sc.Run(ctx, sc.Request{PrivateAllMode: &h, PrivateSources: &q, Workspace: qWorkspace(q), Contract: contract, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+		if pause.Err != nil || pause.PrivateSources == nil {
+			t.Fatal("ASSERT_EARLY_SETUP", pause.Err)
+		}
+		return h, pause.PrivateSources, store
+	}
+	small, smallOut, smallStore := build([]byte("absent source selector\n"), "CONTROLLED_SOURCE_MODE")
+	large, largeOut, largeStore := build(bytes.Repeat([]byte("s"), 1<<16), strings.Repeat("p", 4096))
+	if smallOut.Counts != largeOut.Counts || smallOut.Counts.Admitted != 32 || smallOut.Counts.Requests != 2 {
+		t.Fatal("ASSERT_EARLY_CONSTANT_COUNTS", smallOut.Counts, largeOut.Counts)
+	}
+	smallSize, _ := small.RetainedPayloadUpper()
+	largeSize, _ := large.RetainedPayloadUpper()
+	if largeSize <= smallSize {
+		t.Fatal("ASSERT_EARLY_PAYLOAD_GROWTH")
+	}
+	makeRequest := func(h cc.PrivateAllModeHandoff, out *sc.PrivateAllModeSourcesResult, store *sourceStageStore) sc.SuppliedSourceResponseRequest {
+		r := out.Requests[0]
+		return sc.SuppliedSourceResponseRequest{Resume: sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: out.Expected, Originals: q.Originals, Definitions: q.Definitions, ExpectedHandoff: h}, Workspace: qWorkspace(q), Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: out.CheckpointID}, Record: r, Attempt: sc.SuppliedSourceAttempt{ID: "early-control", CheckpointID: out.CheckpointID, SourceUnitID: r.Envelope.AdmissionID, RequestRecordID: r.RecordID}, AdapterLine: describeworker.EncodeAdapterResultV2(`{"verdict":"ABSTAINED","target_role":"controlled source","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"supplied fixture","consumer_relative":false},"boundary_contribution":"unknown","limitations":["not HOST output"]}`), Limits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 512 << 10, MaxSemanticBytes: 64 << 10}}
+	}
+	prep := func(r sc.SuppliedSourceResponseRequest) sc.SourceAcquisitionRequest {
+		return sc.SourceAcquisitionRequest{Resume: r.Resume, Record: r.Record, Attempt: r.Attempt}
+	}
+	// Test-only wire check, not runtime sizing: the real successful lower result
+	// carries private scalar state, but an identical JSON round trip cannot.
+	metadata, err := cc.PreparePrivateAllModeSourceIntents(ctx, small, contract, smallStore, qWorkspace(q))
+	if err != nil {
+		t.Fatal("ASSERT_EARLY_LOWER_CACHE", err)
+	}
+	peak, held, valid := metadata.RegenerationPayloadUpper()
+	if !valid || peak < held || held == 0 {
+		t.Fatal("ASSERT_EARLY_LOWER_CACHE", peak, held, valid)
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded cc.PrivateAllModeResult
+	if json.Unmarshal(encoded, &decoded) != nil {
+		t.Fatal("ASSERT_EARLY_PRIVATE_CACHE_WIRE")
+	}
+	if _, _, ok := decoded.RegenerationPayloadUpper(); ok {
+		t.Fatal("ASSERT_EARLY_PRIVATE_CACHE_WIRE")
+	}
+	again, _ := json.Marshal(decoded)
+	if !bytes.Equal(encoded, again) {
+		t.Fatal("ASSERT_EARLY_PRIVATE_CACHE_WIRE")
+	}
+	t.Log("ASSERT_EARLY_LOWER_CACHE: PASS; ASSERT_EARLY_PRIVATE_CACHE_WIRE: PASS", peak, held)
+	bad := makeRequest(large, largeOut, largeStore)
+	largeStore.gets, largeStore.puts = 0, 0
+	probe := &earlyWorkContext{Context: ctx}
+	p, e := sc.PrepareSourceAcquisition(probe, runner, prep(bad))
+	if e == nil || p.ID() != "" || largeStore.gets != 0 || largeStore.puts != 0 || probe.regenerated || probe.plan {
+		t.Errorf("ASSERT_EARLY_PREPARE_ZERO_REGEN: error=%v handle=%t gets=%d puts=%d regenerated=%t plan=%t", e, p.ID() != "", largeStore.gets, largeStore.puts, probe.regenerated, probe.plan)
+	} else {
+		t.Log("ASSERT_EARLY_PREPARE_ZERO_REGEN: PASS")
+	}
+	good := makeRequest(small, smallOut, smallStore)
+	eligible, e := sc.PrepareSourceAcquisition(ctx, runner, prep(good))
+	if e != nil || eligible.ID() == "" {
+		t.Fatal("ASSERT_EARLY_SMALL_FITS", e)
+	}
+	smallStore.gets, smallStore.puts = 0, 0
+	largeResponse := good
+	largeResponse.AdapterLine = bytes.Replace(good.AdapterLine, []byte(`"grammar":""`), []byte(`"grammar":"`+strings.Repeat("g", 500*1024)+`"`), 1)
+	probe = &earlyWorkContext{Context: ctx}
+	b, e := sc.CompleteSuppliedSourceAcquisition(probe, runner, eligible, largeResponse)
+	if e == nil || b.ID() != "" || smallStore.gets != 0 || smallStore.puts != 0 || probe.regenerated || probe.plan {
+		t.Errorf("ASSERT_EARLY_COMPLETE_ZERO_REGEN: error=%v handle=%t gets=%d puts=%d regenerated=%t plan=%t", e, b.ID() != "", smallStore.gets, smallStore.puts, probe.regenerated, probe.plan)
+	} else {
+		t.Log("ASSERT_EARLY_COMPLETE_ZERO_REGEN: PASS")
+	}
+	smallStore.gets, smallStore.puts = 0, 0
+	mismatch := good
+	mismatch.Limits.MaxAdapterBytes++
+	if b, e := sc.CompleteSuppliedSourceAcquisition(ctx, runner, eligible, mismatch); e == nil || b.ID() != "" || smallStore.gets != 0 || smallStore.puts != 0 {
+		t.Error("ASSERT_EARLY_LIMIT_ZERO_REGEN", e, smallStore.gets, smallStore.puts)
+	} else {
+		t.Log("ASSERT_EARLY_LIMIT_ZERO_REGEN: PASS")
+	}
+	bound, e := sc.CompleteSuppliedSourceAcquisition(ctx, runner, eligible, good)
+	if e != nil || bound.ID() == "" {
+		t.Fatal("ASSERT_EARLY_SMALL_COMPLETES", e)
+	}
+	if _, e := os.Stat(marker); !errors.Is(e, os.ErrNotExist) {
+		t.Fatal("ASSERT_EARLY_NO_MODEL_START", e)
+	}
+	t.Log("ASSERT_EARLY_SMALL_FITS: PASS; ASSERT_EARLY_SMALL_COMPLETES: PASS; ASSERT_EARLY_CONSTANT_COUNTS: PASS; ASSERT_EARLY_NO_MODEL_START: PASS", smallSize, largeSize, smallOut.Counts)
+}
+
+// Real, controlled pins for the existing Runner constructor. The executable is
+// NEVER run; an unexpected start would leave a marker and fail the witness.
+func acquireRunner(t *testing.T) (*describeworker.Runner, string) {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("Runner Preflight requires Darwin; compile-only elsewhere")
+	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "PROHIBITED_START")
+	pin := func(name, body string, mode os.FileMode) describeworker.FilePin {
+		path := filepath.Join(dir, name)
+		if e := os.WriteFile(path, []byte(body), mode); e != nil {
+			t.Fatal(e)
+		}
+		return describeworker.FilePin{Path: path, SHA256: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(body)))}
+	}
+	script := "#!/bin/sh\nprintf prohibited > '" + marker + "'\nexit 97\n"
+	c := describeworker.Config{Worker: pin("worker", script, 0700), Model: pin("model", "controlled model, never loaded", 0600), Library: pin("library", "controlled library, never loaded", 0600), SandboxExecutable: pin("sandbox", script, 0700), SandboxProfile: pin("profile", "(version 1)\n(deny network*)\n", 0600), Grammar: pin("grammar", "root ::= object\n", 0600), RuntimeIdentity: "controlled-runtime", AdapterIdentity: "controlled-adapter", ModelIdentity: "controlled-model", ResponseVersion: describeworker.ResponseVersionV2, Limits: describeworker.Limits{TimeoutMS: 1000, MaxTokens: 64, ContextTokens: 1024, StdoutBytes: 512 << 10, StderrBytes: 1024, WorkBytes: 1 << 20, TempBytes: 1 << 20}}
+	r, e := describeworker.NewRunner(c)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return r, marker
+}
+
+func TestSuppliedAcquire(t *testing.T) {
+	runner, marker := acquireRunner(t)
+	foreign, otherMarker := acquireRunner(t)
+	input, h, c, q := sourceStageFixture(t, "positive", false)
+	inv.ControlledSourceProjectionNoReadmitForTest(t, input)
+	ctx, cancel := context.WithDeadline(context.Background(), q.Deadline)
+	defer cancel()
+	store := &sourceStageStore{MemoryStore: cc.NewMemoryStore()}
+	got := sc.Run(ctx, sc.Request{PrivateAllMode: &h, PrivateSources: &q, Workspace: qWorkspace(q), Contract: c, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+	if got.Err != nil || got.PrivateSources == nil {
+		t.Fatal("ASSERT_ACQUIRE_SOURCE", got.Err)
+	}
+	out := got.PrivateSources
+	if out.Counts.Admitted != 32 || out.Counts.Unresolved != 24 || out.Counts.Requests != 2 || out.Counts.Intents != 56 {
+		t.Fatal("ASSERT_ACQUIRE_ALL7", out.Counts)
+	}
+	resume := sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: out.Expected, Originals: q.Originals, Definitions: q.Definitions, ExpectedHandoff: h}, Workspace: qWorkspace(q), Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: out.CheckpointID}
+	semantic := `{"verdict":"ABSTAINED","target_role":"controlled source fixture","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"fixture body only","consumer_relative":false},"boundary_contribution":"unknown","limitations":["controlled supplied terminal text; not HOST output"]}`
+	makeRequest := func(n int) sc.SuppliedSourceResponseRequest {
+		r := out.Requests[n]
+		return sc.SuppliedSourceResponseRequest{Resume: resume, Record: r, Attempt: sc.SuppliedSourceAttempt{ID: "controlled-acquisition", CheckpointID: out.CheckpointID, SourceUnitID: r.Envelope.AdmissionID, RequestRecordID: r.RecordID}, AdapterLine: describeworker.EncodeAdapterResultV2(semantic), Limits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 512 << 10, MaxSemanticBytes: 64 << 10}}
+	}
+	prepare := func(r sc.SuppliedSourceResponseRequest) sc.SourceAcquisitionRequest {
+		return sc.SourceAcquisitionRequest{Resume: r.Resume, Record: r.Record, Attempt: r.Attempt}
+	}
+	first := makeRequest(0)
+	eligible, e := sc.PrepareSourceAcquisition(ctx, runner, prepare(first))
+	if e != nil || eligible.ID() == "" {
+		t.Fatal("ASSERT_ACQUIRE_ELIGIBLE", e)
+	}
+	if _, e = sc.CompleteSuppliedSourceAcquisition(ctx, foreign, eligible, first); e == nil {
+		t.Fatal("ASSERT_ACQUIRE_OWNER")
+	}
+	t.Log("ASSERT_ACQUIRE_OWNER: PASS")
+	beforePuts := store.puts
+	bindings := map[string]bool{}
+	for n := range out.Requests {
+		r := makeRequest(n)
+		p, e := sc.PrepareSourceAcquisition(ctx, runner, prepare(r))
+		if e != nil {
+			t.Fatal("ASSERT_ACQUIRE_BOTH_REQUESTS", e)
+		}
+		b, e := sc.CompleteSuppliedSourceAcquisition(ctx, runner, p, r)
+		if e != nil || b.ID() == "" || bindings[b.ID()] {
+			t.Fatal("ASSERT_ACQUIRE_BOTH_REQUESTS", e)
+		}
+		bindings[b.ID()] = true
+		ordinary, e := sc.BindSuppliedSourceResponse(ctx, r)
+		bb, _ := b.Bytes()
+		ob, _ := ordinary.Bytes()
+		if e != nil || !bytes.Equal(bb, ob) {
+			t.Fatal("ASSERT_ACQUIRE_ADOPTED_BINDER", e)
+		}
+		var wire map[string]json.RawMessage
+		if json.Unmarshal(bb, &wire) != nil || string(wire["authority"]) != "0" || string(wire["accepted"]) != "false" || string(wire["identity"]) != `"UNRESOLVED"` || string(wire["completeness"]) != `"UNKNOWN"` || string(wire["absence"]) != `"PROHIBITED"` || string(wire["origin"]) != `"SUPPLIED_TERMINAL_RESPONSE_ONLY"` || string(wire["execution"]) != `"NO_PROCESS_OR_HOST_EXECUTION_VERIFIED"` {
+			t.Fatal("ASSERT_ACQUIRE_CEILING")
+		}
+	}
+	t.Log("ASSERT_ACQUIRE_BOTH_REQUESTS: PASS; ASSERT_ACQUIRE_ADOPTED_BINDER: PASS; ASSERT_ACQUIRE_CEILING: PASS")
+	// Complete tuple negatives. Each attempt retains the same genuine upper
+	// handle; mutated public values cannot cause it to bind another context.
+	for name, mutate := range map[string]func(*sc.SuppliedSourceResponseRequest){
+		"request":     func(r *sc.SuppliedSourceResponseRequest) { r.Record.RecordID = "foreign" },
+		"prompt":      func(r *sc.SuppliedSourceResponseRequest) { r.Record.Envelope.Prompt += "foreign" },
+		"full-record": func(r *sc.SuppliedSourceResponseRequest) { r.Record.Lineage.AlternativeOrdinal++ },
+		"source": func(r *sc.SuppliedSourceResponseRequest) {
+			r.Attempt.SourceUnitID = out.Requests[1].Envelope.AdmissionID
+		},
+		"attempt":         func(r *sc.SuppliedSourceResponseRequest) { r.Attempt.ID = "foreign" },
+		"attempt-request": func(r *sc.SuppliedSourceResponseRequest) { r.Attempt.RequestRecordID = "foreign" },
+		"checkpoint":      func(r *sc.SuppliedSourceResponseRequest) { r.Attempt.CheckpointID = "foreign" },
+		"workspace":       func(r *sc.SuppliedSourceResponseRequest) { r.Resume.Workspace = "foreign" },
+		"selector":        func(r *sc.SuppliedSourceResponseRequest) { r.Resume.Selector = "foreign" },
+		"original": func(r *sc.SuppliedSourceResponseRequest) {
+			s := *r.Resume.PrivateSources
+			s.Originals = nil
+			r.Resume.PrivateSources = &s
+		},
+		"handoff": func(r *sc.SuppliedSourceResponseRequest) {
+			s := *r.Resume.PrivateSources
+			s.ExpectedHandoff = cc.PrivateAllModeHandoff{}
+			r.Resume.PrivateSources = &s
+		},
+		"expected": func(r *sc.SuppliedSourceResponseRequest) {
+			s := *r.Resume.PrivateSources
+			s.Expected = sc.PrivateAllModeSourcesExpected{}
+			r.Resume.PrivateSources = &s
+		},
+		"buffer": func(r *sc.SuppliedSourceResponseRequest) { r.AdapterLine = make([]byte, (512<<10)+1) },
+	} {
+		r := first
+		mutate(&r)
+		if b, e := sc.CompleteSuppliedSourceAcquisition(ctx, runner, eligible, r); e == nil || b.ID() != "" {
+			t.Fatal("ASSERT_ACQUIRE_JOIN", name)
+		}
+	}
+	t.Log("ASSERT_ACQUIRE_JOIN: PASS")
+	var public sc.SourceAcquisitionHandoff
+	publicBytes, _ := json.Marshal(eligible)
+	if json.Unmarshal(publicBytes, &public) != nil || public.ID() != "" {
+		t.Fatal("ASSERT_ACQUIRE_OPAQUE")
+	}
+	if b, e := sc.CompleteSuppliedSourceAcquisition(ctx, runner, public, first); e == nil || b.ID() != "" {
+		t.Fatal("ASSERT_ACQUIRE_OPAQUE")
+	}
+	// A genuine lower plan still cannot carry upper source eligibility via JSON.
+	lowerContext := describeworker.SourceAcquisitionContext{HandoffID: h.ID(), CheckpointID: out.CheckpointID, SourceUnitID: first.Attempt.SourceUnitID, SourceDigest: "sha256:" + first.Record.Envelope.SourceRevision, Workspace: resume.Workspace, PolicyID: q.PolicyID, Deadline: q.Deadline, SourceLimits: q.Limits, MaxWireBytes: c.PacketMaxResponseBytes(), MaxParentBytes: c.CaptureLimits().MaxParentBytes}
+	lower, e := runner.PrepareSourceAcquisition(ctx, first.Record, first.Attempt.ID, lowerContext)
+	if e != nil {
+		t.Fatal("ASSERT_ACQUIRE_LOWER_SETUP", e)
+	}
+	lowerBytes, _ := json.Marshal(lower)
+	if json.Unmarshal(lowerBytes, &public) != nil || public.ID() != "" {
+		t.Fatal("ASSERT_ACQUIRE_LOWER_NONADMITTING")
+	}
+	noProof := prepare(first)
+	ss := *noProof.Resume.PrivateSources
+	ss.Expected = sc.PrivateAllModeSourcesExpected{}
+	noProof.Resume.PrivateSources = &ss
+	if p, e := sc.PrepareSourceAcquisition(ctx, runner, noProof); e == nil || p.ID() != "" {
+		t.Fatal("ASSERT_ACQUIRE_LOWER_NONADMITTING")
+	}
+	if !errors.Is(runner.RunSourceAcquisition(ctx, lower), describeworker.ErrSourceExecutionDisabled) {
+		t.Fatal("ASSERT_ACQUIRE_DISABLED")
+	}
+	cancelled, stop := context.WithCancel(ctx)
+	stop()
+	gets := store.gets
+	if p, e := sc.PrepareSourceAcquisition(cancelled, runner, prepare(first)); e == nil || p.ID() != "" || store.gets != gets {
+		t.Fatal("ASSERT_ACQUIRE_EARLY_CANCEL")
+	}
+	if b, e := sc.CompleteSuppliedSourceAcquisition(cancelled, runner, eligible, first); e == nil || b.ID() != "" || store.gets != gets {
+		t.Fatal("ASSERT_ACQUIRE_EARLY_CANCEL")
+	}
+	for _, completion := range []bool{false, true} {
+		base, stop := context.WithCancel(ctx)
+		late := &acquireFinalContext{Context: base, cancel: stop}
+		var id string
+		var e error
+		if completion {
+			b, err := sc.CompleteSuppliedSourceAcquisition(late, runner, eligible, first)
+			id, e = b.ID(), err
+		} else {
+			p, err := sc.PrepareSourceAcquisition(late, runner, prepare(first))
+			id, e = p.ID(), err
+		}
+		stop()
+		phase := "prepare"
+		if completion {
+			phase = "completion"
+		}
+		if e == nil || id != "" || !late.seen {
+			t.Errorf("ASSERT_ACQUIRE_FINAL_CANCEL_%s error=%v seen=%v", phase, e, late.seen)
+		} else {
+			t.Logf("ASSERT_ACQUIRE_FINAL_CANCEL_%s: PASS", phase)
+		}
+	}
+	t.Log("ASSERT_ACQUIRE_EARLY_CANCEL: PASS")
+	// Boundary search changes ONLY supplied grammar metadata, not any grant,
+	// source limit, URI or deadline. Find an ordinary binder payload just below
+	// the unchanged parent ceiling, then show this retained plan is not free.
+	low, high := 0, 500*1024
+	for n := 0; n < 10; n++ {
+		mid := (low + high) / 2
+		r := first
+		r.AdapterLine = bytes.Replace(first.AdapterLine, []byte(`"grammar":""`), []byte(`"grammar":"`+strings.Repeat("g", mid)+`"`), 1)
+		if _, e := sc.BindSuppliedSourceResponse(ctx, r); e == nil {
+			low = mid
+		} else {
+			if !strings.Contains(e.Error(), "retained-plus-peak ceiling") {
+				t.Fatal("ASSERT_ACQUIRE_EXTRA_CONTROL", e)
+			}
+			high = mid
+		}
+	}
+	near := first
+	near.AdapterLine = bytes.Replace(first.AdapterLine, []byte(`"grammar":""`), []byte(`"grammar":"`+strings.Repeat("g", low)+`"`), 1)
+	if _, e := sc.BindSuppliedSourceResponse(ctx, near); e != nil {
+		t.Fatal("ASSERT_ACQUIRE_EXTRA_CONTROL", e)
+	}
+	if b, e := sc.CompleteSuppliedSourceAcquisition(ctx, runner, eligible, near); e == nil || b.ID() != "" || !strings.Contains(e.Error(), "retained-plus-peak ceiling") {
+		t.Fatal("ASSERT_ACQUIRE_EXTRA_RETAINED", e)
+	}
+	t.Log("ASSERT_ACQUIRE_EXTRA_RETAINED: PASS; ASSERT_ACQUIRE_EXTRA_CONTROL: PASS", low, high)
+	if b, e := sc.CompleteSuppliedSourceAcquisition(ctx, runner, eligible, first); e != nil || b.ID() == "" {
+		t.Fatal("ASSERT_ACQUIRE_RESTORED", e)
+	}
+	for _, path := range []string{marker, otherMarker} {
+		if _, e := os.Stat(path); !errors.Is(e, os.ErrNotExist) {
+			t.Fatal("ASSERT_ACQUIRE_NO_START", e)
+		}
+	}
+	if store.puts != beforePuts || len(bindings) != 2 || q.Deadline != lowerContext.Deadline || q.Limits != lowerContext.SourceLimits {
+		t.Fatal("ASSERT_ACQUIRE_UNCHANGED_CONTEXT")
+	}
+	t.Log("ASSERT_ACQUIRE_ALL7: PASS; ASSERT_ACQUIRE_OPAQUE: PASS; ASSERT_ACQUIRE_LOWER_NONADMITTING: PASS; ASSERT_ACQUIRE_DISABLED: PASS; ASSERT_ACQUIRE_NO_START: PASS; ASSERT_ACQUIRE_UNCHANGED_CONTEXT: PASS; ASSERT_ACQUIRE_RESTORED: PASS; source=32 unresolved=24 requests=2 bindings=2 describe_workers=0; no new capture/evaluator")
+}
+
+// Test-only context intercepts only the actual final upper publication helper.
+// No mutable production hook or clock is introduced.
+type acquireFinalContext struct {
+	context.Context
+	cancel   context.CancelFunc
+	deadline time.Time
+	seen     bool
+}
+
+func (c *acquireFinalContext) Err() error {
+	if e := c.Context.Err(); e != nil {
+		return e
+	}
+	for depth := 1; depth <= 4; depth++ {
+		pc, _, _, ok := runtime.Caller(depth)
+		if ok && strings.HasSuffix(runtime.FuncForPC(pc).Name(), ".sourceAcquisitionPublicationLive") {
+			c.seen = true
+			if !c.deadline.IsZero() {
+				time.Sleep(time.Until(c.deadline) + time.Millisecond)
+				return nil
+			}
+			c.cancel()
+			return c.Context.Err()
+		}
+	}
+	return nil
+}
+
+func TestSuppliedExpiry(t *testing.T) {
+	runner, _ := acquireRunner(t)
+	input, h, c, q := sourceStageFixture(t, "positive", false)
+	inv.ControlledSourceProjectionNoReadmitForTest(t, input)
+	for _, completion := range []bool{false, true} {
+		// Shorten, never renew, the original source deadline for this separate
+		// controlled source pause. Existing producer originals outlive it.
+		short := q
+		short.Deadline = time.Now().Add(700 * time.Millisecond)
+		if !short.Deadline.Before(q.Deadline) {
+			t.Fatal("ASSERT_ACQUIRE_EXPIRY_SETUP")
+		}
+		store := &sourceStageStore{MemoryStore: cc.NewMemoryStore()}
+		got := sc.Run(context.Background(), sc.Request{PrivateAllMode: &h, PrivateSources: &short, Workspace: qWorkspace(q), Contract: c, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+		if got.Err != nil || got.PrivateSources == nil {
+			t.Fatal("ASSERT_ACQUIRE_EXPIRY_SETUP", got.Err)
+		}
+		out := got.PrivateSources
+		r := out.Requests[0]
+		resume := sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: out.Expected, Originals: q.Originals, Definitions: q.Definitions, ExpectedHandoff: h}, Workspace: qWorkspace(q), Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: out.CheckpointID}
+		prep := sc.SourceAcquisitionRequest{Resume: resume, Record: r, Attempt: sc.SuppliedSourceAttempt{ID: "controlled-expiry", CheckpointID: out.CheckpointID, SourceUnitID: r.Envelope.AdmissionID, RequestRecordID: r.RecordID}}
+		late := &acquireFinalContext{Context: context.Background(), deadline: short.Deadline}
+		if completion {
+			p, e := sc.PrepareSourceAcquisition(context.Background(), runner, prep)
+			if e != nil {
+				t.Fatal("ASSERT_ACQUIRE_EXPIRY_SETUP", e)
+			}
+			semantic := `{"verdict":"ABSTAINED","target_role":"fixture","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"fixture","consumer_relative":false},"boundary_contribution":"unknown","limitations":["supplied only"]}`
+			b, e := sc.CompleteSuppliedSourceAcquisition(late, runner, p, sc.SuppliedSourceResponseRequest{Resume: resume, Record: r, Attempt: prep.Attempt, AdapterLine: describeworker.EncodeAdapterResultV2(semantic), Limits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 512 << 10, MaxSemanticBytes: 64 << 10}})
+			if e == nil || b.ID() != "" || !late.seen {
+				t.Errorf("ASSERT_ACQUIRE_FINAL_EXPIRY_completion error=%v seen=%v", e, late.seen)
+			} else {
+				t.Log("ASSERT_ACQUIRE_FINAL_EXPIRY_completion: PASS")
+			}
+		} else {
+			p, e := sc.PrepareSourceAcquisition(late, runner, prep)
+			if e == nil || p.ID() != "" || !late.seen {
+				t.Errorf("ASSERT_ACQUIRE_FINAL_EXPIRY_prepare error=%v seen=%v", e, late.seen)
+			} else {
+				t.Log("ASSERT_ACQUIRE_FINAL_EXPIRY_prepare: PASS")
+			}
+		}
+		before := store.gets
+		if p, e := sc.PrepareSourceAcquisition(context.Background(), runner, prep); e == nil || p.ID() != "" || store.gets != before {
+			t.Fatal("ASSERT_ACQUIRE_EARLY_EXPIRY", e)
+		}
+	}
+	t.Log("ASSERT_ACQUIRE_EARLY_EXPIRY: PASS")
 }
 
 // Controlled supplied semantic text is NOT authentic HOST output. Only the
