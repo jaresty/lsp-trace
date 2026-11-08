@@ -209,6 +209,9 @@ func (w applicationFullWriter) Write(p []byte) (int, error) {
 }
 
 func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "source-describe" {
+		return runPrivateSourceHostApplication(args, applicationFullWriter{stdout}, stderr)
+	}
 	stdout = applicationFullWriter{stdout}
 	fail := func(class string) int { fmt.Fprintln(stderr, "private application:", class); return 1 }
 	var startup *applicationStartupNotifier

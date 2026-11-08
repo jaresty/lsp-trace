@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/url"
 	"os"
 	"os/exec"
@@ -23,6 +26,7 @@ import (
 	"lsp-trace/internal/describeworker"
 	inv "lsp-trace/internal/inventorysuccessor"
 	sc "lsp-trace/internal/inventorysuccessor/sourcecontinuation"
+	so "lsp-trace/internal/inventorysuccessor/sourceoperator"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/lspwire"
 	host "lsp-trace/internal/privatedescribeprep"
@@ -30,6 +34,7 @@ import (
 	"lsp-trace/internal/programcadmission"
 	rg "lsp-trace/internal/referencegrouping"
 	"lsp-trace/internal/retainedprojection"
+	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/sourceobject"
 	"lsp-trace/internal/sourceprojection"
 	tp "lsp-trace/internal/targetpacket"
@@ -84,6 +89,28 @@ func TestSuppliedHost(t *testing.T) {
 	}
 	limits := describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10}
 	cfg := newConfig("mailbox", h.ID())
+	// Genuine opaque originals/expected/cache, not a caller-supplied bound DTO.
+	// The observation must do no regeneration, Store IO or mailbox publication.
+	phaseBeforeGets, phaseBeforePuts := store.OperationCounts()
+	phaseProbe := &earlyWorkContext{Context: ctx}
+	phases, phaseErr := out.HostPhaseBounds(phaseProbe, cfg, request, limits)
+	phaseAfterGets, phaseAfterPuts := store.OperationCounts()
+	phaseFiles, phaseFileErr := os.ReadDir(cfg.Mailbox.Directory)
+	if phaseErr != nil || phases.Source == 0 || phases.Lower == 0 || phases.Binder == 0 || phaseBeforeGets != phaseAfterGets || phaseBeforePuts != phaseAfterPuts || phaseProbe.regenerated || phaseProbe.plan || phaseFileErr != nil || len(phaseFiles) != 0 {
+		t.Fatal("ASSERT_HOST_GENUINE_PHASE_METADATA_ONLY", phases, phaseErr, phaseProbe, phaseFileErr)
+	}
+	added := []byte("controlled additionally retained store bytes")
+	if _, e := store.Put(ctx, added); e != nil {
+		t.Fatal(e)
+	}
+	next, phaseErr := out.HostPhaseBounds(ctx, cfg, request, limits)
+	if phaseErr != nil || next.Source != phases.Source+uint64(len(added)) || next.Lower != phases.Lower+uint64(len(added)) || next.Binder != phases.Binder+uint64(len(added)) {
+		t.Fatal("ASSERT_HOST_PHASE_CURRENT_STORE", phases, next, phaseErr)
+	}
+	if _, e := (&sc.PrivateAllModeSourcesResult{}).HostPhaseBounds(ctx, cfg, request, limits); e == nil {
+		t.Fatal("ASSERT_HOST_PHASE_DTO_CANNOT_MINT")
+	}
+	t.Logf("ASSERT_HOST_GENUINE_PHASE_METADATA_ONLY: PASS; ASSERT_HOST_PHASE_CURRENT_STORE: PASS; ASSERT_HOST_PHASE_DTO_CANNOT_MINT: PASS; genuine peaks source=%d lower=%d binder=%d", phases.Source, phases.Lower, phases.Binder)
 	for name, change := range map[string]func(*sc.SourceAcquisitionRequest){
 		"record":  func(v *sc.SourceAcquisitionRequest) { v.Record.Envelope.Prompt += "foreign" },
 		"unit":    func(v *sc.SourceAcquisitionRequest) { v.Attempt.SourceUnitID = out.Requests[1].Envelope.AdmissionID },
@@ -203,8 +230,24 @@ func TestSuppliedHost(t *testing.T) {
 	if e != nil || publisherErr != nil || result.Supplied().ID() == "" || !result.Delivery().Delivered() {
 		t.Fatal("ASSERT_HOST_CONNECTED", e, publisherErr)
 	}
+	// Actual opaque delivered value, not a zero DTO: deterministic close-error
+	// finalization witness. Physical os.Root Close failure is not injected here.
+	closeFailure := errors.New("controlled first mailbox close failure")
+	failed, ce := result.AfterClose(closeFailure)
+	if !errors.Is(ce, closeFailure) || failed.Supplied().ID() != "" || failed.Delivery().Delivered() {
+		t.Fatal("ASSERT_HOST_CLOSE_ERROR_WITHHOLDS_DELIVERY", ce)
+	}
+	preserved, ce := result.AfterClose(nil)
+	if ce != nil || preserved.Supplied().ID() != result.Supplied().ID() || !preserved.Delivery().Delivered() {
+		t.Fatal("ASSERT_HOST_CLOSE_SUCCESS_CONTROL", ce)
+	}
+	suppliedUpper, deliveryUpper, semanticUpper, be := result.NativePayloadBounds()
 	bound, _ := result.Supplied().Bytes()
 	receipt, _ := result.Delivery().Bytes()
+	if be != nil || suppliedUpper != uint64(len(bound)) || deliveryUpper < uint64(len(receipt)) || semanticUpper == 0 {
+		t.Fatal("ASSERT_NATIVE_OPAQUE_ACTUAL_LENGTHS", suppliedUpper, deliveryUpper, semanticUpper, be)
+	}
+	t.Log("ASSERT_HOST_CLOSE_ERROR_WITHHOLDS_DELIVERY: PASS; ASSERT_HOST_CLOSE_SUCCESS_CONTROL: PASS; ASSERT_NATIVE_OPAQUE_ACTUAL_LENGTHS: PASS; LIMITED: actual-value finalization helper plus finite actual-call AST, not physical close-fault execution")
 	if !bytes.Contains(bound, []byte(`"origin":"SUPPLIED_TERMINAL_RESPONSE_ONLY"`)) || !bytes.Contains(bound, []byte(`"execution":"NO_PROCESS_OR_HOST_EXECUTION_VERIFIED"`)) || !bytes.Contains(receipt, []byte("HOST_OBSERVED_NOT_AUTHENTICATED")) {
 		t.Fatal("ASSERT_HOST_SUPPLIED_CEILING")
 	}
@@ -225,6 +268,22 @@ func TestSuppliedHost(t *testing.T) {
 	if finalPuts != beforePuts {
 		t.Fatal("ASSERT_HOST_NO_PUBLICATION")
 	}
+	// After the original positive delivery, exercise the real scalar refusal with
+	// more currently retained store bytes. This is NOT an operator phase-separating
+	// acquisition fixture, and must not be reported as one.
+	if _, e := store.Put(ctx, bytes.Repeat([]byte("s"), 1<<20)); e != nil {
+		t.Fatal(e)
+	}
+	refusalCfg := newConfig("phase-store-refusal", h.ID())
+	phaseBeforeGets, phaseBeforePuts = store.OperationCounts()
+	refusalProbe := &earlyWorkContext{Context: ctx}
+	_, refusalErr := out.HostPhaseBounds(refusalProbe, refusalCfg, request, limits)
+	phaseAfterGets, phaseAfterPuts = store.OperationCounts()
+	refusalFiles, refusalFileErr := os.ReadDir(refusalCfg.Mailbox.Directory)
+	if refusalErr == nil || phaseAfterGets != phaseBeforeGets || phaseAfterPuts != phaseBeforePuts || refusalProbe.regenerated || refusalProbe.plan || refusalFileErr != nil || len(refusalFiles) != 0 {
+		t.Fatal("ASSERT_HOST_GENUINE_PHASE_EARLY_REFUSAL", refusalErr, refusalProbe, refusalFileErr)
+	}
+	t.Log("ASSERT_HOST_GENUINE_PHASE_EARLY_REFUSAL: PASS (current-store bound method, not connected operator separation)")
 	t.Log("ASSERT_HOST_CONNECTED: PASS; ASSERT_HOST_HELPER_EXACT_BYTES: PASS; ASSERT_HOST_SUPPLIED_CEILING: PASS; ASSERT_HOST_UPPER_ONE_SHOT: PASS; ASSERT_HOST_PUBLIC_NONADMITTING: PASS; ASSERT_HOST_ALL7: PASS; original caps unchanged; source=32 unresolved=24 requests=2 exchanges=1 sandbox/model starts=0 actual_HOST=0")
 }
 
@@ -448,6 +507,14 @@ func TestPrivateSourceSELFResponder(t *testing.T) {
 				r = site
 			}
 			result = []any{map[string]any{"uri": targetURI, "range": r}}
+			count := map[string]int{"native-large": 32, "host-phase-8": 8, "host-phase-16": 16, "host-phase-24": 24}[mode]
+			if count > 0 && msg.Method == "textDocument/references" {
+				items := make([]any, count)
+				for i := range items {
+					items[i] = map[string]any{"uri": targetURI, "range": r}
+				}
+				result = items
+			}
 			if strings.HasPrefix(mode, "link") && msg.Method == "textDocument/definition" {
 				full := other.Range
 				if mode == "link-envelope" {
@@ -508,6 +575,419 @@ type sourceStageWorker struct{ calls int }
 func (w *sourceStageWorker) Run(context.Context, describerequest.Record, string) (describeworker.RunResult, error) {
 	w.calls++
 	return describeworker.RunResult{}, errors.New("source stage must never execute")
+}
+
+func TestSuppliedOpPreparationControls(t *testing.T) {
+	for _, control := range []string{"paid", "shortage", "scope", "seed", "attempt", "input", "root", "stale", "cancel", "deadline", "uncertain"} {
+		t.Run(control, func(t *testing.T) {
+			owner, root := inv.ControlledRPrepCanonicalOwnerForTest(t)
+			if control == "shortage" {
+				owner, root = inv.ControlledRPrepShortOwnerForTest(t)
+			}
+			m, start, uri := mixedStartFixtureV2(t)
+			body := []byte("package fixture\nfunc Root(){ Other() }\nfunc Other(){ Root() }\n")
+			if e := os.WriteFile(filepath.Join(start.Profile.Workspace().String(), "root.go"), body, 0644); e != nil {
+				t.Fatal(e)
+			}
+			start.Process.Args = []string{"-test.run=^TestPrivateSourceSELFResponder$", "--", "private-source-self", start.Profile.Workspace().String(), "positive"}
+			capture := inv.PrivateMixedInputRequestV2{Manager: m, Root: root, Start: start, URI: uri, OccurrenceID: "prep-control", Revision: "source-controlled-revision", Privacy: "private-source-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 6, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}}
+			ctx := context.Background()
+			op, e := owner.ReserveMixedInputV2(ctx, fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("capture-control"))), capture)
+			if e != nil {
+				t.Fatal(e)
+			}
+			input, e := inv.ExecuteMixedInputV2(ctx, op, capture)
+			if e != nil {
+				t.Fatal(e)
+			}
+			q := inv.PrivateSourceRPreparationRequestV1{Input: input, Root: root, ExpectedHead: owner.PreparationHeadV1(), Attempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("prep-control"))), Workspace: start.Profile.Workspace().String(), Revision: capture.Revision, RunID: "prep-control", SeedNamespace: "source-original-schedule", Seed: 7, Deadline: input.SourceDeadlineV1()}
+			_, before := inv.ControlledRPrepDebitForTest(t, owner)
+			if control == "scope" {
+				q.RunID = string([]byte{0xff})
+			}
+			if control == "stale" {
+				q.ExpectedHead = "sha256:" + strings.Repeat("0", 64)
+			}
+			operation, e := owner.ReserveRPreparationV1(ctx, q)
+			if control == "shortage" || control == "stale" || control == "scope" {
+				if e == nil {
+					t.Fatal("ASSERT_RPREP_NO_RESERVATION", control)
+				}
+				_, after := inv.ControlledRPrepDebitForTest(t, owner)
+				if before != after {
+					t.Fatal("ASSERT_RPREP_NO_CONSTRUCTION_DEBIT", control)
+				}
+				if p, e := inv.ExecuteRPreparationV1(ctx, operation, q); e == nil {
+					_, _, _, _, _, ve := p.Values()
+					t.Fatal("ASSERT_RPREP_NO_USABLE", ve)
+				}
+				t.Log("ASSERT_RPREP_NO_RESERVATION: PASS", control)
+				return
+			}
+			if e != nil {
+				t.Fatal(e)
+			}
+			disposition, afterReserve := inv.ControlledRPrepDebitForTest(t, owner)
+			if disposition != "PENDING" || afterReserve[0] <= before[0] || afterReserve[13] <= before[13] {
+				t.Fatal("ASSERT_RPREP_UPFRONT_DEBIT", disposition, before, afterReserve)
+			}
+			expected := inv.ControlledRPrepExpectedChargeForTest(t, q)
+			for i, n := range expected {
+				if i == 8 {
+					continue
+				}
+				if afterReserve[i]-before[i] != n {
+					t.Fatal("ASSERT_RPREP_EXACT_DEBIT", i, n, afterReserve[i]-before[i])
+				}
+			}
+			bad := q
+			switch control {
+			case "seed":
+				bad.Seed++
+			case "attempt":
+				bad.Attempt = "sha256:" + strings.Repeat("0", 64)
+			case "input":
+				bad.Input = inv.PrivateManagedGroupingInput{}
+			case "root":
+				bad.Root = nil
+			case "deadline":
+				bad.Deadline = time.Now().Add(-time.Second)
+			case "cancel":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			case "uncertain":
+				inv.ControlledMixedObserveUncertainForTest(owner)
+			}
+			prepared, e := inv.ExecuteRPreparationV1(ctx, operation, bad)
+			if control == "paid" {
+				if e != nil {
+					t.Fatal("ASSERT_RPREP_PAID", e)
+				}
+				_, _, _, _, _, e = prepared.Values()
+				if e != nil {
+					t.Fatal(e)
+				}
+				retained, ok := prepared.RetainedPayloadUpper()
+				if !ok || retained <= uint64(input.Input.ByteLength()) || retained > 8<<20 {
+					t.Fatal("ASSERT_RPREP_ACTUAL_RETAINED_METADATA", retained, ok)
+				}
+				t.Logf("ASSERT_RPREP_ACTUAL_RETAINED_METADATA: PASS bound=%d input=%d", retained, input.Input.ByteLength())
+			} else {
+				if e == nil {
+					t.Fatal("ASSERT_RPREP_BAD_USABLE", control)
+				}
+				if _, _, _, _, _, ve := prepared.Values(); ve == nil {
+					t.Fatal("ASSERT_RPREP_BAD_USABLE", control)
+				}
+			}
+			if _, e = inv.ExecuteRPreparationV1(context.Background(), operation, q); e == nil {
+				t.Fatal("ASSERT_RPREP_ONE_SHOT", control)
+			}
+			t.Logf("ASSERT_RPREP_UPFRONT_DEBIT: PASS; ASSERT_RPREP_ONE_SHOT: PASS control=%s before=%v reserved=%v", control, before, afterReserve)
+		})
+	}
+}
+
+// TestSuppliedOp connects actual controlled owner, R SELF acquisition, paid
+// preparation, source Resume, file-role exchange and Go-owned native publication.
+func TestSuppliedOp(t *testing.T) {
+	home, e := os.UserHomeDir()
+	if e != nil {
+		t.Fatal(e)
+	}
+	dir, e := os.MkdirTemp(home, ".source-op-cli-")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer os.RemoveAll(dir)
+	binary := filepath.Join(dir, "lsp-trace")
+	_, file, _, _ := runtime.Caller(0)
+	build := exec.Command("go", "build", "-o", binary, "./cmd/lsp-trace")
+	build.Dir = filepath.Join(filepath.Dir(file), "..", "..")
+	raw, e := build.CombinedOutput()
+	if e != nil {
+		t.Fatalf("CLI build is not RED: %v %s", e, raw)
+	}
+	t.Run("api", func(t *testing.T) { testSuppliedOp(t, "") })
+	t.Run("cli", func(t *testing.T) { testSuppliedOp(t, binary) })
+}
+
+type sourceOpCLIConfig struct {
+	Schema, Mode, Pin                                                     string
+	AccountingRoot                                                        string
+	CanonicalJob                                                          []byte
+	ExpectedHead                                                          string
+	Verification                                                          inv.PrivateManagedInputVerificationV2
+	Profile                                                               runtimeprofile.Selector
+	LanguageID, Provider                                                  string
+	ProcessPath                                                           string
+	ProcessArgs                                                           []string
+	Workspace, Revision, Privacy, URI, OccurrenceID                       string
+	Line, Character                                                       uint32
+	CaptureAttempt, PreparationAttempt, RoleAttempt, RunID, SeedNamespace string
+	Seed                                                                  uint64
+	Deadline                                                              time.Time
+	Contract                                                              cc.ContractInput
+	SourceLimits                                                          tp.PrivateSourceLimits
+	Host                                                                  host.SourceHostConfig
+	ResponseLimits                                                        describeworker.SuppliedResponseLimits
+	OutputRoots                                                           [2]string
+}
+
+// Finite source-level supplement for physical close-fault paths which are not
+// deterministically injectable through the closed production mailbox. Reads only
+// the two authorized concrete implementations, not a compiler closure.
+func TestSourceOperatorMailboxCloseBinding(t *testing.T) {
+	_, file, _, _ := runtime.Caller(0)
+	readBody := func(path, name, receiver string) string {
+		t.Helper()
+		raw, e := os.ReadFile(path)
+		if e != nil {
+			t.Fatal(e)
+		}
+		fs := token.NewFileSet()
+		f, e := parser.ParseFile(fs, path, raw, 0)
+		if e != nil {
+			t.Fatal(e)
+		}
+		for _, d := range f.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			if !ok || fn.Name.Name != name {
+				continue
+			}
+			if receiver != "" {
+				if fn.Recv == nil {
+					continue
+				}
+				star, ok := fn.Recv.List[0].Type.(*ast.StarExpr)
+				if !ok {
+					continue
+				}
+				id, ok := star.X.(*ast.Ident)
+				if !ok || id.Name != receiver {
+					continue
+				}
+			}
+			return string(raw[fs.Position(fn.Body.Pos()).Offset:fs.Position(fn.Body.End()).Offset])
+		}
+		t.Fatal("function absent", name)
+		return ""
+	}
+	lower := readBody(filepath.Join(filepath.Dir(file), "..", "privatedescribeprep", "source_handoff_private.go"), "Close", "SourceHostMailbox")
+	if !strings.Contains(lower, "return m.closeErr") || strings.Count(lower, "return m.closeErr") != 2 || !strings.Contains(lower, "m.closeErr = m.io.root.Close()") || !strings.Contains(lower, "m.io == nil || m.io.closed") || strings.Index(lower, "m.io.closed = true") > strings.Index(lower, "m.closeErr = m.io.root.Close()") {
+		t.Fatal("ASSERT_MAILBOX_FIRST_CLOSE_STICKY_BINDING")
+	}
+	upper := readBody(filepath.Join(filepath.Dir(file), "sourcecontinuation", "host_handoff.go"), "CompleteSourceHost", "")
+	if !strings.Contains(upper, "out, err = out.AfterClose(errors.Join(err, s.mailbox.Close()))") || strings.Index(upper, "out.AfterClose") > strings.Index(upper, "s.mailbox.Exchange") {
+		t.Fatal("ASSERT_HOST_ACTUAL_CLOSE_JOIN_BINDING")
+	}
+	t.Log("ASSERT_MAILBOX_FIRST_CLOSE_STICKY_BINDING: PASS; ASSERT_HOST_ACTUAL_CLOSE_JOIN_BINDING: PASS; LIMITED: finite AST supplement, not physical descriptor close-fault execution")
+}
+
+func TestSourceOperatorActualAggregateRefusal(t *testing.T) {
+	testSuppliedOp(t, "native-aggregate-refusal")
+}
+
+func TestSourceOperatorPhaseFixtures(t *testing.T) {
+	for _, mode := range []string{"host-phase-8", "host-phase-16", "host-phase-24"} {
+		t.Run(mode, func(t *testing.T) { testSuppliedOp(t, mode) })
+	}
+}
+
+func testSuppliedOp(t *testing.T, binary string) {
+	phaseMode := ""
+	if strings.HasPrefix(binary, "host-phase-") {
+		phaseMode, binary = binary, ""
+	}
+	large := binary == "native-aggregate-refusal"
+	if large {
+		binary = ""
+	}
+	owner, root := inv.ControlledRPrepCanonicalOwnerForTest(t)
+	m, start, uri := mixedStartFixtureV2(t)
+	body := []byte("package fixture\nfunc Root(){ Other() }\nfunc Other(){ Root() }\n")
+	if e := os.WriteFile(filepath.Join(start.Profile.Workspace().String(), "root.go"), body, 0644); e != nil {
+		t.Fatal(e)
+	}
+	mode := "positive"
+	if large {
+		mode = "native-large"
+	} else if phaseMode != "" {
+		mode = phaseMode
+	}
+	start.Process.Args = []string{"-test.run=^TestPrivateSourceSELFResponder$", "--", "private-source-self", start.Profile.Workspace().String(), mode}
+	capture := inv.PrivateMixedInputRequestV2{Manager: m, Root: root, Start: start, URI: uri, OccurrenceID: "source-op", Revision: "source-controlled-revision", Privacy: "private-source-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 6, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}}
+	home, e := os.UserHomeDir()
+	if e != nil {
+		t.Fatal(e)
+	}
+	dir, e := os.MkdirTemp(home, ".source-op-")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer os.RemoveAll(dir)
+	mailbox := filepath.Join(dir, "mailbox")
+	outputs := [2]string{filepath.Join(dir, "a"), filepath.Join(dir, "b")}
+	for _, p := range []string{mailbox, outputs[0], outputs[1]} {
+		if e = os.Mkdir(p, 0700); e != nil {
+			t.Fatal(e)
+		}
+	}
+	cfg := host.SourceHostConfig{Protocol: host.SourceHostProtocol, Mailbox: host.AutomaticHandoffConfigPrivateV2{Enabled: true, Directory: mailbox, Invocation: "source-op", InterpreterRole: "canned-role-not-HOST", ReviewerRole: "unused-reviewer", TimeoutMS: 2000, OverallTimeoutMS: 2000, PollMS: 1, Limits: host.AutomaticLimitsPrivateV2{MaxCalls: 1, MaxRequestBytes: 64 << 10, MaxResponseBytes: 16 << 10, MaxTotalBytes: 256 << 10, MaxOutputBytes: 64 << 10}}}
+	payload := describeworker.EncodeAdapterResultV2(`{"verdict":"ABSTAINED","target_role":"controlled R source fixture","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"fixture body only","consumer_relative":false},"boundary_contribution":"unknown","limitations":["canned role, not authenticated HOST output"]}`)
+	payloadPath := filepath.Join(dir, "payload")
+	if e = os.WriteFile(payloadPath, payload, 0600); e != nil {
+		t.Fatal(e)
+	}
+	_, file, _, _ := runtime.Caller(0)
+	helper := filepath.Join(filepath.Dir(file), "..", "..", "scripts", "private-variable-v2-host-handoff.py")
+	ctx, cancel := context.WithDeadline(context.Background(), start.Deadline)
+	defer cancel()
+	publisherCtx, publisherCancel := context.WithCancel(ctx)
+	defer publisherCancel()
+	done := make(chan error, 1)
+	go func() {
+		for {
+			if _, e := os.Stat(filepath.Join(mailbox, "request-000001.json")); e == nil {
+				break
+			}
+			select {
+			case <-publisherCtx.Done():
+				done <- publisherCtx.Err()
+				return
+			case <-time.After(time.Millisecond):
+			}
+		}
+		cmd := exec.CommandContext(publisherCtx, "python3", helper, "respond", "--mailbox", mailbox, "--sequence", "1", "--payload", payloadPath)
+		raw, e := cmd.CombinedOutput()
+		if e != nil {
+			done <- fmt.Errorf("publisher: %w: %s", e, raw)
+			return
+		}
+		done <- nil
+	}()
+	q := so.Request{Owner: owner, Capture: capture, CaptureAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-capture"))), PreparationAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-prepare"))), RoleAttempt: "source-op-role", RunID: "source-op-run", SeedNamespace: "source-original-schedule", Seed: 7, Contract: sourceStageContract(t), SourceLimits: tp.PrivateSourceLimits{MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20, MaxWork: 10000, MaxObjects: 1000}, Host: cfg, ResponseLimits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10}, OutputRoots: outputs}
+	_, beforeRefusals := inv.ControlledRPrepDebitForTest(t, owner)
+	badAlias := q
+	badAlias.OutputRoots[1] = badAlias.OutputRoots[0]
+	if _, e := so.Run(ctx, badAlias); e == nil {
+		publisherCancel()
+		<-done
+		t.Fatal("ASSERT_OP_ALIAS_BEFORE_CAPTURE")
+	}
+	cancelled, cancelledStop := context.WithCancel(ctx)
+	cancelledStop()
+	if _, e := so.Run(cancelled, q); e == nil {
+		publisherCancel()
+		<-done
+		t.Fatal("ASSERT_OP_CANCEL_BEFORE_CAPTURE")
+	}
+	_, afterRefusals := inv.ControlledRPrepDebitForTest(t, owner)
+	if beforeRefusals != afterRefusals || m.Census().Sessions != 0 {
+		publisherCancel()
+		<-done
+		t.Fatal("ASSERT_OP_REFUSAL_ZERO_EFFECT")
+	}
+	var out so.Outcome
+	var runErr error
+	if binary == "" {
+		out, runErr = so.Run(ctx, q)
+	} else {
+		job, head := inv.ControlledRPrepCLIJobForTest(t, owner)
+		d := "sha256:" + strings.Repeat("1", 64)
+		cfg := sourceOpCLIConfig{Schema: "private-source-host-application.v1", Mode: "EXECUTE", AccountingRoot: root.Path(), CanonicalJob: job, ExpectedHead: head, Verification: inv.PrivateManagedInputVerificationV2{Records: 4096, Bytes: 64 << 20, Work: 16384}, Profile: runtimeprofile.Selector{TrustDomain: "test", Workspace: start.Profile.Workspace().String(), Profile: "go", EnvironmentReference: "local"}, LanguageID: "go", Provider: "lsp", ProcessPath: start.Process.Path, ProcessArgs: start.Process.Args, Workspace: start.Profile.Workspace().String(), Revision: capture.Revision, Privacy: capture.Privacy, URI: uri, OccurrenceID: capture.OccurrenceID, Line: capture.Line, Character: capture.Character, CaptureAttempt: q.CaptureAttempt, PreparationAttempt: q.PreparationAttempt, RoleAttempt: q.RoleAttempt, RunID: q.RunID, SeedNamespace: q.SeedNamespace, Seed: q.Seed, Deadline: start.Deadline, Contract: cc.ContractInput{ContinuationID: d, ProfileID: d, WorkerPinID: d, ProgramCSeed: 9, CaptureLimits: q.Contract.CaptureLimits(), PacketSourcePolicy: q.Contract.PacketSourcePolicy(), PacketResolveLimits: q.Contract.PacketResolveLimits(), PacketMaxResponseBytes: q.Contract.PacketMaxResponseBytes(), DescribeDeadlineMS: q.Contract.DescribeDeadlineMS(), RetryPolicy: cc.RetryPolicy{MaxAttemptsPerRequest: 1}}, SourceLimits: q.SourceLimits, Host: q.Host, ResponseLimits: q.ResponseLimits, OutputRoots: outputs}
+		raw, _ := json.Marshal(cfg)
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &fields)
+		raw, _ = json.Marshal(fields)
+		cfg.Pin = fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
+		raw, _ = json.Marshal(cfg)
+		config := filepath.Join(dir, "config.json")
+		if e = os.WriteFile(config, raw, 0600); e != nil {
+			publisherCancel()
+			<-done
+			t.Fatal(e)
+		}
+		command := exec.CommandContext(ctx, binary, "private-host-application", "source-describe", config)
+		var stdout, stderr bytes.Buffer
+		command.Stdout = &stdout
+		command.Stderr = &stderr
+		runErr = command.Run()
+		if runErr != nil {
+			runErr = fmt.Errorf("%w stderr=%s stdout=%s", runErr, stderr.Bytes(), stdout.Bytes())
+		} else {
+			runErr = json.Unmarshal(stdout.Bytes(), &out)
+		}
+	}
+	publisherCancel()
+	publisherErr := <-done // always drain before Fatal
+	if phaseMode != "" && runErr != nil {
+		if !errors.Is(runErr, so.ErrNativeAggregate) && !strings.Contains(runErr.Error(), "host-phase=") {
+			t.Fatal("ASSERT_HOST_PHASE_FIXTURE_BOUNDED_FAILURE", phaseMode, runErr)
+		}
+		if out.NativeID != "" || out.Published != [2]bool{} || out.Readback != [2]bool{} || m.Census().Workers != 0 {
+			t.Fatal("ASSERT_HOST_PHASE_FIXTURE_NO_OUTPUT", phaseMode, out, m.Census())
+		}
+		if _, e := os.Stat(filepath.Join(mailbox, "preparation.json")); !os.IsNotExist(e) {
+			t.Fatal("ASSERT_HOST_PHASE_FIXTURE_BEFORE_MAILBOX", e)
+		}
+		if errors.Is(runErr, so.ErrNativeAggregate) {
+			t.Logf("LIMITED_PHASE_FIXTURE: %s native bound refuses first; no connected HOST phase separation; %v", phaseMode, runErr)
+		} else {
+			t.Logf("ASSERT_HOST_PHASE_FIXTURE_BEFORE_MAILBOX: PASS; genuine paid opaque R; %s; %v", phaseMode, runErr)
+		}
+		return
+	}
+	if large {
+		if !errors.Is(runErr, so.ErrNativeAggregate) || out.NativeID != "" || out.Published != [2]bool{} || out.Readback != [2]bool{} {
+			t.Fatal("ASSERT_NATIVE_ACTUAL_UPSTREAM_REFUSAL", out, runErr, publisherErr)
+		}
+		if _, e := os.Stat(filepath.Join(mailbox, "preparation.json")); !os.IsNotExist(e) {
+			t.Fatal("ASSERT_NATIVE_BEFORE_HOST", e)
+		}
+		for _, p := range outputs {
+			entries, e := os.ReadDir(p)
+			if e != nil || len(entries) != 0 {
+				t.Fatal("ASSERT_NATIVE_NO_PUBLICATION", e)
+			}
+		}
+		disposition, _ := inv.ControlledRPrepDebitForTest(t, owner)
+		if disposition != "OBSERVED" || out.Counts.Intents == 0 || m.Census().Workers != 0 {
+			t.Fatal("ASSERT_NATIVE_ACTUAL_PAID_R", disposition, out, m.Census())
+		}
+		t.Logf("ASSERT_NATIVE_ACTUAL_UPSTREAM_REFUSAL: PASS; ASSERT_NATIVE_BEFORE_HOST: PASS; ASSERT_NATIVE_NO_PUBLICATION: PASS; ASSERT_NATIVE_ACTUAL_PAID_R: PASS; same original caps/source/seed; genuine paid opaque multi-occurrence R input; %v", runErr)
+		return
+	}
+	if runErr != nil || publisherErr != nil {
+		t.Fatal("ASSERT_OP_CONNECTED", out, runErr, publisherErr)
+	}
+	if phaseMode != "" {
+		t.Logf("LIMITED_PHASE_FIXTURE: %s all original phase/native bounds fit; no connected HOST phase separation", phaseMode)
+	}
+	if out.Disposition != "SOURCE_PROVISIONAL_DELIVERED_PAIR" || out.NativeID == "" || out.Published != [2]bool{true, true} || out.Readback != [2]bool{true, true} || m.Census().Workers != 0 {
+		t.Fatal("ASSERT_OP_NATIVE_PAIR", out)
+	}
+	a, e := os.ReadFile(filepath.Join(outputs[0], out.NativeID))
+	if e != nil {
+		t.Fatal(e)
+	}
+	b, e := os.ReadFile(filepath.Join(outputs[1], out.NativeID))
+	if e != nil || !bytes.Equal(a, b) {
+		t.Fatal("ASSERT_OP_EXACT_PAIR", e)
+	}
+	var native map[string]json.RawMessage
+	if e = json.Unmarshal(a, &native); e != nil || string(native["schema"]) != `"SOURCE_NATIVE_V1"` || len(native["machine"]) == 0 || len(native["human_inventory"]) == 0 {
+		t.Fatal("ASSERT_OP_NATIVE_SCHEMA", e)
+	}
+	if string(native["origin"]) != `"SUPPLIED_TERMINAL_RESPONSE_ONLY"` || string(native["execution"]) != `"NO_PROCESS_OR_HOST_EXECUTION_VERIFIED"` || string(native["host_identity"]) != `"HOST_OBSERVED_NOT_AUTHENTICATED"` || string(native["authority"]) != "0" || string(native["accepted"]) != "false" || string(native["identity"]) != `"UNRESOLVED"` || string(native["completeness"]) != `"UNKNOWN"` || string(native["absence"]) != `"PROHIBITED"` {
+		t.Fatal("ASSERT_OP_NATIVE_CEILING")
+	}
+	disposition, debit := inv.ControlledRPrepDebitForTest(t, owner)
+	if disposition != "OBSERVED" || debit[0] == 0 || debit[5] == 0 {
+		t.Fatal("ASSERT_OP_CUMULATIVE_DEBIT", disposition, debit)
+	}
+	t.Logf("ASSERT_OP_CONNECTED: PASS; ASSERT_OP_EXACT_PAIR: PASS; original seven-mode schedule R-only; counts=%+v debit=%v native=%s", out.Counts, debit, out.NativeID)
 }
 
 func sourceStageContract(t *testing.T) cc.ContinuationContract {

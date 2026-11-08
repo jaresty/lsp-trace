@@ -71,6 +71,7 @@ type SourceHostMailbox struct {
 	record      describerequest.Record
 	preparation string
 	used        bool
+	closeErr    error // first close result; shared by all pointer/upper handle copies
 	roots       sourceHostRoots
 }
 
@@ -85,6 +86,30 @@ type sourceHostDelivery struct {
 	Authority                       int
 	Accepted                        bool
 	Identity, Completeness, Absence string
+}
+
+// SourceHostDeliveryUpper is the same closed scalar formula used on the actual
+// delivered receipt. Fixed 4096 covers all keys, four SHA256/nonce strings,
+// scalar numbers, time strings and fixed provenance labels. No payload bytes
+// occur in a receipt; response frame base64 is charged by SourceHostRetentionUpper.
+func SourceHostDeliveryUpper(c SourceHostConfig, s SourceHostContext) (uint64, error) {
+	return sourceHostDeliveryUpper(SourceHostBinding{Protocol: c.Protocol, Invocation: c.Mailbox.Invocation, RoleID: c.Mailbox.InterpreterRole, Source: s})
+}
+func sourceHostDeliveryUpper(b SourceHostBinding) (uint64, error) {
+	n := uint64(4096)
+	for _, v := range []string{b.Protocol, b.Invocation, b.RoleID, b.Source.HandoffID, b.Source.CheckpointID, b.Source.SourceUnitID, b.Source.SourceDigest, b.Source.RequestRecordID, b.Source.AttemptID, b.Source.Workspace} {
+		if uint64(len(v)) > (^uint64(0)-n)/6 {
+			return 0, errors.New("source host delivery size overflow")
+		}
+		n += 6 * uint64(len(v))
+	}
+	return n, nil
+}
+func (d SourceHostDelivery) SerializedUpper() (uint64, error) {
+	if d.state == nil {
+		return 0, errors.New("source host delivery absent")
+	}
+	return sourceHostDeliveryUpper(d.state.Binding)
 }
 
 func (d SourceHostDelivery) Delivered() bool { return d.state != nil }
@@ -511,8 +536,9 @@ func (m *SourceHostMailbox) Close() error {
 	defer m.mu.Unlock()
 	m.used = true
 	if m.io == nil || m.io.closed {
-		return nil
+		return m.closeErr
 	}
-	m.io.closed = true
-	return m.io.root.Close()
+	m.io.closed = true // close once, including on failure; never retry the descriptor
+	m.closeErr = m.io.root.Close()
+	return m.closeErr
 }

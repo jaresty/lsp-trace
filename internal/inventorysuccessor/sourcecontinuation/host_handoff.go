@@ -22,6 +22,7 @@ type RootlessSourceHostStore struct {
 	memory     *cc.MemoryStore
 	max        int64
 	gets, puts atomic.Uint64
+	retained   atomic.Uint64 // cumulative stored byte lengths; duplicates overcharged
 }
 
 func NewRootlessSourceHostStore(maxObjectBytes int64) (*RootlessSourceHostStore, error) {
@@ -45,6 +46,15 @@ func (s *RootlessSourceHostStore) Put(ctx context.Context, b []byte) (string, er
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
+	}
+	for {
+		old := s.retained.Load()
+		if uint64(len(b)) > ^uint64(0)-old {
+			return "", errors.New("source host stored retention overflow")
+		}
+		if s.retained.CompareAndSwap(old, old+uint64(len(b))) {
+			break
+		}
 	}
 	s.puts.Add(1)
 	return s.memory.Put(ctx, b)
@@ -96,9 +106,166 @@ type DeliveredSourceResponse struct {
 	delivery host.SourceHostDelivery
 }
 
+// NativePayloadBounds observes closed-state lengths before any Bytes/Semantic
+// accessor, hash or encoding. The bound canonical embeds the canonical semantic
+// JSON, so its length also bounds decoded semantic strings/collection payload.
+func (r DeliveredSourceResponse) NativePayloadBounds() (supplied, delivery, semantic uint64, err error) {
+	if r.supplied.state == nil || !r.delivery.Delivered() {
+		return 0, 0, 0, errors.New("source native delivery absent")
+	}
+	s := r.supplied.state
+	supplied = uint64(len(s.canonical))
+	if supplied == 0 || !s.bounds.allows(supplied) {
+		return 0, 0, 0, errors.New("source native supplied bounds")
+	}
+	delivery, err = r.delivery.SerializedUpper()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	semantic = supplied
+	if s.bounds.semantic < semantic {
+		semantic = s.bounds.semantic
+	}
+	return supplied, delivery, semantic, nil
+}
+
+// NativeRetentionBounds is metadata-only and non-admitting. Original READY
+// handoff/cache, source admissions/output, originals, host whole-frame buffers,
+// root metadata and the rootless store are added, not treated as free headroom.
+// The cache already includes canonical/decoded READY values and two source
+// outputs. PreparedSourceRV1 is independently charged by the operator too.
+func (out *PrivateAllModeSourcesResult) NativeRetentionBounds(ctx context.Context, c host.SourceHostConfig, q SourceAcquisitionRequest, limits describeworker.SuppliedResponseLimits) (retained, supplied, delivery, semantic uint64, err error) {
+	bad := func() (uint64, uint64, uint64, uint64, error) {
+		return 0, 0, 0, 0, errors.New("source native retention bounds")
+	}
+	if out == nil || out.Expected.state == nil || q.Resume.PrivateSources == nil || q.Resume.PrivateSources.Expected.state != out.Expected.state {
+		return bad()
+	}
+	s, extra, e := sourceHostPreflight(ctx, c, q, limits)
+	if e != nil {
+		return 0, 0, 0, 0, e
+	}
+	store, ok := q.Resume.Store.(*RootlessSourceHostStore)
+	if !ok || !store.valid() {
+		return bad()
+	}
+	handoff, ok := s.handoff.RetainedPayloadUpper()
+	if !ok {
+		return bad()
+	}
+	retained, ok = sourceResponseAdd(handoff, s.regeneration.response, extra, store.retained.Load())
+	if !ok {
+		return bad()
+	}
+	record, ok := sourceResponseRecordUpper(q.Record)
+	if !ok {
+		return bad()
+	}
+	metadata, ok := sourceResponseStringBytes(s.handoff.ID(), s.checkpoint, q.Attempt.SourceUnitID, s.regeneration.digest, q.Resume.Workspace, q.Attempt.ID)
+	if !ok {
+		return bad()
+	}
+	b, e := sourceResponseAggregateBound(retained, record, metadata, uint64(limits.MaxAdapterBytes), uint64(limits.MaxSemanticBytes), uint64(s.contract.PacketMaxResponseBytes()), uint64(s.contract.CaptureLimits().MaxParentBytes))
+	if e != nil {
+		return 0, 0, 0, 0, e
+	}
+	// Delivery has no payload/base64: only a fixed receipt and binding strings.
+	// The lower helper includes 6x every variable binding field and fixed hashes.
+	delivery, e = host.SourceHostDeliveryUpper(c, hostSourceContext(s, q, s.regeneration.digest))
+	if e != nil {
+		return 0, 0, 0, 0, e
+	}
+	return retained, b.wire, delivery, b.semantic, nil
+}
+
+// SourceHostPhaseBounds is non-admitting sizing metadata, never source custody.
+// Each peak includes the same simultaneously retained handoff/transport/store.
+// The operator must independently add its prepared payload and root metadata.
+// Keeping the phases separate makes equality/overflow checks inspectable.
+type SourceHostPhaseBounds struct{ Source, Lower, Binder uint64 }
+
+func (out *PrivateAllModeSourcesResult) HostPhaseBounds(ctx context.Context, c host.SourceHostConfig, q SourceAcquisitionRequest, limits describeworker.SuppliedResponseLimits) (SourceHostPhaseBounds, error) {
+	bad := func() (SourceHostPhaseBounds, error) {
+		return SourceHostPhaseBounds{}, errors.New("source host phase bounds")
+	}
+	if out == nil || out.Expected.state == nil || q.Resume.PrivateSources == nil || q.Resume.PrivateSources.Expected.state != out.Expected.state {
+		return bad()
+	}
+	s, extra, err := sourceHostPreflight(ctx, c, q, limits)
+	if err != nil {
+		return SourceHostPhaseBounds{}, err
+	}
+	store, ok := q.Resume.Store.(*RootlessSourceHostStore)
+	if !ok || !store.valid() {
+		return bad()
+	}
+	handoff, ok := s.handoff.RetainedPayloadUpper()
+	if !ok {
+		return bad()
+	}
+	// Store bytes are independent of source cache bounds. Charge even duplicate
+	// Puts cumulatively. Resume's lower/upper paths only Get existing materials;
+	// they do not Put. The cached four-material peaks cover the freshly generated
+	// materials and Get/verification copies; store retention is NOT their budget.
+	// Shared original/prepared/cache payloads may be charged twice, never omitted.
+	extra, ok = sourceResponseAdd(extra, store.retained.Load())
+	if !ok {
+		return bad()
+	}
+	parent := s.contract.CaptureLimits().MaxParentBytes
+	if parent <= 0 || c.Mailbox.Limits.MaxResponseBytes <= 0 {
+		return bad()
+	}
+	raw := uint64(c.Mailbox.Limits.MaxResponseBytes) // ORIGINAL ceiling, not delivered/adapter length
+	source, ok := sourceAcquisitionEnvelopePeak(handoff, s.regeneration.source, s.regeneration.source, extra, raw, uint64(parent))
+	if !ok {
+		return bad()
+	}
+	lower, ok := sourceAcquisitionEnvelopePeak(handoff, s.regeneration.lower, s.regeneration.lower, extra, raw, uint64(parent))
+	if !ok {
+		return bad()
+	}
+	retained, ok := sourceResponseAdd(handoff, s.regeneration.response, extra)
+	if !ok {
+		return bad()
+	}
+	record, ok := sourceResponseRecordUpper(q.Record)
+	if !ok {
+		return bad()
+	}
+	metadata, ok := sourceResponseStringBytes(s.handoff.ID(), s.checkpoint, q.Attempt.SourceUnitID, s.regeneration.digest, q.Resume.Workspace, q.Attempt.ID)
+	if !ok {
+		return bad()
+	}
+	wire := s.contract.PacketMaxResponseBytes()
+	if artifact := s.contract.CaptureLimits().MaxArtifactBytes; artifact < wire {
+		wire = artifact
+	}
+	if wire <= 0 {
+		return bad()
+	}
+	b, err := sourceResponseAggregateBound(retained, record, metadata, raw, uint64(limits.MaxSemanticBytes), uint64(wire), uint64(parent))
+	if err != nil {
+		return SourceHostPhaseBounds{}, err
+	}
+	return SourceHostPhaseBounds{Source: source, Lower: lower, Binder: b.peak}, nil
+}
+
 func (r DeliveredSourceResponse) Supplied() BoundSuppliedSourceResponse { return r.supplied }
 func (r DeliveredSourceResponse) Delivery() host.SourceHostDelivery     { return r.delivery }
-func (h SourceHostHandoff) Eligible() bool                              { return h.state != nil }
+
+// AfterClose is a non-admitting finalization: an error can only erase custody.
+// CompleteSourceHost applies it to the actual first mailbox Close result before
+// releasing its named return. Exposed for bounded deterministic failure witnesses;
+// it cannot turn a zero value, DTO or failed exchange into a delivered response.
+func (r DeliveredSourceResponse) AfterClose(err error) (DeliveredSourceResponse, error) {
+	if err != nil {
+		return DeliveredSourceResponse{}, err
+	}
+	return r, nil
+}
+
+func (h SourceHostHandoff) Eligible() bool { return h.state != nil }
 func (h SourceHostHandoff) Close() error {
 	if h.state == nil {
 		return nil
@@ -215,7 +382,7 @@ func PrepareSourceHost(ctx context.Context, c host.SourceHostConfig, q SourceAcq
 // CompleteSourceHost consumes one exchange and feeds its exact bytes ONCE to the
 // adopted strict COMPLETE-adapter/SemanticV2 binder. It does not evaluate/compose,
 // recapture, execute a model, or upgrade the supplied semantic origin.
-func CompleteSourceHost(ctx context.Context, h SourceHostHandoff) (DeliveredSourceResponse, error) {
+func CompleteSourceHost(ctx context.Context, h SourceHostHandoff) (out DeliveredSourceResponse, err error) {
 	bad := func(e error) (DeliveredSourceResponse, error) { return DeliveredSourceResponse{}, e }
 	if h.state == nil {
 		return bad(errors.New("source host upper ownership absent"))
@@ -227,7 +394,9 @@ func CompleteSourceHost(ctx context.Context, h SourceHostHandoff) (DeliveredSour
 		return bad(errors.New("source host upper already consumed"))
 	}
 	s.used = true
-	defer s.mailbox.Close()
+	defer func() {
+		out, err = out.AfterClose(errors.Join(err, s.mailbox.Close()))
+	}()
 	if ctx == nil {
 		return bad(errors.New("source host nil completion context"))
 	}
