@@ -1,3 +1,5 @@
+//go:build darwin || linux
+
 package inventorysuccessor_test
 
 import (
@@ -9,6 +11,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,6 +25,7 @@ import (
 	sc "lsp-trace/internal/inventorysuccessor/sourcecontinuation"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/lspwire"
+	host "lsp-trace/internal/privatedescribeprep"
 	pc "lsp-trace/internal/programc"
 	"lsp-trace/internal/programcadmission"
 	rg "lsp-trace/internal/referencegrouping"
@@ -33,9 +37,370 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-// The only subprocess is this controlled existing Go test binary. References /
+// Source acquisition subprocesses use only this controlled existing Go test binary.
+// TestSuppliedHost additionally runs the existing Python byte publisher, no operator.
+// The only acquisition subprocess is this controlled existing Go test binary. References /
 // definitions deliberately return a real observed symbol selection coordinate.
 // Foreign/snippet modes exercise source gaps, not alternate source authority.
+// TestSuppliedHost keeps the original seven-mode source fixture and 8 MiB /
+// 1 MiB contract. Only ONE admitted request crosses the actual file mailbox.
+func TestSuppliedHost(t *testing.T) {
+	input, h, contract, q := sourceStageFixture(t, "positive", false)
+	inv.ControlledSourceProjectionNoReadmitForTest(t, input)
+	ctx, cancel := context.WithDeadline(context.Background(), q.Deadline)
+	defer cancel()
+	store, e := sc.NewRootlessSourceHostStore(8 << 20)
+	if e != nil {
+		t.Fatal(e)
+	}
+	pause := sc.Run(ctx, sc.Request{PrivateAllMode: &h, PrivateSources: &q, Workspace: qWorkspace(q), Contract: contract, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+	if pause.Err != nil || pause.PrivateSources == nil {
+		t.Fatal("ASSERT_HOST_SOURCE_SETUP", pause.Err)
+	}
+	out := pause.PrivateSources
+	if out.Counts.Admitted != 32 || out.Counts.Unresolved != 24 || out.Counts.Requests != 2 || out.Counts.Intents != 56 {
+		t.Fatal("ASSERT_HOST_ALL7", out.Counts)
+	}
+	r := out.Requests[0]
+	resume := sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: out.Expected, Originals: q.Originals, Definitions: q.Definitions, ExpectedHandoff: h}, Workspace: qWorkspace(q), Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: out.CheckpointID}
+	request := sc.SourceAcquisitionRequest{Resume: resume, Record: r, Attempt: sc.SuppliedSourceAttempt{ID: "controlled-host-file-attempt", CheckpointID: out.CheckpointID, SourceUnitID: r.Envelope.AdmissionID, RequestRecordID: r.RecordID}}
+	home, e := os.UserHomeDir()
+	if e != nil {
+		t.Fatal(e)
+	}
+	root, e := os.MkdirTemp(home, ".source-host-upper-")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer os.RemoveAll(root)
+	newConfig := func(name string, scope string) host.SourceHostConfig {
+		dir := filepath.Join(root, name)
+		if e := os.Mkdir(dir, 0700); e != nil {
+			t.Fatal(e)
+		}
+		c := host.SourceHostConfig{Protocol: host.SourceHostProtocol, Mailbox: host.AutomaticHandoffConfigPrivateV2{Enabled: true, Directory: dir, Invocation: "controlled-source-host", InterpreterRole: "canned-role-not-HOST", ReviewerRole: "unused-reviewer", ScopeSHA256: scope, TimeoutMS: 2000, OverallTimeoutMS: 2000, PollMS: 1, Limits: host.AutomaticLimitsPrivateV2{MaxCalls: 1, MaxRequestBytes: 64 << 10, MaxResponseBytes: 16 << 10, MaxTotalBytes: 256 << 10, MaxOutputBytes: 64 << 10}}}
+		c.Mailbox.ApprovalSHA256 = host.AutomaticHandoffApprovalPrivateV2(c.Mailbox)
+		return c
+	}
+	limits := describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10}
+	cfg := newConfig("mailbox", h.ID())
+	for name, change := range map[string]func(*sc.SourceAcquisitionRequest){
+		"record":  func(v *sc.SourceAcquisitionRequest) { v.Record.Envelope.Prompt += "foreign" },
+		"unit":    func(v *sc.SourceAcquisitionRequest) { v.Attempt.SourceUnitID = out.Requests[1].Envelope.AdmissionID },
+		"attempt": func(v *sc.SourceAcquisitionRequest) { v.Attempt.RequestRecordID = "foreign" },
+		"expected": func(v *sc.SourceAcquisitionRequest) {
+			p := *v.Resume.PrivateSources
+			p.Expected = sc.PrivateAllModeSourcesExpected{}
+			v.Resume.PrivateSources = &p
+		},
+		"workspace": func(v *sc.SourceAcquisitionRequest) { v.Resume.Workspace = "file:///foreign" },
+		"original": func(v *sc.SourceAcquisitionRequest) {
+			p := *v.Resume.PrivateSources
+			p.Originals = nil
+			v.Resume.PrivateSources = &p
+		},
+		"resealed": func(v *sc.SourceAcquisitionRequest) {
+			u := out.Units[0]
+			u.Body += "foreign"
+			x, e := describerequest.FormatPrivateSourceRequestCandidate(u, contract.DescribeDeadlineMS(), 1<<20)
+			if e != nil {
+				t.Fatal(e)
+			}
+			v.Record = x
+			v.Attempt.RequestRecordID = x.RecordID
+			v.Attempt.SourceUnitID = u.ID
+		},
+	} {
+		bad := request
+		change(&bad)
+		if p, e := sc.PrepareSourceHost(ctx, cfg, bad, limits); e == nil || p.Eligible() {
+			p.Close()
+			t.Fatal("ASSERT_HOST_EXACT_JOIN", name, e)
+		}
+		entries, e := os.ReadDir(cfg.Mailbox.Directory)
+		if e != nil || len(entries) != 0 {
+			t.Fatal("ASSERT_HOST_NO_MAILBOX_BEFORE_JOIN", name, e)
+		}
+	}
+	t.Log("ASSERT_HOST_EXACT_JOIN: PASS; ASSERT_HOST_NO_MAILBOX_BEFORE_JOIN: PASS")
+	// Genuine oversized READY handoff: unchanged source limits, seeds and source
+	// payload. Four absent-source READY inputs retain larger preexisting payloads.
+	absent, _, _, _ := sourceStageFixture(t, "positive", false)
+	baseSlots, baseEntries, _ := sourceStageEntries(t, input.Input, []string{"RD", "C", "CRD", "D", "CD", "R", "CR"}, 0, []byte("source selection\n"), "CONTROLLED_SOURCE_MODE")
+	slots, entries, _ := sourceStageEntries(t, absent.Input, []string{"RD", "RD", "RD", "RD"}, 7, bytes.Repeat([]byte("s"), 1<<16), strings.Repeat("p", 4096))
+	large, e := cc.NewPrivateAllModeHandoff(qWorkspace(q), "source-controlled-revision", append(baseSlots, slots...), append(baseEntries, entries...))
+	if e != nil {
+		t.Fatal(e)
+	}
+	largeStore, e := sc.NewRootlessSourceHostStore(8 << 20)
+	if e != nil {
+		t.Fatal(e)
+	}
+	largePause := sc.Run(ctx, sc.Request{PrivateAllMode: &large, PrivateSources: &q, Workspace: qWorkspace(q), Contract: contract, Store: largeStore, StopAfter: sc.StopAfterPrivateSourceRequests})
+	if largePause.Err != nil || largePause.PrivateSources == nil {
+		t.Fatal("ASSERT_HOST_LARGE_SETUP", largePause.Err)
+	}
+	lo := largePause.PrivateSources
+	lr := lo.Requests[0]
+	bad := sc.SourceAcquisitionRequest{Resume: sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: lo.Expected, Originals: q.Originals, Definitions: q.Definitions, ExpectedHandoff: large}, Workspace: qWorkspace(q), Store: largeStore, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: lo.CheckpointID}, Record: lr, Attempt: sc.SuppliedSourceAttempt{ID: request.Attempt.ID, CheckpointID: lo.CheckpointID, SourceUnitID: lr.Envelope.AdmissionID, RequestRecordID: lr.RecordID}}
+	bigCfg := newConfig("large-mailbox", large.ID())
+	largeGets, largePuts := largeStore.OperationCounts()
+	probe := &earlyWorkContext{Context: ctx}
+	p, e := sc.PrepareSourceHost(probe, bigCfg, bad, limits)
+	p.Close()
+	files, fe := os.ReadDir(bigCfg.Mailbox.Directory)
+	afterLargeGets, afterLargePuts := largeStore.OperationCounts()
+	if e == nil || p.Eligible() || afterLargeGets != largeGets || afterLargePuts != largePuts || probe.regenerated || probe.plan || fe != nil || len(files) != 0 {
+		t.Fatal("ASSERT_HOST_EARLY_AGGREGATE", e, afterLargeGets-largeGets, afterLargePuts-largePuts, probe.regenerated, fe)
+	}
+	t.Log("ASSERT_HOST_EARLY_AGGREGATE: PASS")
+	// Lower frame/output limits fail early too, before any source StoreGet.
+	smallCfg := cfg
+	smallCfg.Mailbox.Limits.MaxRequestBytes = 10
+	smallCfg.Mailbox.ApprovalSHA256 = host.AutomaticHandoffApprovalPrivateV2(smallCfg.Mailbox)
+	beforeGets, beforePuts := store.OperationCounts()
+	p, e = sc.PrepareSourceHost(ctx, smallCfg, request, limits)
+	afterGets, afterPuts := store.OperationCounts()
+	if e == nil || p.Eligible() || afterGets != beforeGets || afterPuts != beforePuts {
+		p.Close()
+		t.Fatal("ASSERT_HOST_EARLY_FRAME", e)
+	}
+	t.Log("ASSERT_HOST_EARLY_FRAME: PASS")
+	eligible, e := sc.PrepareSourceHost(ctx, cfg, request, limits)
+	if e != nil || !eligible.Eligible() {
+		t.Fatal("ASSERT_HOST_ELIGIBLE", e)
+	}
+	defer eligible.Close()
+	semantic := `{"verdict":"ABSTAINED","target_role":"controlled source fixture","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"fixture body only","consumer_relative":false},"boundary_contribution":"unknown","limitations":["canned fake role, not HOST output"]}`
+	payload := describeworker.EncodeAdapterResultV2(semantic)
+	payloadPath := filepath.Join(root, "canned-response.txt")
+	if e = os.WriteFile(payloadPath, payload, 0600); e != nil {
+		t.Fatal(e)
+	}
+	// Existing helper respond reads caller-owned raw bytes and publishes exactly
+	// one response frame. Never launch/supervise an operator or a model client.
+	_, testFile, _, _ := runtime.Caller(0)
+	helper := filepath.Join(filepath.Dir(testFile), "..", "..", "scripts", "private-variable-v2-host-handoff.py")
+	done := make(chan error, 1)
+	go func() {
+		until := time.Now().Add(2 * time.Second)
+		for time.Now().Before(until) {
+			if _, e := os.Stat(filepath.Join(cfg.Mailbox.Directory, "request-000001.json")); e == nil {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		cmd := exec.CommandContext(ctx, "python3", helper, "respond", "--mailbox", cfg.Mailbox.Directory, "--sequence", "1", "--payload", payloadPath)
+		raw, e := cmd.CombinedOutput()
+		if e != nil {
+			done <- fmt.Errorf("controlled publisher: %w: %s", e, raw)
+			return
+		}
+		done <- nil
+	}()
+	result, e := sc.CompleteSourceHost(ctx, eligible)
+	publisherErr := <-done // drain before Fatal
+	if e != nil || publisherErr != nil || result.Supplied().ID() == "" || !result.Delivery().Delivered() {
+		t.Fatal("ASSERT_HOST_CONNECTED", e, publisherErr)
+	}
+	bound, _ := result.Supplied().Bytes()
+	receipt, _ := result.Delivery().Bytes()
+	if !bytes.Contains(bound, []byte(`"origin":"SUPPLIED_TERMINAL_RESPONSE_ONLY"`)) || !bytes.Contains(bound, []byte(`"execution":"NO_PROCESS_OR_HOST_EXECUTION_VERIFIED"`)) || !bytes.Contains(receipt, []byte("HOST_OBSERVED_NOT_AUTHENTICATED")) {
+		t.Fatal("ASSERT_HOST_SUPPLIED_CEILING")
+	}
+	var response host.SourceHostResponse
+	responseRaw, e := os.ReadFile(filepath.Join(cfg.Mailbox.Directory, "response-000001.json"))
+	if e != nil || json.Unmarshal(responseRaw, &response) != nil || !bytes.Equal(response.Payload, payload) {
+		t.Fatal("ASSERT_HOST_HELPER_EXACT_BYTES", e)
+	}
+	if _, e = sc.CompleteSourceHost(ctx, eligible); e == nil {
+		t.Fatal("ASSERT_HOST_UPPER_ONE_SHOT")
+	}
+	var public sc.SourceHostHandoff
+	raw, _ := json.Marshal(eligible)
+	if json.Unmarshal(raw, &public) != nil || public.Eligible() {
+		t.Fatal("ASSERT_HOST_PUBLIC_NONADMITTING")
+	}
+	_, finalPuts := store.OperationCounts()
+	if finalPuts != beforePuts {
+		t.Fatal("ASSERT_HOST_NO_PUBLICATION")
+	}
+	t.Log("ASSERT_HOST_CONNECTED: PASS; ASSERT_HOST_HELPER_EXACT_BYTES: PASS; ASSERT_HOST_SUPPLIED_CEILING: PASS; ASSERT_HOST_UPPER_ONE_SHOT: PASS; ASSERT_HOST_PUBLIC_NONADMITTING: PASS; ASSERT_HOST_ALL7: PASS; original caps unchanged; source=32 unresolved=24 requests=2 exchanges=1 sandbox/model starts=0 actual_HOST=0")
+}
+
+// A genuine bounded filesystem store with immutable digest keys and cloned bytes.
+// Its root contains the mailbox; correct source checkpoints do not prove disjointness.
+type sourceHostFSStore struct {
+	root       string
+	gets, puts int
+}
+
+func (s *sourceHostFSStore) MaxObjectBytes() int64 { return 8 << 20 }
+func (s *sourceHostFSStore) Put(ctx context.Context, b []byte) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if len(b) > 8<<20 {
+		return "", errors.New("fixture object ceiling")
+	}
+	id := fmt.Sprintf("sha256:%x", sha256.Sum256(b))
+	name := filepath.Join(s.root, strings.TrimPrefix(id, "sha256:"))
+	s.puts++
+	if prior, err := os.ReadFile(name); err == nil {
+		if !bytes.Equal(prior, b) {
+			return "", errors.New("fixture replacement")
+		}
+		return id, nil
+	}
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return "", err
+	}
+	_, err = f.Write(bytes.Clone(b))
+	closeErr := f.Close()
+	if err != nil {
+		return "", err
+	}
+	return id, closeErr
+}
+func (s *sourceHostFSStore) Get(ctx context.Context, id string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.gets++
+	if len(id) != 71 || !strings.HasPrefix(id, "sha256:") || strings.ContainsAny(id[7:], "/\\\\") {
+		return nil, errors.New("fixture key")
+	}
+	b, err := os.ReadFile(filepath.Join(s.root, id[7:]))
+	if len(b) > 8<<20 {
+		return nil, errors.New("fixture object ceiling")
+	}
+	return bytes.Clone(b), err
+}
+func TestSuppliedHostFSStore(t *testing.T) {
+	input, h, contract, q := sourceStageFixture(t, "positive", false)
+	inv.ControlledSourceProjectionNoReadmitForTest(t, input)
+	ctx, cancel := context.WithDeadline(context.Background(), q.Deadline)
+	defer cancel()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.MkdirTemp(home, ".source-host-fs-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(root)
+	store := &sourceHostFSStore{root: root}
+	pause := sc.Run(ctx, sc.Request{PrivateAllMode: &h, PrivateSources: &q, Workspace: qWorkspace(q), Contract: contract, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+	if pause.Err != nil || pause.PrivateSources == nil {
+		t.Fatal("ASSERT_HOST_FS_SETUP", pause.Err)
+	}
+	out := pause.PrivateSources
+	r := out.Requests[0]
+	resume := sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: out.Expected, Originals: q.Originals, Definitions: q.Definitions, ExpectedHandoff: h}, Workspace: qWorkspace(q), Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: out.CheckpointID}
+	// Prove the filesystem store actually serves the correct paused source artifacts.
+	if resumed := sc.Resume(ctx, resume); resumed.Err != nil {
+		t.Fatal("ASSERT_HOST_FS_RESUME_SETUP", resumed.Err)
+	}
+	mailbox := filepath.Join(root, "mailbox")
+	if err := os.Mkdir(mailbox, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cfg := host.SourceHostConfig{Protocol: host.SourceHostProtocol, Mailbox: host.AutomaticHandoffConfigPrivateV2{Enabled: true, Directory: mailbox, Invocation: "controlled-fs", InterpreterRole: "canned", ReviewerRole: "unused", ScopeSHA256: h.ID(), TimeoutMS: 1000, OverallTimeoutMS: 1000, PollMS: 1, Limits: host.AutomaticLimitsPrivateV2{MaxCalls: 1, MaxRequestBytes: 64 << 10, MaxResponseBytes: 16 << 10, MaxTotalBytes: 256 << 10, MaxOutputBytes: 64 << 10}}}
+	cfg.Mailbox.ApprovalSHA256 = host.AutomaticHandoffApprovalPrivateV2(cfg.Mailbox)
+	request := sc.SourceAcquisitionRequest{Resume: resume, Record: r, Attempt: sc.SuppliedSourceAttempt{ID: "controlled-fs-attempt", CheckpointID: out.CheckpointID, SourceUnitID: r.Envelope.AdmissionID, RequestRecordID: r.RecordID}}
+	store.gets, store.puts = 0, 0
+	eligible, err := sc.PrepareSourceHost(ctx, cfg, request, describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10})
+	eligible.Close()
+	files, readErr := os.ReadDir(mailbox)
+	if err == nil || eligible.Eligible() || store.gets != 0 || store.puts != 0 || readErr != nil || len(files) != 0 {
+		t.Fatal("ASSERT_HOST_FS_STORE_REFUSED_BEFORE_IO", err, store.gets, store.puts, len(files), readErr)
+	}
+	t.Log("ASSERT_HOST_FS_STORE_REFUSED_BEFORE_IO: PASS")
+}
+
+// Observe real completed preparation at the existing upper liveness boundary.
+// Waiting targets its published absolute deadline; caller/source remain live.
+// The pure minimum and closed-call guards separately avoid relying on timing.
+type sourceHostEligibleContext struct {
+	context.Context
+	dir      string
+	seen     bool
+	deadline time.Time
+}
+
+func (c *sourceHostEligibleContext) Err() error {
+	if err := c.Context.Err(); err != nil {
+		return err
+	}
+	for n := 1; n < 10; n++ {
+		pc, _, _, ok := runtime.Caller(n)
+		if !ok || !strings.HasSuffix(runtime.FuncForPC(pc).Name(), ".sourceHostPublicationLive") {
+			continue
+		}
+		var prep struct{ Protocol, Deadline string }
+		raw, err := os.ReadFile(filepath.Join(c.dir, "preparation.json"))
+		if err != nil || json.Unmarshal(raw, &prep) != nil || prep.Protocol != host.SourceHostProtocol {
+			break
+		}
+		deadline, err := time.Parse(time.RFC3339Nano, prep.Deadline)
+		if err != nil {
+			break
+		}
+		c.seen, c.deadline = true, deadline
+		timer := time.NewTimer(time.Until(deadline))
+		<-timer.C
+		timer.Stop()
+		break
+	}
+	return c.Context.Err()
+}
+func TestSuppliedHostLatePreparation(t *testing.T) {
+	input, h, contract, q := sourceStageFixture(t, "positive", false)
+	inv.ControlledSourceProjectionNoReadmitForTest(t, input)
+	ctx, cancel := context.WithDeadline(context.Background(), q.Deadline)
+	defer cancel()
+	originalDeadline := q.Deadline
+	store, err := sc.NewRootlessSourceHostStore(8 << 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pause := sc.Run(ctx, sc.Request{PrivateAllMode: &h, PrivateSources: &q, Workspace: qWorkspace(q), Contract: contract, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+	if pause.Err != nil || pause.PrivateSources == nil {
+		t.Fatal("ASSERT_HOST_LATE_PREPARATION_SOURCE", pause.Err)
+	}
+	out := pause.PrivateSources
+	if out.Counts.Admitted != 32 || out.Counts.Unresolved != 24 || out.Counts.Requests != 2 {
+		t.Fatal("ASSERT_HOST_LATE_PREPARATION_SOURCE_COUNTS", out.Counts)
+	}
+	r := out.Requests[0]
+	resume := sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: out.Expected, Originals: q.Originals, Definitions: q.Definitions, ExpectedHandoff: h}, Workspace: qWorkspace(q), Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: out.CheckpointID}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := os.MkdirTemp(home, ".ep-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	cfg := host.SourceHostConfig{Protocol: host.SourceHostProtocol, Mailbox: host.AutomaticHandoffConfigPrivateV2{Enabled: true, Directory: dir, Invocation: "late-prep", InterpreterRole: "canned", ReviewerRole: "unused", ScopeSHA256: h.ID(), TimeoutMS: 100, OverallTimeoutMS: 500, PollMS: 1, Limits: host.AutomaticLimitsPrivateV2{MaxCalls: 1, MaxRequestBytes: 64 << 10, MaxResponseBytes: 16 << 10, MaxTotalBytes: 256 << 10, MaxOutputBytes: 64 << 10}}}
+	cfg.Mailbox.ApprovalSHA256 = host.AutomaticHandoffApprovalPrivateV2(cfg.Mailbox)
+	request := sc.SourceAcquisitionRequest{Resume: resume, Record: r, Attempt: sc.SuppliedSourceAttempt{ID: "late-prep", CheckpointID: out.CheckpointID, SourceUnitID: r.Envelope.AdmissionID, RequestRecordID: r.RecordID}}
+	stage := &sourceHostEligibleContext{Context: ctx, dir: dir}
+	eligible, err := sc.PrepareSourceHost(stage, cfg, request, describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10})
+	eligible.Close()
+	if !stage.seen || stage.deadline.IsZero() || time.Now().Before(stage.deadline) || !stage.deadline.Before(originalDeadline) || ctx.Err() != nil || !time.Now().Before(originalDeadline) || q.Deadline != originalDeadline {
+		t.Fatal("ASSERT_HOST_LATE_PREPARATION_READBACK_LIVE_SOURCE", stage.seen, stage.deadline, ctx.Err())
+	}
+	t.Log("ASSERT_HOST_LATE_PREPARATION_READBACK_LIVE_SOURCE: PASS; actual original mailbox deadline elapsed, source/caller unchanged and live")
+	if err == nil || eligible.Eligible() {
+		t.Fatal("ASSERT_HOST_ELIGIBLE_MAILBOX_EARLIER_DEADLINE", err, eligible.Eligible())
+	}
+	t.Log("ASSERT_HOST_ELIGIBLE_MAILBOX_EARLIER_DEADLINE: PASS; no exchange or actual_HOST invocation")
+}
+
 func TestPrivateSourceSELFResponder(t *testing.T) {
 	at := -1
 	for n, a := range os.Args {

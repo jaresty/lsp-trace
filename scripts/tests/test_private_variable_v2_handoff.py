@@ -658,5 +658,203 @@ class WaitTest(unittest.TestCase):
         self.assertEqual(self.wait(f)['Status'], 'REQUEST')
 
 
+class SourceHostTest(unittest.TestCase):
+    put = WaitTest.put
+    export = HandoffTest.export
+    assert_export_exact = HandoffTest.assert_export_exact
+
+    def fixture(self):
+        tmp = tempfile.TemporaryDirectory(prefix='.owned-source-host-', dir=Path.home())
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name)
+        mailbox, control = base / 'mailbox', base / 'control'
+        mailbox.mkdir(mode=0o700)
+        control.mkdir(mode=0o700)
+        sha = h.digest(b'controlled source')
+        limits = dict(MaxCorrections=0, MaxCalls=1, MaxRequestBytes=1 << 20,
+                      MaxResponseBytes=16384, MaxTotalBytes=4 << 20, MaxOutputBytes=1 << 20)
+        m = dict(Enabled=True, Directory=str(mailbox), Invocation='controlled-source',
+                 InterpreterRole='canned-source-role', ReviewerRole='unused-reviewer', ScopeSHA256=sha,
+                 TimeoutMS=1000, OverallTimeoutMS=1000, PollMS=1, Limits=limits, ApprovalSHA256='')
+        m['ApprovalSHA256'] = h.digest(h.canonical(m))
+        cfg = dict(Protocol=h.SOURCE_PROTOCOL, Mailbox=m)
+        prompt = 'SOURCE_ONLY controlled fixture; not HOST ' + '界🙂e\u0301' * 10000
+        envelope = dict(protocol='adr0007-semantic-worker', message_type='request', message_id='',
+                        correlation_id='', admission_id=sha, corpus='revision-bound-code',
+                        item_type='assembled-source-projection', acquisition_mode='TARGET',
+                        input_sha256=h.hashlib.sha256(prompt.encode()).hexdigest(), input_bytes=len(prompt.encode()),
+                        source_revision=sha[7:], deadline_ms=1000, target_message_id='', prompt=prompt)
+        lineage = dict(packet_id=sha, census_id=sha, lineage_identity='',
+                       consumer_resolution='PRIVATE_SOURCE_ONLY_NO_CONSUMER_CLAIM', alternative_id='SOURCE_ONLY',
+                       alternative_ordinal=0, authority=0, accepted=False, completeness='UNKNOWN', source_graph_complete='UNKNOWN')
+        record = dict(record_id='', envelope=envelope, lineage=lineage)
+        def identity(kind):
+            return h.hashlib.sha256(('lsp-trace.describerequest.' + kind + '\x00').encode() + h.canonical(record)).hexdigest()
+        lineage['lineage_identity'] = identity('lineage.v2')
+        message, correlation = identity('message.v1'), identity('correlation.v1')
+        envelope.update(message_id=message, correlation_id=correlation)
+        record['record_id'] = identity('record.v1')
+        source = dict(HandoffID=sha, CheckpointID=sha, SourceUnitID=sha, SourceDigest=sha,
+                      RequestRecordID=record['record_id'], AttemptID='canned-attempt',
+                      Workspace='file:///controlled', Deadline='2099-01-01T00:00:00Z')
+        source_raw = h.canonical(source)
+        prep = dict(Protocol=h.SOURCE_PROTOCOL, Invocation=m['Invocation'], OwnerNonce='a' * 64,
+                    ScopeSHA256=sha, PreparationSHA256=h.digest(source_raw), PreparationByteLength=len(source_raw),
+                    Limits=limits, Deadline=source['Deadline'], SourceConfiguration=cfg, Preparation=source)
+        binding = dict(Protocol=h.SOURCE_PROTOCOL, Invocation=m['Invocation'], OwnerNonce=prep['OwnerNonce'],
+                       Sequence=1, Stage=h.SOURCE_FAMILY, RoleID=m['InterpreterRole'],
+                       RequestSHA256=h.digest(h.canonical(record)), PreparationSHA256=prep['PreparationSHA256'],
+                       Source=source, ResponseAllowance=limits['MaxResponseBytes'], Deadline=source['Deadline'])
+        frame = dict(Binding=binding, Request=record)
+        self.put(mailbox / 'preparation.json', prep)
+        self.put(mailbox / 'request-000001.json', frame)
+        export = dict(Schema='private-source-describe-host-export.v1', Protocol=h.SOURCE_PROTOCOL,
+                      SourceConfiguration=cfg, Roots=[str(base / 'source')], ScopeSHA256=sha,
+                      PreparationSHA256=prep['PreparationSHA256'], Authority=0, Accepted=False,
+                      Identity='UNRESOLVED', Completeness='UNKNOWN', Absence='PROHIBITED')
+        config = base / 'config.json'
+        self.put(config, export)
+        return dict(base=base, mailbox=mailbox, control=control, config=config,
+                    pin=h.digest(config.read_bytes()), dest=base / 'export', raw=h.canonical(frame),
+                    request=h.canonical(record), frame=frame, prep=prep)
+
+    def test_source_export_respond_exact(self):
+        f = self.fixture()
+        fd = h.directory(str(f['mailbox']))
+        try:
+            self.assertEqual(h.canonical(h.request(fd, 1)), f['raw'], 'SOURCE_REQUEST_EXACT')
+        finally:
+            os.close(fd)
+        receipt = self.export(f)
+        m = self.assert_export_exact(f, receipt)
+        self.assertGreater(len(m['Parts']), 1)
+        payload = b'\x00\xff exact canned bytes { broken JSON\r\n'
+        path = f['base'] / 'payload'
+        path.write_bytes(payload)
+        path.chmod(0o600)
+        h.respond(str(f['mailbox']), 1, str(path))
+        response = h.decode((f['mailbox'] / 'response-000001.json').read_bytes())
+        self.assertEqual(h.base64.b64decode(response['Payload']), payload, 'SOURCE_RESPONSE_EXACT')
+        self.assertEqual(response['Binding'], f['frame']['Binding'])
+        print('SOURCE_REQUEST_EXACT: A-pass; SOURCE_RESPONSE_EXACT: A-pass; SOURCE_EXPORT_ORDERED: A-pass')
+
+    def test_source_respond_final_deadline(self):
+        # Test-only clocks advance during real payload/frame work, after request()
+        # has admitted the original deadline. No sleeps or production clock hooks.
+        for stage in ('payload-read', 'canonical', 'receipt-hash'):
+            for expire in (False, True):
+                with self.subTest(stage=stage, expire=expire):
+                    f = self.fixture()
+                    deadline = h.datetime.fromisoformat(f['frame']['Binding']['Deadline'].replace('Z', '+00:00')).timestamp()
+                    clock = [deadline - 1]
+                    reached = []
+                    payload = b'\x00\xff exact source bytes { invalid JSON\r\n'
+                    path = f['base'] / 'payload'
+                    path.write_bytes(payload)
+                    path.chmod(0o600)
+                    actual_read, actual_canonical, actual_digest = h.read, h.canonical, h.digest
+                    def advance():
+                        reached.append(stage)
+                        if expire:
+                            clock[0] = deadline  # equality must already be refused
+                    def read(*args, **kwargs):
+                        value = actual_read(*args, **kwargs)
+                        if stage == 'payload-read' and args[1] == 'payload':
+                            advance()
+                        return value
+                    def canonical(value):
+                        raw = actual_canonical(value)
+                        if stage == 'canonical' and isinstance(value, dict) and 'PayloadSHA256' in value:
+                            advance()
+                        return raw
+                    def digest(raw):
+                        value = actual_digest(raw)
+                        if stage == 'receipt-hash' and raw.startswith(b'{"Binding":') and b'"PayloadByteLength"' in raw:
+                            advance()
+                        return value
+                    refused, receipt = None, None
+                    with patch.object(h.time, 'time', side_effect=lambda: clock[0]), patch.object(h, 'read', side_effect=read), patch.object(h, 'canonical', side_effect=canonical), patch.object(h, 'digest', side_effect=digest):
+                        try:
+                            receipt = h.respond(str(f['mailbox']), 1, str(path))
+                        except ValueError as error:
+                            refused = error
+                    self.assertEqual(reached, [stage], 'ASSERT_SOURCE_RESPONSE_WORK_REACHED')
+                    response_path = f['mailbox'] / 'response-000001.json'
+                    if expire:
+                        self.assertFalse(response_path.exists(), 'ASSERT_SOURCE_RESPONSE_LATE_WORK_ABSENT')
+                        self.assertIsInstance(refused, ValueError, 'ASSERT_SOURCE_RESPONSE_LATE_WORK_REFUSED')
+                        self.assertEqual(str(refused), 'expired handoff', 'ASSERT_SOURCE_RESPONSE_LATE_WORK_REFUSED')
+                        self.assertIsNone(receipt, 'ASSERT_SOURCE_RESPONSE_LATE_WORK_REFUSED')
+                        print(f'ASSERT_SOURCE_RESPONSE_LATE_WORK_ABSENT: PASS stage={stage}; original deadline equality refused')
+                    else:
+                        self.assertIsNone(refused, 'ASSERT_SOURCE_RESPONSE_LIVE_WORK_EXACT')
+                        raw = response_path.read_bytes()
+                        response = h.decode(raw)
+                        self.assertEqual(h.base64.b64decode(response['Payload']), payload, 'ASSERT_SOURCE_RESPONSE_LIVE_WORK_EXACT')
+                        self.assertEqual(response['Binding'], f['frame']['Binding'], 'ASSERT_SOURCE_RESPONSE_LIVE_WORK_EXACT')
+                        self.assertEqual(receipt, dict(ResponseSHA256=h.digest(raw), ResponseByteLength=len(raw)), 'ASSERT_SOURCE_RESPONSE_LIVE_WORK_EXACT')
+                        print(f'ASSERT_SOURCE_RESPONSE_LIVE_WORK_EXACT: PASS stage={stage}')
+
+    def test_source_closed_family(self):
+        mutations = {
+            'legacy-label': lambda q: q['Binding'].update(Stage='INTERPRET'),
+            'legacy-protocol': lambda q: q['Binding'].update(Protocol=h.PROTOCOL),
+            'unknown': lambda q: q['Request'].update(Items=[]),
+            'nonce': lambda q: q['Binding'].update(OwnerNonce='b' * 64),
+            'role': lambda q: q['Binding'].update(RoleID='unused-reviewer'),
+            'sequence': lambda q: q['Binding'].update(Sequence=True),
+            'attempt': lambda q: q['Binding']['Source'].update(AttemptID='foreign'),
+            'source': lambda q: q['Binding']['Source'].update(SourceDigest=h.digest(b'foreign')),
+            'record': lambda q: q['Request'].update(record_id='f' * 64),
+            'deadline': lambda q: q['Binding'].update(Deadline='2100-01-01T00:00:00Z'),
+            'bool-limit': lambda q: q['Binding'].update(ResponseAllowance=True),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                f = self.fixture()
+                frame = h.decode(f['raw'])
+                mutate(frame)
+                self.put(f['mailbox'] / 'request-000001.json', frame)
+                fd = h.directory(str(f['mailbox']))
+                try:
+                    with self.assertRaises((ValueError, KeyError, TypeError), msg='SOURCE_CLOSED_FAMILY'):
+                        h.request(fd, 1)
+                finally:
+                    os.close(fd)
+        print('SOURCE_CLOSED_FAMILY: A-pass')
+
+    def test_source_family_countercontrol(self):
+        f = self.fixture()
+        frame = h.decode(f['raw'])
+        frame['Binding']['Stage'] = 'INTERPRET'
+        self.put(f['mailbox'] / 'request-000001.json', frame)
+        def guard():
+            fd = h.directory(str(f['mailbox']))
+            try:
+                with self.assertRaises(ValueError, msg='SOURCE_FAMILY_GUARD'):
+                    h.request(fd, 1)
+            finally:
+                os.close(fd)
+        with patch.object(h, 'source_frame', return_value=None):
+            with self.assertRaisesRegex(AssertionError, 'SOURCE_FAMILY_GUARD'):
+                guard()
+            print('SOURCE_FAMILY_GUARD: A-fail with source validator removed')
+        guard()
+        print('SOURCE_FAMILY_GUARD: A-pass restored')
+
+    def test_source_wait_privacy_and_stop(self):
+        f = self.fixture()
+        self.put(f['control'] / 'start.json', dict(Schema='private.onefile-actual-start.v2',
+                 ParentInvokedOperator=True, Invocation=f['prep']['Invocation'], ScopeSHA256=f['prep']['ScopeSHA256'],
+                 FullPlanSHA256=h.digest(b'plan'), ActualRoleBindingsSHA256=h.digest(b'canned labels'),
+                 StartedUnix=1000000000, HardDeadlineUnix=4102444800))
+        result = h.wait_request(str(f['mailbox']), 'canned-source-role', str(f['control']), poll_ms=1)
+        self.assertEqual(result, dict(Status='REQUEST', Binding=f['frame']['Binding']))
+        self.assertNotIn(f['frame']['Request']['envelope']['prompt'], str(result))
+        self.put(f['control'] / 'stop.json', dict(StopRequested=True))
+        self.assertEqual(h.wait_request(str(f['mailbox']), 'canned-source-role', str(f['control'])), dict(Status='STOP'))
+        print('SOURCE_WAIT_BINDING_ONLY: A-pass; SOURCE_STOP: A-pass')
+
+
 if __name__ == '__main__':
     unittest.main()
