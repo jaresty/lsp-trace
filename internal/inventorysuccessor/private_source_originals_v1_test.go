@@ -497,7 +497,11 @@ func TestPrivateSourceSELFResponder(t *testing.T) {
 		case "initialize":
 			result = map[string]any{"serverInfo": map[string]string{"name": "controlled-source-self", "version": "v1"}, "capabilities": map[string]any{"positionEncoding": "utf-16", "callHierarchyProvider": true, "documentSymbolProvider": true, "referencesProvider": true, "definitionProvider": true}}
 		case "textDocument/documentSymbol":
-			result = []any{map[string]any{"name": "Root", "kind": 12, "range": display, "selectionRange": selection}, map[string]any{"name": "Other", "kind": 12, "range": other.Range, "selectionRange": other.SelectionRange}}
+			otherName := "Other"
+			if mode == "same-name" {
+				otherName = "Root" // native names cannot disambiguate these symbols
+			}
+			result = []any{map[string]any{"name": "Root", "kind": 12, "range": display, "selectionRange": selection}, map[string]any{"name": otherName, "kind": 12, "range": other.Range, "selectionRange": other.SelectionRange}}
 		case "textDocument/references", "textDocument/definition":
 			targetURI, r := uri, otherSelection
 			if mode == "foreign" {
@@ -578,7 +582,7 @@ func (w *sourceStageWorker) Run(context.Context, describerequest.Record, string)
 }
 
 func TestSuppliedOpPreparationControls(t *testing.T) {
-	for _, control := range []string{"paid", "shortage", "scope", "seed", "attempt", "input", "root", "stale", "cancel", "deadline", "uncertain"} {
+	for _, control := range []string{"paid", "paid-same-name", "shortage", "scope", "seed", "attempt", "input", "root", "stale", "cancel", "deadline", "uncertain"} {
 		t.Run(control, func(t *testing.T) {
 			owner, root := inv.ControlledRPrepCanonicalOwnerForTest(t)
 			if control == "shortage" {
@@ -589,7 +593,11 @@ func TestSuppliedOpPreparationControls(t *testing.T) {
 			if e := os.WriteFile(filepath.Join(start.Profile.Workspace().String(), "root.go"), body, 0644); e != nil {
 				t.Fatal(e)
 			}
-			start.Process.Args = []string{"-test.run=^TestPrivateSourceSELFResponder$", "--", "private-source-self", start.Profile.Workspace().String(), "positive"}
+			mode := "positive"
+			if control == "paid-same-name" {
+				mode = "same-name"
+			}
+			start.Process.Args = []string{"-test.run=^TestPrivateSourceSELFResponder$", "--", "private-source-self", start.Profile.Workspace().String(), mode}
 			capture := inv.PrivateMixedInputRequestV2{Manager: m, Root: root, Start: start, URI: uri, OccurrenceID: "prep-control", Revision: "source-controlled-revision", Privacy: "private-source-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 6, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}}
 			ctx := context.Background()
 			op, e := owner.ReserveMixedInputV2(ctx, fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("capture-control"))), capture)
@@ -660,7 +668,7 @@ func TestSuppliedOpPreparationControls(t *testing.T) {
 				inv.ControlledMixedObserveUncertainForTest(owner)
 			}
 			prepared, e := inv.ExecuteRPreparationV1(ctx, operation, bad)
-			if control == "paid" {
+			if strings.HasPrefix(control, "paid") {
 				if e != nil {
 					t.Fatal("ASSERT_RPREP_PAID", e)
 				}
@@ -673,6 +681,7 @@ func TestSuppliedOpPreparationControls(t *testing.T) {
 					t.Fatal("ASSERT_RPREP_ACTUAL_RETAINED_METADATA", retained, ok)
 				}
 				t.Logf("ASSERT_RPREP_ACTUAL_RETAINED_METADATA: PASS bound=%d input=%d", retained, input.Input.ByteLength())
+				sourceOriginalTargetChecks(t, prepared, q)
 			} else {
 				if e == nil {
 					t.Fatal("ASSERT_RPREP_BAD_USABLE", control)
@@ -687,6 +696,174 @@ func TestSuppliedOpPreparationControls(t *testing.T) {
 			t.Logf("ASSERT_RPREP_UPFRONT_DEBIT: PASS; ASSERT_RPREP_ONE_SHOT: PASS control=%s before=%v reserved=%v", control, before, afterReserve)
 		})
 	}
+}
+
+// Genuine paid preparation, post-Observe originals, canonical admissions and
+// exact later HOST join. Public DTO perturbations never stand in for this control.
+func sourceOriginalTargetChecks(t *testing.T, prepared inv.PreparedSourceRV1, q inv.PrivateSourceRPreparationRequestV1) {
+	t.Helper()
+	inv.ControlledOriginalTargetRetentionForTest(t, prepared)
+	input, policy, frozen, result, originals, e := prepared.Values()
+	if e != nil {
+		t.Fatal(e)
+	}
+	modes := []string{"RD", "C", "CRD", "D", "CD", "R", "CR"}
+	slots := make([]cc.PrivateAllModeSlot, 7)
+	entries := make([]cc.PrivateAllModeEntry, 7)
+	for i, mode := range modes {
+		run := q.RunID + "/" + mode
+		if mode == "R" {
+			run = q.RunID
+		}
+		slots[i] = cc.PrivateAllModeSlot{Ordinal: i, Mode: mode, RunID: run, SeedNamespace: q.SeedNamespace, Seed: q.Seed}
+		entries[i] = cc.PrivateAllModeEntry{Slot: slots[i], Disposition: cc.PrivateAllModeDeclaredMissing, Lineage: q.RunID, MissingReason: "NOT_CAPTURED_BY_R_ONLY_OPERATOR;UNRESOLVED"}
+		if mode == "R" {
+			entries[i] = cc.PrivateAllModeEntry{Slot: slots[i], Disposition: cc.PrivateAllModeReady, Lineage: q.RunID, Input: input, Policy: policy, Case: frozen, Result: result}
+		}
+	}
+	h, e := cc.NewPrivateAllModeHandoff(q.Workspace, q.Revision, slots, entries)
+	if e != nil {
+		t.Fatal(e)
+	}
+	objects, e := prepared.SourceObjects()
+	if e != nil {
+		t.Fatal(e)
+	}
+	contract := sourceStageContract(t)
+	sources := sc.PrivateAllModeSourcesRequest{PolicyID: contract.PacketSourcePolicy().PolicyID, Limits: tp.PrivateSourceLimits{MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20, MaxWork: 10000, MaxObjects: 1000}, Deadline: q.Deadline, Originals: []inv.PrivateProducerOriginals{originals}, Objects: objects}
+	store, e := sc.NewRootlessSourceHostStore(8 << 20)
+	if e != nil {
+		t.Fatal(e)
+	}
+	out := sc.Run(context.Background(), sc.Request{PrivateAllMode: &h, PrivateSources: &sources, Workspace: q.Workspace, Contract: contract, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+	if out.Err != nil || out.PrivateSources == nil {
+		t.Fatal("ASSERT_ORIGINAL_CANONICAL_ADMISSION", out.Err)
+	}
+	s := out.PrivateSources
+	before, _ := json.Marshal(s)
+	if s.Counts.Intents != 8 || s.Counts.Admitted != 2 || s.Counts.Unresolved != 6 || s.Counts.Requests != 2 || len(s.Units) != 2 {
+		t.Fatal("ASSERT_ORIGINAL_NOMINATIONS_RETAINED", s.Counts)
+	}
+	selectionGets, selectionPuts := store.OperationCounts()
+	var original, other tp.PrivateSourceUnit
+	for _, u := range s.Units {
+		if prepared.MatchesOriginalQueryTarget(u) {
+			original = u
+		} else {
+			other = u
+		}
+	}
+	if original.ID == "" || other.ID == "" || original.URI != other.URI || original.SymbolID == other.SymbolID || original.SelectionRange == other.SelectionRange {
+		t.Fatal("ASSERT_ORIGINAL_SAME_FILE_DISTINCT_SYMBOLS")
+	}
+	for _, units := range [][]tp.PrivateSourceUnit{{other, original}, {original, other}} {
+		id, err := prepared.OriginalQueryTargetID(units)
+		if err != nil || id != original.ID {
+			t.Fatal("ASSERT_ORIGINAL_OTHER_BEFORE_QUERY", err)
+		}
+	}
+	if id, err := prepared.OriginalQueryTargetID([]tp.PrivateSourceUnit{other}); err == nil || id != "" {
+		t.Fatal("ASSERT_ORIGINAL_MISSING_REFUSED")
+	}
+	for name, change := range map[string]func(*tp.PrivateSourceUnit){
+		"symbol":       func(u *tp.PrivateSourceUnit) { u.SymbolID = other.SymbolID },
+		"selection":    func(u *tp.PrivateSourceUnit) { u.SelectionRange = other.SelectionRange },
+		"display":      func(u *tp.PrivateSourceUnit) { u.DisplayRange = other.DisplayRange },
+		"uri":          func(u *tp.PrivateSourceUnit) { u.URI += "other" },
+		"source":       func(u *tp.PrivateSourceUnit) { u.SourceDigest = "sha256:" + strings.Repeat("0", 64) },
+		"session":      func(u *tp.PrivateSourceUnit) { u.SessionID += "other" },
+		"generation":   func(u *tp.PrivateSourceUnit) { u.Generation++ },
+		"version":      func(u *tp.PrivateSourceUnit) { u.DocumentVersion += "other" },
+		"encoding":     func(u *tp.PrivateSourceUnit) { u.PositionEncoding = "utf-8" },
+		"revision":     func(u *tp.PrivateSourceUnit) { u.Revision += "other" },
+		"privacy":      func(u *tp.PrivateSourceUnit) { u.Privacy += "other" },
+		"workspace":    func(u *tp.PrivateSourceUnit) { u.Workspace += "other" },
+		"input":        func(u *tp.PrivateSourceUnit) { u.InputID = "foreign" },
+		"unit-version": func(u *tp.PrivateSourceUnit) { u.Version = "foreign" },
+		"ceiling":      func(u *tp.PrivateSourceUnit) { u.ClaimCeiling = tp.PrivateSourceCandidateCeiling },
+		"id":           func(u *tp.PrivateSourceUnit) { u.ID = "" },
+	} {
+		bad := original
+		change(&bad)
+		if prepared.MatchesOriginalQueryTarget(bad) {
+			t.Fatal("ASSERT_ORIGINAL_EXACT_METADATA", name)
+		}
+		if id, err := prepared.OriginalQueryTargetID([]tp.PrivateSourceUnit{other, bad}); err == nil || id != "" {
+			t.Fatal("ASSERT_ORIGINAL_EXACT_METADATA", name)
+		}
+		t.Log("ASSERT_ORIGINAL_EXACT_METADATA: PASS", name)
+	}
+	conflict := other
+	conflict.ID = original.ID
+	duplicate := original
+	duplicate.ID += "other"
+	for _, units := range [][]tp.PrivateSourceUnit{{original, original}, {original, duplicate}, {original, conflict}, nil} {
+		if id, err := prepared.OriginalQueryTargetID(units); err == nil || id != "" {
+			t.Fatal("ASSERT_ORIGINAL_AMBIGUITY_REFUSED")
+		}
+	}
+	gets, puts := store.OperationCounts()
+	if gets != selectionGets || puts != selectionPuts {
+		t.Fatal("ASSERT_ORIGINAL_SELECTION_NO_STORE_EFFECTS")
+	}
+	t.Logf("ASSERT_ORIGINAL_CANONICAL_ORDER: first_other=%t; requests=%d units=%d; all retained", s.Requests[0].Envelope.AdmissionID == other.ID, len(s.Requests), len(s.Units))
+	t.Log("ASSERT_ORIGINAL_SELECTION_NO_STORE_EFFECTS: PASS (including genuine no-original-match refusal; no HOST exchange)")
+	if (inv.PreparedSourceRV1{}).MatchesOriginalQueryTarget(original) {
+		t.Fatal("ASSERT_ORIGINAL_ZERO_NO_MATCH")
+	}
+	// A public matching DTO is intentionally NOT admission: altering its body
+	// leaves the scalar predicate true but the exact full-record HOST join refuses.
+	fake := original
+	fake.Body += "\ncaller-invented-body"
+	if !prepared.MatchesOriginalQueryTarget(fake) {
+		t.Fatal("ASSERT_ORIGINAL_METADATA_NOT_ADMISSION_CONTROL")
+	}
+	r, e := describerequest.FormatPrivateSourceRequestCandidate(fake, contract.DescribeDeadlineMS(), 1<<20)
+	if e != nil {
+		t.Fatal(e)
+	}
+	dir, e := filepath.EvalSymlinks(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	mailbox := filepath.Join(dir, "mailbox")
+	if e = os.Mkdir(mailbox, 0700); e != nil {
+		t.Fatal(e)
+	}
+	cfg := host.SourceHostConfig{Protocol: host.SourceHostProtocol, Mailbox: host.AutomaticHandoffConfigPrivateV2{Enabled: true, Directory: mailbox, Invocation: "original-target-control", InterpreterRole: "canned-not-HOST", ReviewerRole: "unused", ScopeSHA256: h.ID(), TimeoutMS: 2000, OverallTimeoutMS: 2000, PollMS: 1, Limits: host.AutomaticLimitsPrivateV2{MaxCalls: 1, MaxRequestBytes: 64 << 10, MaxResponseBytes: 16 << 10, MaxTotalBytes: 256 << 10, MaxOutputBytes: 64 << 10}}}
+	cfg.Mailbox.ApprovalSHA256 = host.AutomaticHandoffApprovalPrivateV2(cfg.Mailbox)
+	resume := sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: s.Expected, Originals: sources.Originals, ExpectedHandoff: h}, Workspace: q.Workspace, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: s.CheckpointID}
+	request := sc.SourceAcquisitionRequest{Resume: resume, Record: r, Attempt: sc.SuppliedSourceAttempt{ID: "original-target-control", CheckpointID: s.CheckpointID, SourceUnitID: r.Envelope.AdmissionID, RequestRecordID: r.RecordID}}
+	limits := describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10}
+	p, err := sc.PrepareSourceHost(context.Background(), cfg, request, limits)
+	p.Close()
+	files, fe := os.ReadDir(mailbox)
+	if err == nil || p.Eligible() || fe != nil || len(files) != 0 {
+		t.Fatal("ASSERT_ORIGINAL_METADATA_CANNOT_ADMIT", err, fe)
+	}
+	// The actual canonical original record still passes unchanged Resume admission.
+	for _, record := range s.Requests {
+		if record.Envelope.AdmissionID == original.ID {
+			request.Record = record
+			request.Attempt.RequestRecordID = record.RecordID
+		}
+	}
+	p, err = sc.PrepareSourceHost(context.Background(), cfg, request, limits)
+	if err != nil || !p.Eligible() {
+		p.Close()
+		t.Fatal("ASSERT_ORIGINAL_GENUINE_HOST_PREPARE", err)
+	}
+	p.Close()
+	after, _ := json.Marshal(s)
+	if !bytes.Equal(before, after) {
+		t.Fatal("ASSERT_ORIGINAL_NOMINATIONS_RETAINED")
+	}
+	for i, entry := range entries {
+		if entry.Slot.Seed != 7 || entry.Slot.Mode != modes[i] || (entry.Disposition == cc.PrivateAllModeReady) != (i == 5) {
+			t.Fatal("ASSERT_ORIGINAL_SEVEN_MODE_SEED")
+		}
+	}
+	t.Log("ASSERT_ORIGINAL_OTHER_BEFORE_QUERY: PASS; ASSERT_ORIGINAL_MISSING_REFUSED: PASS; ASSERT_ORIGINAL_AMBIGUITY_REFUSED: PASS; ASSERT_ORIGINAL_ZERO_NO_MATCH: PASS; ASSERT_ORIGINAL_METADATA_CANNOT_ADMIT: PASS; ASSERT_ORIGINAL_GENUINE_HOST_PREPARE: PASS; ASSERT_ORIGINAL_NOMINATIONS_RETAINED: PASS; ASSERT_ORIGINAL_SEVEN_MODE_SEED: PASS")
 }
 
 // TestSuppliedOp connects actual controlled owner, R SELF acquisition, paid
@@ -795,7 +972,15 @@ func TestSourceOperatorPhaseFixtures(t *testing.T) {
 	}
 }
 
+func TestSourceOperatorOriginalQueryTarget(t *testing.T) {
+	testSuppliedOp(t, "original-target")
+}
+
 func testSuppliedOp(t *testing.T, binary string) {
+	originalTarget := binary == "original-target"
+	if originalTarget {
+		binary = ""
+	}
 	phaseMode := ""
 	if strings.HasPrefix(binary, "host-phase-") {
 		phaseMode, binary = binary, ""
@@ -961,6 +1146,13 @@ func testSuppliedOp(t *testing.T, binary string) {
 	}
 	if runErr != nil || publisherErr != nil {
 		t.Fatal("ASSERT_OP_CONNECTED", out, runErr, publisherErr)
+	}
+	if originalTarget {
+		raw, readErr := os.ReadFile(filepath.Join(mailbox, "request-000001.json"))
+		if readErr != nil || !bytes.Contains(raw, []byte("func Root(){ Other() }")) || bytes.Contains(raw, []byte("func Other(){ Root() }")) {
+			t.Fatal("ASSERT_ORIGINAL_QUERY_HOST_BODY_ONLY", readErr, string(raw))
+		}
+		t.Log("ASSERT_ORIGINAL_QUERY_HOST_BODY_ONLY: PASS (actual paid R SELF and canned mailbox; not real HOST)")
 	}
 	if phaseMode != "" {
 		t.Logf("LIMITED_PHASE_FIXTURE: %s all original phase/native bounds fit; no connected HOST phase separation", phaseMode)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	cc "lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/describerequest"
 	"lsp-trace/internal/describeworker"
 	inv "lsp-trace/internal/inventorysuccessor"
 	sc "lsp-trace/internal/inventorysuccessor/sourcecontinuation"
@@ -122,7 +123,10 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	}
 	source := pause.PrivateSources
 	out.Counts = source.Counts
-	record := source.Requests[0] // exact admitted record, never reconstructed DTO custody
+	record, e := originalQueryRecord(prepared, source)
+	if e != nil {
+		return out, e
+	}
 	resume := sc.ResumeRequest{PrivateSources: &sc.PrivateAllModeSourcesResume{Version: sc.PrivateAllModeSourcesVersion, Expected: source.Expected, Originals: sources.Originals, ExpectedHandoff: handoff}, Workspace: prep.Workspace, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests, Selector: source.CheckpointID}
 	acquisition := sc.SourceAcquisitionRequest{Resume: resume, Record: record, Attempt: sc.SuppliedSourceAttempt{ID: q.RoleAttempt, CheckpointID: source.CheckpointID, SourceUnitID: record.Envelope.AdmissionID, RequestRecordID: record.RecordID}}
 	mailbox := q.Host
@@ -184,6 +188,43 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	}
 	out.Disposition = "SOURCE_PROVISIONAL_DELIVERED_PAIR"
 	return out, nil
+}
+
+// originalQueryRecord selects only the original native query target. It does not
+// mutate nominations, sort, format a replacement record, or admit a public DTO.
+// The later PrepareSourceHost still validates the full record against opaque
+// source admission and the exact original checkpoint/producer custody.
+func originalQueryRecord(prepared inv.PreparedSourceRV1, source *sc.PrivateAllModeSourcesResult) (describerequest.Record, error) {
+	if source == nil || len(source.Units) == 0 || len(source.Units) > 1000 || len(source.Requests) == 0 || len(source.Requests) > 1000 {
+		return describerequest.Record{}, ErrRefused
+	}
+	id, err := prepared.OriginalQueryTargetID(source.Units)
+	if err != nil {
+		return describerequest.Record{}, ErrRefused
+	}
+	return originalQueryRecordForID(id, source.Requests)
+}
+
+// id must come from OriginalQueryTargetID above. This join is not admission.
+func originalQueryRecordForID(id string, records []describerequest.Record) (describerequest.Record, error) {
+	if id == "" || len(records) == 0 || len(records) > 1000 {
+		return describerequest.Record{}, ErrRefused
+	}
+	var record describerequest.Record
+	matches := 0
+	for _, r := range records {
+		if r.Envelope.AdmissionID == id {
+			if r.Lineage.PacketID != id || r.Lineage.CensusID != id || r.RecordID == "" {
+				return describerequest.Record{}, ErrRefused
+			}
+			record = r
+			matches++
+		}
+	}
+	if matches != 1 {
+		return describerequest.Record{}, ErrRefused
+	}
+	return record, nil
 }
 
 // finalizeTerminal runs only after the caller's last owned close. It does not

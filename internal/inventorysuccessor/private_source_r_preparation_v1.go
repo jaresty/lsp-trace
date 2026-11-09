@@ -6,10 +6,12 @@ import (
 	"sync"
 	"time"
 
+	qt "lsp-trace/internal/adr0011querytarget"
 	pc "lsp-trace/internal/programc"
 	"lsp-trace/internal/publication"
 	rg "lsp-trace/internal/referencegrouping"
 	"lsp-trace/internal/sourceobject"
+	"lsp-trace/internal/targetpacket"
 	"lsp-trace/sessionruntime"
 )
 
@@ -40,12 +42,69 @@ type privateSourceRPreparationStateV1 struct {
 // values cannot reconstruct it. Copies preserve opaque in-process custody.
 type PreparedSourceRV1 struct{ state *preparedSourceRStateV1 }
 type preparedSourceRStateV1 struct {
-	input     PrivateManagedGroupingInput
-	originals PrivateProducerOriginals
-	policy    rg.GroupingPolicy
-	frozen    pc.GroupingEvaluationCasePrivate
-	result    pc.GroupingEvaluationResultPrivate
-	objects   []sourceobject.Object
+	input          PrivateManagedGroupingInput
+	originals      PrivateProducerOriginals
+	policy         rg.GroupingPolicy
+	frozen         pc.GroupingEvaluationCasePrivate
+	result         pc.GroupingEvaluationResultPrivate
+	objects        []sourceobject.Object
+	originalTarget originalQueryTargetV1
+}
+
+// Cached only in the existing paid Snapshot continuation, never from a caller
+// unit. This is comparison metadata, not source admission or resumable custody.
+type originalQueryTargetV1 struct {
+	uri, sourceDigest, sessionID, documentVersion, encoding, symbolID string
+	workspace, revision, privacy                                      string
+	generation                                                        uint64
+	display, selection                                                qt.Range
+}
+
+// MatchesOriginalQueryTarget compares scalar metadata without snapshotting,
+// hashing, parsing, copying source, or granting source admission. A matching DTO
+// must still pass the unchanged whole-record/opaque-admission Resume join.
+func (p PreparedSourceRV1) MatchesOriginalQueryTarget(u targetpacket.PrivateSourceUnit) bool {
+	if p.state == nil {
+		return false
+	}
+	o := &p.state.originalTarget
+	return o.symbolID != "" && u.ID != "" &&
+		u.Version == targetpacket.PrivateSourceVersion && u.ClaimCeiling == targetpacket.PrivateSourceCeiling &&
+		u.InputID == "" && u.URI == o.uri && u.SourceDigest == o.sourceDigest &&
+		u.Workspace == o.workspace && u.Revision == o.revision && u.Privacy == o.privacy &&
+		u.SessionID == o.sessionID && u.Generation == o.generation &&
+		u.DocumentVersion == o.documentVersion && u.PositionEncoding == o.encoding &&
+		u.SymbolID == o.symbolID && u.SelectionRange == o.selection && u.DisplayRange == o.display
+}
+
+// OriginalQueryTargetID returns only comparison metadata, never admission. It
+// rejects missing, multiple, and conflicting selected IDs without changing units.
+func (p PreparedSourceRV1) OriginalQueryTargetID(units []targetpacket.PrivateSourceUnit) (string, error) {
+	if len(units) == 0 || len(units) > 1000 {
+		return "", ErrPrivateSourceRPreparationV1
+	}
+	id := ""
+	for _, u := range units {
+		if p.MatchesOriginalQueryTarget(u) {
+			if id != "" {
+				return "", ErrPrivateSourceRPreparationV1
+			}
+			id = u.ID
+		}
+	}
+	if id == "" {
+		return "", ErrPrivateSourceRPreparationV1
+	}
+	count := 0
+	for _, u := range units {
+		if u.ID == id {
+			count++
+		}
+	}
+	if count != 1 {
+		return "", ErrPrivateSourceRPreparationV1
+	}
+	return id, nil
 }
 
 // RetainedPayloadUpper reads only already-admitted lengths. It includes the
@@ -108,6 +167,17 @@ func (p PreparedSourceRV1) RetainedPayloadUpper() (uint64, bool) {
 	}
 	for _, v := range s.objects {
 		if !add(uint64(len(v.Bytes)), 2) || !add(uint64(len(v.Identity.Digest)+64), 6) {
+			return 0, false
+		}
+	}
+	// Charge the cached target struct and all string payloads, even shared ones.
+	// Fixed overhead covers scalar/range/string headers; no serialization work.
+	o := &s.originalTarget
+	if !add(512, 1) {
+		return 0, false
+	}
+	for _, v := range []string{o.uri, o.sourceDigest, o.sessionID, o.documentVersion, o.encoding, o.symbolID, o.workspace, o.revision, o.privacy} {
+		if !add(uint64(len(v)), 1) {
 			return 0, false
 		}
 	}
@@ -293,6 +363,7 @@ func ExecuteRPreparationV1(ctx context.Context, op PrivateSourceRPreparationOper
 		return fail()
 	}
 	objects := []sourceobject.Object{{Identity: sourceobject.Identity{Digest: view.Query.SourceDigest, ByteLength: uint64(len(view.Source))}, Bytes: view.Source}}
+	originalTarget := originalQueryTargetV1{uri: view.Query.URI, sourceDigest: view.Query.SourceDigest, sessionID: view.Query.SessionID, generation: view.Query.Generation, documentVersion: view.Query.DocumentVersion, encoding: view.Query.Encoding, symbolID: view.Target.SymbolID, selection: view.Target.SelectionRange, display: view.Target.DisplayRange, workspace: view.Workspace, revision: view.Revision, privacy: view.Privacy}
 	rules := []rg.GroupingPolicyRule{}
 	for _, k := range []string{"CALLS", "REFERENCES_SYMBOL", "RESOLVES_TO_DEFINITION"} {
 		r := rg.GroupingPolicyRule{RelationKind: k, Action: "EXCLUDE", RationaleCode: "PRIVATE_SOURCE_R_ONLY", Weight: rg.Rational{Numerator: 0, Denominator: 1}}
@@ -330,5 +401,5 @@ func ExecuteRPreparationV1(ctx context.Context, op PrivateSourceRPreparationOper
 		o.uncertain = true
 		return fail()
 	}
-	return PreparedSourceRV1{&preparedSourceRStateV1{q.Input, originals, policy, frozen, result, objects}}, nil
+	return PreparedSourceRV1{&preparedSourceRStateV1{q.Input, originals, policy, frozen, result, objects, originalTarget}}, nil
 }

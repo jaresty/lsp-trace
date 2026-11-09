@@ -16,9 +16,54 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/describerequest"
+	inv "lsp-trace/internal/inventorysuccessor"
 	sc "lsp-trace/internal/inventorysuccessor/sourcecontinuation"
 	"lsp-trace/internal/publication"
 )
+
+func TestSourceOperatorOriginalRecordJoin(t *testing.T) {
+	// DTO-only supplement: genuine paid predicate/admission controls live in
+	// TestSuppliedOpPreparationControls, and actual mailbox export in
+	// TestSourceOperatorOriginalQueryTarget. This function cannot mint custody.
+	original := describerequest.Record{RecordID: "original-record", Envelope: describerequest.Envelope{AdmissionID: "original"}, Lineage: describerequest.Lineage{PacketID: "original", CensusID: "original"}}
+	other := original
+	other.RecordID = "other-record"
+	other.Envelope.AdmissionID = "other"
+	other.Lineage.PacketID = "other"
+	other.Lineage.CensusID = "other"
+	for _, records := range [][]describerequest.Record{{other, original}, {original, other}} {
+		r, e := originalQueryRecordForID("original", records)
+		if e != nil || r != original {
+			t.Fatal("ASSERT_ORIGINAL_RECORD_ORDER_INDEPENDENT", e)
+		}
+	}
+	for name, records := range map[string][]describerequest.Record{"missing": {other}, "duplicate": {original, original}, "empty": nil} {
+		if r, e := originalQueryRecordForID("original", records); e == nil || r.RecordID != "" {
+			t.Fatal("ASSERT_ORIGINAL_RECORD_JOIN_REFUSED", name)
+		}
+	}
+	for _, change := range []func(*describerequest.Record){func(r *describerequest.Record) { r.Lineage.PacketID = "other" }, func(r *describerequest.Record) { r.Lineage.CensusID = "other" }, func(r *describerequest.Record) { r.RecordID = "" }, func(r *describerequest.Record) { r.Envelope.AdmissionID = "other" }} {
+		r := original
+		change(&r)
+		if got, e := originalQueryRecordForID("original", []describerequest.Record{r}); e == nil || got.RecordID != "" {
+			t.Fatal("ASSERT_ORIGINAL_RECORD_JOIN_REFUSED")
+		}
+	}
+	if _, e := originalQueryRecord(inv.PreparedSourceRV1{}, &sc.PrivateAllModeSourcesResult{Requests: []describerequest.Record{original}}); e == nil {
+		t.Fatal("ASSERT_ORIGINAL_ZERO_CUSTODY_REFUSED")
+	}
+	raw, e := os.ReadFile("run.go")
+	if e != nil {
+		t.Fatal(e)
+	}
+	s := string(raw)
+	selection, prepare := strings.Index(s, "record, e := originalQueryRecord(prepared, source)"), strings.Index(s, "sc.PrepareSourceHost")
+	if selection < 0 || prepare <= selection || strings.Contains(s, "record := source.Requests[0]") {
+		t.Fatal("ASSERT_ORIGINAL_ACTUAL_SELECTION_BEFORE_HOST")
+	}
+	t.Log("ASSERT_ORIGINAL_RECORD_ORDER_INDEPENDENT: PASS; ASSERT_ORIGINAL_RECORD_JOIN_REFUSED: PASS; ASSERT_ORIGINAL_ZERO_CUSTODY_REFUSED: PASS; ASSERT_ORIGINAL_ACTUAL_SELECTION_BEFORE_HOST: PASS (DTO/finite source supplement)")
+}
 
 func TestSourceOperatorZeroCustody(t *testing.T) {
 	if out, e := Run(context.Background(), Request{}); e == nil || out.NativeID != "" {

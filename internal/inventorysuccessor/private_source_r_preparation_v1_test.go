@@ -8,6 +8,7 @@ import (
 	"time"
 
 	rg "lsp-trace/internal/referencegrouping"
+	"lsp-trace/internal/targetpacket"
 )
 
 func ControlledRPrepCanonicalOwnerForTest(t *testing.T) (*PrivateManagedInputOwnerV2, *publication.Root) {
@@ -58,6 +59,41 @@ func ControlledRPrepShortOwnerForTest(t *testing.T) (*PrivateManagedInputOwnerV2
 func ControlledRPrepCLIJobForTest(t *testing.T, o *PrivateManagedInputOwnerV2) ([]byte, string) {
 	t.Helper()
 	return sealTestV2(t, &o.job), o.head
+}
+
+// Inspect already-paid genuine state without another Snapshot/hash/evaluation.
+func ControlledOriginalTargetRetentionForTest(t *testing.T, p PreparedSourceRV1) {
+	t.Helper()
+	if p.state == nil {
+		t.Fatal("ASSERT_ORIGINAL_RETENTION_GENUINE")
+	}
+	before, ok := p.RetainedPayloadUpper()
+	if !ok {
+		t.Fatal("ASSERT_ORIGINAL_RETENTION_GENUINE")
+	}
+	copyState := *p.state
+	copyState.originalTarget = originalQueryTargetV1{}
+	after, ok := (PreparedSourceRV1{state: &copyState}).RetainedPayloadUpper()
+	o := &p.state.originalTarget
+	want := uint64(0)
+	for _, s := range []string{o.uri, o.sourceDigest, o.sessionID, o.documentVersion, o.encoding, o.symbolID, o.workspace, o.revision, o.privacy} {
+		want += uint64(len(s))
+	}
+	if !ok || want == 0 || before-after != want {
+		t.Fatal("ASSERT_ORIGINAL_RETENTION_EXACT_DELTA", before, after, want)
+	}
+	t.Logf("ASSERT_ORIGINAL_RETENTION_EXACT_DELTA: PASS payload=%d fixed=512 (fixed overhead charged even for empty comparison control)", want)
+}
+
+func TestSourceRPrepOriginalTargetZero(t *testing.T) {
+	for _, p := range []PreparedSourceRV1{{}, {state: &preparedSourceRStateV1{}}} {
+		if p.MatchesOriginalQueryTarget(targetpacket.PrivateSourceUnit{}) {
+			t.Fatal("ASSERT_ORIGINAL_UNISSUED_NO_MATCH")
+		}
+		if id, e := p.OriginalQueryTargetID(nil); e == nil || id != "" {
+			t.Fatal("ASSERT_ORIGINAL_UNISSUED_NO_MATCH")
+		}
+	}
 }
 
 func TestSourceRPrepQuote(t *testing.T) {
