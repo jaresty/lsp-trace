@@ -7,6 +7,7 @@ import (
 	"time"
 
 	qt "lsp-trace/internal/adr0011querytarget"
+	"lsp-trace/internal/describeworker"
 	pc "lsp-trace/internal/programc"
 	"lsp-trace/internal/publication"
 	rg "lsp-trace/internal/referencegrouping"
@@ -26,21 +27,40 @@ type PrivateSourceRPreparationRequestV1 struct {
 	ExpectedHead, Attempt, Workspace, Revision, RunID, SeedNamespace string
 	Seed                                                             uint64
 	Deadline                                                         time.Time
+	Local                                                            *PrivateSourceLocalConfigV1
 }
 type PrivateSourceRPreparationOperationV1 struct {
 	state *privateSourceRPreparationStateV1
 }
 type privateSourceRPreparationStateV1 struct {
-	mu      sync.Mutex
-	used    bool
-	owner   *PrivateManagedInputOwnerV2
-	request PrivateSourceRPreparationRequestV1
-	head    string
+	mu                       sync.Mutex
+	used                     bool
+	owner                    *PrivateManagedInputOwnerV2
+	request                  PrivateSourceRPreparationRequestV1
+	head                     string
+	local                    *PrivateSourceLocalConfigV1
+	execution                context.Context
+	reservedContext          context.Context
+	cancel                   context.CancelFunc
+	metadata                 *preparedSourceRStateV1
+	verified, finalized      bool
+	localVerificationStarted bool
+	localWorkerStarted       bool
+	localStageDir            string
+	localStage               *localStageNamespaceV1
+	localManagedUse          *localManagedUseV1
+	localStagedConfig        describeworker.Config
+	localExecutorContract    string
+	localWorkerObservation   PrivateSourceLocalWorkerObservationV1
+	localFailure             error
 }
 
 // PreparedSourceRV1 is minted only after confirmed Observe. JSON, hashes and zero
 // values cannot reconstruct it. Copies preserve opaque in-process custody.
 type PreparedSourceRV1 struct{ state *preparedSourceRStateV1 }
+
+// sourceRMetadataV1 is internal data, not an observed preparation proof.
+type sourceRMetadataV1 struct{ state *preparedSourceRStateV1 }
 type preparedSourceRStateV1 struct {
 	input          PrivateManagedGroupingInput
 	originals      PrivateProducerOriginals
@@ -63,7 +83,7 @@ type originalQueryTargetV1 struct {
 // MatchesOriginalQueryTarget compares scalar metadata without snapshotting,
 // hashing, parsing, copying source, or granting source admission. A matching DTO
 // must still pass the unchanged whole-record/opaque-admission Resume join.
-func (p PreparedSourceRV1) MatchesOriginalQueryTarget(u targetpacket.PrivateSourceUnit) bool {
+func (p sourceRMetadataV1) MatchesOriginalQueryTarget(u targetpacket.PrivateSourceUnit) bool {
 	if p.state == nil {
 		return false
 	}
@@ -79,7 +99,7 @@ func (p PreparedSourceRV1) MatchesOriginalQueryTarget(u targetpacket.PrivateSour
 
 // OriginalQueryTargetID returns only comparison metadata, never admission. It
 // rejects missing, multiple, and conflicting selected IDs without changing units.
-func (p PreparedSourceRV1) OriginalQueryTargetID(units []targetpacket.PrivateSourceUnit) (string, error) {
+func (p sourceRMetadataV1) OriginalQueryTargetID(units []targetpacket.PrivateSourceUnit) (string, error) {
 	if len(units) == 0 || len(units) > 1000 {
 		return "", ErrPrivateSourceRPreparationV1
 	}
@@ -112,7 +132,7 @@ func (p PreparedSourceRV1) OriginalQueryTargetID(units []targetpacket.PrivateSou
 // policy/case/result and the detached projection, plus the original source object.
 // Deliberate overcounting of shared originals makes no pointer-sharing assumption.
 // This is logical payload retention, not heap size or a new accounting grant.
-func (p PreparedSourceRV1) RetainedPayloadUpper() (uint64, bool) {
+func (p sourceRMetadataV1) RetainedPayloadUpper() (uint64, bool) {
 	if p.state == nil {
 		return 0, false
 	}
@@ -184,7 +204,7 @@ func (p PreparedSourceRV1) RetainedPayloadUpper() (uint64, bool) {
 	return n, true
 }
 
-func (p PreparedSourceRV1) SourceObjects() ([]sourceobject.Object, error) {
+func (p sourceRMetadataV1) SourceObjects() ([]sourceobject.Object, error) {
 	if p.state == nil {
 		return nil, ErrPrivateSourceRPreparationV1
 	}
@@ -194,7 +214,7 @@ func (p PreparedSourceRV1) SourceObjects() ([]sourceobject.Object, error) {
 	}
 	return out, nil
 }
-func (p PreparedSourceRV1) Values() (rg.AdmittedInput, rg.GroupingPolicy, pc.GroupingEvaluationCasePrivate, pc.GroupingEvaluationResultPrivate, PrivateProducerOriginals, error) {
+func (p sourceRMetadataV1) Values() (rg.AdmittedInput, rg.GroupingPolicy, pc.GroupingEvaluationCasePrivate, pc.GroupingEvaluationResultPrivate, PrivateProducerOriginals, error) {
 	if p.state == nil {
 		return rg.AdmittedInput{}, rg.GroupingPolicy{}, pc.GroupingEvaluationCasePrivate{}, pc.GroupingEvaluationResultPrivate{}, PrivateProducerOriginals{}, ErrPrivateSourceRPreparationV1
 	}
@@ -296,6 +316,24 @@ func (o *PrivateManagedInputOwnerV2) ReserveRPreparationV1(ctx context.Context, 
 	if err != nil {
 		return fail()
 	}
+	var local *PrivateSourceLocalConfigV1
+	if q.Local != nil {
+		frozen := *q.Local // fixed arrays and immutable strings; never borrow caller pointer
+		if frozen.Managed != nil {
+			handle := *frozen.Managed
+			frozen.Managed = &handle
+		}
+		extra, e := sourceLocalConfigChargeV1(frozen)
+		if e != nil {
+			return fail()
+		}
+		charge, err = sourceLocalChargeV1(m, now, q.Deadline, extra)
+		if err != nil {
+			return fail()
+		}
+		local = &frozen
+		q.Local = local
+	}
 	if d, ok := ctx.Deadline(); ok && d.Before(q.Deadline) {
 		return fail()
 	}
@@ -316,16 +354,24 @@ func (o *PrivateManagedInputOwnerV2) ReserveRPreparationV1(ctx context.Context, 
 		o.uncertain = true
 		return fail()
 	}
-	return PrivateSourceRPreparationOperationV1{&privateSourceRPreparationStateV1{owner: o, request: q, head: h.Identity}}, nil
+	return PrivateSourceRPreparationOperationV1{&privateSourceRPreparationStateV1{owner: o, request: q, head: h.Identity, local: local, reservedContext: ctx}}, nil
 }
 func sameRPreparationV1(a, b PrivateSourceRPreparationRequestV1) bool {
-	return a.Root == b.Root && a.ExpectedHead == b.ExpectedHead && a.Attempt == b.Attempt && a.Workspace == b.Workspace && a.Revision == b.Revision && a.RunID == b.RunID && a.SeedNamespace == b.SeedNamespace && a.Seed == b.Seed && a.Deadline.Equal(b.Deadline) && a.Input.sourceInputOriginal.ID() == b.Input.sourceInputOriginal.ID() && samePrivateManagedBindingV2(a.Input.replayBinding, b.Input.replayBinding) && a.Input.sourceEvidence == b.Input.sourceEvidence
+	return sameLocalConfigV1(a.Local, b.Local) && a.Root == b.Root && a.ExpectedHead == b.ExpectedHead && a.Attempt == b.Attempt && a.Workspace == b.Workspace && a.Revision == b.Revision && a.RunID == b.RunID && a.SeedNamespace == b.SeedNamespace && a.Seed == b.Seed && a.Deadline.Equal(b.Deadline) && a.Input.sourceInputOriginal.ID() == b.Input.sourceInputOriginal.ID() && samePrivateManagedBindingV2(a.Input.replayBinding, b.Input.replayBinding) && a.Input.sourceEvidence == b.Input.sourceEvidence
 }
 
 // ExecuteRPreparationV1 is a fixed continuation, never a caller callback. Retire
 // before validating even nil/cancelled/mismatched calls. Failures keep PENDING.
 func ExecuteRPreparationV1(ctx context.Context, op PrivateSourceRPreparationOperationV1, q PrivateSourceRPreparationRequestV1) (PreparedSourceRV1, error) {
-	fail := func() (PreparedSourceRV1, error) { return PreparedSourceRV1{}, ErrPrivateSourceRPreparationV1 }
+	m, err := executeRMetadataV1(ctx, op, q, false)
+	if err != nil {
+		return PreparedSourceRV1{}, err
+	}
+	return PreparedSourceRV1{m}, nil
+}
+
+func executeRMetadataV1(ctx context.Context, op PrivateSourceRPreparationOperationV1, q PrivateSourceRPreparationRequestV1, local bool) (*preparedSourceRStateV1, error) {
+	fail := func() (*preparedSourceRStateV1, error) { return nil, ErrPrivateSourceRPreparationV1 }
 	if op.state == nil {
 		return fail()
 	}
@@ -336,14 +382,26 @@ func ExecuteRPreparationV1(ctx context.Context, op PrivateSourceRPreparationOper
 		return fail()
 	}
 	s.used = true
-	if ctx == nil || ctx.Err() != nil || !sameRPreparationV1(q, s.request) || !time.Now().Before(q.Deadline) {
+	if ctx == nil || ctx.Err() != nil || local != (s.local != nil) || !sameRPreparationV1(q, s.request) || !time.Now().Before(q.Deadline) {
 		return fail()
 	}
 	if _, err := sourceRPreparationMetadataV1(q); err != nil {
 		return fail()
 	}
-	execution, cancel := context.WithDeadline(ctx, q.Deadline)
-	defer cancel()
+	parent := ctx
+	if local {
+		if s.reservedContext == nil || s.reservedContext.Err() != nil {
+			return fail()
+		}
+		parent = s.reservedContext
+	}
+	execution, cancel := context.WithDeadline(parent, q.Deadline)
+	keep := false
+	defer func() {
+		if !keep {
+			cancel()
+		}
+	}()
 	o := s.owner
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -391,6 +449,12 @@ func ExecuteRPreparationV1(ctx context.Context, op PrivateSourceRPreparationOper
 	if err != nil || execution.Err() != nil || !time.Now().Before(q.Deadline) {
 		return fail()
 	}
+	metadata := &preparedSourceRStateV1{q.Input, originals, policy, frozen, result, objects, originalTarget}
+	if local {
+		s.execution, s.cancel, s.metadata = execution, cancel, metadata
+		keep = true
+		return metadata, nil
+	}
 	h, err = o.k.observe(execution, o.job, s.head, q.Attempt, "OBSERVED", time.Now().UnixNano(), o.limits)
 	if err != nil {
 		o.uncertain = true
@@ -401,5 +465,5 @@ func ExecuteRPreparationV1(ctx context.Context, op PrivateSourceRPreparationOper
 		o.uncertain = true
 		return fail()
 	}
-	return PreparedSourceRV1{&preparedSourceRStateV1{q.Input, originals, policy, frozen, result, objects, originalTarget}}, nil
+	return metadata, nil
 }

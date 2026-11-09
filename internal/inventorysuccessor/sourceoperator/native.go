@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"lsp-trace/internal/describeworker"
+	inv "lsp-trace/internal/inventorysuccessor"
 	sc "lsp-trace/internal/inventorysuccessor/sourcecontinuation"
 )
 
@@ -26,18 +27,19 @@ type nativeMachine struct {
 	Gaps     []sc.PrivateSourceOutcome         `json:"gaps"`
 }
 type nativeEnvelope struct {
-	Schema         string        `json:"schema"`
-	Origin         string        `json:"origin"`
-	Execution      string        `json:"execution"`
-	DeliveryOrigin string        `json:"delivery_origin"`
-	HostIdentity   string        `json:"host_identity"`
-	Authority      int           `json:"authority"`
-	Accepted       bool          `json:"accepted"`
-	Identity       string        `json:"identity"`
-	Completeness   string        `json:"completeness"`
-	Absence        string        `json:"absence"`
-	Machine        nativeMachine `json:"machine"`
-	HumanInventory string        `json:"human_inventory"`
+	LocalWorker    *inv.PrivateSourceLocalWorkerObservationV1 `json:"local_worker_stdout,omitempty"`
+	Schema         string                                     `json:"schema"`
+	Origin         string                                     `json:"origin"`
+	Execution      string                                     `json:"execution"`
+	DeliveryOrigin string                                     `json:"delivery_origin"`
+	HostIdentity   string                                     `json:"host_identity"`
+	Authority      int                                        `json:"authority"`
+	Accepted       bool                                       `json:"accepted"`
+	Identity       string                                     `json:"identity"`
+	Completeness   string                                     `json:"completeness"`
+	Absence        string                                     `json:"absence"`
+	Machine        nativeMachine                              `json:"machine"`
+	HumanInventory string                                     `json:"human_inventory"`
 }
 
 // Native encoding stays under the original source 8MiB aggregate ceiling, not
@@ -46,7 +48,7 @@ type nativeEnvelope struct {
 // immediately before the first defensive accessor below.
 const nativeMaxBytes = 8 << 20
 
-func (p *publicationOwner) sealNative(delivered sc.DeliveredSourceResponse, source *sc.PrivateAllModeSourcesResult) (nativeOutcome, error) {
+func (p *publicationOwner) sealNative(delivered sc.DeliveredSourceResponse, source *sc.PrivateAllModeSourcesResult, worker ...inv.PrivateSourceLocalWorkerObservationV1) (nativeOutcome, error) {
 	if p == nil || !p.admitted || source == nil {
 		return nativeOutcome{}, ErrRefused
 	}
@@ -79,6 +81,16 @@ func (p *publicationOwner) sealNative(delivered sc.DeliveredSourceResponse, sour
 	// Citation suggestions remain suggestions in machine semantics, never citations.
 	human := fmt.Sprintf("SOURCE-PROVISIONAL — SUPPLIED claims only\nVerdict: %s\nTarget role: %s\nConsumer need (%s): %s\nProvided behavior: %s\nBoundary contribution: %s\nLimitations: %s\nCitation suggestions are not admitted citations.\nAuthority 0; accepted false; identity UNRESOLVED; completeness UNKNOWN; absence PROHIBITED.\nOther six modes: DECLARED_MISSING_UNRESOLVED.\nLocal file delivery does not authenticate a role, model or execution.\n", semantic.Verdict, semantic.TargetRole, semantic.ConsumerNeed.Status, semantic.ConsumerNeed.Value, semantic.ProvidedBehavior.Value, semantic.BoundaryContribution, strings.Join(semantic.Limitations, "; "))
 	envelope := nativeEnvelope{Schema: "SOURCE_NATIVE_V1", Origin: "SUPPLIED_TERMINAL_RESPONSE_ONLY", Execution: "NO_PROCESS_OR_HOST_EXECUTION_VERIFIED", DeliveryOrigin: "LOCAL_HOST_ROLE_FILE_TRANSPORT_DELIVERED", HostIdentity: "HOST_OBSERVED_NOT_AUTHENTICATED", Identity: "UNRESOLVED", Completeness: "UNKNOWN", Absence: "PROHIBITED", Machine: nativeMachine{supplied, delivery, semantic, source.Counts, source.Outcomes}, HumanInventory: human}
+	if len(worker) > 1 {
+		return nativeOutcome{}, ErrRefused
+	}
+	if len(worker) == 1 {
+		w := worker[0]
+		if w.RawStdoutBytes == 0 || w.RawStdoutBytes > 2080 || len(w.RawStdoutSHA256) != 71 || w.AdapterSHA256 != delivered.Supplied().RawAdapterDigest() {
+			return nativeOutcome{}, ErrRefused
+		}
+		envelope.LocalWorker = &w
+	}
 	raw, e := json.Marshal(envelope)
 	if e != nil || len(raw) == 0 || len(raw) >= nativeMaxBytes || uint64(len(raw))+1 > wire {
 		return nativeOutcome{}, ErrRefused

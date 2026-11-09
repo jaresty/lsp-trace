@@ -65,14 +65,16 @@ type sourceHostPreparation struct {
 }
 
 type SourceHostMailbox struct {
-	mu          sync.Mutex
-	io          *automaticHandoff // only unchanged check/publish/read; owner stays nil
-	source      SourceHostContext
-	record      describerequest.Record
-	preparation string
-	used        bool
-	closeErr    error // first close result; shared by all pointer/upper handle copies
-	roots       sourceHostRoots
+	mu           sync.Mutex
+	io           *automaticHandoff // only unchanged check/publish/read; owner stays nil
+	source       SourceHostContext
+	record       describerequest.Record
+	preparation  string
+	used         bool
+	closeErr     error // first close result; shared by all pointer/upper handle copies
+	roots        sourceHostRoots
+	localPayload []byte // non-admitting one-shot payload; exact binding stays mailbox-owned
+	localArmed   bool
 }
 
 // SourceHostDelivery is minted only after a successful actual file Exchange.
@@ -204,7 +206,12 @@ func sourceHostIdentity(s SourceHostContext, r describerequest.Record) bool {
 // NewSourceHostMailbox is NON-ADMITTING: public data can construct only a byte
 // mailbox. Upper opaque source ownership, budgets and exact regeneration must
 // precede this call. It does not acquire sources, invoke a host or execute roles.
-func NewSourceHostMailbox(ctx context.Context, c SourceHostConfig, r describerequest.Record, source SourceHostContext) (*SourceHostMailbox, error) {
+func NewSourceHostMailbox(ctx context.Context, c SourceHostConfig, r describerequest.Record, source SourceHostContext, boundedLocal ...bool) (*SourceHostMailbox, error) {
+	// B explicitly selects stricter read mechanics; this is not admission or
+	// credit. Legacy callers retain the exact original default mechanics.
+	if len(boundedLocal) > 1 {
+		return nil, errors.New("source host read selector refused")
+	}
 	if _, err := SourceHostRetentionUpper(c, r, source); err != nil {
 		return nil, err
 	}
@@ -236,6 +243,9 @@ func NewSourceHostMailbox(ctx context.Context, c SourceHostConfig, r describereq
 		return nil, err
 	}
 	io := &automaticHandoff{cfg: c.Mailbox, root: root, info: info, deadline: deadline, consumed: map[string]os.FileInfo{}}
+	if len(boundedLocal) == 1 && boundedLocal[0] {
+		io.sourceReadContext = ctx
+	}
 	fail := func(e error) (*SourceHostMailbox, error) { root.Close(); return nil, e }
 	roots, err := observeSourceHostRoots(source.Workspace, c.Mailbox.Directory)
 	if err != nil {
@@ -341,6 +351,27 @@ func (m *SourceHostMailbox) Exchange(ctx context.Context) (payload []byte, recei
 	if err != nil || !bytes.Equal(got, raw) {
 		return nil, receipt, errors.New("source host request changed")
 	}
+	if m.localArmed {
+		// Same public frame and same actual file transport as an external role.
+		// No receipt is minted here; the unchanged read/binding checks below do it.
+		// The existing scalar delivery upper covers binding keys, fixed hashes,
+		// times and 6x every variable string. Add base64 BEFORE hashing/encoding
+		// the response so even a rejected oversized frame is already bounded.
+		frameUpper, upperErr := sourceHostDeliveryUpper(binding)
+		base64Upper := uint64((len(m.localPayload)+2)/3) * 4
+		if upperErr != nil || base64Upper > uint64(binding.ResponseAllowance) || frameUpper > uint64(binding.ResponseAllowance)-base64Upper {
+			return nil, receipt, errors.New("source host local whole-frame upper refused")
+		}
+		response := SourceHostResponse{Binding: binding, PayloadSHA256: pilot.Digest(m.localPayload), PayloadByteLength: len(m.localPayload), Payload: m.localPayload}
+		encoded, e := json.Marshal(response)
+		if e != nil || len(encoded) > binding.ResponseAllowance || !sourceHostLive(ctx, deadline) {
+			return nil, receipt, errors.New("source host local response ceiling/deadline")
+		}
+		if e = io.publish("response-000001.json", encoded); e != nil {
+			return nil, receipt, e
+		}
+		m.localPayload = nil
+	}
 	ticker := time.NewTicker(time.Duration(io.cfg.PollMS) * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -352,6 +383,9 @@ func (m *SourceHostMailbox) Exchange(ctx context.Context) (payload []byte, recei
 		}
 		raw, err = io.read("response-000001.json", binding.ResponseAllowance)
 		if errors.Is(err, os.ErrNotExist) {
+			if m.localArmed {
+				return nil, receipt, errors.New("source host local response missing")
+			}
 			select {
 			case <-ctx.Done():
 				return nil, receipt, ctx.Err()
@@ -528,6 +562,23 @@ func (m *SourceHostMailbox) Deadline() time.Time {
 	return m.io.deadline
 }
 
+// ArmLocalResponse retains only already bounded adapter bytes. This grants no
+// source eligibility or delivery; Exchange still publishes, reads, and validates
+// its exact nonce/role/request/preparation/source/attempt/deadline file binding.
+func (m *SourceHostMailbox) ArmLocalResponse(ctx context.Context, payload []byte) error {
+	if m == nil {
+		return errors.New("source host mailbox absent")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.io == nil || m.io.sourceReadContext == nil || m.used || m.localArmed || !sourceHostLive(ctx, m.io.deadline) || len(payload) == 0 || len(payload) > 8192 || len(payload) > m.io.cfg.Limits.MaxResponseBytes {
+		return errors.New("source host local arm refused")
+	}
+	m.localArmed = true
+	m.localPayload = bytes.Clone(payload)
+	return nil
+}
+
 func (m *SourceHostMailbox) Close() error {
 	if m == nil {
 		return nil
@@ -538,6 +589,7 @@ func (m *SourceHostMailbox) Close() error {
 	if m.io == nil || m.io.closed {
 		return m.closeErr
 	}
+	m.localPayload = nil
 	m.io.closed = true // close once, including on failure; never retry the descriptor
 	m.closeErr = m.io.root.Close()
 	return m.closeErr

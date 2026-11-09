@@ -265,6 +265,26 @@ func (r DeliveredSourceResponse) AfterClose(err error) (DeliveredSourceResponse,
 	return r, nil
 }
 
+// ArmLocalResponse is only non-admitting byte supply to this existing opaque
+// handoff. It cannot manufacture expected state, admission, or a delivered proof.
+func (h SourceHostHandoff) ArmLocalResponse(ctx context.Context, payload []byte) error {
+	if h.state == nil {
+		return errors.New("source host upper ownership absent")
+	}
+	s := h.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.used || len(payload) > s.limits.MaxAdapterBytes || !sourceHostPublicationLive(ctx, s.source.Deadline) {
+		return errors.New("source host local payload refused")
+	}
+	return s.mailbox.ArmLocalResponse(ctx, payload)
+}
+func (h SourceHostHandoff) Deadline() time.Time {
+	if h.state == nil {
+		return time.Time{}
+	}
+	return h.state.mailbox.Deadline()
+}
 func (h SourceHostHandoff) Eligible() bool { return h.state != nil }
 func (h SourceHostHandoff) Close() error {
 	if h.state == nil {
@@ -335,7 +355,10 @@ func sourceHostPreflight(ctx context.Context, c host.SourceHostConfig, q SourceA
 	return s, extra, err
 }
 
-func PrepareSourceHost(ctx context.Context, c host.SourceHostConfig, q SourceAcquisitionRequest, limits describeworker.SuppliedResponseLimits) (SourceHostHandoff, error) {
+func PrepareSourceHost(ctx context.Context, c host.SourceHostConfig, q SourceAcquisitionRequest, limits describeworker.SuppliedResponseLimits, boundedLocal ...bool) (SourceHostHandoff, error) {
+	if len(boundedLocal) > 1 {
+		return SourceHostHandoff{}, errors.New("source host read selector refused")
+	}
 	s, extra, err := sourceHostPreflight(ctx, c, q, limits)
 	if err != nil {
 		return SourceHostHandoff{}, err
@@ -364,7 +387,7 @@ func PrepareSourceHost(ctx context.Context, c host.SourceHostConfig, q SourceAcq
 	if !sourceHostPublicationLive(ctx, s.request.Deadline) {
 		return SourceHostHandoff{}, errors.New("source host expired before mailbox")
 	}
-	mailbox, err := host.NewSourceHostMailbox(ctx, c, q.Record, source)
+	mailbox, err := host.NewSourceHostMailbox(ctx, c, q.Record, source, boundedLocal...)
 	if err != nil {
 		return SourceHostHandoff{}, err
 	}

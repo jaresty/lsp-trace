@@ -215,6 +215,13 @@ func sourceResponseJoin(ctx context.Context, r ResumeRequest, requested describe
 	return bad("supplied source response opaque admission mismatch")
 }
 
+// RawAdapterDigest is bounded scalar observation, not additional source custody.
+func (b BoundSuppliedSourceResponse) RawAdapterDigest() string {
+	if b.state == nil || !b.state.bounds.allows(uint64(len(b.state.canonical))) {
+		return ""
+	}
+	return b.state.candidate.RawAdapterDigest()
+}
 func (b BoundSuppliedSourceResponse) ID() string {
 	if b.state == nil {
 		return ""

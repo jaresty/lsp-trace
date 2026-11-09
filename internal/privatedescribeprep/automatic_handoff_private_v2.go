@@ -132,16 +132,17 @@ type automaticHandoffPreparation struct {
 	Preparation                                                      json.RawMessage
 }
 type automaticHandoff struct {
-	cfg              AutomaticHandoffConfigPrivateV2
-	root             *os.Root
-	info             os.FileInfo
-	owner            *postState
-	nonce            string
-	deadline         time.Time
-	exchangeDeadline time.Time
-	sequence         int
-	failed, closed   bool
-	consumed         map[string]os.FileInfo
+	cfg               AutomaticHandoffConfigPrivateV2
+	root              *os.Root
+	info              os.FileInfo
+	owner             *postState
+	nonce             string
+	deadline          time.Time
+	exchangeDeadline  time.Time
+	sequence          int
+	failed, closed    bool
+	consumed          map[string]os.FileInfo
+	sourceReadContext context.Context // SOURCE-only explicit bounded descriptor reads
 }
 type automaticHandoffBackend struct {
 	shared       *automaticHandoff
@@ -244,7 +245,51 @@ func (s *automaticHandoff) read(name string, limit int) (raw []byte, err error) 
 	if e != nil || !os.SameFile(before, i) || !handoffMetadata(i, false) {
 		return nil, errors.New("handoff file substituted")
 	}
-	raw, e = io.ReadAll(io.LimitReader(f, int64(limit)+1))
+	if s.sourceReadContext != nil {
+		// Stat before allocation, then ceil(n/32768)+1 calls including EOF.
+		// A short positive read may refuse rather than mint additional calls.
+		if limit < 1 || i.Size() < 1 || i.Size() > int64(limit) {
+			return nil, errors.New("source handoff file byte ceiling")
+		}
+		raw = make([]byte, int(i.Size()))
+		left := uint64(i.Size()) / 32768
+		if uint64(i.Size())%32768 != 0 {
+			left++
+		}
+		left++
+		read := func(b []byte) (int, error) {
+			if left == 0 || s.sourceReadContext.Err() != nil || !time.Now().Before(s.deadline) {
+				return 0, errors.New("source handoff prepaid read-call/deadline ceiling")
+			}
+			left--
+			return f.Read(b)
+		}
+		used := 0
+		for used < len(raw) {
+			end := used + 32768
+			if end > len(raw) {
+				end = len(raw)
+			}
+			n, re := read(raw[used:end])
+			if n < 0 || n > end-used {
+				return nil, errors.New("source handoff read count")
+			}
+			used += n
+			if re != nil && !(re == io.EOF && used == len(raw)) {
+				return nil, re
+			}
+			if n == 0 && re == nil {
+				return nil, io.ErrNoProgress
+			}
+		}
+		var probe [1]byte
+		n, re := read(probe[:])
+		if n != 0 || re != io.EOF {
+			return nil, errors.New("source handoff rejecting EOF probe")
+		}
+	} else {
+		raw, e = io.ReadAll(io.LimitReader(f, int64(limit)+1))
+	}
 	if e != nil {
 		return raw, e
 	}

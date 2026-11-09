@@ -976,7 +976,13 @@ func TestSourceOperatorOriginalQueryTarget(t *testing.T) {
 	testSuppliedOp(t, "original-target")
 }
 
+func TestSourceOperatorLocalUnfunded(t *testing.T) { testSuppliedOp(t, "local-invalid") }
+
 func testSuppliedOp(t *testing.T, binary string) {
+	localInvalid := binary == "local-invalid"
+	if localInvalid {
+		binary = ""
+	}
 	originalTarget := binary == "original-target"
 	if originalTarget {
 		binary = ""
@@ -1053,6 +1059,9 @@ func testSuppliedOp(t *testing.T, binary string) {
 		done <- nil
 	}()
 	q := so.Request{Owner: owner, Capture: capture, CaptureAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-capture"))), PreparationAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-prepare"))), RoleAttempt: "source-op-role", RunID: "source-op-run", SeedNamespace: "source-original-schedule", Seed: 7, Contract: sourceStageContract(t), SourceLimits: tp.PrivateSourceLimits{MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20, MaxWork: 10000, MaxObjects: 1000}, Host: cfg, ResponseLimits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10}, OutputRoots: outputs}
+	if localInvalid {
+		q.Local = &inv.PrivateSourceLocalConfigV1{}
+	}
 	_, beforeRefusals := inv.ControlledRPrepDebitForTest(t, owner)
 	badAlias := q
 	badAlias.OutputRoots[1] = badAlias.OutputRoots[0]
@@ -1107,6 +1116,13 @@ func testSuppliedOp(t *testing.T, binary string) {
 	}
 	publisherCancel()
 	publisherErr := <-done // always drain before Fatal
+	if localInvalid {
+		if runErr == nil || out.NativeID != "" || out.Published != [2]bool{} {
+			t.Fatal("ASSERT_LOCAL_BRANCH_REFUSES_BEFORE_DELIVERY", out, runErr)
+		}
+		t.Log("ASSERT_LOCAL_BRANCH_REFUSES_BEFORE_DELIVERY: PASS")
+		return
+	}
 	if phaseMode != "" && runErr != nil {
 		if !errors.Is(runErr, so.ErrNativeAggregate) && !strings.Contains(runErr.Error(), "host-phase=") {
 			t.Fatal("ASSERT_HOST_PHASE_FIXTURE_BOUNDED_FAILURE", phaseMode, runErr)
