@@ -690,3 +690,94 @@ func OpenPreparedDescribeV1(ctx context.Context, op PreparedDescribeOpenOperatio
 	}
 	return OpenedPreparedDescribeV1{&preparedDescribeResultV1{a, bytes.Clone(r.Definition), provenance}}, nil
 }
+
+// preparedDescribePacketV1 is a NEW paid producer-side data read/encoding,
+// not Open's independent completion admission and never capture renewal. The
+// committed handle lacks question/request/schema accessors. Read the selected
+// immutable manifest only after a fresh reservation, rather than trusting input
+// copies or reconstructing authority from DTO hashes. The unchanged closed
+// 16MiB Describe quote pays fixed rejecting snapshot/verifier passes, bounded
+// checked reads, parsing, copies, five hashes, <=1MiB JSON output and cleanup.
+// All fourteen coordinates retain their existing meanings; five provider/wire
+// currencies stay zero. Failed reads/encoding/Observe retain their full debit.
+func (o *PrivateManagedInputOwnerV2) preparedDescribePacketV1(ctx context.Context, p PreparedDescribeV1, attempt string, deadline time.Time, outputLimit uint64) ([]byte, error) {
+	fail := func() ([]byte, error) { return nil, ErrPreparedDescribeV1 }
+	if o == nil || ctx == nil || ctx.Err() != nil || p.state == nil || !hashV2(attempt) || outputLimit == 0 || outputLimit > 1<<20 {
+		return fail()
+	}
+	a := p.state.anchors
+	if !preparedDescribeAnchorsValidV1(a) {
+		return fail()
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	now := time.Now()
+	if o.k == nil || o.uncertain || o.job.Identity != a.ProducerJob || o.k.root.Path() != a.RootPath || o.head != a.Observed {
+		return fail()
+	}
+	charge, err := preparedDescribeChargeV1(preparedDescribeRecordMaxV1, now, deadline)
+	if err != nil {
+		return fail()
+	}
+	k := preparedDescribeKernelV1(o)
+	reserved, err := k.reserve(ctx, o.job, o.head, attempt, charge, deadline.UnixNano(), now.UnixNano(), o.limits)
+	if err != nil {
+		if errors.Is(err, errUncertainV2) {
+			o.uncertain = true
+		}
+		return fail()
+	}
+	o.head = reserved.Identity
+	control, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+	// Every data access, including a rejected oversized/invalid snapshot, is paid.
+	graw, err := preparedDescribeReadV1(control, k, "genesis", a.Genesis, recordLimitV2)
+	if err != nil || digest(graw) != a.Genesis {
+		return fail()
+	}
+	selected, err := preparedDescribeReadV1(control, k, "selected", a.Workflow, recordLimitV2)
+	if err != nil || !bytes.Equal(graw, selected) {
+		return fail()
+	}
+	var genesis preparedDescribeGenesisV1
+	if preparedDescribeDecodeV1(graw, &genesis, recordLimitV2) != nil || genesis.Manifest != a.Manifest || genesis.Workflow != a.Workflow {
+		return fail()
+	}
+	raw, err := preparedDescribeReadV1(control, k, "manifests", a.Manifest, preparedDescribeRecordMaxV1)
+	if err != nil || digest(raw) != a.Manifest {
+		return fail()
+	}
+	var r preparedDescribeRecordV1
+	if preparedDescribeDecodeV1(raw, &r, preparedDescribeRecordMaxV1) != nil || !preparedDescribeRecordValidV1(r) || r.Workflow != a.Workflow || r.RootPath != a.RootPath || r.Producer.Identity != o.job.Identity || r.InitialHead != a.InitialHead || r.CompletionScope != a.CompletionScope || r.PersistReserved != genesis.Reservation || r.Created != genesis.At || !time.Now().Before(time.Unix(0, r.Expires)) {
+		return fail()
+	}
+	head, err := k.reopen(control, o.job, o.limits)
+	if err != nil || head.Identity != reserved.Identity || preparedDescribeProducerV1(control, k, r, head, a.Observed, o.limits) != nil {
+		return fail()
+	}
+	provenance, err := preparedDescribeEncodeV1(r.Provenance, 64<<10)
+	if err != nil {
+		return fail()
+	}
+	packet := PrepareDescribePacketV1{Schema: "private-prepare-describe-packet.v1", FeatureIdentity: "UNRESOLVED", Completeness: "UNKNOWN", AbsenceInference: "PROHIBITED", HOSTCost: "UNKNOWN_NOT_FREE", RoleLabels: [2]string{"SOURCE_PROVIDER_ATTRIBUTION_ONLY", "EVALUATOR_ATTRIBUTION_ONLY"}, Continuation: a, Question: r.Question, Request: r.Request, ResponseSchema: r.ResponseSchema, Definition: r.Definition, Provenance: provenance, QuestionSHA256: digest(r.Question), RequestSHA256: digest(r.Request), ResponseSchemaSHA256: digest(r.ResponseSchema), DefinitionSHA256: digest(r.Definition), ProvenanceSHA256: digest(provenance)}
+	encoded, err := preparedDescribeEncodeV1(packet, outputLimit)
+	if err != nil || control.Err() != nil {
+		return fail()
+	}
+	observed, err := k.observe(control, o.job, reserved.Identity, attempt, "OBSERVED", time.Now().UnixNano(), o.limits)
+	if err != nil {
+		o.uncertain = true
+		return fail()
+	}
+	o.head = observed.Identity
+	verified, err := k.reopen(control, o.job, o.limits)
+	if err != nil || verified.Identity != observed.Identity || ctx.Err() != nil || !time.Now().Before(deadline) {
+		o.uncertain = true
+		return fail()
+	}
+	cancel()
+	if control.Err() != context.Canceled || o.k.root.ValidatePrivate() != nil {
+		return fail()
+	}
+	return encoded, nil
+}
