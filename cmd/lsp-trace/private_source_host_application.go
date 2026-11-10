@@ -106,6 +106,13 @@ func runPrivateSourceHostApplication(args []string, stdout, stderr io.Writer) in
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	return executePrivateSourceHostConfig(ctx, c, stdout, stderr)
+}
+
+// Both the legacy explicit invocation and connected parent-start path enter the
+// SAME production owner/Manager/Run/cleanup implementation. No executor hook.
+func executePrivateSourceHostConfig(ctx context.Context, c privateSourceHostConfig, stdout, stderr io.Writer) int {
+	fail := func(class string) int { fmt.Fprintln(stderr, "private source application:", class); return 1 }
 	ctx, cancel := context.WithDeadline(ctx, c.Deadline)
 	defer cancel()
 	// Admission comes before Manager/starter construction, provider, mailbox and
@@ -119,6 +126,14 @@ func runPrivateSourceHostApplication(args []string, stdout, stderr io.Writer) in
 		_ = root.Close()
 		return fail("OWNER_ADMISSION_REFUSED")
 	}
+	return executePrivateSourceHostOwned(ctx, c, stdout, stderr, root, owner)
+}
+
+// Takes ownership of the already admitted SOURCE accounting connection. The
+// connected start path prepays its reopen/expiry verification and transfers it
+// here, avoiding any post-control free re-open or serialized owner substitute.
+func executePrivateSourceHostOwned(ctx context.Context, c privateSourceHostConfig, stdout, stderr io.Writer, root *publication.Root, owner *inv.PrivateManagedInputOwnerV2) int {
+	fail := func(class string) int { fmt.Fprintln(stderr, "private source application:", class); return 1 }
 	selected, e := runtimeprofile.Validate(c.Profile)
 	if e != nil {
 		_ = root.Close()

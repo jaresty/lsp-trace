@@ -978,7 +978,13 @@ func TestSourceOperatorOriginalQueryTarget(t *testing.T) {
 
 func TestSourceOperatorLocalUnfunded(t *testing.T) { testSuppliedOp(t, "local-invalid") }
 
+func TestConnectedProviderStartSourceV2(t *testing.T) { testSuppliedOp(t, "connected-provider-start") }
+
 func testSuppliedOp(t *testing.T, binary string) {
+	connectedStart := binary == "connected-provider-start"
+	if connectedStart {
+		binary = ""
+	}
 	localInvalid := binary == "local-invalid"
 	if localInvalid {
 		binary = ""
@@ -1033,7 +1039,11 @@ func testSuppliedOp(t *testing.T, binary string) {
 	}
 	_, file, _, _ := runtime.Caller(0)
 	helper := filepath.Join(filepath.Dir(file), "..", "..", "scripts", "private-variable-v2-host-handoff.py")
-	ctx, cancel := context.WithDeadline(context.Background(), start.Deadline)
+	parentDeadline := start.Deadline
+	if connectedStart {
+		parentDeadline = time.Now().Add(30 * time.Second)
+	} // setup bound only; SOURCE stays15s below
+	ctx, cancel := context.WithDeadline(context.Background(), parentDeadline)
 	defer cancel()
 	publisherCtx, publisherCancel := context.WithCancel(ctx)
 	defer publisherCancel()
@@ -1059,6 +1069,29 @@ func testSuppliedOp(t *testing.T, binary string) {
 		done <- nil
 	}()
 	q := so.Request{Owner: owner, Capture: capture, CaptureAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-capture"))), PreparationAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-prepare"))), RoleAttempt: "source-op-role", RunID: "source-op-run", SeedNamespace: "source-original-schedule", Seed: 7, Contract: sourceStageContract(t), SourceLimits: tp.PrivateSourceLimits{MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20, MaxWork: 10000, MaxObjects: 1000}, Host: cfg, ResponseLimits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10}, OutputRoots: outputs}
+	if connectedStart {
+		q.SourceLimits = tp.PrivateSourceLimits{MaxDocumentBytes: 16 << 10, MaxTotalBytes: 64 << 10, MaxWork: 4096, MaxObjects: 16}
+		q.ResponseLimits = describeworker.SuppliedResponseLimits{MaxAdapterBytes: 8192, MaxSemanticBytes: 4096}
+		q.Host.Mailbox.TimeoutMS = 5000
+		q.Host.Mailbox.OverallTimeoutMS = 5000
+		q.Host.Mailbox.PollMS = 10
+		q.Host.Mailbox.Limits.MaxTotalBytes = 147456
+		cl := q.Contract.CaptureLimits()
+		cl.MaxSourceBytes = 16384
+		cl.MaxTotalSourceBytes = 65536
+		cl.MaxBindings = 64
+		cl.MaxWork = 4096
+		policy := q.Contract.PacketSourcePolicy()
+		policy.MaxBytes = 65536
+		policy.MaxRanges = 64
+		policy.MaxObjects = 16
+		policy.MaxWork = 4096
+		d := "sha256:" + strings.Repeat("1", 64)
+		q.Contract, e = cc.NewContinuationContract(cc.ContractInput{ContinuationID: d, ProfileID: d, WorkerPinID: d, ProgramCSeed: 7, CaptureLimits: cl, PacketSourcePolicy: policy, PacketResolveLimits: retainedprojection.ResolveLimits{MaxDistinctObjects: 16, MaxUniqueSourceBytes: 65536, MaxLogicalSelections: 64}, PacketMaxResponseBytes: 131072, DescribeDeadlineMS: 5000, RetryPolicy: cc.RetryPolicy{MaxAttemptsPerRequest: 1}})
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
 	if localInvalid {
 		q.Local = &inv.PrivateSourceLocalConfigV1{}
 	}
@@ -1086,6 +1119,54 @@ func testSuppliedOp(t *testing.T, binary string) {
 	var out so.Outcome
 	var runErr error
 	if binary == "" {
+		if connectedStart {
+			if e = os.Mkdir(filepath.Join(dir, "control"), 0700); e != nil {
+				t.Fatal(e)
+			}
+			pending, providerPath, controlOwner := inv.ControlledProviderLaunchForTest(t, dir, owner)
+			if e = pending.PublishStartReadyV2([]byte("controlled-ready\n")); e != nil {
+				t.Fatal(e)
+			}
+			startRaw := []byte("{\"Operation\":\"START_CONFIRM\",\"ProducerWaiterActive\":true}\n")
+			if e = os.WriteFile(filepath.Join(dir, "control", "start.json"), startRaw, 0600); e != nil {
+				t.Fatal(e)
+			}
+			got, re := pending.ReadStartMetadataV2("control/start.json")
+			if re != nil || !bytes.Equal(got, startRaw) {
+				t.Fatal("ASSERT_CONNECTED_SIGNAL", re)
+			}
+			firstStart := time.Now() // fixed before consume; no re-invocation clock
+			if e = pending.ConsumeStartV2(got); e != nil {
+				t.Fatal(e)
+			}
+			expiry, re := pending.SourceAuthorizationExpiryV2(ctx, owner)
+			if re != nil {
+				t.Fatal(re)
+			}
+			deadline := firstStart.Add(15 * time.Second)
+			if expiry.Before(deadline) {
+				deadline = expiry
+			}
+			if !deadline.After(firstStart) || q.Local != nil {
+				t.Fatal("ASSERT_CONNECTED_ORIGINAL_EXPIRY")
+			}
+			q.Capture.Start.Deadline = deadline
+			sourceCtx, sourceCancel := context.WithDeadline(ctx, deadline)
+			defer sourceCancel()
+			ctx = sourceCtx
+			t.Log("ASSERT_CONNECTED_ORIGINAL_CLOCK PASS; chosen once min(start+15s, original expiry)")
+			if e = pending.FinishProviderLaunchV2(ctx, providerPath); e != nil {
+				t.Fatal("ASSERT_CONNECTED_PAID_FRESHNESS", e)
+			}
+			if e = pending.ConsumeStartV2(got); e == nil {
+				t.Fatal("ASSERT_CONNECTED_NO_SECOND_START")
+			}
+			disp, _ := inv.ControlledRPrepDebitForTest(t, controlOwner)
+			if disp != "OBSERVED" {
+				t.Fatal("ASSERT_CONNECTED_CONTROL_OBSERVED", disp)
+			}
+			t.Log("ASSERT_CONNECTED_CONTROL_SIGNAL_FRESHNESS PASS; tiny provider never executed; next actual SELF and canned mailbox")
+		}
 		out, runErr = so.Run(ctx, q)
 	} else {
 		job, head := inv.ControlledRPrepCLIJobForTest(t, owner)

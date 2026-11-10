@@ -359,6 +359,9 @@ func verifyBoundLocalFileV1(ctx context.Context, live func() bool, systemExecuto
 	if systemExecutor {
 		modeSafe = trustedSystemSandboxInfoV1(before)
 	}
+	if fixed, ok := f.(interface{ providerModeSafeV2(os.FileInfo) bool }); ok && e == nil {
+		modeSafe = fixed.providerModeSafeV2(before)
+	}
 	if e != nil || !modeSafe || before.Size() < 0 || uint64(before.Size()) != length {
 		if _, raw := f.(managedPinMetadataComparisonV1); raw {
 			return errors.Join(ErrPrivateSourceLocalV1, e)
