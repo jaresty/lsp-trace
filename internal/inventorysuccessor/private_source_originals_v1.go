@@ -2,6 +2,7 @@ package inventorysuccessor
 
 import (
 	"bytes"
+	"context"
 	"lsp-trace/internal/targetpacket"
 	"time"
 )
@@ -14,10 +15,11 @@ type PrivateProducerOriginals struct {
 }
 type privateProducerOriginalsV1 struct {
 	candidate targetpacket.CandidateOriginals
+	timing    *privateSourceTimingStateV2
 }
 
 func mintPrivateProducerOriginals(c targetpacket.CandidateOriginals) PrivateProducerOriginals {
-	return PrivateProducerOriginals{&privateProducerOriginalsV1{c}, c}
+	return PrivateProducerOriginals{&privateProducerOriginalsV1{candidate: c}, c}
 }
 func (o PrivateProducerOriginals) Bound() uint64 {
 	if o.state == nil {
@@ -78,12 +80,52 @@ func (in PrivateManagedGroupingInput) SourceOriginalsV1() (PrivateProducerOrigin
 		}
 	}
 	c, err := targetpacket.RetainPrivateSourceCandidate(in.sourceEvidence, in.sourceInputOriginal, in.originals, in.sourceQueryOriginal, in.replayBinding.Deadline, in.replayBinding.Session.Workspace)
+	if in.sourceTiming != nil {
+		f := in.sourceTiming.frame
+		if !f.Valid() || !f.CaptureDeadline.Equal(in.replayBinding.Deadline) {
+			return PrivateProducerOriginals{}, ErrPrivateManagedGrouping
+		}
+		c, err = targetpacket.RetainPrivateSourceHOSTCandidate(in.sourceEvidence, in.sourceInputOriginal, in.originals, in.sourceQueryOriginal, in.replayBinding.Deadline, f.TotalDeadline, in.replayBinding.Session.Workspace)
+	}
 	if err != nil {
 		return PrivateProducerOriginals{}, err
 	}
-	return mintPrivateProducerOriginals(c), nil
+	o := mintPrivateProducerOriginals(c)
+	o.state.timing = in.sourceTiming
+	return o, nil
 }
-func (in PrivateManagedGroupingInput) SourceDeadlineV1() time.Time { return in.replayBinding.Deadline }
+func (in PrivateManagedGroupingInput) SourceDeadlineV1() time.Time {
+	if in.sourceConfirmed && in.sourceTiming != nil {
+		return in.sourceTiming.frame.TotalDeadline
+	}
+	return in.replayBinding.Deadline
+}
+
+// SourcePreparationDeadlineV2 observes M's once-derived preparation child.
+func (in PrivateManagedGroupingInput) SourcePreparationDeadlineV2() (time.Time, bool) {
+	if !in.sourceConfirmed || in.sourceTiming == nil {
+		return time.Time{}, false
+	}
+	return in.sourceTiming.preparationDeadline, true
+}
+
+// HOSTTimingV2 observes a completed producer's immutable policy, never issuance.
+func (o PrivateProducerOriginals) HOSTTimingV2() (PrivateSourceTimingFrameV2, bool) {
+	if o.state == nil || o.state.timing == nil {
+		return PrivateSourceTimingFrameV2{}, false
+	}
+	f := o.state.timing.frame
+	return f, f.Valid() && o.Deadline().Equal(f.TotalDeadline)
+}
+
+// HOSTRetainedContextV2 returns the original invocation scope, not the completed
+// and canceled capture child. It is never serialized or a replacement context.
+func (o PrivateProducerOriginals) HOSTRetainedContextV2() context.Context {
+	if o.state == nil || o.state.timing == nil {
+		return nil
+	}
+	return o.state.timing.retainedContext
+}
 func PreparePrivateProducerOriginals(o PrivateProducerOriginals, l targetpacket.PrivateSourceLimits) (PrivateProducerOriginals, error) {
 	if o.state == nil {
 		return PrivateProducerOriginals{}, ErrPrivateManagedGrouping

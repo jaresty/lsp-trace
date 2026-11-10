@@ -126,7 +126,25 @@ func sourceStop(s cc.StopAfter) bool {
 // is reachable. All finite ceilings come from the existing contract.
 func preflight(ctx context.Context, q PrivateAllModeSourcesRequest, c cc.ContinuationContract, store cc.Store, workspace string, stop cc.StopAfter) error {
 	bad := func(s string) error { return errors.New(s) }
-	if ctx == nil || ctx.Err() != nil || !sourceStop(stop) || !q.Limits.Valid() || q.Deadline.IsZero() || !time.Now().Before(q.Deadline) || q.Deadline.After(time.Now().Add(15*time.Second)) || len(q.PolicyID) == 0 || len(q.PolicyID) > 4096 {
+	// Extended retention is admitted only by completed, paid producer custody;
+	// a public deadline/profile DTO cannot remove the legacy 15s control.
+	hostRetention := len(q.Originals) > 0
+	var rule string
+	for _, o := range q.Originals {
+		f, ok := o.HOSTTimingV2()
+		if ok {
+			scope := o.HOSTRetainedContextV2()
+			if scope == nil || scope.Err() != nil {
+				return bad("private source original retained scope expired")
+			}
+		}
+		if !ok || !f.TotalDeadline.Equal(q.Deadline) || (rule != "" && rule != f.Profile.Rules()) {
+			hostRetention = false
+			break
+		}
+		rule = f.Profile.Rules()
+	}
+	if ctx == nil || ctx.Err() != nil || !sourceStop(stop) || !q.Limits.Valid() || q.Deadline.IsZero() || !time.Now().Before(q.Deadline) || (!hostRetention && q.Deadline.After(time.Now().Add(15*time.Second))) || len(q.PolicyID) == 0 || len(q.PolicyID) > 4096 {
 		return bad("private source context/policy/stop/deadline")
 	}
 	if d, ok := ctx.Deadline(); ok && d.After(q.Deadline) {

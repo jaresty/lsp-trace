@@ -45,6 +45,8 @@ type privateSourceHostConfig struct {
 	CaptureAttempt, PreparationAttempt, RoleAttempt, RunID, SeedNamespace string
 	Seed                                                                  uint64
 	Deadline                                                              time.Time
+	Timing                                                                *inv.PrivateSourceTimingV2      `json:",omitempty"`
+	TimingFrame                                                           *inv.PrivateSourceTimingFrameV2 `json:",omitempty"`
 	Contract                                                              cc.ContractInput
 	SourceLimits                                                          targetpacket.PrivateSourceLimits
 	Host                                                                  host.SourceHostConfig
@@ -77,6 +79,15 @@ func decodePrivateSourceHostConfig(raw []byte) (privateSourceHostConfig, error) 
 	d.DisallowUnknownFields()
 	if d.Decode(&c) != nil || d.Decode(new(any)) != io.EOF || c.Schema != "private-source-host-application.v1" || (c.Mode != "PREVIEW" && c.Mode != "EXECUTE") || c.Pin != privateSourceConfigPin(c) || len(c.CanonicalJob) == 0 || len(c.CanonicalJob) > 32<<10 || len(c.ProcessArgs) > 64 || !filepath.IsAbs(c.ProcessPath) || c.Workspace != c.Profile.Workspace || len(c.Provider) == 0 || len(c.Provider) > 256 || c.Deadline.IsZero() {
 		return c, sourceoperator.ErrRefused
+	}
+	if c.Timing == nil {
+		if c.TimingFrame != nil {
+			return c, sourceoperator.ErrRefused
+		}
+	} else {
+		if _, e := c.Timing.Total(); e != nil || c.TimingFrame == nil || !c.TimingFrame.Valid() || c.TimingFrame.Profile != *c.Timing || !c.Deadline.Equal(c.TimingFrame.TotalDeadline) || c.Host.Mailbox.TimeoutMS != 60000 || c.Host.Mailbox.OverallTimeoutMS != 60000 {
+			return c, sourceoperator.ErrRefused
+		}
 	}
 	for _, s := range c.ProcessArgs {
 		if len(s) > 4096 {
@@ -154,16 +165,31 @@ func executePrivateSourceHostOwned(ctx context.Context, c privateSourceHostConfi
 	var out sourceoperator.Outcome
 	if e == nil {
 		start := sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.LanguageID, RelationProviders: []string{c.Provider}, Deadline: c.Deadline, Process: managedprocess.Spec{Path: c.ProcessPath, Dir: c.Workspace, Args: c.ProcessArgs}}
+		if c.TimingFrame != nil {
+			start.Deadline = c.TimingFrame.CaptureDeadline
+		}
 		capture := inv.PrivateMixedInputRequestV2{Manager: manager, Root: root, Start: start, URI: c.URI, OccurrenceID: c.OccurrenceID, Revision: c.Revision, Privacy: c.Privacy, OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: c.Line, Character: c.Character, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}}
-		out, e = sourceoperator.Run(ctx, sourceoperator.Request{Owner: owner, Capture: capture, CaptureAttempt: c.CaptureAttempt, PreparationAttempt: c.PreparationAttempt, RoleAttempt: c.RoleAttempt, RunID: c.RunID, SeedNamespace: c.SeedNamespace, Seed: c.Seed, Contract: contract, SourceLimits: c.SourceLimits, Host: c.Host, ResponseLimits: c.ResponseLimits, OutputRoots: c.OutputRoots})
+		out, e = sourceoperator.Run(ctx, sourceoperator.Request{Owner: owner, Capture: capture, CaptureAttempt: c.CaptureAttempt, PreparationAttempt: c.PreparationAttempt, RoleAttempt: c.RoleAttempt, RunID: c.RunID, SeedNamespace: c.SeedNamespace, Seed: c.Seed, Contract: contract, SourceLimits: c.SourceLimits, Host: c.Host, ResponseLimits: c.ResponseLimits, OutputRoots: c.OutputRoots, Timing: c.TimingFrame})
 	}
 	// No renewed cleanup window. FinishMixed already joined the provider window;
 	// shutdown and every owned descriptor close contribute to the terminal result.
-	shutdownErr := manager.Shutdown(ctx)
+	terminalDeadline := c.Deadline
+	cleanupCtx := ctx
+	if tail, ok := out.TerminalDeadlineV2(); ok {
+		if tail.After(c.Deadline) {
+			e = sourceoperator.ErrRefused
+		} else {
+			terminalDeadline = tail
+			var stop context.CancelFunc
+			cleanupCtx, stop = context.WithDeadline(ctx, tail)
+			defer stop()
+		}
+	}
+	shutdownErr := manager.Shutdown(cleanupCtx)
 	closeErr := root.Close()
-	// This CLI owns the accounting root (Run only borrows it). Check the original
-	// signal context/deadline after shutdown AND that last close, before success.
-	if e != nil || shutdownErr != nil || closeErr != nil || ctx.Err() != nil || !time.Now().Before(c.Deadline) {
+	// Check both the immutable total and its once-bound publication/cleanup tail
+	// after shutdown AND this final owned close. Neither is a termination promise.
+	if e != nil || shutdownErr != nil || closeErr != nil || ctx.Err() != nil || cleanupCtx.Err() != nil || !time.Now().Before(terminalDeadline) {
 		out.Disposition = "FAILED_RETAINED"
 		if json.NewEncoder(stdout).Encode(out) != nil {
 			return fail("OUTPUT_REFUSED")

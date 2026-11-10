@@ -425,6 +425,7 @@ var ErrPrivateManagedGrouping = errors.New("private managed grouping input not i
 // PrivateManagedGroupingInput is structural input only, never policy qualification.
 // Public fields are copies; Replay compares them with the private issued originals.
 type PrivateManagedGroupingInput struct {
+	sourceTiming         *privateSourceTimingStateV2
 	Input                referencegrouping.AdmittedInput
 	TypedInput           programcadmission.TypedInput
 	Predecessors         []referencegrouping.PredecessorRecord

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	sourceclock "lsp-trace/internal/privatesourceclock"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/publication"
 	"lsp-trace/sessionruntime"
@@ -24,15 +25,17 @@ type PrivateMixedInputRequestV2 struct {
 	URI, OccurrenceID, Revision, Privacy, OccurrencePolicy, CompositionPolicy string
 	Line, Character                                                           uint32
 	Kinds                                                                     []programcadmission.RelationKind
+	Timing                                                                    *PrivateSourceTimingFrameV2
 }
 type PrivateMixedInputOperationV2 struct{ state *privateMixedInputOperationV2 }
 type privateMixedInputOperationV2 struct {
-	mu            sync.Mutex
-	used          bool
-	owner         *PrivateManagedInputOwnerV2
-	request       PrivateMixedInputRequestV2
-	envelope      sessionruntime.PrivateProviderWindowEnvelope
-	head, attempt string
+	mu              sync.Mutex
+	used            bool
+	owner           *PrivateManagedInputOwnerV2
+	request         PrivateMixedInputRequestV2
+	envelope        sessionruntime.PrivateProviderWindowEnvelope
+	head, attempt   string
+	retainedContext context.Context
 }
 
 func privateMixedPlanV2(q PrivateMixedInputRequestV2) (sessionruntime.PrivateProviderWindowPlan, bool) {
@@ -116,7 +119,22 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 	if err != nil {
 		return fail()
 	}
+	deadline := q.Start.Deadline
+	if q.Timing != nil {
+		frozen := *q.Timing
+		q.Timing = &frozen
+		if !frozen.Valid() || len(q.Kinds) != 1 || !plan.References || plan.Calls || plan.Definitions || !q.Start.Deadline.Equal(frozen.CaptureDeadline) {
+			return fail()
+		}
+		deadline = frozen.TotalDeadline
+		if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+			return fail()
+		}
+	}
 	charge, err := privateMixedChargeV2(now, q.Start.Deadline, envelope.Bounds())
+	if q.Timing != nil {
+		charge, err = sourceTimingMixedChargeV2(*q.Timing, now, envelope.Bounds(), o.limits)
+	}
 	if err != nil {
 		return fail()
 	}
@@ -125,7 +143,12 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 	if o.k == nil || o.uncertain || q.Root != o.k.root {
 		return fail()
 	}
-	h, err := o.k.reserve(ctx, o.job, o.head, attempt, charge, q.Start.Deadline.UnixNano(), now.UnixNano(), o.limits)
+	if q.Timing != nil {
+		if err = o.sourceTimingFundingV2(ctx, *q.Timing, charge, now); err != nil {
+			return fail()
+		}
+	}
+	h, err := o.k.reserve(ctx, o.job, o.head, attempt, charge, deadline.UnixNano(), now.UnixNano(), o.limits)
 	if err != nil {
 		if errors.Is(err, errUncertainV2) {
 			o.uncertain = true
@@ -138,7 +161,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 	q.Start.Process.Args = append([]string(nil), q.Start.Process.Args...)
 	q.Start.Process.Env = append([]string(nil), q.Start.Process.Env...)
 	q.Start.RelationProviders = append([]string(nil), q.Start.RelationProviders...)
-	return PrivateMixedInputOperationV2{&privateMixedInputOperationV2{owner: o, request: q, envelope: envelope, head: h.Identity, attempt: attempt}}, nil
+	return PrivateMixedInputOperationV2{&privateMixedInputOperationV2{owner: o, request: q, envelope: envelope, head: h.Identity, attempt: attempt, retainedContext: ctx}}, nil
 }
 
 // ExecuteMixedInputV2 is a fixed internal continuation, not a caller executor.
@@ -158,6 +181,9 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		return fail(nil)
 	}
 	s.used = true
+	if s.request.Timing != nil && (!reflect.TypeOf(ctx).Comparable() || ctx != s.retainedContext || s.retainedContext == nil || s.retainedContext.Err() != nil) {
+		return fail(nil)
+	}
 	if ctx.Err() != nil || !reflect.DeepEqual(q, s.request) || !time.Now().Before(q.Start.Deadline) {
 		return fail(nil)
 	}
@@ -244,12 +270,24 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 	if err != nil || !completion.Completed || q.Manager.Census().Workers != 0 {
 		return fail(err)
 	}
+	if !sourceclock.Now(ctx, "capture-complete").Before(q.Start.Deadline) {
+		return fail(context.DeadlineExceeded)
+	}
 	if err = operation.completeFixed(execution); err != nil {
 		return fail(err)
 	}
 	// The source token remained private through lease/window join and confirmed
 	// Observe. No failed or uncertain producer can expose source originals.
 	out.sourceConfirmed = true
+	if q.Timing != nil {
+		f := *q.Timing
+		prep := time.Now().Add(time.Duration(f.Profile.PreparationMS) * time.Millisecond)
+		cutoff := f.TotalDeadline.Add(-time.Duration(f.Profile.HOSTMS+f.Profile.PublicationCleanupMS) * time.Millisecond)
+		if cutoff.Before(prep) {
+			prep = cutoff
+		}
+		out.sourceTiming = &privateSourceTimingStateV2{frame: f, preparationDeadline: prep, retainedContext: s.retainedContext}
+	}
 	// The initial exact replay above is paid by this mixed reservation. A later
 	// replay must not silently reuse the old D/R-only operation quote.
 	if plan.Calls {

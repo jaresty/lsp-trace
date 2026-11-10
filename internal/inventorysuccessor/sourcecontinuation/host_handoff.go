@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	sourceclock "lsp-trace/internal/privatesourceclock"
+
 	cc "lsp-trace/internal/censuscontinuation"
 	"lsp-trace/internal/describeworker"
 	host "lsp-trace/internal/privatedescribeprep"
@@ -102,8 +104,9 @@ type sourceHostState struct {
 // DeliveredSourceResponse preserves the adopted SUPPLIED-only binding. Its
 // separate opaque receipt observes local file delivery, not model authentication.
 type DeliveredSourceResponse struct {
-	supplied BoundSuppliedSourceResponse
-	delivery host.SourceHostDelivery
+	supplied         BoundSuppliedSourceResponse
+	delivery         host.SourceHostDelivery
+	terminalDeadline time.Time
 }
 
 // NativePayloadBounds observes closed-state lengths before any Bytes/Semantic
@@ -253,6 +256,9 @@ func (out *PrivateAllModeSourcesResult) HostPhaseBounds(ctx context.Context, c h
 
 func (r DeliveredSourceResponse) Supplied() BoundSuppliedSourceResponse { return r.supplied }
 func (r DeliveredSourceResponse) Delivery() host.SourceHostDelivery     { return r.delivery }
+func (r DeliveredSourceResponse) TerminalDeadlineV2() (time.Time, bool) {
+	return r.terminalDeadline, !r.terminalDeadline.IsZero()
+}
 
 // AfterClose is a non-admitting finalization: an error can only erase custody.
 // CompleteSourceHost applies it to the actual first mailbox Close result before
@@ -305,6 +311,16 @@ func hostSourceContext(s *expected, q SourceAcquisitionRequest, sourceDigest str
 // before Join/Resume/Get, marshaling, hashing, opening or publishing a mailbox.
 // The limits are ceilings within the existing source contract, not new credit.
 func sourceHostPreflight(ctx context.Context, c host.SourceHostConfig, q SourceAcquisitionRequest, limits describeworker.SuppliedResponseLimits) (*expected, uint64, error) {
+	if q.Resume.PrivateSources != nil {
+		for _, o := range q.Resume.PrivateSources.Originals {
+			if _, ok := o.HOSTTimingV2(); ok {
+				scope := o.HOSTRetainedContextV2()
+				if scope == nil || scope.Err() != nil {
+					return nil, 0, errors.New("source HOST original retained scope expired")
+				}
+			}
+		}
+	}
 	// Closed admission precedes any Resume/Store Get, regeneration or mailbox IO.
 	store, ok := q.Resume.Store.(*RootlessSourceHostStore)
 	if !ok || !store.valid() {
@@ -417,8 +433,16 @@ func CompleteSourceHost(ctx context.Context, h SourceHostHandoff) (out Delivered
 		return bad(errors.New("source host upper already consumed"))
 	}
 	s.used = true
+	var tailDeadline time.Time
+	var retainedCtx context.Context
 	defer func() {
-		out, err = out.AfterClose(errors.Join(err, s.mailbox.Close()))
+		closeErr := s.mailbox.Close()
+		// The mailbox closes before exposing delivered custody. HOST's acceptance
+		// child may now be expired; only the genuine original retained scope is used.
+		if !tailDeadline.IsZero() && (retainedCtx == nil || retainedCtx.Err() != nil || !sourceclock.Now(retainedCtx, "host-close").Before(tailDeadline)) {
+			closeErr = errors.Join(closeErr, context.DeadlineExceeded)
+		}
+		out, err = out.AfterClose(errors.Join(err, closeErr))
 	}()
 	if ctx == nil {
 		return bad(errors.New("source host nil completion context"))
@@ -451,7 +475,22 @@ func CompleteSourceHost(ctx context.Context, h SourceHostHandoff) (out Delivered
 	if !sourceHostPublicationLive(ctx, s.source.Deadline) {
 		return bad(errors.New("source host expired at completion"))
 	}
-	return DeliveredSourceResponse{bound, delivery}, nil
+	out = DeliveredSourceResponse{supplied: bound, delivery: delivery}
+	for _, original := range s.expected.request.Originals {
+		if f, ok := original.HOSTTimingV2(); ok {
+			retainedCtx = original.HOSTRetainedContextV2()
+			if retainedCtx == nil || retainedCtx.Err() != nil {
+				return bad(errors.New("source HOST retained scope refused"))
+			}
+			tailDeadline = sourceclock.Now(retainedCtx, "host-complete").Add(time.Duration(f.Profile.PublicationCleanupMS) * time.Millisecond)
+			if f.TotalDeadline.Before(tailDeadline) {
+				tailDeadline = f.TotalDeadline
+			}
+			out.terminalDeadline = tailDeadline
+			break
+		}
+	}
+	return out, nil
 }
 
 // Use the actual established mailbox window, never a fresh overall timeout.

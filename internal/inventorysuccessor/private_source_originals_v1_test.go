@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	host "lsp-trace/internal/privatedescribeprep"
 	pc "lsp-trace/internal/programc"
 	"lsp-trace/internal/programcadmission"
+	"lsp-trace/internal/publication"
 	rg "lsp-trace/internal/referencegrouping"
 	"lsp-trace/internal/retainedprojection"
 	"lsp-trace/internal/runtimeprofile"
@@ -956,10 +958,191 @@ func TestSourceOperatorMailboxCloseBinding(t *testing.T) {
 		t.Fatal("ASSERT_MAILBOX_FIRST_CLOSE_STICKY_BINDING")
 	}
 	upper := readBody(filepath.Join(filepath.Dir(file), "sourcecontinuation", "host_handoff.go"), "CompleteSourceHost", "")
-	if !strings.Contains(upper, "out, err = out.AfterClose(errors.Join(err, s.mailbox.Close()))") || strings.Index(upper, "out.AfterClose") > strings.Index(upper, "s.mailbox.Exchange") {
+	// The named return is finalized by the actual deferred first close. Timing
+	// validation must run AFTER that close, and BOTH errors must erase custody.
+	// This finite implementation supplement does not inject a physical close fault.
+	deferAt := strings.Index(upper, "defer func() {")
+	closeAt := strings.Index(upper, "closeErr := s.mailbox.Close()")
+	liveAt := strings.Index(upper, "if !tailDeadline.IsZero() && (retainedCtx == nil || retainedCtx.Err() != nil || !sourceclock.Now(retainedCtx, \"host-close\").Before(tailDeadline))")
+	lateAt := strings.Index(upper, "closeErr = errors.Join(closeErr, context.DeadlineExceeded)")
+	joinAt := strings.Index(upper, "out, err = out.AfterClose(errors.Join(err, closeErr))")
+	endAt := strings.Index(upper, "}()")
+	exchangeAt := strings.Index(upper, "s.mailbox.Exchange")
+	if deferAt < 0 || closeAt <= deferAt || liveAt <= closeAt || lateAt <= liveAt || joinAt <= lateAt || endAt <= joinAt || exchangeAt <= endAt || strings.Count(upper, "s.mailbox.Close()") != 1 || strings.Count(upper, "out.AfterClose") != 1 {
 		t.Fatal("ASSERT_HOST_ACTUAL_CLOSE_JOIN_BINDING")
 	}
 	t.Log("ASSERT_MAILBOX_FIRST_CLOSE_STICKY_BINDING: PASS; ASSERT_HOST_ACTUAL_CLOSE_JOIN_BINDING: PASS; LIMITED: finite AST supplement, not physical descriptor close-fault execution")
+}
+
+// Genuine funded reservation-scope regression: canonical owner and SELF capture;
+// no real provider, HOST, acquisition, kernel override, or forged custody. During
+// cases use only the existing tagged clock's cancellation boundary; no time shift.
+func TestHOSTTimingReservationScopeV2(t *testing.T) {
+	for _, mode := range []string{"HOST60", "legacy", "local"} {
+		for _, phase := range []string{"live", "before", "during", "caller-during"} {
+			t.Run(fmt.Sprintf("%s/%s", mode, phase), func(t *testing.T) {
+				canceled := phase != "live"
+				if (phase == "during" || phase == "caller-during") && controlledTimingClock == nil {
+					t.Skip("covered by ordinary wrapper tagged child")
+				}
+				m, start, uri := mixedStartFixtureV2(t)
+				body := []byte("package fixture\nfunc Root(){ Other() }\nfunc Other(){ Root() }\n")
+				if e := os.WriteFile(filepath.Join(start.Profile.Workspace().String(), "root.go"), body, 0644); e != nil {
+					t.Fatal(e)
+				}
+				start.Process.Args = []string{"-test.run=^TestPrivateSourceSELFResponder$", "--", "private-source-self", start.Profile.Workspace().String(), "positive"}
+				var owner *inv.PrivateManagedInputOwnerV2
+				var root *publication.Root
+				var timing *inv.PrivateSourceTimingFrameV2
+				deadline := start.Deadline
+				if mode == "HOST60" {
+					p := inv.PrivateSourceTimingV2{Mode: inv.PrivateSourceHOST60V2, CaptureMS: 15000, PreparationMS: 15000, HOSTMS: 60000, PublicationCleanupMS: 5000}
+					env, e := m.PrivateProviderWindowEnvelope(start, sessionruntime.PrivateProviderWindowPlan{References: true})
+					if e != nil {
+						t.Fatal(e)
+					}
+					owner, root = inv.ControlledHOSTTimingOwnerForTest(t, p, env.Bounds())
+					f, e := p.Bind(time.Now())
+					if e != nil {
+						t.Fatal(e)
+					}
+					timing = &f
+					start.Deadline = f.CaptureDeadline
+					deadline = f.TotalDeadline
+				} else if mode == "local" {
+					owner, root = inv.ControlledLocalOwnerForTest(t)
+				} else {
+					owner, root = inv.ControlledRPrepCanonicalOwnerForTest(t)
+				}
+				A, stopA := context.WithDeadline(context.Background(), deadline)
+				defer stopA()
+				var duringCancel context.CancelFunc
+				fired := false
+				if phase == "during" || phase == "caller-during" {
+					A = controlledTimingClock(A, func(boundary string) time.Time {
+						if boundary == "r-preparation-before-observe" {
+							fired = true
+							duringCancel()
+						}
+						return time.Now()
+					})
+				}
+				digest := func(s string) string { return fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(s))) }
+				capture := inv.PrivateMixedInputRequestV2{Manager: m, Root: root, Start: start, URI: uri, OccurrenceID: "scope-probe", Revision: "source-controlled-revision", Privacy: "private-source-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 6, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}, Timing: timing}
+				mop, e := owner.ReserveMixedInputV2(A, digest("scope-probe-M"), capture)
+				if e != nil {
+					t.Fatalf("M reserve: %v", e)
+				}
+				input, e := inv.ExecuteMixedInputV2(A, mop, capture)
+				if e != nil {
+					t.Fatalf("M execute: %v", e)
+				}
+				_, md, mdebit, mw, e := inv.ControlledHOSTTimingSnapshotForTest(owner)
+				if e != nil || md != "OBSERVED" || mw != 1 {
+					t.Fatalf("M original observation missing: %s windows=%d err=%v", md, mw, e)
+				}
+				q := inv.PrivateSourceRPreparationRequestV1{Input: input, Root: root, ExpectedHead: owner.PreparationHeadV1(), Attempt: digest("scope-probe-P"), Workspace: start.Profile.Workspace().String(), Revision: capture.Revision, RunID: "scope-probe", SeedNamespace: "source-original-schedule", Seed: 7, Deadline: input.SourceDeadlineV1()}
+				ioEffects := 0
+				if mode == "local" {
+					base, e := filepath.EvalSymlinks(t.TempDir())
+					if e != nil {
+						t.Fatal(e)
+					}
+					path := filepath.Join(base, "tiny")
+					data := []byte("tiny-controlled-artifact\n")
+					if e = os.WriteFile(path, data, 0600); e != nil {
+						t.Fatal(e)
+					}
+					pin := describeworker.FilePin{Path: path, SHA256: digest(string(data))}
+					c := inv.PrivateSourceLocalConfigV1{Config: describeworker.Config{Worker: pin, Model: pin, Library: pin, SandboxExecutable: pin, SandboxProfile: pin, Grammar: pin, RuntimeIdentity: "controlled-only", AdapterIdentity: "controlled-only", ModelIdentity: "not-a-model", ResponseVersion: describeworker.ResponseVersionV2, Limits: describeworker.Limits{TimeoutMS: 1000, MaxTokens: 1, ContextTokens: 1, StdoutBytes: 8192, StderrBytes: 1024, WorkBytes: 4096, TempBytes: 4096}}}
+					for i := range c.Lengths {
+						c.Lengths[i] = uint64(len(data))
+					}
+					c = inv.ControlledLocalIOForTest(c, func(string) error { ioEffects++; return nil })
+					q.Local = &c
+				}
+				B, stopB := context.WithCancel(A)
+				defer stopB()
+				executionCaller := A
+				duringCancel = stopB
+				if phase == "caller-during" {
+					var stopCaller context.CancelFunc
+					executionCaller, stopCaller = context.WithCancel(A)
+					defer stopCaller()
+					duringCancel = stopCaller
+				}
+				bd, bok := B.Deadline()
+				if !bok || bd.Before(q.Deadline) {
+					t.Fatal("B fails to cover original total")
+				}
+				pop, e := owner.ReserveRPreparationV1(B, q)
+				if e != nil {
+					t.Fatalf("P reserve: %v", e)
+				}
+				ph, pd, pdebit, pw, e := inv.ControlledHOSTTimingSnapshotForTest(owner)
+				if e != nil || pd != "PENDING" || pw != 2 || pdebit == mdebit {
+					t.Fatalf("genuine full P debit missing: %s windows=%d err=%v", pd, pw, e)
+				}
+				t.Logf("RESERVED M=%s/%d P=%s/%d debit=%v BcoversTotal=%t", md, mw, pd, pw, pdebit, !bd.Before(q.Deadline))
+				if phase == "before" {
+					stopB()
+				}
+				if A.Err() != nil || (phase == "before" && B.Err() != context.Canceled) || (phase != "before" && B.Err() != nil) {
+					t.Fatal("scope control invalid")
+				}
+				usable := false
+				if mode == "local" {
+					prepared, err := inv.ExecuteLocalRPreparationV1(executionCaller, pop, q)
+					e = err
+					if err == nil {
+						_, _, _, _, _, ve := prepared.Values()
+						usable = ve == nil
+					}
+				} else {
+					prepared, err := inv.ExecuteRPreparationV1(executionCaller, pop, q)
+					e = err
+					if err == nil {
+						_, _, _, _, _, ve := prepared.Values()
+						usable = ve == nil
+					}
+				}
+				ah, ad, adebit, aw, se := inv.ControlledHOSTTimingSnapshotForTest(owner)
+				if (phase == "during" || phase == "caller-during") && !fired {
+					t.Fatal("ASSERT_P_DURING_BOUNDARY_NOT_REACHED")
+				}
+				t.Logf("RESULT A=%v B=%v executeErr=%v usable=%t before=%s after=%s headSame=%t debitSame=%t windows=%d ioEffects=%d snapshotErr=%v", A.Err(), B.Err(), e, usable, pd, ad, ah == ph, adebit == pdebit, aw, ioEffects, se)
+				if A.Err() != nil || se != nil || adebit != pdebit || aw != pw {
+					t.Fatal("ASSERT_ACCOUNTING_CONTROL")
+				}
+				if canceled {
+					if e == nil || usable || ad != "PENDING" || ah != ph || ioEffects != 0 {
+						t.Errorf("ASSERT_P_RESERVATION_SCOPE: canceled reservation/caller must refuse under live A before effects/Observe; error=%v usable=%t disposition=%s headSame=%t ioEffects=%d", e, usable, ad, ah == ph, ioEffects)
+					}
+				} else {
+					want := "OBSERVED"
+					if mode == "local" {
+						want = "PENDING"
+					}
+					if e != nil || !usable || ad != want {
+						t.Errorf("ASSERT_LIVE_B_CONTROL: error=%v usable=%t disposition=%s want=%s", e, usable, ad, want)
+					}
+				}
+				if e != nil {
+					if mode == "local" {
+						_, again := inv.ExecuteLocalRPreparationV1(A, pop, q)
+						if again == nil {
+							t.Fatal("ASSERT_P_RETIRED")
+						}
+					} else {
+						_, again := inv.ExecuteRPreparationV1(A, pop, q)
+						if again == nil {
+							t.Fatal("ASSERT_P_RETIRED")
+						}
+					}
+				}
+			})
+		}
+	}
 }
 
 func TestSourceOperatorActualAggregateRefusal(t *testing.T) {
@@ -980,7 +1163,26 @@ func TestSourceOperatorLocalUnfunded(t *testing.T) { testSuppliedOp(t, "local-in
 
 func TestConnectedProviderStartSourceV2(t *testing.T) { testSuppliedOp(t, "connected-provider-start") }
 
+type timingHeadObservation struct {
+	Head, Disposition string
+	Debit             [14]uint64
+	Windows           uint64
+}
+
+var controlledTimingClock func(context.Context, func(string) time.Time) context.Context
+
 func testSuppliedOp(t *testing.T, binary string) {
+	timingCase := ""
+	if strings.HasPrefix(binary, "host-timing-") {
+		timingCase, binary = strings.TrimPrefix(binary, "host-timing-"), ""
+	}
+	var timingProfile inv.PrivateSourceTimingV2
+	var timingFrame inv.PrivateSourceTimingFrameV2
+	var timingShift atomic.Int64
+	var wireRemaining atomic.Int64
+	var timingFence atomic.Pointer[time.Time]
+	var tailFence atomic.Pointer[time.Time]
+	var beforeHOST atomic.Pointer[timingHeadObservation]
 	connectedStart := binary == "connected-provider-start"
 	if connectedStart {
 		binary = ""
@@ -1001,8 +1203,28 @@ func testSuppliedOp(t *testing.T, binary string) {
 	if large {
 		binary = ""
 	}
-	owner, root := inv.ControlledRPrepCanonicalOwnerForTest(t)
+	var owner *inv.PrivateManagedInputOwnerV2
+	var root *publication.Root
 	m, start, uri := mixedStartFixtureV2(t)
+	if timingCase != "" {
+		timingProfile = inv.PrivateSourceTimingV2{Mode: inv.PrivateSourceHOST60V2, CaptureMS: 15000, PreparationMS: 15000, HOSTMS: 60000, PublicationCleanupMS: 5000}
+		envelope, ee := m.PrivateProviderWindowEnvelope(start, sessionruntime.PrivateProviderWindowPlan{References: true})
+		if ee != nil {
+			t.Fatal(ee)
+		}
+		short := -1
+		if timingCase == "future" {
+			short = -2
+		}
+		if strings.HasPrefix(timingCase, "underfund-") {
+			if _, ee = fmt.Sscanf(timingCase, "underfund-%d", &short); ee != nil {
+				t.Fatal(ee)
+			}
+		}
+		owner, root = inv.ControlledHOSTTimingOwnerForTest(t, timingProfile, envelope.Bounds(), short)
+	} else {
+		owner, root = inv.ControlledRPrepCanonicalOwnerForTest(t)
+	}
 	body := []byte("package fixture\nfunc Root(){ Other() }\nfunc Other(){ Root() }\n")
 	if e := os.WriteFile(filepath.Join(start.Profile.Workspace().String(), "root.go"), body, 0644); e != nil {
 		t.Fatal(e)
@@ -1040,11 +1262,49 @@ func testSuppliedOp(t *testing.T, binary string) {
 	_, file, _, _ := runtime.Caller(0)
 	helper := filepath.Join(filepath.Dir(file), "..", "..", "scripts", "private-variable-v2-host-handoff.py")
 	parentDeadline := start.Deadline
+	if timingCase != "" {
+		timingFrame, e = timingProfile.Bind(time.Now())
+		if e != nil {
+			t.Fatal(e)
+		}
+		capture.Start.Deadline = timingFrame.CaptureDeadline
+		parentDeadline = timingFrame.TotalDeadline
+	}
 	if connectedStart {
 		parentDeadline = time.Now().Add(30 * time.Second)
 	} // setup bound only; SOURCE stays15s below
 	ctx, cancel := context.WithDeadline(context.Background(), parentDeadline)
 	defer cancel()
+	if timingCase != "" {
+		if controlledTimingClock == nil {
+			t.Fatal("controlled clock requires explicit test build tag")
+		}
+		ctx = controlledTimingClock(ctx, func(boundary string) time.Time {
+			if (timingCase == "tail" && boundary == "terminal") || (timingCase == "mailbox-tail" && boundary == "host-close") {
+				if fence := tailFence.Load(); fence != nil {
+					return *fence
+				}
+			}
+			if timingCase == "equal" && boundary == "host-acceptance" {
+				if fence := timingFence.Load(); fence != nil {
+					return *fence
+				}
+			}
+			if boundary == "host-complete" {
+				now := time.Now().Add(time.Duration(timingShift.Load()))
+				tail := now.Add(5 * time.Second)
+				tailFence.Store(&tail)
+				return now
+			}
+			if timingCase == "preparation" && boundary == "preparation-complete" {
+				return timingFrame.Started.Add(30 * time.Second)
+			}
+			if timingCase == "capture" && boundary == "capture-complete" {
+				return timingFrame.CaptureDeadline
+			}
+			return time.Now().Add(time.Duration(timingShift.Load()))
+		})
+	}
 	publisherCtx, publisherCancel := context.WithCancel(ctx)
 	defer publisherCancel()
 	done := make(chan error, 1)
@@ -1060,6 +1320,41 @@ func testSuppliedOp(t *testing.T, binary string) {
 			case <-time.After(time.Millisecond):
 			}
 		}
+		if timingCase != "" {
+			h, d, v, w, se := inv.ControlledHOSTTimingSnapshotForTest(owner)
+			if se != nil || d != "OBSERVED" || w != 2 {
+				done <- fmt.Errorf("ASSERT_HOST_TIMING_P_OBSERVED_BEFORE_ROLE %s %d %v", d, w, se)
+				return
+			}
+			beforeHOST.Store(&timingHeadObservation{h, d, v, w})
+			raw, re := os.ReadFile(filepath.Join(mailbox, "request-000001.json"))
+			if re != nil {
+				done <- re
+				return
+			}
+			var frame struct{ Binding struct{ Deadline string } }
+			if re = json.Unmarshal(raw, &frame); re != nil {
+				done <- re
+				return
+			}
+			deadline, re := time.Parse(time.RFC3339Nano, frame.Binding.Deadline)
+			if re != nil {
+				done <- re
+				return
+			}
+			wireRemaining.Store(int64(time.Until(deadline)))
+			timingFence.Store(&deadline)
+			delay := 6 * time.Second
+			if timingCase == "late" {
+				delay = 61 * time.Second
+			}
+			timingShift.Store(int64(delay))
+			if timingCase == "cancel" {
+				cancel()
+				done <- nil
+				return
+			}
+		}
 		cmd := exec.CommandContext(publisherCtx, "python3", helper, "respond", "--mailbox", mailbox, "--sequence", "1", "--payload", payloadPath)
 		raw, e := cmd.CombinedOutput()
 		if e != nil {
@@ -1069,7 +1364,7 @@ func testSuppliedOp(t *testing.T, binary string) {
 		done <- nil
 	}()
 	q := so.Request{Owner: owner, Capture: capture, CaptureAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-capture"))), PreparationAttempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte("op-prepare"))), RoleAttempt: "source-op-role", RunID: "source-op-run", SeedNamespace: "source-original-schedule", Seed: 7, Contract: sourceStageContract(t), SourceLimits: tp.PrivateSourceLimits{MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20, MaxWork: 10000, MaxObjects: 1000}, Host: cfg, ResponseLimits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 4 << 10, MaxSemanticBytes: 1 << 10}, OutputRoots: outputs}
-	if connectedStart {
+	if connectedStart || timingCase != "" {
 		q.SourceLimits = tp.PrivateSourceLimits{MaxDocumentBytes: 16 << 10, MaxTotalBytes: 64 << 10, MaxWork: 4096, MaxObjects: 16}
 		q.ResponseLimits = describeworker.SuppliedResponseLimits{MaxAdapterBytes: 8192, MaxSemanticBytes: 4096}
 		q.Host.Mailbox.TimeoutMS = 5000
@@ -1090,6 +1385,27 @@ func testSuppliedOp(t *testing.T, binary string) {
 		q.Contract, e = cc.NewContinuationContract(cc.ContractInput{ContinuationID: d, ProfileID: d, WorkerPinID: d, ProgramCSeed: 7, CaptureLimits: cl, PacketSourcePolicy: policy, PacketResolveLimits: retainedprojection.ResolveLimits{MaxDistinctObjects: 16, MaxUniqueSourceBytes: 65536, MaxLogicalSelections: 64}, PacketMaxResponseBytes: 131072, DescribeDeadlineMS: 5000, RetryPolicy: cc.RetryPolicy{MaxAttemptsPerRequest: 1}})
 		if e != nil {
 			t.Fatal(e)
+		}
+	}
+	if timingCase != "" {
+		q.Timing = &timingFrame
+		if timingCase == "forged" {
+			timingFrame.TotalDeadline = timingFrame.TotalDeadline.Add(time.Nanosecond)
+		}
+		if timingCase == "incompatible" {
+			timingProfile.PublicationCleanupMS++
+			timingFrame, e = timingProfile.Bind(timingFrame.Started)
+			if e != nil {
+				t.Fatal(e)
+			}
+		}
+		q.SourceLimits = tp.PrivateSourceLimits{MaxDocumentBytes: 16 << 10, MaxTotalBytes: 64 << 10, MaxWork: 4096, MaxObjects: 16}
+		q.Host.Mailbox.TimeoutMS = 60000
+		q.Host.Mailbox.OverallTimeoutMS = 60000
+		if timingCase == "legacy" {
+			q.Timing = nil
+			q.Host.Mailbox.TimeoutMS = 5000
+			q.Host.Mailbox.OverallTimeoutMS = 5000
 		}
 	}
 	if localInvalid {
@@ -1115,6 +1431,37 @@ func testSuppliedOp(t *testing.T, binary string) {
 		publisherCancel()
 		<-done
 		t.Fatal("ASSERT_OP_REFUSAL_ZERO_EFFECT")
+	}
+	if timingCase == "replacement" || timingCase == "scope-cancel" {
+		q.Capture.Timing = q.Timing
+		op, err := owner.ReserveMixedInputV2(ctx, q.CaptureAttempt, q.Capture)
+		if err == nil {
+			drive := ctx
+			if timingCase == "replacement" {
+				drive = context.WithValue(ctx, struct{}{}, true)
+			}
+			input, xe := inv.ExecuteMixedInputV2(drive, op, q.Capture)
+			err = xe
+			if timingCase == "scope-cancel" && xe == nil {
+				cancel()
+				fresh, stop := context.WithDeadline(context.Background(), timingFrame.TotalDeadline)
+				prep := inv.PrivateSourceRPreparationRequestV1{Input: input, Root: root, ExpectedHead: owner.PreparationHeadV1(), Attempt: q.PreparationAttempt, Workspace: start.Profile.Workspace().String(), Revision: q.Capture.Revision, RunID: q.RunID, SeedNamespace: q.SeedNamespace, Seed: q.Seed, Deadline: input.SourceDeadlineV1()}
+				_, err = owner.ReserveRPreparationV1(fresh, prep)
+				stop()
+			}
+		}
+		publisherCancel()
+		<-done
+		_, d, v, w, se := inv.ControlledHOSTTimingSnapshotForTest(owner)
+		want := "PENDING"
+		if timingCase == "scope-cancel" {
+			want = "OBSERVED"
+		}
+		if err == nil || se != nil || d != want || w != 1 || v[0] == 0 || m.Census().Workers != 0 || (timingCase == "replacement" && m.Census().Sessions != 0) {
+			t.Fatal("ASSERT_HOST_TIMING_ORIGINAL_SCOPE", timingCase, err, se, d, w, m.Census())
+		}
+		t.Log("ASSERT_HOST_TIMING_ORIGINAL_SCOPE PASS", timingCase, "actual head", d, "windows", w)
+		return
 	}
 	var out so.Outcome
 	var runErr error
@@ -1197,6 +1544,63 @@ func testSuppliedOp(t *testing.T, binary string) {
 	}
 	publisherCancel()
 	publisherErr := <-done // always drain before Fatal
+	if timingCase != "" {
+		disposition, debit := inv.ControlledRPrepDebitForTest(t, owner)
+		if pre := beforeHOST.Load(); pre != nil {
+			h, d, v, w, se := inv.ControlledHOSTTimingSnapshotForTest(owner)
+			if se != nil || h != pre.Head || d != pre.Disposition || v != pre.Debit || w != pre.Windows {
+				t.Fatal("ASSERT_HOST_TIMING_TERMINAL_LEDGER_TRUTH", se, d, w)
+			}
+			t.Log("ASSERT_HOST_TIMING_TERMINAL_LEDGER_TRUTH PASS; genuine pre-HOST OBSERVED head/debit/windows2 unchanged")
+		}
+		if timingCase == "forged" || timingCase == "incompatible" || timingCase == "future" || strings.HasPrefix(timingCase, "underfund-") {
+			if runErr == nil || disposition != "READY" || debit != [14]uint64{} || out.Published != [2]bool{} || m.Census().Workers != 0 || m.Census().Sessions != 0 {
+				t.Fatal("ASSERT_HOST_TIMING_PREFLIGHT", timingCase, out, runErr, disposition, debit, m.Census())
+			}
+			t.Log("ASSERT_HOST_TIMING_PREFLIGHT PASS", timingCase)
+			return
+		}
+		if timingCase == "preparation" {
+			_, d, _, w, se := inv.ControlledHOSTTimingSnapshotForTest(owner)
+			if runErr == nil || se != nil || d != "OBSERVED" || w != 2 || out.Published != [2]bool{} || beforeHOST.Load() != nil || m.Census().Workers != 0 {
+				t.Fatal("ASSERT_HOST_TIMING_PREPARATION", out, runErr, d, w)
+			}
+			t.Log("ASSERT_HOST_TIMING_PREPARATION PASS; P observed, no HOST publication")
+			return
+		}
+		if timingCase == "capture" {
+			if runErr == nil || disposition != "PENDING" || debit[0] == 0 || out.Published != [2]bool{} || m.Census().Workers != 0 {
+				t.Fatal("ASSERT_HOST_TIMING_CAPTURE", out, runErr, disposition, debit)
+			}
+			t.Log("ASSERT_HOST_TIMING_CAPTURE PASS")
+			return
+		}
+		if timingCase == "mailbox-tail" {
+			if !errors.Is(runErr, context.DeadlineExceeded) || disposition != "OBSERVED" || out.Published != [2]bool{} || out.Readback != [2]bool{} || m.Census().Workers != 0 {
+				t.Fatal("ASSERT_HOST_MAILBOX_CLOSE_TAIL", out, runErr, disposition)
+			}
+			t.Log("ASSERT_HOST_MAILBOX_CLOSE_TAIL PASS; actual deferred close equality refuses custody, genuine P remains OBSERVED")
+			return
+		}
+		if timingCase == "legacy" || timingCase == "late" || timingCase == "equal" || timingCase == "cancel" {
+			if runErr == nil || disposition != "OBSERVED" || debit[0] == 0 || out.Published != [2]bool{} || m.Census().Workers != 0 {
+				t.Fatal("ASSERT_HOST_TIMING_REJECTION", timingCase, out, runErr, disposition, debit)
+			}
+			t.Log("ASSERT_HOST_TIMING_REJECTION PASS", timingCase)
+			return
+		}
+		if timingCase == "tail" {
+			if runErr == nil || disposition != "OBSERVED" || out.Disposition != "FAILED_RETAINED" || out.Published != [2]bool{true, true} || out.Readback != [2]bool{true, true} || m.Census().Workers != 0 {
+				t.Fatal("ASSERT_HOST_TIMING_TAIL", out, runErr, disposition)
+			}
+			t.Log("ASSERT_HOST_TIMING_TAIL PASS")
+			return
+		}
+		if runErr != nil || publisherErr != nil || wireRemaining.Load() < int64(50*time.Second) || disposition != "OBSERVED" {
+			t.Fatal("ASSERT_HOST_TIMING_CONNECTED", out, runErr, publisherErr, time.Duration(wireRemaining.Load()), disposition)
+		}
+		t.Log("ASSERT_HOST_TIMING_CONNECTED PASS; controlled 6s HOST delay, original lifetime retained, actual native pair below")
+	}
 	if localInvalid {
 		if runErr == nil || out.NativeID != "" || out.Published != [2]bool{} {
 			t.Fatal("ASSERT_LOCAL_BRANCH_REFUSES_BEFORE_DELIVERY", out, runErr)

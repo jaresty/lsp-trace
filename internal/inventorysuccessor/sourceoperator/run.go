@@ -17,6 +17,7 @@ import (
 	inv "lsp-trace/internal/inventorysuccessor"
 	sc "lsp-trace/internal/inventorysuccessor/sourcecontinuation"
 	host "lsp-trace/internal/privatedescribeprep"
+	sourceclock "lsp-trace/internal/privatesourceclock"
 	pc "lsp-trace/internal/programc"
 	"lsp-trace/internal/programcadmission"
 	rg "lsp-trace/internal/referencegrouping"
@@ -36,17 +37,45 @@ type Request struct {
 	OutputRoots                                                           [2]string
 	// Local is private and default-off. Only the explicit local-worker adapter
 	// identity enables B; other local configurations retain A's disabled delivery.
-	Local *inv.PrivateSourceLocalConfigV1
+	Local  *inv.PrivateSourceLocalConfigV1
+	Timing *inv.PrivateSourceTimingFrameV2
 }
 type Outcome struct {
 	Schema, Disposition, NativeID string
 	Published                     [2]bool
 	Readback                      [2]bool
 	Counts                        sc.PrivateSourceCounts
+	terminalDeadline              time.Time
+}
+
+// TerminalDeadlineV2 is in-process completion metadata, deliberately not JSON.
+func (o Outcome) TerminalDeadlineV2() (time.Time, bool) {
+	return o.terminalDeadline, !o.terminalDeadline.IsZero()
 }
 
 var ErrRefused = errors.New("private source operator refused")
 var ErrNativeAggregate = errors.New("private source native retained-plus-transient aggregate refused")
+
+// One invocation-local cancellation owner. Its Close defer is registered before
+// root cleanup, so a legitimately completed tail is not canceled before the
+// final owned-close/liveness check. This is not a renewable timing controller.
+type sourceTailCancellationV2 struct{ cancel context.CancelFunc }
+
+func (t *sourceTailCancellationV2) begin(ctx context.Context, d time.Time) context.Context {
+	child, cancel := context.WithDeadline(ctx, d)
+	t.cancel = cancel
+	return child
+}
+func (t *sourceTailCancellationV2) close() {
+	if t.cancel != nil {
+		t.cancel()
+	}
+}
+
+func fixedHOSTSourceCeilingsV2(q Request) bool {
+	l := q.Host.Mailbox.Limits
+	return q.Seed == 7 && q.SeedNamespace == "source-original-schedule" && q.SourceLimits.MaxDocumentBytes <= 16<<10 && q.SourceLimits.MaxTotalBytes <= 64<<10 && q.SourceLimits.MaxWork <= 4096 && q.SourceLimits.MaxObjects <= 16 && q.Contract.PacketMaxResponseBytes() <= 131072 && q.ResponseLimits.MaxAdapterBytes <= 8192 && q.ResponseLimits.MaxSemanticBytes <= 4096 && q.Host.Mailbox.PollMS == 10 && l.MaxCalls == 1 && l.MaxRequestBytes <= 65536 && l.MaxResponseBytes <= 16384 && l.MaxTotalBytes <= 147456 && l.MaxOutputBytes <= 65536
+}
 
 // Run retains owner/originals/expected/store in this original invocation through
 // terminal close. A failure may leave cumulative accounting/mailbox/output bytes;
@@ -56,6 +85,22 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	out.Disposition = "REFUSED"
 	if ctx == nil || ctx.Err() != nil || q.Owner == nil || q.Owner.PreparationHeadV1() == "" || !q.SourceLimits.Valid() || !q.ResponseLimits.Valid() || q.Capture.Root == nil || q.Capture.Manager == nil || len(q.Capture.Kinds) != 1 || q.Capture.Kinds[0] != programcadmission.TypedReferencesSymbol || q.Capture.Start.Deadline.IsZero() || !time.Now().Before(q.Capture.Start.Deadline) || time.Until(q.Capture.Start.Deadline) > 15*time.Second || q.RunID == "" || len(q.RunID) > 256 || q.SeedNamespace == "" || len(q.SeedNamespace) > 256 || q.RoleAttempt == "" || len(q.RoleAttempt) > 256 {
 		return out, ErrRefused
+	}
+	deadline := q.Capture.Start.Deadline
+	if q.Timing == nil && (q.Capture.Timing != nil || q.Host.Mailbox.TimeoutMS > 5000 || q.Host.Mailbox.OverallTimeoutMS > 5000) {
+		return out, ErrRefused
+	}
+	if q.Timing != nil {
+		f := *q.Timing
+		if !f.Valid() || !f.CaptureDeadline.Equal(q.Capture.Start.Deadline) || q.Local != nil || q.Host.Mailbox.TimeoutMS != 60000 || q.Host.Mailbox.OverallTimeoutMS != 60000 || !fixedHOSTSourceCeilingsV2(q) {
+			return out, ErrRefused
+		}
+		if q.Capture.Timing != nil && *q.Capture.Timing != f {
+			return out, ErrRefused
+		}
+		q.Timing = &f
+		q.Capture.Timing = &f
+		deadline = f.TotalDeadline
 	}
 	if q.Local != nil {
 		// Freeze the fixed declaration before capture; the local option never
@@ -70,8 +115,10 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 			return out, ErrRefused
 		}
 	}
-	ctx, cancel := context.WithDeadline(ctx, q.Capture.Start.Deadline)
+	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
+	var tailCancellation sourceTailCancellationV2
+	defer tailCancellation.close()
 	// Root admission writes nothing; all roots already exist. Topology is checked
 	// before provider/source/mailbox effects and again around each output effect.
 	roots, e := openPublication(ctx, q)
@@ -95,7 +142,7 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 			localErr = pending.Finalize(ctx, prior)
 			err = errors.Join(err, localErr)
 		}
-		err = finalizeTerminal(ctx, q.Capture.Start.Deadline, &out, err)
+		err = finalizeTerminal(ctx, deadline, &out, err)
 		if localReady && localErr == nil && closeErr == nil && ctx.Err() == nil && time.Now().Before(q.Capture.Start.Deadline) {
 			out.Disposition = "LOCAL_VERIFIED_DELIVERY_DISABLED"
 		}
@@ -126,6 +173,18 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 		if e != nil {
 			return out, e
 		}
+	}
+	preparationCtx := ctx
+	preparationDeadline := deadline
+	if q.Timing != nil {
+		var ok bool
+		preparationDeadline, ok = input.SourcePreparationDeadlineV2()
+		if !ok {
+			return out, ErrRefused
+		}
+		var stop context.CancelFunc
+		preparationCtx, stop = context.WithDeadline(ctx, preparationDeadline)
+		defer stop()
 	}
 	admitted, policy, frozen, result, originals, e := prepared.Values()
 	if e != nil {
@@ -160,7 +219,7 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 		return out, e
 	}
 	sources := sc.PrivateAllModeSourcesRequest{PolicyID: q.Contract.PacketSourcePolicy().PolicyID, Limits: q.SourceLimits, Deadline: input.SourceDeadlineV1(), Originals: []inv.PrivateProducerOriginals{originals}, Objects: objects}
-	pause := sc.Run(ctx, sc.Request{PrivateAllMode: &handoff, PrivateSources: &sources, Workspace: prep.Workspace, Contract: q.Contract, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
+	pause := sc.Run(preparationCtx, sc.Request{PrivateAllMode: &handoff, PrivateSources: &sources, Workspace: prep.Workspace, Contract: q.Contract, Store: store, StopAfter: sc.StopAfterPrivateSourceRequests})
 	if pause.Err != nil {
 		return out, pause.Err
 	}
@@ -183,14 +242,14 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	if !ok {
 		return out, ErrRefused
 	}
-	held, suppliedUpper, deliveryUpper, semanticUpper, e := source.NativeRetentionBounds(ctx, mailbox, acquisition, q.ResponseLimits)
+	held, suppliedUpper, deliveryUpper, semanticUpper, e := source.NativeRetentionBounds(preparationCtx, mailbox, acquisition, q.ResponseLimits)
 	if e != nil {
 		return out, e
 	}
 	if e = roots.admitNativeMetadata(source, preparedUpper, held, suppliedUpper, deliveryUpper, semanticUpper); e != nil {
 		return out, e
 	}
-	phases, e := source.HostPhaseBounds(ctx, mailbox, acquisition, q.ResponseLimits)
+	phases, e := source.HostPhaseBounds(preparationCtx, mailbox, acquisition, q.ResponseLimits)
 	if e != nil {
 		return out, e
 	}
@@ -208,7 +267,21 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 			return out, inv.ErrPrivateSourceLocalDeliveryDisabledV1
 		}
 	}
-	eligible, e := sc.PrepareSourceHost(ctx, mailbox, acquisition, q.ResponseLimits, hasPending)
+	if q.Timing != nil && (preparationCtx.Err() != nil || !sourceclock.Now(preparationCtx, "preparation-complete").Before(preparationDeadline)) {
+		return out, context.DeadlineExceeded
+	}
+	hostCtx := ctx
+	if q.Timing != nil {
+		end := time.Now().Add(time.Duration(q.Timing.Profile.HOSTMS) * time.Millisecond)
+		cutoff := deadline.Add(-time.Duration(q.Timing.Profile.PublicationCleanupMS) * time.Millisecond)
+		if cutoff.Before(end) {
+			end = cutoff
+		}
+		var stop context.CancelFunc
+		hostCtx, stop = context.WithDeadline(ctx, end)
+		defer stop()
+	}
+	eligible, e := sc.PrepareSourceHost(hostCtx, mailbox, acquisition, q.ResponseLimits, hasPending)
 	if e != nil {
 		return out, e
 	}
@@ -241,9 +314,18 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 			return out, e
 		}
 	}
-	delivered, e := sc.CompleteSourceHost(ctx, eligible)
+	delivered, e := sc.CompleteSourceHost(hostCtx, eligible)
 	if e != nil {
 		return out, e
+	}
+	if q.Timing != nil {
+		tail, ok := delivered.TerminalDeadlineV2()
+		if !ok || tail.After(deadline) {
+			return out, ErrRefused
+		}
+		out.terminalDeadline = tail
+		deadline = tail
+		ctx = tailCancellation.begin(ctx, tail)
 	}
 	// Resume may have added store objects. Re-read only trusted scalar retention
 	// after actual response, before the first native accessor copy/encoding/hash.
@@ -321,7 +403,7 @@ func finalizeTerminal(ctx context.Context, deadline time.Time, out *Outcome, err
 	} else {
 		err = errors.Join(err, ctx.Err())
 	}
-	if deadline.IsZero() || !time.Now().Before(deadline) {
+	if deadline.IsZero() || !sourceclock.Now(ctx, "terminal").Before(deadline) {
 		err = errors.Join(err, context.DeadlineExceeded)
 	}
 	if err != nil {

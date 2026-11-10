@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	sourceclock "lsp-trace/internal/privatesourceclock"
+
 	pilot "lsp-trace/internal/censuslineagepilot"
 	"lsp-trace/internal/describerequest"
 )
@@ -181,7 +183,7 @@ func SourceHostRetentionUpper(c SourceHostConfig, r describerequest.Record, s So
 }
 
 func sourceHostLive(ctx context.Context, deadline time.Time) bool {
-	return ctx != nil && ctx.Err() == nil && !deadline.IsZero() && time.Now().Before(deadline)
+	return ctx != nil && ctx.Err() == nil && !deadline.IsZero() && sourceclock.Now(ctx, "host-acceptance").Before(deadline)
 }
 func sourceHostSHA(s string) bool {
 	if len(s) != 71 || !strings.HasPrefix(s, "sha256:") {
@@ -532,7 +534,8 @@ func (m *SourceHostMailbox) check() error {
 	return nil
 }
 
-// Named logical liveness boundaries; no mutable clock or test hook.
+// Named logical liveness boundaries. Production clocks are non-configurable;
+// deterministic clock advancement exists only in explicitly tagged test builds.
 func sourceHostRequestLive(ctx context.Context, deadline time.Time) bool {
 	return sourceHostLive(ctx, deadline)
 }

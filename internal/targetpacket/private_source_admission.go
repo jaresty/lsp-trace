@@ -36,13 +36,14 @@ type CandidateOriginals struct {
 	prepared *preparedSourceCandidate
 }
 type candidateOriginals struct {
-	evidence     sessionruntime.PrivateGroupingSourceEvidence
-	input        rg.AdmittedInput
-	predecessors []rg.PredecessorRecord
-	query        []byte
-	deadline     time.Time
-	workspace    string
-	bound        uint64
+	evidence        sessionruntime.PrivateGroupingSourceEvidence
+	input           rg.AdmittedInput
+	predecessors    []rg.PredecessorRecord
+	query           []byte
+	deadline        time.Time
+	captureDeadline time.Time
+	workspace       string
+	bound           uint64
 }
 type projectedSourceNode struct {
 	ID             string   `json:"id"`
@@ -94,7 +95,22 @@ func RetainPrivateSourceCandidate(e sessionruntime.PrivateGroupingSourceEvidence
 	if total > 3<<20 {
 		return CandidateOriginals{}, ErrPrivateSource
 	}
-	return CandidateOriginals{state: &candidateOriginals{e, in, p, query, deadline, workspace, b + total}}, nil
+	return CandidateOriginals{state: &candidateOriginals{e, in, p, query, deadline, deadline, workspace, b + total}}, nil
+}
+
+// RetainPrivateSourceHOSTCandidate separates immutable historical query time
+// from retained lifetime. This lower candidate is NONADMITTING: it cannot mint
+// inventory producer completion, paid P, expected handoff, or HOST eligibility.
+func RetainPrivateSourceHOSTCandidate(e sessionruntime.PrivateGroupingSourceEvidence, in rg.AdmittedInput, p []rg.PredecessorRecord, query []byte, capture, retained time.Time, workspace string) (CandidateOriginals, error) {
+	if capture.IsZero() || !retained.After(capture) {
+		return CandidateOriginals{}, ErrPrivateSource
+	}
+	c, err := RetainPrivateSourceCandidate(e, in, p, query, capture, workspace)
+	if err != nil {
+		return CandidateOriginals{}, err
+	}
+	c.state.deadline = retained
+	return c, nil
 }
 func (o CandidateOriginals) Workspace() string {
 	if o.state == nil {
@@ -230,7 +246,7 @@ func PreparePrivateSourceCandidate(original CandidateOriginals, limits PrivateSo
 	}
 	o := original.state
 	v, err := o.evidence.Snapshot(sessionruntime.PrivateGroupingQueryMaxBytes)
-	if err != nil || len(v.Source) > limits.MaxDocumentBytes || !v.Deadline.Equal(o.deadline) || v.Workspace != o.workspace || !exactSourceView(v) || !bytes.Equal(sourceQueryBytes(v), o.query) {
+	if err != nil || len(v.Source) > limits.MaxDocumentBytes || !v.Deadline.Equal(o.captureDeadline) || v.Workspace != o.workspace || !exactSourceView(v) || !bytes.Equal(sourceQueryBytes(v), o.query) {
 		return bad("ORIGINAL_QUERY_PROOF_MISMATCH")
 	}
 	// Contributions are already privately admitted. Never parse/re-admit them here.

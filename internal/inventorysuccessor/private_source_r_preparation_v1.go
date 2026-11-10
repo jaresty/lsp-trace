@@ -8,6 +8,7 @@ import (
 
 	qt "lsp-trace/internal/adr0011querytarget"
 	"lsp-trace/internal/describeworker"
+	sourceclock "lsp-trace/internal/privatesourceclock"
 	pc "lsp-trace/internal/programc"
 	"lsp-trace/internal/publication"
 	rg "lsp-trace/internal/referencegrouping"
@@ -236,8 +237,11 @@ func (o *PrivateManagedInputOwnerV2) PreparationHeadV1() string {
 }
 func sourceRPreparationMetadataV1(q PrivateSourceRPreparationRequestV1) (rg.AllModeMetadataPrivate, error) {
 	in := q.Input
+	if in.sourceTiming != nil && (in.sourceTiming.retainedContext == nil || in.sourceTiming.retainedContext.Err() != nil || !time.Now().Before(in.sourceTiming.frame.TotalDeadline)) {
+		return rg.AllModeMetadataPrivate{}, ErrPrivateSourceRPreparationV1
+	}
 	b := in.replayBinding
-	if !in.sourceConfirmed || q.Root == nil || b.Root != q.Root || b.KindCount != 1 || b.Kinds != [3]string{"REFERENCES_SYMBOL", "", ""} || q.Workspace != b.Session.Workspace || q.Revision != b.Revision || !q.Deadline.Equal(b.Deadline) || !hashV2(q.ExpectedHead) || !hashV2(q.Attempt) || in.Input.ID() != in.sourceInputOriginal.ID() || len(in.inputOriginal) != in.sourceInputOriginal.ByteLength() || len(in.ledgerOriginal) == 0 || len(in.ledgerOriginal) > 1024 {
+	if !in.sourceConfirmed || q.Root == nil || b.Root != q.Root || b.KindCount != 1 || b.Kinds != [3]string{"REFERENCES_SYMBOL", "", ""} || q.Workspace != b.Session.Workspace || q.Revision != b.Revision || !q.Deadline.Equal(in.SourceDeadlineV1()) || !hashV2(q.ExpectedHead) || !hashV2(q.Attempt) || in.Input.ID() != in.sourceInputOriginal.ID() || len(in.inputOriginal) != in.sourceInputOriginal.ByteLength() || len(in.ledgerOriginal) == 0 || len(in.ledgerOriginal) > 1024 {
 		return rg.AllModeMetadataPrivate{}, ErrPrivateSourceRPreparationV1
 	}
 	for _, s := range []string{q.Workspace, q.Revision, q.RunID, q.SeedNamespace, b.URI, b.Occurrence} {
@@ -313,6 +317,12 @@ func (o *PrivateManagedInputOwnerV2) ReserveRPreparationV1(ctx context.Context, 
 	}
 	now := time.Now()
 	charge, err := sourceRPreparationChargeV1(m, now, q.Deadline)
+	if q.Input.sourceTiming != nil {
+		if q.Local != nil || !now.Before(q.Input.sourceTiming.preparationDeadline) {
+			return fail()
+		}
+		charge, err = sourceTimingPreparationChargeV2(m, now, q.Deadline)
+	}
 	if err != nil {
 		return fail()
 	}
@@ -339,7 +349,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveRPreparationV1(ctx context.Context, 
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.k == nil || o.uncertain || o.k.root != q.Root || o.head != q.ExpectedHead {
+	if o.k == nil || o.uncertain || o.k.root != q.Root || o.head != q.ExpectedHead || (q.Input.sourceTiming != nil && o.job.ResourceRules != q.Input.sourceTiming.frame.Profile.Rules()) {
 		return fail()
 	}
 	h, err := o.k.reserve(ctx, o.job, q.ExpectedHead, q.Attempt, charge, q.Deadline.UnixNano(), now.UnixNano(), o.limits)
@@ -382,20 +392,37 @@ func executeRMetadataV1(ctx context.Context, op PrivateSourceRPreparationOperati
 		return fail()
 	}
 	s.used = true
-	if ctx == nil || ctx.Err() != nil || local != (s.local != nil) || !sameRPreparationV1(q, s.request) || !time.Now().Before(q.Deadline) {
+	if ctx == nil || ctx.Err() != nil || s.reservedContext == nil || s.reservedContext.Err() != nil || local != (s.local != nil) || !sameRPreparationV1(q, s.request) || !time.Now().Before(q.Deadline) {
 		return fail()
 	}
 	if _, err := sourceRPreparationMetadataV1(q); err != nil {
 		return fail()
 	}
-	parent := ctx
-	if local {
-		if s.reservedContext == nil || s.reservedContext.Err() != nil {
-			return fail()
-		}
-		parent = s.reservedContext
+	// P's original reservation scope owns execution on every path. A live
+	// caller (including M's retained scope) cannot revive a canceled P child.
+	executionDeadline := q.Deadline
+	if q.Input.sourceTiming != nil {
+		executionDeadline = q.Input.sourceTiming.preparationDeadline
 	}
-	execution, cancel := context.WithDeadline(parent, q.Deadline)
+	execution, cancelExecution := context.WithDeadline(s.reservedContext, executionDeadline)
+	// Preserve caller cancellation without substituting the caller for P's
+	// parent. The owned cancel travels with Local=true's pending lifecycle.
+	stopCaller := context.AfterFunc(ctx, cancelExecution)
+	var stopRetained func() bool
+	if q.Input.sourceTiming != nil {
+		stopRetained = context.AfterFunc(q.Input.sourceTiming.retainedContext, cancelExecution)
+	}
+	cancel := func() {
+		stopCaller()
+		if stopRetained != nil {
+			stopRetained()
+		}
+		cancelExecution()
+	}
+	live := func() bool {
+		return execution.Err() == nil && ctx.Err() == nil &&
+			(q.Input.sourceTiming == nil || q.Input.sourceTiming.retainedContext.Err() == nil)
+	}
 	keep := false
 	defer func() {
 		if !keep {
@@ -435,18 +462,21 @@ func executeRMetadataV1(ctx context.Context, op PrivateSourceRPreparationOperati
 	if err != nil {
 		return fail()
 	}
-	if execution.Err() != nil {
+	if !live() {
 		return fail()
 	}
 	frozen, err := pc.NewGroupingEvaluationCasePrivate(pc.GroupingEvaluationCaseRequestPrivate{CaseID: q.RunID, RunID: q.RunID, SelectorID: q.SeedNamespace, SelectorBytes: []byte(q.Input.replayBinding.URI), Input: q.Input.sourceInputOriginal, Policy: policy, Seed: q.Seed, ProjectionLimits: rg.CompositionLimits{MaxRawBytes: rg.EvaluationMaxBytesPrivate, MaxCanonicalBytes: rg.EvaluationMaxBytesPrivate, MaxOccurrences: rg.EvaluationMaxOccurrencesPrivate, MaxPairContributions: rg.EvaluationMaxOccurrencesPrivate, MaxPairs: rg.EvaluationMaxOccurrencesPrivate, MaxStringBytes: rg.EvaluationMaxStringPrivate, MaxDenominator: 1 << 30, MaxAccumulator: 1 << 50}})
 	if err != nil {
 		return fail()
 	}
-	if execution.Err() != nil {
+	if !live() {
 		return fail()
 	}
 	result, err := pc.EvaluateGroupingCasePrivate(frozen)
-	if err != nil || execution.Err() != nil || !time.Now().Before(q.Deadline) {
+	// The default clock is always real; the existing tagged test clock can
+	// cancel a genuine reservation here, after evaluation but before Observe.
+	now := sourceclock.Now(execution, "r-preparation-before-observe")
+	if err != nil || !live() || !now.Before(q.Deadline) {
 		return fail()
 	}
 	metadata := &preparedSourceRStateV1{q.Input, originals, policy, frozen, result, objects, originalTarget}
@@ -461,7 +491,7 @@ func executeRMetadataV1(ctx context.Context, op PrivateSourceRPreparationOperati
 		return fail()
 	}
 	o.head = h.Identity
-	if execution.Err() != nil || !time.Now().Before(q.Deadline) {
+	if !live() || !time.Now().Before(q.Deadline) {
 		o.uncertain = true
 		return fail()
 	}

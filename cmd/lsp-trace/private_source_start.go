@@ -86,7 +86,7 @@ func decodePrivateStartConfig(raw []byte) (privateSourceStartConfig, error) {
 		return c, e
 	}
 	s := c.Source
-	if c.Schema != "private-source-start.v2" || c.Invocation != privateStartInvocation || c.Pin != privateStartConfigPin(c) || !filepath.IsAbs(c.Base) || filepath.Clean(c.Base) != c.Base || filepath.Base(c.Base) != c.Invocation || c.ControlRoot == s.AccountingRoot || c.ControlRoot == c.Base || !filepath.IsAbs(c.ControlRoot) || len(c.CanonicalControlJob) == 0 || len(c.CanonicalControlJob) > 16384 || c.ControlDeadline.IsZero() || c.LaunchDeadline.IsZero() || !s.Deadline.IsZero() || s.Pin != "" || s.Mode != "EXECUTE" || s.ProcessPath != privateStartProvider || len(s.ProcessArgs) != 0 || s.Host.Mailbox.Invocation != c.Invocation || s.Host.Mailbox.InterpreterRole != "host-source-producer-1" || s.Host.Mailbox.ReviewerRole != "host-source-reviewer-1" || c.ProducerSession != privateStartProducerSession || c.ReviewerSession != privateStartReviewerSession {
+	if c.Schema != "private-source-start.v2" || c.Invocation != privateStartInvocation || c.Pin != privateStartConfigPin(c) || !filepath.IsAbs(c.Base) || filepath.Clean(c.Base) != c.Base || filepath.Base(c.Base) != c.Invocation || c.ControlRoot == s.AccountingRoot || c.ControlRoot == c.Base || !filepath.IsAbs(c.ControlRoot) || len(c.CanonicalControlJob) == 0 || len(c.CanonicalControlJob) > 16384 || c.ControlDeadline.IsZero() || c.LaunchDeadline.IsZero() || !s.Deadline.IsZero() || s.TimingFrame != nil || s.Pin != "" || s.Mode != "EXECUTE" || s.ProcessPath != privateStartProvider || len(s.ProcessArgs) != 0 || s.Host.Mailbox.Invocation != c.Invocation || s.Host.Mailbox.InterpreterRole != "host-source-producer-1" || s.Host.Mailbox.ReviewerRole != "host-source-reviewer-1" || c.ProducerSession != privateStartProducerSession || c.ReviewerSession != privateStartReviewerSession {
 		return c, errors.New("start binding")
 	}
 	for _, v := range []string{c.ControlHead, c.ControlAttempt, c.LaunchAttempt, c.ProducerReadySHA256, c.ReviewerReadySHA256, c.FrozenProducerSHA256, c.FrozenReviewerSHA256} {
@@ -94,12 +94,20 @@ func decodePrivateStartConfig(raw []byte) (privateSourceStartConfig, error) {
 			return c, errors.New("start digest")
 		}
 	}
-	if s.Seed != 7 || s.SeedNamespace != "source-original-schedule" || s.Host.Mailbox.TimeoutMS <= 0 || s.Host.Mailbox.TimeoutMS > 5000 || s.Host.Mailbox.OverallTimeoutMS <= 0 || s.Host.Mailbox.OverallTimeoutMS > 5000 || s.Host.Mailbox.PollMS != 10 || s.SourceLimits.MaxDocumentBytes > 16<<10 || s.SourceLimits.MaxTotalBytes > 64<<10 || s.SourceLimits.MaxWork > 4096 || s.SourceLimits.MaxObjects > 16 || s.Contract.PacketMaxResponseBytes > 131072 || s.ResponseLimits.MaxAdapterBytes > 8192 || s.ResponseLimits.MaxSemanticBytes > 4096 || s.Host.Mailbox.Limits.MaxCalls != 1 || s.Host.Mailbox.Limits.MaxRequestBytes > 65536 || s.Host.Mailbox.Limits.MaxResponseBytes > 16384 || s.Host.Mailbox.Limits.MaxTotalBytes > 147456 || s.Host.Mailbox.Limits.MaxOutputBytes > 65536 {
+	if s.Seed != 7 || s.SeedNamespace != "source-original-schedule" || !privateStartTimingConfigValid(s) || s.Host.Mailbox.PollMS != 10 || s.SourceLimits.MaxDocumentBytes > 16<<10 || s.SourceLimits.MaxTotalBytes > 64<<10 || s.SourceLimits.MaxWork > 4096 || s.SourceLimits.MaxObjects > 16 || s.Contract.PacketMaxResponseBytes > 131072 || s.ResponseLimits.MaxAdapterBytes > 8192 || s.ResponseLimits.MaxSemanticBytes > 4096 || s.Host.Mailbox.Limits.MaxCalls != 1 || s.Host.Mailbox.Limits.MaxRequestBytes > 65536 || s.Host.Mailbox.Limits.MaxResponseBytes > 16384 || s.Host.Mailbox.Limits.MaxTotalBytes > 147456 || s.Host.Mailbox.Limits.MaxOutputBytes > 65536 {
 		return c, errors.New("fixed SOURCE ceilings")
 	}
 	// Validate the exact existing typed config shape with a disposable validation
 	// instant ONLY. This value is never used as the runtime SOURCE deadline.
 	s.Deadline = c.ControlDeadline
+	if s.Timing != nil {
+		total, _ := s.Timing.Total()
+		frame, e := s.Timing.Bind(c.ControlDeadline.Add(-total))
+		if e != nil {
+			return c, e
+		}
+		s.TimingFrame = &frame
+	}
 	s.Pin = privateSourceConfigPin(s)
 	b, e := json.Marshal(s)
 	if e != nil {
@@ -109,6 +117,13 @@ func decodePrivateStartConfig(raw []byte) (privateSourceStartConfig, error) {
 		return c, e
 	}
 	return c, nil
+}
+func privateStartTimingConfigValid(s privateSourceHostConfig) bool {
+	if s.Timing == nil {
+		return s.Host.Mailbox.TimeoutMS > 0 && s.Host.Mailbox.TimeoutMS <= 5000 && s.Host.Mailbox.OverallTimeoutMS > 0 && s.Host.Mailbox.OverallTimeoutMS <= 5000
+	}
+	_, e := s.Timing.Total()
+	return e == nil && s.Host.Mailbox.TimeoutMS == 60000 && s.Host.Mailbox.OverallTimeoutMS == 60000
 }
 func validatePrivateParentStart(raw, parentRaw, readyRaw []byte, c privateSourceStartConfig) (privateParentStartSignal, error) {
 	var signal privateParentStartSignal
@@ -129,12 +144,21 @@ func validatePrivateParentStart(raw, parentRaw, readyRaw []byte, c privateSource
 // bindPrivateSourceStart sets the typed deadline/pin exactly once. Repeated
 // binding, expired authorization and pre-populated clocks all refuse.
 func bindPrivateSourceStart(c privateSourceHostConfig, start, expiry time.Time) (privateSourceHostConfig, error) {
-	if !c.Deadline.IsZero() || c.Pin != "" || start.IsZero() || !expiry.After(start) {
+	if !c.Deadline.IsZero() || c.TimingFrame != nil || c.Pin != "" || start.IsZero() || !expiry.After(start) {
 		return c, errors.New("source clock already bound or expired")
 	}
-	c.Deadline = start.Add(15 * time.Second)
-	if expiry.Before(c.Deadline) {
-		c.Deadline = expiry
+	if c.Timing == nil {
+		c.Deadline = start.Add(15 * time.Second)
+		if expiry.Before(c.Deadline) {
+			c.Deadline = expiry
+		}
+	} else {
+		frame, e := c.Timing.Bind(start)
+		if e != nil || frame.TotalDeadline.After(expiry) {
+			return c, errors.New("HOST timing original authorization does not cover selected total")
+		}
+		c.TimingFrame = &frame
+		c.Deadline = frame.TotalDeadline
 	}
 	c.Pin = privateSourceConfigPin(c)
 	b, e := json.Marshal(c)
