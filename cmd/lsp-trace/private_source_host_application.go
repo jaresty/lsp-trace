@@ -162,6 +162,7 @@ func executePrivateSourceHostOwned(ctx context.Context, c privateSourceHostConfi
 		return fail("MANAGER_REFUSED")
 	}
 	contract, e := cc.NewContinuationContract(c.Contract)
+	contractFailed := e != nil
 	var out sourceoperator.Outcome
 	if e == nil {
 		start := sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.LanguageID, RelationProviders: []string{c.Provider}, Deadline: c.Deadline, Process: managedprocess.Spec{Path: c.ProcessPath, Dir: c.Workspace, Args: c.ProcessArgs}}
@@ -173,11 +174,13 @@ func executePrivateSourceHostOwned(ctx context.Context, c privateSourceHostConfi
 	}
 	// No renewed cleanup window. FinishMixed already joined the provider window;
 	// shutdown and every owned descriptor close contribute to the terminal result.
+	executionErr := e // Preserve the operation result before invalid-tail refusal.
+	tailInvalid := false
 	terminalDeadline := c.Deadline
 	cleanupCtx := ctx
 	if tail, ok := out.TerminalDeadlineV2(); ok {
 		if tail.After(c.Deadline) {
-			e = sourceoperator.ErrRefused
+			tailInvalid = true
 		} else {
 			terminalDeadline = tail
 			var stop context.CancelFunc
@@ -189,15 +192,7 @@ func executePrivateSourceHostOwned(ctx context.Context, c privateSourceHostConfi
 	closeErr := root.Close()
 	// Check both the immutable total and its once-bound publication/cleanup tail
 	// after shutdown AND this final owned close. Neither is a termination promise.
-	if e != nil || shutdownErr != nil || closeErr != nil || ctx.Err() != nil || cleanupCtx.Err() != nil || !time.Now().Before(terminalDeadline) {
-		out.Disposition = "FAILED_RETAINED"
-		if json.NewEncoder(stdout).Encode(out) != nil {
-			return fail("OUTPUT_REFUSED")
-		}
-		return fail("EXECUTION_REFUSED_RETAINED")
-	}
-	if json.NewEncoder(stdout).Encode(out) != nil {
-		return fail("OUTPUT_REFUSED")
-	}
-	return 0
+	now := time.Now()
+	diagnostic := privateSourceDiagnosticV1(out, executionErr, shutdownErr, closeErr, ctx.Err(), cleanupCtx.Err(), contractFailed, tailInvalid, now, terminalDeadline)
+	return finishPrivateSourceV1(out, diagnostic, stdout, stderr)
 }

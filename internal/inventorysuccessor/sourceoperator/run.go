@@ -46,6 +46,7 @@ type Outcome struct {
 	Readback                      [2]bool
 	Counts                        sc.PrivateSourceCounts
 	terminalDeadline              time.Time
+	failure                       FailureDiagnosticV1
 }
 
 // TerminalDeadlineV2 is in-process completion metadata, deliberately not JSON.
@@ -83,6 +84,15 @@ func fixedHOSTSourceCeilingsV2(q Request) bool {
 func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	out.Schema = "SOURCE_NATIVE_V1"
 	out.Disposition = "REFUSED"
+	stage := FailureGuardV1
+	failureCaptured := false
+	captureFailure := func() {
+		if !failureCaptured {
+			out.failV1(stage, err)
+			failureCaptured = true
+		}
+	}
+	defer captureFailure()
 	if ctx == nil || ctx.Err() != nil || q.Owner == nil || q.Owner.PreparationHeadV1() == "" || !q.SourceLimits.Valid() || !q.ResponseLimits.Valid() || q.Capture.Root == nil || q.Capture.Manager == nil || len(q.Capture.Kinds) != 1 || q.Capture.Kinds[0] != programcadmission.TypedReferencesSymbol || q.Capture.Start.Deadline.IsZero() || !time.Now().Before(q.Capture.Start.Deadline) || time.Until(q.Capture.Start.Deadline) > 15*time.Second || q.RunID == "" || len(q.RunID) > 256 || q.SeedNamespace == "" || len(q.SeedNamespace) > 256 || q.RoleAttempt == "" || len(q.RoleAttempt) > 256 {
 		return out, ErrRefused
 	}
@@ -121,6 +131,7 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	defer tailCancellation.close()
 	// Root admission writes nothing; all roots already exist. Topology is checked
 	// before provider/source/mailbox effects and again around each output effect.
+	stage = FailurePublicationOpenV1
 	roots, e := openPublication(ctx, q)
 	if e != nil {
 		return out, e
@@ -131,7 +142,9 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	defer func() {
 		// Registered first, executed last: the later eligible.Close defer finishes
 		// before these publication/protected roots and the original-time check.
+		captureFailure()
 		closeErr := roots.close()
+		out.failure.PublicationClose = closeErr != nil
 		err = errors.Join(err, closeErr)
 		var localErr error
 		if hasPending {
@@ -140,6 +153,7 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 				prior = closeErr
 			} // delivery-disabled is not a cleanup failure
 			localErr = pending.Finalize(ctx, prior)
+			out.failure.PendingFinalize = localErr != nil
 			err = errors.Join(err, localErr)
 		}
 		err = finalizeTerminal(ctx, deadline, &out, err)
@@ -147,19 +161,23 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 			out.Disposition = "LOCAL_VERIFIED_DELIVERY_DISABLED"
 		}
 	}()
+	stage = FailureCaptureReserveV1
 	capture, e := q.Owner.ReserveMixedInputV2(ctx, q.CaptureAttempt, q.Capture)
 	if e != nil {
 		return out, e
 	}
+	stage = FailureCaptureExecuteV1
 	input, e := inv.ExecuteMixedInputV2(ctx, capture, q.Capture)
 	if e != nil {
 		return out, e
 	}
 	prep := inv.PrivateSourceRPreparationRequestV1{Input: input, Root: q.Capture.Root, ExpectedHead: q.Owner.PreparationHeadV1(), Attempt: q.PreparationAttempt, Workspace: q.Capture.Start.Profile.Workspace().String(), Revision: q.Capture.Revision, RunID: q.RunID, SeedNamespace: q.SeedNamespace, Seed: q.Seed, Deadline: input.SourceDeadlineV1(), Local: q.Local}
+	stage = FailurePreparationReserveV1
 	operation, e := q.Owner.ReserveRPreparationV1(ctx, prep)
 	if e != nil {
 		return out, e
 	}
+	stage = FailurePreparationExecuteV1
 	var prepared sourcePreparationMetadata
 	if q.Local != nil {
 		pending, e = inv.ExecuteLocalRPreparationV1(ctx, operation, prep)
@@ -174,6 +192,7 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 			return out, e
 		}
 	}
+	stage = FailureOperatorV1
 	preparationCtx := ctx
 	preparationDeadline := deadline
 	if q.Timing != nil {
@@ -286,6 +305,7 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 		return out, e
 	}
 	defer func() { err = errors.Join(err, eligible.Close()) }()
+	defer captureFailure() // runs before eligible.Close; later cleanup cannot mask the operation
 	// Re-read current store retention before exchange or binder regeneration.
 	// Use the original raw response ceiling even though no response exists yet.
 	phases, e = source.HostPhaseBounds(ctx, mailbox, acquisition, q.ResponseLimits)
@@ -336,6 +356,7 @@ func Run(ctx context.Context, q Request) (out Outcome, err error) {
 	if e = roots.admitNativeMetadata(source, preparedUpper, held, suppliedUpper, deliveryUpper, semanticUpper); e != nil {
 		return out, e
 	}
+	stage = FailurePublicationV1
 	native, e := roots.sealNative(delivered, source, workerObservations...)
 	if e != nil {
 		return out, e
@@ -399,11 +420,15 @@ func originalQueryRecordForID(id string, records []describerequest.Record) (desc
 // roll back published bytes, clear actual flags, renew time or retry anything.
 func finalizeTerminal(ctx context.Context, deadline time.Time, out *Outcome, err error) error {
 	if ctx == nil {
+		out.failure.Terminal = true
 		err = errors.Join(err, ErrRefused)
 	} else {
-		err = errors.Join(err, ctx.Err())
+		contextErr := ctx.Err()
+		out.failure.Terminal = contextErr != nil
+		err = errors.Join(err, contextErr)
 	}
 	if deadline.IsZero() || !sourceclock.Now(ctx, "terminal").Before(deadline) {
+		out.failure.Terminal = true
 		err = errors.Join(err, context.DeadlineExceeded)
 	}
 	if err != nil {
