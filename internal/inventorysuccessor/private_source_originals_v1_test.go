@@ -1498,7 +1498,7 @@ func testSuppliedOp(t *testing.T, binary string) {
 			digest := func(raw []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) }
 			d := digest([]byte("controlled-start-config"))
 			launchDeadline := parentDeadline.UTC().Format(time.RFC3339Nano)
-			ready, _ := json.Marshal(map[string]any{"Schema": "private-connected-source-ready.v2", "Invocation": cfg.Mailbox.Invocation, "ConfigPin": d, "SourceTemplatePin": d, "ControlReceipt": d, "LaunchDeadline": launchDeadline})
+			ready, _ := json.Marshal(map[string]any{"Schema": "private-connected-source-ready.v2", "Invocation": cfg.Mailbox.Invocation, "ConfigPin": d, "SourceTemplatePin": d, "ControlReceipt": "fixed-provider-control/v2 /Users/schwa/.local/bin/gopls v0.23.0 " + digest([]byte("controlled transport head")), "LaunchDeadline": launchDeadline})
 			ready = append(ready, '\n')
 			if e = pending.PublishStartReadyV2(ready); e != nil {
 				t.Fatal(e)

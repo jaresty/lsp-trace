@@ -150,7 +150,7 @@ func TestConnectedBridgeCanonicalJoinV2(t *testing.T) {
 		t.Fatal(e)
 	}
 	c.Pin = privateStartConfigPin(c)
-	ready, _ := json.Marshal(privateConnectedReady{"private-connected-source-ready.v2", c.Invocation, c.Pin, privateSourceConfigPin(c.Source), privateStartDigest([]byte("controlled receipt epoch")), c.LaunchDeadline})
+	ready, _ := json.Marshal(privateConnectedReady{"private-connected-source-ready.v2", c.Invocation, c.Pin, privateSourceConfigPin(c.Source), "fixed-provider-control/v2 /Users/schwa/.local/bin/gopls v0.23.0 " + privateStartDigest([]byte("controlled receipt epoch")), c.LaunchDeadline})
 	ready = append(ready, '\n')
 	if len(ready) > applicationStartupPacketLimit {
 		t.Fatal("ASSERT_SOURCE_READY_PIPE_BOUND", len(ready))

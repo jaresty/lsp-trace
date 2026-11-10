@@ -347,10 +347,16 @@ def source_send(fd, raw):
 
 def source_ready(raw, capability):
     r = host.strict(raw)
+    # PrivateProviderControlV2.String: fixed path/version followed by the
+    # CONTROL head, not a bare digest. This checks transport shape, not custody.
+    receipt_prefix = 'fixed-provider-control/v2 /Users/schwa/.local/bin/gopls v0.23.0 '
+    receipt = r.get('ControlReceipt')
     if (set(r) != {'Schema', 'Invocation', 'ConfigPin', 'SourceTemplatePin', 'ControlReceipt', 'LaunchDeadline'}
             or r['Schema'] != 'private-connected-source-ready.v2'
             or any(r[k] != capability[k] for k in ('Invocation', 'ConfigPin', 'LaunchDeadline'))
-            or not all(isinstance(r[k], str) and host.DIGEST.fullmatch(r[k]) for k in ('SourceTemplatePin', 'ControlReceipt'))):
+            or not isinstance(r['SourceTemplatePin'], str) or not host.DIGEST.fullmatch(r['SourceTemplatePin'])
+            or not isinstance(receipt, str) or not receipt.startswith(receipt_prefix)
+            or not host.DIGEST.fullmatch(receipt[len(receipt_prefix):])):
         raise ValueError('SOURCE connected identity')
     return r
 

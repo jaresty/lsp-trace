@@ -749,7 +749,7 @@ import hashlib,json,os,sys,time
 c=json.load(open(sys.argv[3])); control=c['Base']+'/control'
 digest=lambda b:'sha256:'+hashlib.sha256(b).hexdigest()
 encode=lambda v:json.dumps(v,separators=(',',':')).encode()
-r=dict(Schema='private-connected-source-ready.v2',Invocation=c['Invocation'],ConfigPin=c['Pin'],SourceTemplatePin=digest(b'template'),ControlReceipt=digest(b'controlled-receipt'),LaunchDeadline=c['LaunchDeadline'])
+r=dict(Schema='private-connected-source-ready.v2',Invocation=c['Invocation'],ConfigPin=c['Pin'],SourceTemplatePin=digest(b'template'),ControlReceipt='fixed-provider-control/v2 /Users/schwa/.local/bin/gopls v0.23.0 '+digest(b'controlled-receipt'),LaunchDeadline=c['LaunchDeadline'])
 raw=encode(r)+b'\\n'
 fd=int(sys.argv[5]);os.write(fd,raw);os.close(fd)
 end=time.monotonic()+5
@@ -819,6 +819,65 @@ assert os.path.exists(mailbox+'/response-000001.json'),'CONTROLLED_RESPONSE_REQU
                              dict(Status='DEADLINE'), 'CONNECTED_ORIGINAL_SOURCE_WAIT')
         print('CONNECTED_ORIGINAL_SOURCE_WAIT: A-pass after startup deadline; fixed total equality refuses')
 
+    def connected_receipt_fixture(self):
+        # Source-free metadata from the failed actual Go startup; no semantic
+        # payload, provider invocation, accounting history or live capability IO.
+        raw = (b'{"Schema":"private-connected-source-ready.v2","Invocation":"host-assisted-full-definition-r-XoBFapmT",'
+               b'"ConfigPin":"sha256:5a28c0e53f3f0917c15057ef6bbbd7fdf18a4f2de0faf2cd14b7905cfd41f30e",'
+               b'"SourceTemplatePin":"sha256:4eb411fef4f6f110f57e69d6b40694978e92a3c3ae7584556a945dcfdb315f38",'
+               b'"ControlReceipt":"fixed-provider-control/v2 /Users/schwa/.local/bin/gopls v0.23.0 sha256:003dbef7d03f6b5c96fc9721a759049be1e35d3b8638c2f87c634d8de531cf2d",'
+               b'"LaunchDeadline":"2026-11-10T06:41:32.522208Z"}\n')
+        path = Path(h.__file__).parents[1] / '.pi/skills/private-host-streaming-application/scripts/activation-bridge.py'
+        spec = importlib.util.spec_from_file_location('receipt_bridge_test', path)
+        bridge = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bridge)
+        ready = bridge.host.strict(raw)
+        cap = {k: ready[k] for k in ('Invocation', 'ConfigPin', 'LaunchDeadline')}
+        return bridge, raw, ready, cap
+
+    def test_connected_actual_go_receipt(self):
+        bridge, raw, ready, cap = self.connected_receipt_fixture()
+        self.assertEqual(len(raw), 485)
+        self.assertEqual(bridge.source_ready(raw, cap), ready, 'CONNECTED_GO_RECEIPT')
+        print('CONNECTED_GO_RECEIPT: A-pass actual 485-byte LF packet')
+
+    def test_connected_receipt_and_identity_refusals(self):
+        bridge, raw, ready, cap = self.connected_receipt_fixture()
+        receipt = ready['ControlReceipt']
+        # The fixed producer's path is exact, not whitespace-tokenized. A path
+        # containing spaces is foreign here, not a reason to parse a new format.
+        cases = [("ControlReceipt", value) for value in (
+            h.digest(b'bare'), '', None, 1, 'INVALID',
+            receipt.replace('control/v2', 'control/v1'),
+            receipt.replace('/Users/schwa/.local/bin/gopls', '/tmp/provider with spaces/gopls'),
+            receipt.replace('v0.23.0', 'v0.24.0'),
+            receipt.replace('sha256:', 'sha512:'),
+            receipt[:-1], receipt + '0', receipt + '\n', receipt + ' trailing',
+            receipt[:-64] + 'G' * 64,
+        )]
+        cases += [('Schema', 'foreign'), ('Invocation', 'foreign'),
+                  ('ConfigPin', h.digest(b'foreign')), ('LaunchDeadline', '2099-01-01T00:00:00Z'),
+                  ('SourceTemplatePin', receipt), ('SourceTemplatePin', None), ('Unknown', True)]
+        for key, value in cases:
+            with self.subTest(key=key, value=value):
+                changed = dict(ready, **{key: value})
+                with self.assertRaisesRegex(ValueError, 'SOURCE connected identity'):
+                    bridge.source_ready(bridge.source_encoded(changed), cap)
+        print('CONNECTED_RECEIPT_IDENTITY: A-pass malformed receipt, forged head shape, foreign identity and unknown key refused')
+
+    def test_connected_ack_exact_ready_bytes(self):
+        bridge, raw, ready, cap = self.connected_receipt_fixture()
+        cap['Nonce'] = 'a' * 64
+        pin = h.digest(bridge.source_encoded(cap))
+        ack = dict(Schema='private-source-connected-ack.v1', CapabilitySHA256=pin,
+                   DriverReadySHA256=h.digest(raw), Nonce=cap['Nonce'], ProducerWaiterActive=True)
+        bridge.source_ack(bridge.source_encoded(ack), raw, cap, pin)
+        for changed in (raw[:-1], raw + b' ', bridge.source_encoded(ready)):
+            with self.subTest(changed=changed[-10:]):
+                with self.assertRaisesRegex(ValueError, 'SOURCE handler identity'):
+                    bridge.source_ack(bridge.source_encoded(ack), changed, cap, pin)
+        print('CONNECTED_ACK_BYTES: A-pass original LF bound; missing LF or extra byte refused')
+
     def test_connected_start_admission_guards(self):
         bridge_path = Path(h.__file__).parents[1] / '.pi/skills/private-host-streaming-application/scripts/activation-bridge.py'
         spec = importlib.util.spec_from_file_location('connected_bridge_test', bridge_path)
@@ -836,7 +895,7 @@ assert os.path.exists(mailbox+'/response-000001.json'),'CONTROLLED_RESPONSE_REQU
                 c = dict(Invocation=cap['Invocation'], ProducerSession='producer', ReviewerSession='reviewer')
                 ready = dict(Schema='private-connected-source-ready.v2', Invocation=cap['Invocation'],
                              ConfigPin=cap['ConfigPin'], SourceTemplatePin=h.digest(b'template'),
-                             ControlReceipt=h.digest(b'actual-epoch'), LaunchDeadline=cap['LaunchDeadline'])
+                             ControlReceipt='fixed-provider-control/v2 /Users/schwa/.local/bin/gopls v0.23.0 ' + h.digest(b'controlled-epoch'), LaunchDeadline=cap['LaunchDeadline'])
                 pin = h.digest(bridge.source_encoded(cap))
                 raw = bridge.source_encoded(ready) + b'\n'
                 ack = dict(Schema='private-source-connected-ack.v1', CapabilitySHA256=pin,
