@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
 	inv "lsp-trace/internal/inventorysuccessor"
 	"lsp-trace/internal/publication"
 )
@@ -169,6 +170,16 @@ func bindPrivateSourceStart(c privateSourceHostConfig, start, expiry time.Time) 
 }
 func runPrivateSourceStart(args []string, stdout, stderr io.Writer) int {
 	fail := func(class string) int { fmt.Fprintln(stderr, "private connected source:", class); return 1 }
+	var startup *applicationStartupNotifier
+	if len(args) == 4 && args[0] == "start-source" && args[2] == "--startup-notify-fd" {
+		var e error
+		startup, e = openApplicationStartupNotifier(args[3])
+		if e != nil {
+			return fail("STARTUP_NOTIFY_REFUSED")
+		}
+		defer startup.close()
+		args = args[:2]
+	}
 	if len(args) != 2 || args[0] != "start-source" {
 		return fail("INVALID_INVOCATION")
 	}
@@ -222,6 +233,9 @@ func runPrivateSourceStart(args []string, stdout, stderr io.Writer) int {
 	readyRaw = append(readyRaw, '\n')
 	if e = pending.PublishStartReadyV2(readyRaw); e != nil {
 		return fail("READY_PUBLICATION_RETAINED")
+	}
+	if e = notifyPrivateSourceReady(ctx, startup, readyRaw); e != nil {
+		return fail("READY_TRANSPORT_RETAINED")
 	}
 	var startRaw []byte
 	// The bounded paid wait is NOT a SOURCE window. Parent must separately bind
@@ -286,6 +300,35 @@ func runPrivateSourceStart(args []string, stdout, stderr io.Writer) int {
 	closed = true
 	sourceTransferred = true
 	return finishPrivateSourceStart(sourceCtx, c, stdout, stderr, root, sourceRoot, sourceOwner, nil)
+}
+
+// Same admitted anonymous-pipe domain and <=PIPE_BUF single-attempt write as
+// application activation, but never relabel SOURCE as an application packet.
+// This carries no semantic text, approval, credit, or readiness from markers.
+func notifyPrivateSourceReady(ctx context.Context, n *applicationStartupNotifier, raw []byte) (err error) {
+	if n == nil {
+		return nil
+	}
+	if n.attempted || n.file == nil || len(raw) == 0 || len(raw) > applicationStartupPacketLimit {
+		return errors.New("source readiness transport")
+	}
+	n.attempted = true
+	defer func() { err = errors.Join(err, n.close()) }()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	fd := int(n.file.Fd())
+	if err = unix.SetNonblock(fd, true); err != nil {
+		return err
+	}
+	wrote, err := unix.Write(fd, raw)
+	if err != nil {
+		return err
+	}
+	if wrote != len(raw) {
+		return io.ErrShortWrite
+	}
+	return ctx.Err()
 }
 
 // Invocation-local test boundary only; production supplies nil. Implementations

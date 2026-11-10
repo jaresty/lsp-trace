@@ -1308,7 +1308,28 @@ func testSuppliedOp(t *testing.T, binary string) {
 	publisherCtx, publisherCancel := context.WithCancel(ctx)
 	defer publisherCancel()
 	done := make(chan error, 1)
+	connectedEntry := make(chan struct{})
 	go func() {
+		if connectedStart {
+			select {
+			case <-publisherCtx.Done():
+				done <- publisherCtx.Err()
+				return
+			case <-connectedEntry:
+			}
+			capPath := filepath.Join(dir, "startup-capability.json")
+			capRaw, re := os.ReadFile(capPath)
+			if re != nil {
+				done <- re
+				return
+			}
+			pin := fmt.Sprintf("sha256:%x", sha256.Sum256(capRaw))
+			cmd := exec.CommandContext(publisherCtx, "python3", helper, "connected-wait", "--control", filepath.Join(dir, "control"), "--capability", capPath, "--capability-sha256", pin)
+			if raw, re := cmd.CombinedOutput(); re != nil {
+				done <- fmt.Errorf("ASSERT_AUTOMATED_CONNECTED_HANDLER: %w %s", re, raw)
+				return
+			}
+		}
 		for {
 			if _, e := os.Stat(filepath.Join(mailbox, "request-000001.json")); e == nil {
 				break
@@ -1471,17 +1492,98 @@ func testSuppliedOp(t *testing.T, binary string) {
 				t.Fatal(e)
 			}
 			pending, providerPath, controlOwner := inv.ControlledProviderLaunchForTest(t, dir, owner)
-			if e = pending.PublishStartReadyV2([]byte("controlled-ready\n")); e != nil {
+			// The test peer carries only the live startup packet; genuine CONTROL
+			// custody and the actual Local=nil SOURCE owner remain in this Go
+			// invocation. No parent test writes START or resumes the HOST handler.
+			digest := func(raw []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)) }
+			d := digest([]byte("controlled-start-config"))
+			launchDeadline := parentDeadline.UTC().Format(time.RFC3339Nano)
+			ready, _ := json.Marshal(map[string]any{"Schema": "private-connected-source-ready.v2", "Invocation": cfg.Mailbox.Invocation, "ConfigPin": d, "SourceTemplatePin": d, "ControlReceipt": d, "LaunchDeadline": launchDeadline})
+			ready = append(ready, '\n')
+			if e = pending.PublishStartReadyV2(ready); e != nil {
 				t.Fatal(e)
 			}
-			startRaw := []byte("{\"Operation\":\"START_CONFIRM\",\"ProducerWaiterActive\":true}\n")
-			if e = os.WriteFile(filepath.Join(dir, "control", "start.json"), startRaw, 0600); e != nil {
+			config, _ := json.Marshal(map[string]any{"Schema": "private-source-start.v2", "Invocation": cfg.Mailbox.Invocation, "Base": dir, "Pin": d, "LaunchDeadline": launchDeadline, "ProducerSession": "controlled-producer", "ReviewerSession": "controlled-reviewer", "Source": map[string]any{"Host": cfg}, "Ready": string(ready)})
+			configPath := filepath.Join(dir, "startup-config.json")
+			if e = os.WriteFile(configPath, config, 0600); e != nil {
 				t.Fatal(e)
 			}
-			got, re := pending.ReadStartMetadataV2("control/start.json")
-			if re != nil || !bytes.Equal(got, startRaw) {
+			cap, _ := json.Marshal(map[string]any{"Schema": "private-source-start-capability.v1", "ConfigSHA256": digest(config), "ConfigPin": d, "Invocation": cfg.Mailbox.Invocation, "ProducerSession": "controlled-producer", "ReviewerSession": "controlled-reviewer", "RoleID": cfg.Mailbox.InterpreterRole, "Mailbox": mailbox, "Control": filepath.Join(dir, "control"), "SourceTotalMS": 15000, "Nonce": strings.Repeat("a", 64), "LaunchDeadline": launchDeadline, "ApproveParentStart": true})
+			capPath := filepath.Join(dir, "startup-capability.json")
+			if e = os.WriteFile(capPath, cap, 0600); e != nil {
+				t.Fatal(e)
+			}
+			peer := filepath.Join(dir, "controlled-startup-peer")
+			peerRaw := []byte(`#!/usr/bin/env python3
+import json,os,sys,time
+c=json.load(open(sys.argv[3]));w=int(sys.argv[5]);os.write(w,c['Ready'].encode());os.close(w)
+end=time.monotonic()+30
+while not os.path.exists(c['Base']+'/operator-finished.json') and time.monotonic()<end:time.sleep(.001)
+assert os.path.exists(c['Base']+'/operator-finished.json')
+`)
+			if e = os.WriteFile(peer, peerRaw, 0700); e != nil {
+				t.Fatal(e)
+			}
+			bridge := filepath.Join(filepath.Dir(helper), "..", ".pi", "skills", "private-host-streaming-application", "scripts", "activation-bridge.py")
+			command := exec.CommandContext(ctx, "python3", bridge, "source", peer, configPath, digest(config), capPath, digest(cap))
+			var bridgeOut, bridgeErr bytes.Buffer
+			command.Stdout, command.Stderr = &bridgeOut, &bridgeErr
+			if e = command.Start(); e != nil {
+				t.Fatal(e)
+			}
+			finished := false
+			finishBridge := func() {
+				if finished {
+					return
+				}
+				finished = true
+				_ = os.WriteFile(filepath.Join(dir, "operator-finished.json"), []byte("{}"), 0600)
+				if re := command.Wait(); re != nil {
+					t.Errorf("ASSERT_AUTOMATED_CONNECTED_OWNER: %v %s %s", re, bridgeOut.Bytes(), bridgeErr.Bytes())
+				}
+			}
+			defer finishBridge()
+			// Wait only for the transport endpoint before the ONE role launch;
+			// this is test orchestration, not parent readiness/START coordination.
+			for i := 0; i < 10000; i++ {
+				if _, re := os.Stat(filepath.Join(dir, "control", "source-ack.fifo")); re == nil {
+					break
+				}
+				if ctx.Err() != nil {
+					t.Fatal(ctx.Err())
+				}
+				time.Sleep(time.Millisecond)
+			}
+			close(connectedEntry)
+			var got []byte
+			var re error
+			for i := 0; i < 10000; i++ {
+				got, re = pending.ReadStartMetadataV2("control/start.json")
+				if re == nil {
+					break
+				}
+				if !errors.Is(re, os.ErrNotExist) {
+					t.Fatal("ASSERT_CONNECTED_SIGNAL", re)
+				}
+				select {
+				case <-ctx.Done():
+					t.Fatal(ctx.Err())
+				case <-time.After(time.Millisecond):
+				}
+			}
+			if re != nil {
 				t.Fatal("ASSERT_CONNECTED_SIGNAL", re)
 			}
+			var actualStart struct {
+				Operation, Invocation                                   string
+				ProducerWaiterActive                                    bool
+				DriverReadySHA256, ParentReadySHA256, SourceTemplatePin string
+			}
+			parent, re := os.ReadFile(filepath.Join(dir, "control", "parent-ready.json"))
+			if re != nil || json.Unmarshal(got, &actualStart) != nil || actualStart.Operation != "START_CONFIRM" || actualStart.Invocation != cfg.Mailbox.Invocation || !actualStart.ProducerWaiterActive || actualStart.DriverReadySHA256 != digest(ready) || actualStart.ParentReadySHA256 != digest(parent) || actualStart.SourceTemplatePin != d {
+				t.Fatal("ASSERT_AUTOMATED_CONNECTED_TYPED_JOIN", re)
+			}
+			t.Log("ASSERT_AUTOMATED_CONNECTED_TYPED_JOIN PASS; one handler invocation, no manual parent START")
 			firstStart := time.Now() // fixed before consume; no re-invocation clock
 			if e = pending.ConsumeStartV2(got); e != nil {
 				t.Fatal(e)

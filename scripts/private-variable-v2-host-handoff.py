@@ -506,6 +506,68 @@ def wait_request(mailbox, role_id, control, after_sequence=0, poll_ms=100):
         raise ValueError('wait refused') from None
 
 
+def connected_wait(control, capability_path, capability_pin):
+    # One actual HOST tool invocation acknowledges the live driver, then stays
+    # waiting for SOURCE. No parent resume, marker heuristic, model API or body IO.
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        '.pi', 'skills', 'private-host-streaming-application', 'scripts', 'activation-bridge.py')
+    spec = importlib.util.spec_from_file_location('source_activation_bridge', path)
+    bridge = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bridge)
+    capability = bridge.source_handler(control, capability_path, capability_pin)
+    return wait_connected_source(control, capability, bridge)
+
+
+def wait_connected_source(control, capability, bridge):
+    cfd = directory(control)
+    fd = None
+    # This immutable upper bound is NOT SOURCE credit: actual SOURCE starts
+    # strictly before LaunchDeadline, with the selected total fixed by Go. Once
+    # preparation exists, shrink to its real original deadline; never renew it.
+    wait_deadline = bridge.source_deadline(capability['LaunchDeadline']) + capability['SourceTotalMS'] / 1000
+    try:
+        for _ in range(27500):  # <=180s startup +95s SOURCE upper, no renewal
+            if any(name in os.listdir(cfd) for name in ('stop.json', 'actual-exit.json', 'source-completion.json')):
+                return {'Status': 'STOP'}
+            remaining = wait_deadline - time.time()
+            if remaining <= 0:
+                return {'Status': 'DEADLINE'}
+            if fd is None:
+                try:
+                    fd = directory(capability['Mailbox'])
+                except FileNotFoundError:
+                    pass
+            if fd is not None:
+                names = os.listdir(fd)
+                if 'terminal.json' in names:
+                    return {'Status': 'TERMINAL'}
+                if 'preparation.json' in names:
+                    prep = decode(read(fd, 'preparation.json'))
+                    if prep['Protocol'] != SOURCE_PROTOCOL or prep['Invocation'] != capability['Invocation']:
+                        raise ValueError('connected SOURCE preparation identity')
+                    wait_deadline = min(wait_deadline, bridge.source_deadline(prep['Deadline']))
+                    if time.time() >= wait_deadline:
+                        return {'Status': 'DEADLINE'}
+                if 'request-000001.json' in names and 'preparation.json' in names:
+                    frame = request(fd, 1)
+                    b = frame['Binding']
+                    if (b['Protocol'] != SOURCE_PROTOCOL or b['Invocation'] != capability['Invocation']
+                            or b['RoleID'] != capability['RoleID'] or 'response-000001.json' in names):
+                        raise ValueError('connected SOURCE request identity')
+                    if any(n in os.listdir(cfd) for n in ('stop.json', 'actual-exit.json', 'source-completion.json')):
+                        return {'Status': 'STOP'}
+                    if time.time() >= wait_deadline:
+                        return {'Status': 'DEADLINE'}
+                    return {'Status': 'REQUEST', 'Binding': b}
+            time.sleep(min(.01, remaining))
+        return {'Status': 'DEADLINE'}
+    finally:
+        if fd is not None:
+            os.close(fd)
+        os.close(cfd)
+
+
 def export_request(fd, mailbox, sequence, destination, config_path, config_pin, control):
     """Artifact affordance only. No inference, authority reconstruction or retry."""
     automation, protected, expected = export_config(config_path, config_pin)
@@ -867,6 +929,9 @@ def main():
             s.add_argument('--config')
             s.add_argument('--config-sha256')
             s.add_argument('--control')
+    s = sub.add_parser('connected-wait', help='live capability-bound startup ACK, then SOURCE Binding only')
+    for key in ('control', 'capability', 'capability-sha256'):
+        s.add_argument('--' + key, required=True)
     s = sub.add_parser('wait', help='post-START role Binding notification only')
     for key in ('mailbox', 'role-id', 'control'):
         s.add_argument('--' + key, required=True)
@@ -882,6 +947,8 @@ def main():
         return
     elif a.action == 'respond':
         result = respond(a.mailbox, a.sequence, a.payload)
+    elif a.action == 'connected-wait':
+        result = connected_wait(a.control, a.capability, a.capability_sha256)
     elif a.action == 'wait':
         result = wait_request(a.mailbox, a.role_id, a.control, a.after_sequence, a.poll_ms)
     elif a.action == 'stop':

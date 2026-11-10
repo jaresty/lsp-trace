@@ -8,9 +8,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -133,6 +135,97 @@ func TestConnectedParentStartBindingsV2(t *testing.T) {
 		})
 	}
 }
+func TestConnectedBridgeCanonicalJoinV2(t *testing.T) {
+	c := startConfigFixtureV2(t)
+	if e := os.Mkdir(c.Base, 0700); e != nil {
+		t.Fatal(e)
+	}
+	canonicalBase, e := filepath.EvalSymlinks(c.Base)
+	if e != nil {
+		t.Fatal(e)
+	}
+	c.Base = canonicalBase
+	control := filepath.Join(c.Base, "control")
+	if e := os.Mkdir(control, 0700); e != nil {
+		t.Fatal(e)
+	}
+	c.Pin = privateStartConfigPin(c)
+	ready, _ := json.Marshal(privateConnectedReady{"private-connected-source-ready.v2", c.Invocation, c.Pin, privateSourceConfigPin(c.Source), privateStartDigest([]byte("controlled receipt epoch")), c.LaunchDeadline})
+	ready = append(ready, '\n')
+	if len(ready) > applicationStartupPacketLimit {
+		t.Fatal("ASSERT_SOURCE_READY_PIPE_BOUND", len(ready))
+	}
+	for _, mode := range []string{"live", "cancelled"} {
+		t.Run(mode, func(t *testing.T) {
+			r, w, e := os.Pipe()
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer r.Close()
+			n, e := openApplicationStartupNotifier(strconv.Itoa(int(w.Fd())))
+			if e != nil {
+				t.Fatal(e)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if mode == "cancelled" {
+				cancel()
+			}
+			e = notifyPrivateSourceReady(ctx, n, ready)
+			got, re := io.ReadAll(r)
+			if re != nil || (mode == "live" && (e != nil || !bytes.Equal(got, ready))) || (mode == "cancelled" && (e == nil || len(got) != 0)) {
+				t.Fatal("ASSERT_SOURCE_READY_PIPE", mode, e, re)
+			}
+			if notifyPrivateSourceReady(context.Background(), n, ready) == nil {
+				t.Fatal("ASSERT_SOURCE_READY_ONCE")
+			}
+			t.Log("ASSERT_SOURCE_READY_PIPE PASS", mode)
+		})
+	}
+	config, _ := json.Marshal(c)
+	configPath := filepath.Join(c.Base, "start-config.json")
+	readyPath := filepath.Join(c.Base, "controlled-ready.json")
+	if e := os.WriteFile(configPath, config, 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(readyPath, ready, 0600); e != nil {
+		t.Fatal(e)
+	}
+	bridge, e := filepath.Abs(filepath.Join("..", "..", ".pi", "skills", "private-host-streaming-application", "scripts", "activation-bridge.py"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	// Test-only peer creates ACK bytes. Python's separate FIFO test uses the
+	// real connected-wait handler; neither claims authenticated model output.
+	program := `import importlib.util,json,sys,os
+s=importlib.util.spec_from_file_location('bridge',sys.argv[1]);b=importlib.util.module_from_spec(s);s.loader.exec_module(b)
+c=json.load(open(sys.argv[2]));r=open(sys.argv[3],'rb').read()
+cap=dict(Invocation=c['Invocation'],ConfigPin=c['Pin'],ProducerSession=c['ProducerSession'],ReviewerSession=c['ReviewerSession'],LaunchDeadline=c['LaunchDeadline'],Nonce='a'*64)
+pin=b.host.digest(b.source_encoded(cap))
+a=dict(Schema='private-source-connected-ack.v1',CapabilitySHA256=pin,DriverReadySHA256=b.host.digest(r),Nonce=cap['Nonce'],ProducerWaiterActive=True)
+fd=b.private_root(c['Base']+'/control')
+try:b.source_parent_join(fd,c,cap,pin,r,b.source_encoded(a))
+finally:os.close(fd)
+`
+	cmd := exec.Command("python3", "-c", program, bridge, configPath, readyPath)
+	cmd.Env = append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1")
+	if out, e := cmd.CombinedOutput(); e != nil {
+		t.Fatalf("bridge canonical join: %v %s", e, out)
+	}
+	parent, e := os.ReadFile(filepath.Join(control, "parent-ready.json"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	start, e := os.ReadFile(filepath.Join(control, "start.json"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e := validatePrivateParentStart(start, parent, ready, c); e != nil {
+		t.Fatal("ASSERT_BRIDGE_TYPED_GO_JOIN", e)
+	}
+	t.Log("ASSERT_BRIDGE_TYPED_GO_JOIN PASS; exact canonical typed pins, no source/provider/accounting IO")
+}
+
 func TestConnectedTypedDeadlineOnceV2(t *testing.T) {
 	c := startConfigFixtureV2(t).Source
 	start := time.Now()

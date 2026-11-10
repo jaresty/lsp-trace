@@ -718,6 +718,175 @@ class SourceHostTest(unittest.TestCase):
                     pin=h.digest(config.read_bytes()), dest=base / 'export', raw=h.canonical(frame),
                     request=h.canonical(record), frame=frame, prep=prep)
 
+    def test_connected_start_one_invocation(self):
+        self.connected_start_run()
+
+    def test_connected_start_cancel_before_ack(self):
+        self.connected_start_run(cancel=True)
+
+    def connected_start_run(self, cancel=False):
+        # Controlled transport peer only: not a provider, kernel custody, or model.
+        # The separate Go tests check the typed join and native owner boundaries.
+        f = self.fixture()
+        from datetime import datetime, timezone, timedelta
+        deadline = (datetime.now(timezone.utc) + timedelta(seconds=8)).isoformat().replace('+00:00', 'Z')
+        c = dict(Schema='private-source-start.v2', Invocation=f['prep']['Invocation'],
+                 Base=str(f['base']), Pin=h.digest(b'config-pin'), LaunchDeadline=deadline,
+                 ProducerSession='controlled-producer-session', ReviewerSession='controlled-reviewer-session',
+                 Source=dict(Host=f['prep']['SourceConfiguration']))
+        config = f['base'] / 'start-config.json'
+        self.put(config, c)
+        cap = dict(Schema='private-source-start-capability.v1', ConfigSHA256=h.digest(config.read_bytes()),
+                   ConfigPin=c['Pin'], Invocation=c['Invocation'], ProducerSession=c['ProducerSession'],
+                   ReviewerSession=c['ReviewerSession'], RoleID='canned-source-role',
+                   Mailbox=str(f['mailbox']), Control=str(f['control']), SourceTotalMS=15000,
+                   Nonce='b' * 64, LaunchDeadline=deadline, ApproveParentStart=True)
+        capability = f['base'] / 'capability.json'
+        self.put(capability, cap)
+        tool = f['base'] / 'controlled-peer'
+        tool.write_text('''#!/usr/bin/env python3
+import hashlib,json,os,sys,time
+c=json.load(open(sys.argv[3])); control=c['Base']+'/control'
+digest=lambda b:'sha256:'+hashlib.sha256(b).hexdigest()
+encode=lambda v:json.dumps(v,separators=(',',':')).encode()
+r=dict(Schema='private-connected-source-ready.v2',Invocation=c['Invocation'],ConfigPin=c['Pin'],SourceTemplatePin=digest(b'template'),ControlReceipt=digest(b'controlled-receipt'),LaunchDeadline=c['LaunchDeadline'])
+raw=encode(r)+b'\\n'
+fd=int(sys.argv[5]);os.write(fd,raw);os.close(fd)
+end=time.monotonic()+5
+while not os.path.exists(control+'/start.json') and time.monotonic()<end:time.sleep(.001)
+assert os.path.exists(control+'/start.json'),'MANUAL_START_GAP'
+p=open(control+'/parent-ready.json','rb').read();s=open(control+'/start.json','rb').read()
+pv=json.loads(p);sv=json.loads(s)
+assert pv==dict(Schema='private-parent-start-ready.v2',Invocation=c['Invocation'],DriverReadySHA256=digest(raw),ProducerSession=c['ProducerSession'],ReviewerSession=c['ReviewerSession'],ProducerWaiterActive=True)
+assert sv==dict(Operation='START_CONFIRM',Invocation=c['Invocation'],ProducerWaiterActive=True,DriverReadySHA256=digest(raw),ParentReadySHA256=digest(p),SourceTemplatePin=r['SourceTemplatePin'])
+print('CONTROLLED_TYPED_JOIN_PASS')
+mailbox=c['Source']['Host']['Mailbox']['Directory']
+while not os.path.exists(mailbox+'/response-000001.json') and time.monotonic()<end:time.sleep(.001)
+assert os.path.exists(mailbox+'/response-000001.json'),'CONTROLLED_RESPONSE_REQUIRED'
+''')
+        tool.chmod(0o700)
+        bridge = Path(h.__file__).parents[1] / '.pi/skills/private-host-streaming-application/scripts/activation-bridge.py'
+        command = [h.sys.executable, str(bridge), 'source', str(tool), str(config),
+                   h.digest(config.read_bytes()), str(capability), h.digest(capability.read_bytes())]
+        with h.subprocess.Popen(command, stdout=h.subprocess.PIPE, stderr=h.subprocess.PIPE) as owner:
+            try:
+                entry = owner.stdout.readline()
+                self.assertIn(b'SOURCE_HOST_ENTRY', entry, 'CONNECTED_START_WITHOUT_MANUAL_PARENT')
+                if cancel:
+                    owner.terminate()
+                    owner.communicate(timeout=8)
+                    self.assertNotEqual(owner.returncode, 0, 'CONNECTED_CANCEL_JOINED_NO_START')
+                    receipt = h.json.loads((f['control'] / 'source-completion.json').read_bytes())
+                    self.assertTrue(receipt['Joined'], 'CONNECTED_CANCEL_JOINED_NO_START')
+                    self.assertEqual(receipt['GoConsumption'], 'UNOBSERVED')
+                    self.assertEqual(receipt['StartPublication'], 'NOT_ATTEMPTED')
+                    self.assertFalse((f['control'] / 'start.json').exists(), 'CONNECTED_CANCEL_JOINED_NO_START')
+                    print('CONNECTED_CANCEL_JOINED_NO_START: A-pass actual signal, owned child joined, no START')
+                    return
+                handler = h.subprocess.run([h.sys.executable, h.__file__, 'connected-wait',
+                    '--control', str(f['control']), '--capability', str(capability),
+                    '--capability-sha256', h.digest(capability.read_bytes())], capture_output=True, timeout=8)
+                self.assertEqual(handler.returncode, 0, handler.stderr)
+                result = h.json.loads(handler.stdout)
+                self.assertEqual(result, dict(Status='REQUEST', Binding=f['frame']['Binding']), 'CONNECTED_SOURCE_BINDING_ONLY')
+                self.assertNotIn(b'SOURCE_ONLY controlled fixture', handler.stdout)
+                payload = f['base'] / 'canned-response.json'
+                self.put(payload, dict(Controlled=True))
+                h.respond(str(f['mailbox']), 1, str(payload))
+                out, err = owner.communicate(timeout=8)
+                self.assertEqual(owner.returncode, 0, (out, err))
+                self.assertIn(b'CONTROLLED_TYPED_JOIN_PASS', (f['control'] / 'source-output.log').read_bytes())
+                self.assertTrue((f['control'] / 'parent-ready.json').exists())
+                self.assertTrue((f['control'] / 'start.json').exists())
+                print('CONNECTED_START_WITHOUT_MANUAL_PARENT: A-pass; CONNECTED_SOURCE_BINDING_ONLY: A-pass')
+            finally:
+                if owner.poll() is None:
+                    owner.terminate()
+                    owner.wait(timeout=8)
+
+    def test_connected_source_deadline_not_startup_deadline(self):
+        f = self.fixture()
+        from datetime import datetime, timezone
+        launch = datetime.now(timezone.utc)
+        bridge = SimpleNamespace(source_deadline=lambda v: datetime.fromisoformat(v.replace('Z', '+00:00')).timestamp())
+        cap = dict(LaunchDeadline=launch.isoformat(), SourceTotalMS=15000,
+                   Mailbox=str(f['mailbox']), Invocation=f['prep']['Invocation'], RoleID='canned-source-role')
+        with patch.object(h.time, 'time', return_value=launch.timestamp() + 1):
+            self.assertEqual(h.wait_connected_source(str(f['control']), cap, bridge),
+                             dict(Status='REQUEST', Binding=f['frame']['Binding']), 'CONNECTED_ORIGINAL_SOURCE_WAIT')
+        with patch.object(h.time, 'time', return_value=launch.timestamp() + 15):
+            self.assertEqual(h.wait_connected_source(str(f['control']), cap, bridge),
+                             dict(Status='DEADLINE'), 'CONNECTED_ORIGINAL_SOURCE_WAIT')
+        print('CONNECTED_ORIGINAL_SOURCE_WAIT: A-pass after startup deadline; fixed total equality refuses')
+
+    def test_connected_start_admission_guards(self):
+        bridge_path = Path(h.__file__).parents[1] / '.pi/skills/private-host-streaming-application/scripts/activation-bridge.py'
+        spec = importlib.util.spec_from_file_location('connected_bridge_test', bridge_path)
+        bridge = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bridge)
+        from datetime import datetime, timezone, timedelta
+        for mode in ('valid', 'wrong-invocation', 'wrong-session', 'stale-epoch', 'wrong-capability',
+                     'unready', 'numeric-ready', 'expired', 'equal', 'cancel', 'replay', 'late-connected-ready'):
+            with self.subTest(mode=mode):
+                f = self.fixture()
+                deadline = datetime.now(timezone.utc) + timedelta(seconds=30)
+                cap = dict(Invocation='controlled', ConfigPin=h.digest(b'config'),
+                           ProducerSession='producer', ReviewerSession='reviewer', Nonce='a' * 64,
+                           LaunchDeadline=deadline.isoformat(), ApproveParentStart=True)
+                c = dict(Invocation=cap['Invocation'], ProducerSession='producer', ReviewerSession='reviewer')
+                ready = dict(Schema='private-connected-source-ready.v2', Invocation=cap['Invocation'],
+                             ConfigPin=cap['ConfigPin'], SourceTemplatePin=h.digest(b'template'),
+                             ControlReceipt=h.digest(b'actual-epoch'), LaunchDeadline=cap['LaunchDeadline'])
+                pin = h.digest(bridge.source_encoded(cap))
+                raw = bridge.source_encoded(ready) + b'\n'
+                ack = dict(Schema='private-source-connected-ack.v1', CapabilitySHA256=pin,
+                           DriverReadySHA256=h.digest(raw), Nonce=cap['Nonce'], ProducerWaiterActive=True)
+                if mode == 'wrong-invocation':
+                    ready['Invocation'] = 'foreign'
+                    raw = bridge.source_encoded(ready) + b'\n'
+                    ack['DriverReadySHA256'] = h.digest(raw)
+                elif mode == 'wrong-session':
+                    # The capability digest is the complete identity envelope,
+                    # including session labels. Reusing an ack after changing a
+                    # session must fail even when all visible marker files exist.
+                    cap['ProducerSession'] = 'foreign'
+                    pin = h.digest(bridge.source_encoded(cap))
+                elif mode == 'stale-epoch':
+                    ack['DriverReadySHA256'] = h.digest(b'old connected ready')
+                elif mode == 'wrong-capability':
+                    ack['CapabilitySHA256'] = h.digest(b'other approval')
+                elif mode == 'unready':
+                    ack['ProducerWaiterActive'] = False
+                elif mode == 'numeric-ready':
+                    ack['ProducerWaiterActive'] = 1
+                elif mode == 'cancel':
+                    self.put(f['control'] / 'stop.json', dict(StopRequested=True))
+                elif mode == 'replay':
+                    self.put(f['control'] / 'start.json', dict(Immutable='old start'))
+                before = (f['control'] / 'start.json').read_bytes() if mode == 'replay' else None
+                now = deadline.timestamp() - 1
+                if mode in ('expired', 'late-connected-ready'):
+                    now += 2
+                elif mode == 'equal':
+                    now += 1
+                fd = bridge.private_root(str(f['control']))
+                try:
+                    with patch.object(bridge.time, 'time', return_value=now):
+                        call = lambda: bridge.source_parent_join(fd, c, cap, pin, raw, bridge.source_encoded(ack))
+                        if mode == 'valid':
+                            call()
+                            self.assertTrue((f['control'] / 'start.json').exists(), 'CONNECTED_ADMISSION')
+                        else:
+                            with self.assertRaises((ValueError, FileExistsError), msg='CONNECTED_ADMISSION'):
+                                call()
+                            if mode == 'replay':
+                                self.assertEqual((f['control'] / 'start.json').read_bytes(), before)
+                            else:
+                                self.assertFalse((f['control'] / 'start.json').exists(), 'CONNECTED_ADMISSION')
+                    print('CONNECTED_ADMISSION: A-pass', mode)
+                finally:
+                    os.close(fd)
+
     def test_source_export_respond_exact(self):
         f = self.fixture()
         fd = h.directory(str(f['mailbox']))
