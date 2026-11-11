@@ -120,9 +120,29 @@ func privateSourcePrepareDescribeOwned(ctx context.Context, c privateSourcePrepa
 	return staged, nil
 }
 
+// Eight fixed observation slots, containing ONLY closed code strings. With the
+// existing stage/reason/six cleanup slots this is exactly sixteen slots, one
+// closed node and <=256 fixed projection/format steps. No timing or raw cause.
+func privatePrepareAppendLeaseReport(report []byte, v inv.PrivatePrepareLeaseObservationV1) []byte {
+	for _, field := range [8]struct{ name, value string }{
+		{" lease_boundary=", v.Boundary.String()},
+		{" lease_result_observed=", v.ResultObserved.String()},
+		{" inner_result=", v.InnerResult.String()},
+		{" callback_sample=", v.CallbackSample.String()},
+		{" callback_entered=", v.CallbackEntered.String()},
+		{" capture_result=", v.CaptureResult.String()},
+		{" issuance_result=", v.IssuanceResult.String()},
+		{" calls_result=", v.CallsResult.String()},
+	} {
+		report = append(report, field.name...)
+		report = append(report, field.value...)
+	}
+	return report
+}
+
 // Explicit invocation-local CALLER-funded failure-report allowance, separately
 // approved from native job quotes. At most 4096 bytes, ONE Write, no retry;
-// fixed projection/formatting uses one closed node, six slots, <256 fixed steps.
+// fixed projection/formatting uses one closed node, sixteen slots, <=256 fixed steps.
 // No claim that an arbitrary external writer finishes by the source deadline.
 func privatePrepareFailureReport(stderr io.Writer, class string, err error) int {
 	const byteAllowance = 4096
@@ -144,6 +164,7 @@ func privatePrepareFailureReport(stderr io.Writer, class string, err error) int 
 		report = append(report, name...)
 		report = append(report, codes.Cleanup[i].String()...)
 	}
+	report = privatePrepareAppendLeaseReport(report, codes.Lease)
 	report = append(report, '\n')
 	if len(report) > byteAllowance || writesRemaining == 0 {
 		return 1

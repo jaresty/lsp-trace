@@ -2337,6 +2337,19 @@ func (m *Manager) SessionLanguageID(sessionID string, generation uint64) (string
 	return r.languageID, true
 }
 
+// WithReadySessionLeaseObserved performs the SAME single lease operation as
+// WithReadySessionLease and returns detached wrapper-decision DATA only. The
+// existing callback has exactly its original authority; no observer is invoked.
+func (m *Manager) WithReadySessionLeaseObserved(ctx context.Context, req SessionLeaseRequest, callback func(context.Context) error) (error, PrivateLeaseBoundaryObservation) {
+	if w := privateProviderWindowFrom(ctx); w != nil && !privateProviderWindowInner(ctx) {
+		if !w.exactOwner(m, req.SessionID, req.Generation) {
+			return errSessionLeaseConflict, PrivateLeaseBoundaryObservation{boundary: PrivateLeaseBoundaryOwnerRejected}
+		}
+		return privateProviderWindowLeaseRun(w, ctx, func(inner context.Context) error { return m.WithReadySessionLease(inner, req, callback) })
+	}
+	return m.WithReadySessionLease(ctx, req, callback), PrivateLeaseBoundaryObservation{boundary: PrivateLeaseBoundaryNotApplicable}
+}
+
 func (m *Manager) WithReadySessionLease(ctx context.Context, req SessionLeaseRequest, callback func(context.Context) error) error {
 	if w := privateProviderWindowFrom(ctx); w != nil && !privateProviderWindowInner(ctx) {
 		if !w.exactOwner(m, req.SessionID, req.Generation) {

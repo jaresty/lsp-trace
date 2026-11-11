@@ -174,13 +174,69 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 	return PrivateMixedInputOperationV2{&privateMixedInputOperationV2{owner: o, request: q, envelope: envelope, head: h.Identity, attempt: attempt, retainedContext: ctx}}, nil
 }
 
+// Invocation-local callback checkpoints, never a cross-package observer sink.
+// Each checkpoint holds this mutex ONLY for a fixed value assignment, not work.
+// Separate caller diagnostic allowance: <=4 callback locks +1 caller lock,
+// <=16 fixed record updates including the native decision, four checkpoints,
+// frozen caller value and failure attachment; <=256 fixed local steps. These
+// separately caller-funded diagnostic limits are NOT native credit.
+type privatePrepareCallbackObservationV1 struct {
+	mu    sync.Mutex
+	value PrivatePrepareLeaseObservationV1
+}
+
+func (r *privatePrepareCallbackObservationV1) enter() {
+	r.mu.Lock()
+	r.value.CallbackEntered = PrivatePrepareObservedYesV1
+	r.mu.Unlock()
+}
+func (r *privatePrepareCallbackObservationV1) captured(err error) {
+	result := privatePrepareCheckpointV1(err)
+	r.mu.Lock()
+	r.value.CaptureResult = result
+	r.mu.Unlock()
+}
+func (r *privatePrepareCallbackObservationV1) called(err error) {
+	result := privatePrepareCheckpointV1(err)
+	r.mu.Lock()
+	r.value.CallsResult = result
+	r.mu.Unlock()
+}
+func (r *privatePrepareCallbackObservationV1) issued(err error) {
+	result := privatePrepareCheckpointV1(err)
+	r.mu.Lock()
+	r.value.IssuanceResult = result
+	r.mu.Unlock()
+}
+func (r *privatePrepareCallbackObservationV1) freeze(native sessionruntime.PrivateLeaseBoundaryObservation) PrivatePrepareLeaseObservationV1 {
+	// FIRST caller-side lock after the observed lease returns. Worker progress
+	// AFTER native wrapper return but BEFORE this acquisition MAY be included.
+	r.mu.Lock()
+	copy := r.value
+	r.mu.Unlock()
+	copy.Boundary, copy.InnerResult = native.Boundary(), native.InnerResult()
+	if native.ReturnedResultObserved() {
+		copy.ResultObserved = PrivatePrepareObservedYesV1
+	} else {
+		copy.ResultObserved = PrivatePrepareObservedNoV1
+	}
+	copy.CallbackSample = PrivatePrepareCallbackCallerPostReturnLockV1
+	return copy
+}
+
 // ExecuteMixedInputV2 is a fixed internal continuation, not a caller executor.
 // The only successful return is AFTER original-lease return, window worker join,
 // and confirmed Observe. Failures retain PENDING/uncertain cumulative accounting.
 func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q PrivateMixedInputRequestV2) (_ PrivateManagedGroupingInput, failure error) {
 	stage := privatePrepareReplayV1
+	var leaseObservation PrivatePrepareLeaseObservationV1
+	leaseSampled := false
 	fail := func(err error) (PrivateManagedGroupingInput, error) {
-		return PrivateManagedGroupingInput{}, privatePrepareFailureAtV1(stage, ErrPrivateMixedInputV2, err)
+		failure := privatePrepareFailureAtV1(stage, ErrPrivateMixedInputV2, err)
+		if leaseSampled {
+			failure = privatePrepareFailureWithLeaseV1(failure, leaseObservation)
+		}
+		return PrivateManagedGroupingInput{}, failure
 	}
 	if op.state == nil || ctx == nil {
 		return fail(nil)
@@ -258,7 +314,13 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 	grouping.Operation = operation
 	defer operation.abortFixed()
 	var out PrivateManagedGroupingInput
-	err = q.Manager.WithReadySessionLease(window, session, func(base context.Context) error {
+	checkpoints := privatePrepareCallbackObservationV1{value: PrivatePrepareLeaseObservationV1{CallbackEntered: PrivatePrepareObservedNoV1}}
+	if !plan.Calls {
+		checkpoints.value.CallsResult = PrivatePrepareCheckpointNotApplicableV1
+	}
+	var leaseBoundary sessionruntime.PrivateLeaseBoundaryObservation
+	err, leaseBoundary = q.Manager.WithReadySessionLeaseObserved(window, session, func(base context.Context) error {
+		checkpoints.enter() // first callback statement, not a never-runs claim
 		req := sessionruntime.PrivateGroupingOwnedRequest{Session: session, URI: q.URI, OccurrenceID: q.OccurrenceID, Revision: q.Revision, Privacy: q.Privacy, Line: q.Line, Character: q.Character, References: plan.References, Definitions: plan.Definitions, Deadline: q.Start.Deadline}
 		var h sessionruntime.PrivateGroupingOwnedHandoff
 		var e error
@@ -267,12 +329,14 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		} else {
 			h, e = q.Manager.CapturePrivateGroupingQueryOwned(base, req)
 		}
+		checkpoints.captured(e)
 		if e != nil {
 			return e
 		}
 		if plan.Calls {
 			line, ch := q.Line, q.Character
 			native, e := constructNativeCallsPrivateV2(base, q.Manager, PrivateNativeCallsRequestV2{Session: session, Revision: q.Revision, Privacy: q.Privacy, Directional: sessionruntime.DirectionalCallHierarchyRequestPrivate{SessionID: session.SessionID, Generation: session.Generation, URI: q.URI, LanguageID: q.Start.LanguageID, Line: &line, Character: &ch, Deadline: q.Start.Deadline, MaxMessages: 4, MaxBytes: 65536}}, true)
+			checkpoints.called(e)
 			if e != nil {
 				return e
 			}
@@ -280,8 +344,11 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 			grouping.nativeProof = native.nativeEvidence
 		}
 		out, e = issuePrivateManagedGroupingInput(base, q.Manager, h, grouping)
+		checkpoints.issued(e)
 		return e
 	})
+	leaseObservation = checkpoints.freeze(leaseBoundary)
+	leaseSampled = true
 	if err != nil {
 		return fail(err)
 	}

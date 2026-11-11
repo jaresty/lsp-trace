@@ -89,12 +89,135 @@ func (r PrivatePrepareReasonV1) String() string {
 	}
 }
 
+// Closed observation codes are DATA. Unknown constructed enum values normalize
+// to UNKNOWN, never authority. UNOBSERVED does not mean a failed or stalled step.
+type PrivatePrepareObservedV1 uint8
+
+const (
+	PrivatePrepareObservedUnknownV1 PrivatePrepareObservedV1 = iota
+	PrivatePrepareObservedYesV1
+	PrivatePrepareObservedNoV1
+)
+
+func (v PrivatePrepareObservedV1) String() string {
+	switch v {
+	case PrivatePrepareObservedYesV1:
+		return "YES"
+	case PrivatePrepareObservedNoV1:
+		return "NO"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+type PrivatePrepareCallbackSampleV1 uint8
+
+const (
+	PrivatePrepareCallbackUnobservedV1 PrivatePrepareCallbackSampleV1 = iota
+	PrivatePrepareCallbackCallerPostReturnLockV1
+)
+
+func (v PrivatePrepareCallbackSampleV1) String() string {
+	switch v {
+	case PrivatePrepareCallbackUnobservedV1:
+		return "UNOBSERVED"
+	case PrivatePrepareCallbackCallerPostReturnLockV1:
+		return "CALLER_POST_RETURN_LOCK"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+type PrivatePrepareCheckpointV1 uint8
+
+const (
+	PrivatePrepareCheckpointUnobservedV1 PrivatePrepareCheckpointV1 = iota
+	PrivatePrepareCheckpointOKV1
+	PrivatePrepareCheckpointUnknownV1
+	PrivatePrepareCheckpointDeadlineV1
+	PrivatePrepareCheckpointCanceledV1
+	PrivatePrepareCheckpointUnjoinedV1
+	PrivatePrepareCheckpointUnavailableV1
+	PrivatePrepareCheckpointEmptyV1
+	PrivatePrepareCheckpointRefusedV1
+	PrivatePrepareCheckpointNotApplicableV1
+)
+
+func (v PrivatePrepareCheckpointV1) String() string {
+	switch v {
+	case PrivatePrepareCheckpointUnobservedV1:
+		return "UNOBSERVED"
+	case PrivatePrepareCheckpointOKV1:
+		return "OK"
+	case PrivatePrepareCheckpointDeadlineV1:
+		return "DEADLINE"
+	case PrivatePrepareCheckpointCanceledV1:
+		return "CANCELED"
+	case PrivatePrepareCheckpointUnjoinedV1:
+		return "KNOWN_UNJOINED"
+	case PrivatePrepareCheckpointUnavailableV1:
+		return "UNAVAILABLE"
+	case PrivatePrepareCheckpointEmptyV1:
+		return "EMPTY"
+	case PrivatePrepareCheckpointRefusedV1:
+		return "REFUSED"
+	case PrivatePrepareCheckpointNotApplicableV1:
+		return "NOT_APPLICABLE"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func privatePrepareCheckpointV1(err error) PrivatePrepareCheckpointV1 {
+	switch err {
+	case nil:
+		return PrivatePrepareCheckpointOKV1
+	case context.DeadlineExceeded:
+		return PrivatePrepareCheckpointDeadlineV1
+	case context.Canceled:
+		return PrivatePrepareCheckpointCanceledV1
+	case sessionruntime.ErrPrivateProviderWindowUnjoined:
+		return PrivatePrepareCheckpointUnjoinedV1
+	case ErrPrivateMixedInputUnavailableV2:
+		return PrivatePrepareCheckpointUnavailableV1
+	case ErrPrivateMixedInputEmptyV2:
+		return PrivatePrepareCheckpointEmptyV1
+	case ErrPrivateMixedInputV2, ErrPreparedDescribeV1, ErrPrivateManagedInputOperationV2:
+		return PrivatePrepareCheckpointRefusedV1
+	default:
+		return PrivatePrepareCheckpointUnknownV1
+	}
+}
+
+// Eight new fixed scalar slots plus stage/reason/six cleanup slots = SIXTEEN.
+// Native sampling is at wrapper decision; callback sampling is ONLY at caller's
+// first post-return mutex acquisition and can include intervening worker progress.
+type PrivatePrepareLeaseObservationV1 struct {
+	Boundary                                   sessionruntime.PrivateLeaseBoundary
+	ResultObserved                             PrivatePrepareObservedV1
+	InnerResult                                sessionruntime.PrivateLeaseResult
+	CallbackSample                             PrivatePrepareCallbackSampleV1
+	CallbackEntered                            PrivatePrepareObservedV1
+	CaptureResult, IssuanceResult, CallsResult PrivatePrepareCheckpointV1
+}
+
+func privatePrepareFailureWithLeaseV1(err error, observation PrivatePrepareLeaseObservationV1) error {
+	p, ok := err.(*privatePrepareFailureV1)
+	if !ok || p == nil || p.codes.Lease != (PrivatePrepareLeaseObservationV1{}) {
+		return err // preserve an already scoped observation, stage and reason
+	}
+	copy := *p
+	copy.codes.Lease = observation
+	return &copy
+}
+
 // Six fixed cleanup slots; no raw error/path/source/custody data is exported.
 // The value is detached; modifying it cannot mutate a retained error.
 type PrivatePrepareFailureCodesV1 struct {
 	Stage   PrivatePrepareStageV1
 	Reason  PrivatePrepareReasonV1
 	Cleanup [6]PrivatePrepareReasonV1 // deferred Finish, Shutdown, data, root, canceled, deadline
+	Lease   PrivatePrepareLeaseObservationV1
 }
 
 // Immutable after construction. broad is always a package-owned static sentinel.
@@ -151,7 +274,7 @@ func privatePrepareFailureAtV1(stage PrivatePrepareStageV1, broad, cause error) 
 }
 
 // ProjectPrivatePrepareFailureV1 inspects at most ONE closed diagnostic node and
-// six fixed slots (well below 32 nodes/16 slots/256 fixed steps). It does not
+// sixteen fixed scalar slots (within 32 nodes/16 slots/256 fixed steps). It does not
 // recursively walk errors.Join, custom wrappers or arbitrary error graphs.
 func ProjectPrivatePrepareFailureV1(err error) PrivatePrepareFailureCodesV1 {
 	if err == nil {

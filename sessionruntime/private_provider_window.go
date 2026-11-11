@@ -302,6 +302,143 @@ func (w *privateProviderWindow) delivered(n int, read bool) {
 	}
 }
 
+// PrivateLeaseBoundary and PrivateLeaseResult are closed diagnostic DATA, not
+// capabilities. Constructed/unknown enum values confer no authority.
+type PrivateLeaseBoundary uint8
+
+const (
+	PrivateLeaseBoundaryUnobserved PrivateLeaseBoundary = iota
+	PrivateLeaseBoundaryNotApplicable
+	PrivateLeaseBoundaryOwnerRejected
+	PrivateLeaseBoundaryAdmissionRejected
+	PrivateLeaseBoundaryContextDone
+	PrivateLeaseBoundaryResultReplaced
+	PrivateLeaseBoundaryResultReturned
+)
+
+func (b PrivateLeaseBoundary) String() string {
+	switch b {
+	case PrivateLeaseBoundaryUnobserved:
+		return "UNOBSERVED"
+	case PrivateLeaseBoundaryNotApplicable:
+		return "NOT_APPLICABLE"
+	case PrivateLeaseBoundaryOwnerRejected:
+		return "OWNER_REJECTED"
+	case PrivateLeaseBoundaryAdmissionRejected:
+		return "ADMISSION_REJECTED"
+	case PrivateLeaseBoundaryContextDone:
+		return "CONTEXT_DONE"
+	case PrivateLeaseBoundaryResultReplaced:
+		return "RESULT_REPLACED"
+	case PrivateLeaseBoundaryResultReturned:
+		return "RESULT_RETURNED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+type PrivateLeaseResult uint8
+
+const (
+	PrivateLeaseResultUnobserved PrivateLeaseResult = iota
+	PrivateLeaseResultOK
+	PrivateLeaseResultUnjoined
+	PrivateLeaseResultConflict
+	PrivateLeaseResultCanceled
+	PrivateLeaseResultDeadline
+	PrivateLeaseResultUnknown
+)
+
+func (r PrivateLeaseResult) String() string {
+	switch r {
+	case PrivateLeaseResultUnobserved:
+		return "UNOBSERVED"
+	case PrivateLeaseResultOK:
+		return "OK"
+	case PrivateLeaseResultUnjoined:
+		return "KNOWN_UNJOINED"
+	case PrivateLeaseResultConflict:
+		return "KNOWN_CONFLICT"
+	case PrivateLeaseResultCanceled:
+		return "CANCELED"
+	case PrivateLeaseResultDeadline:
+		return "DEADLINE"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func privateLeaseResult(err error) PrivateLeaseResult {
+	// Direct fixed sentinels only: never call an opaque method or walk a graph.
+	switch err {
+	case nil:
+		return PrivateLeaseResultOK
+	case ErrPrivateProviderWindowUnjoined:
+		return PrivateLeaseResultUnjoined
+	case errSessionLeaseConflict:
+		return PrivateLeaseResultConflict
+	case context.Canceled:
+		return PrivateLeaseResultCanceled
+	case context.DeadlineExceeded:
+		return PrivateLeaseResultDeadline
+	default:
+		return PrivateLeaseResultUnknown
+	}
+}
+
+// PrivateLeaseBoundaryObservation freezes only the wrapper's return decision.
+// It does NOT sample callback progress at the caller's later mutex acquisition.
+// No retained manager/window state or worker can mutate this by-value record.
+type PrivateLeaseBoundaryObservation struct {
+	boundary PrivateLeaseBoundary
+	observed bool
+	inner    PrivateLeaseResult
+}
+
+func (o PrivateLeaseBoundaryObservation) Boundary() PrivateLeaseBoundary  { return o.boundary }
+func (o PrivateLeaseBoundaryObservation) ReturnedResultObserved() bool    { return o.observed }
+func (o PrivateLeaseBoundaryObservation) InnerResult() PrivateLeaseResult { return o.inner }
+
+// Error-only specialization of privateProviderWindowRun. Admission, worker
+// accounting/notify-before-delivery, cancellation and final liveness are identical.
+// Only <-done observes an inner result. active==0 is never receipt evidence.
+func privateProviderWindowLeaseRun(w *privateProviderWindow, ctx context.Context, work func(context.Context) error) (error, PrivateLeaseBoundaryObservation) {
+	w.mu.Lock()
+	if !w.liveLocked() || w.active != 0 || w.finishing {
+		w.mu.Unlock()
+		return ErrPrivateProviderWindowUnjoined, PrivateLeaseBoundaryObservation{boundary: PrivateLeaseBoundaryAdmissionRejected}
+	}
+	w.active++
+	w.mu.Unlock()
+	done := make(chan error, 1)
+	go func() {
+		result := work(context.WithValue(ctx, privateProviderWindowInnerKey{}, true))
+		w.mu.Lock()
+		w.active--
+		w.notifyLocked()
+		w.mu.Unlock()
+		done <- result
+	}()
+	select {
+	case <-ctx.Done():
+		w.mu.Lock()
+		w.expired = true
+		w.mu.Unlock()
+		w.cancel()
+		return ErrPrivateProviderWindowUnjoined, PrivateLeaseBoundaryObservation{boundary: PrivateLeaseBoundaryContextDone}
+	case result := <-done:
+		w.mu.Lock()
+		live := w.liveLocked()
+		w.mu.Unlock()
+		observation := PrivateLeaseBoundaryObservation{boundary: PrivateLeaseBoundaryResultReturned, observed: true, inner: privateLeaseResult(result)}
+		if !live {
+			observation.boundary = PrivateLeaseBoundaryResultReplaced
+			return ErrPrivateProviderWindowUnjoined, observation
+		}
+		return result, observation
+	}
+}
+
 // The callback's actual work remains tracked after the caller's select returns.
 // No protocol, session lease or window worker is released by cancellation.
 func privateProviderWindowRun[T any](w *privateProviderWindow, ctx context.Context, refused T, work func(context.Context) T) T {

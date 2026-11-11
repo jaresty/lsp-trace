@@ -9,6 +9,7 @@ import (
 	"errors"
 	inv "lsp-trace/internal/inventorysuccessor"
 	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/sessionruntime"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -55,9 +56,36 @@ func privatePrepareAssertFixedReport(t *testing.T, raw []byte) {
 	for _, name := range []string{" deferred_finish=", " shutdown=", " data_close=", " root_close=", " canceled=", " deadline="} {
 		pattern += name + reason
 	}
+	pattern += " lease_boundary=(?:UNOBSERVED|NOT_APPLICABLE|OWNER_REJECTED|ADMISSION_REJECTED|CONTEXT_DONE|RESULT_REPLACED|RESULT_RETURNED|UNKNOWN)"
+	pattern += " lease_result_observed=(?:YES|NO|UNKNOWN) inner_result=(?:UNOBSERVED|OK|KNOWN_UNJOINED|KNOWN_CONFLICT|CANCELED|DEADLINE|UNKNOWN)"
+	pattern += " callback_sample=(?:UNOBSERVED|CALLER_POST_RETURN_LOCK|UNKNOWN) callback_entered=(?:YES|NO|UNKNOWN)"
+	checkpoint := "(?:UNOBSERVED|OK|UNKNOWN|DEADLINE|CANCELED|KNOWN_UNJOINED|UNAVAILABLE|EMPTY|REFUSED|NOT_APPLICABLE)"
+	for _, name := range []string{" capture_result=", " issuance_result=", " calls_result="} {
+		pattern += name + checkpoint
+	}
 	if !regexp.MustCompile(pattern + "\\n$").Match(raw) {
 		t.Fatal("ASSERT_DIAG_REPORT_PRIVACY: FAIL non-allowlisted report")
 	}
+}
+
+func TestPrivateSourcePrepareDescribeLeaseUnknownEnums(t *testing.T) {
+	v := inv.PrivatePrepareLeaseObservationV1{Boundary: sessionruntime.PrivateLeaseBoundary(255), ResultObserved: inv.PrivatePrepareObservedV1(255), InnerResult: sessionruntime.PrivateLeaseResult(255), CallbackSample: inv.PrivatePrepareCallbackSampleV1(255), CallbackEntered: inv.PrivatePrepareObservedV1(255), CaptureResult: inv.PrivatePrepareCheckpointV1(255), IssuanceResult: inv.PrivatePrepareCheckpointV1(255), CallsResult: inv.PrivatePrepareCheckpointV1(255)}
+	raw := string(privatePrepareAppendLeaseReport(nil, v))
+	if strings.Count(raw, "=UNKNOWN") != 8 || strings.Contains(raw, "255") || len(raw) > 4096 {
+		t.Fatal("ASSERT_LEASE_UNKNOWN_ENUM_PRIVACY: FAIL", raw)
+	}
+	t.Log("ASSERT_LEASE_UNKNOWN_ENUM_PRIVACY: PASS")
+}
+
+func TestPrivateSourcePrepareDescribeLeaseObservationFields(t *testing.T) {
+	t.Log("PROCEDURE: existing terminal formatter with no scoped lease sample; all attribution remains explicitly unobserved")
+	writer := &privatePrepareDiagnosticWriter{}
+	privatePrepareFailureReport(writer, "CONFIG_REFUSED", privatePrepareHostileError{})
+	want := " lease_boundary=UNOBSERVED lease_result_observed=UNKNOWN inner_result=UNOBSERVED callback_sample=UNOBSERVED callback_entered=UNKNOWN capture_result=UNOBSERVED issuance_result=UNOBSERVED calls_result=UNOBSERVED\n"
+	if !strings.HasSuffix(writer.String(), want) {
+		t.Fatal("ASSERT_LEASE_FIELDS_DEFAULT: FAIL", writer.String())
+	}
+	t.Log("ASSERT_LEASE_FIELDS_DEFAULT: PASS")
 }
 
 func TestPrivateSourcePrepareDescribeDiagnosticBudget(t *testing.T) {
