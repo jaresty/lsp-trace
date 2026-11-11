@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"reflect"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -97,9 +98,9 @@ func (m *Manager) PrivateProviderWindowEnvelope(start StartRequest, plan Private
 	default:
 		return PrivateProviderWindowEnvelope{}, ErrPrivateProviderWindowUnavailable
 	}
-	s.start.Process.Args = append([]string(nil), start.Process.Args...)
-	s.start.Process.Env = append([]string(nil), start.Process.Env...)
-	s.start.RelationProviders = append([]string(nil), start.RelationProviders...)
+	s.start.Process.Args = slices.Clone(start.Process.Args)
+	s.start.Process.Env = slices.Clone(start.Process.Env)
+	s.start.RelationProviders = slices.Clone(start.RelationProviders)
 	s.wire = m.wire
 	defaults := lspwire.DefaultLimits()
 	if s.wire.MaxHeaderBytes <= 0 {

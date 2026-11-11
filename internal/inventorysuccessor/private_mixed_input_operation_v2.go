@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -157,10 +158,10 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 	}
 	o.head = h.Identity
 	// Freeze mutable request arrays only after confirmed funding.
-	q.Kinds = append([]programcadmission.RelationKind(nil), q.Kinds...)
-	q.Start.Process.Args = append([]string(nil), q.Start.Process.Args...)
-	q.Start.Process.Env = append([]string(nil), q.Start.Process.Env...)
-	q.Start.RelationProviders = append([]string(nil), q.Start.RelationProviders...)
+	q.Kinds = slices.Clone(q.Kinds)
+	q.Start.Process.Args = slices.Clone(q.Start.Process.Args)
+	q.Start.Process.Env = slices.Clone(q.Start.Process.Env)
+	q.Start.RelationProviders = slices.Clone(q.Start.RelationProviders)
 	return PrivateMixedInputOperationV2{&privateMixedInputOperationV2{owner: o, request: q, envelope: envelope, head: h.Identity, attempt: attempt, retainedContext: ctx}}, nil
 }
 

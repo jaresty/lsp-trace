@@ -81,6 +81,32 @@ func prepareCLIFixture(t *testing.T) (privateSourcePrepareDescribeConfig, *publi
 	return c, root, owner, fixture
 }
 
+// The JSON array is the actual CLI representation that formerly collapsed at
+// both freeze boundaries. Only the fixed test fixture supplies a backend.
+func TestPrivateSourcePrepareDescribeSliceCLIJSON(t *testing.T) {
+	t.Log("PROCEDURE: TestPrivateSourcePrepareDescribeSliceCLIJSON; strict CLI JSON decode ProcessArgs:[] -> fixed native Prepare -> actual Commit and cleanup")
+	c, root, owner, fixture := prepareCLIFixture(t)
+	c.ProcessArgs = []string{}
+	c.ProcessPath = "/controlled-fixture-NEVER-EXECUTED"
+	c.Profile.Workspace = c.Workspace
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodePrivateSourcePrepareDescribeConfig(raw)
+	if err != nil || !bytes.Contains(raw, []byte(`"ProcessArgs":[]`)) || decoded.ProcessArgs == nil || len(decoded.ProcessArgs) != 0 {
+		t.Fatal("SETUP_SLICE_CLI_JSON", err)
+	}
+	start := fixture.StartRequest(c.Persist.Deadline)
+	start.Process.Args = decoded.ProcessArgs // exact production transfer, no normalization
+	staged, err := privateSourcePrepareDescribeOwned(context.Background(), decoded, root, owner, fixture.Manager(), start, privatePrepareDescribeCloseReports{})
+	if err != nil || len(staged.Packet) == 0 || staged.Continuation.Manifest == "" || fixture.Manager().Census().Workers != 0 {
+		t.Error("ASSERT_CLI_SLICE_PIPELINE: FAIL", err)
+	} else {
+		t.Log("ASSERT_CLI_SLICE_PIPELINE: PASS")
+	}
+}
+
 func TestPrivateSourcePrepareDescribeCleanupGate(t *testing.T) {
 	for _, fault := range []string{"manager", "data", "root", "cancel", "deadline", "healthy"} {
 		t.Run(fault, func(t *testing.T) {
