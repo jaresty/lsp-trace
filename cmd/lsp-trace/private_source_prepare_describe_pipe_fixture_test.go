@@ -107,6 +107,80 @@ func TestPrivateSourcePrepareDescribeSliceCLIJSON(t *testing.T) {
 	}
 }
 
+// The original generic report compiles and reaches this assertion after real
+// fixed native Capture/R preparation/Commit and owned cleanup. No new API is
+// needed to observe the missing production attribution.
+func TestPrivateSourcePrepareDescribeFailurePacketStage(t *testing.T) {
+	t.Log("PROCEDURE: actual fixed native Prepare with paid packet size rejection -> owned cleanup -> terminal CLI report")
+	c, root, owner, fixture := prepareCLIFixture(t)
+	c.PacketLimit = 1
+	staged, err := privateSourcePrepareDescribeOwned(context.Background(), c, root, owner, fixture.Manager(), fixture.StartRequest(c.Persist.Deadline), privatePrepareDescribeCloseReports{})
+	if err == nil || len(staged.Packet) != 0 || fixture.Manager().Census().Workers != 0 || root.ValidatePrivate() == nil {
+		t.Fatal("SETUP_DIAGNOSTIC_PACKET_BOUNDARY_NOT_REACHED")
+	}
+	entries, readErr := os.ReadDir(filepath.Join(c.AccountingRoot, "inventory-successor/prepared-describe/private/v1/selected"))
+	selected := 0
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".json") {
+			selected++
+		}
+	}
+	if readErr != nil || selected != 1 || owner.PreparationHeadV1() == c.ExpectedHead {
+		t.Fatal("SETUP_DIAGNOSTIC_ACTUAL_COMMIT_NOT_REACHED")
+	}
+	var out, diag bytes.Buffer
+	code := finishPrivateSourcePrepareDescribe(context.Background(), c.Persist.Deadline, staged, err, &out, &diag)
+	if code != 1 || out.Len() != 0 || !strings.Contains(diag.String(), "stage=PACKET") {
+		t.Errorf("ASSERT_DIAGNOSTIC_REAL_PACKET_STAGE: FAIL code=%d report=%q", code, diag.String())
+	} else {
+		t.Log("ASSERT_DIAGNOSTIC_REAL_PACKET_STAGE: PASS")
+	}
+}
+
+func TestPrivateSourcePrepareDescribeDiagnosticMultipleCleanup(t *testing.T) {
+	t.Log("PROCEDURE: real paid packet failure plus three SIMULATED post-real-close reports; no OS-close-fault claim")
+	c, root, owner, fixture := prepareCLIFixture(t)
+	c.PacketLimit = 1
+	data, e := os.CreateTemp(t.TempDir(), "owned-data")
+	if e != nil {
+		t.Fatal(e)
+	}
+	closedReports := 0
+	reports := privatePrepareDescribeCloseReports{data: data}
+	reports.manager = func() error {
+		if fixture.Manager().Census().Workers != 0 {
+			t.Fatal("SETUP_REAL_SHUTDOWN_NOT_JOINED")
+		}
+		closedReports++
+		return privatePrepareHostileError{}
+	}
+	reports.dataReport = func() error {
+		if _, e := data.Stat(); e == nil {
+			t.Fatal("SETUP_REAL_DATA_NOT_CLOSED")
+		}
+		closedReports++
+		return privatePrepareHostileError{}
+	}
+	reports.root = func() error {
+		if root.ValidatePrivate() == nil {
+			t.Fatal("SETUP_REAL_ROOT_NOT_CLOSED")
+		}
+		closedReports++
+		return privatePrepareHostileError{}
+	}
+	staged, err := privateSourcePrepareDescribeOwned(context.Background(), c, root, owner, fixture.Manager(), fixture.StartRequest(c.Persist.Deadline), reports)
+	codes := inv.ProjectPrivatePrepareFailureV1(err)
+	if err == nil || closedReports != 3 || len(staged.Packet) != 0 || codes.Stage.String() != "PACKET" || codes.Cleanup[1].String() != "REFUSED" || codes.Cleanup[2].String() != "REFUSED" || codes.Cleanup[3].String() != "REFUSED" || !errors.Is(err, inv.ErrPreparedDescribeV1) {
+		t.Fatal("ASSERT_DIAG_REAL_PRIMARY_CLEANUP: FAIL")
+	}
+	var out bytes.Buffer
+	writer := &privatePrepareDiagnosticWriter{}
+	if finishPrivateSourcePrepareDescribe(context.Background(), c.Persist.Deadline, staged, err, &out, writer) != 1 || out.Len() != 0 || writer.calls != 1 || writer.attempted > 4096 || !strings.Contains(writer.String(), "stage=PACKET") || strings.Contains(writer.String(), "secret") {
+		t.Fatal("ASSERT_DIAG_REAL_PRIVACY_CAP: FAIL")
+	}
+	t.Log("ASSERT_DIAG_REAL_PRIMARY_CLEANUP: PASS; ASSERT_DIAG_REAL_PRIVACY_CAP: PASS")
+}
+
 func TestPrivateSourcePrepareDescribeCleanupGate(t *testing.T) {
 	for _, fault := range []string{"manager", "data", "root", "cancel", "deadline", "healthy"} {
 		t.Run(fault, func(t *testing.T) {

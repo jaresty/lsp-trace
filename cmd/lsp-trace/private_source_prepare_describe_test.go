@@ -6,15 +6,120 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	inv "lsp-trace/internal/inventorysuccessor"
 	"lsp-trace/internal/runtimeprofile"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 )
+
+type privatePrepareHostileError struct{}
+
+func (privatePrepareHostileError) Error() string { panic("raw secret Error invoked") }
+func (privatePrepareHostileError) Is(error) bool { panic("opaque Is invoked") }
+func (privatePrepareHostileError) Unwrap() error { panic("opaque Unwrap invoked") }
+
+type privatePrepareDiagnosticWriter struct {
+	bytes.Buffer
+	calls, attempted int
+	mode             string
+	before           func()
+}
+
+func (w *privatePrepareDiagnosticWriter) Write(p []byte) (int, error) {
+	w.calls++
+	w.attempted += len(p)
+	if w.before != nil {
+		w.before()
+	}
+	if w.mode == "short" {
+		return len(p) - 1, nil
+	}
+	if w.mode == "error" {
+		return 0, privatePrepareHostileError{}
+	}
+	return w.Buffer.Write(p)
+}
+
+func privatePrepareAssertFixedReport(t *testing.T, raw []byte) {
+	t.Helper()
+	reason := "(?:NONE|DEADLINE|CANCELED|REFUSED|UNAVAILABLE|EMPTY|UNJOINED|COMMIT_UNCERTAIN)"
+	stage := "(?:NONE|RESERVE|REPLAY|WINDOW|START|READINESS|CAPTURE|FINISH|OBSERVE|RPREP|PERSIST|PACKET)"
+	class := "(?:CONFIG_REFUSED|FRESH_ADMISSION_REFUSED|ROOT_REFUSED|CANONICAL_OWNER_REFUSED|PROFILE_REFUSED|STARTER_REFUSED|MANAGER_REFUSED|OUTPUT_FAILED_POSSIBLY_PARTIAL|REFUSED_OR_CONSUMED_PENDING_UNCERTAIN)"
+	pattern := "^private Prepare: " + class + "\\nprivate Prepare diagnostic\\.v1 stage=" + stage + " reason=" + reason
+	for _, name := range []string{" deferred_finish=", " shutdown=", " data_close=", " root_close=", " canceled=", " deadline="} {
+		pattern += name + reason
+	}
+	if !regexp.MustCompile(pattern + "\\n$").Match(raw) {
+		t.Fatal("ASSERT_DIAG_REPORT_PRIVACY: FAIL non-allowlisted report")
+	}
+}
+
+func TestPrivateSourcePrepareDescribeDiagnosticBudget(t *testing.T) {
+	t.Log("PROCEDURE: terminal failure reporting with hostile opaque cause and oversized graph; bounded one Write including short/error writers")
+	for _, mode := range []string{"healthy-writer", "short", "error", "huge-graph", "output-short"} {
+		t.Run(mode, func(t *testing.T) {
+			writer := &privatePrepareDiagnosticWriter{mode: mode}
+			var out bytes.Buffer
+			var cause error = privatePrepareHostileError{}
+			if mode == "huge-graph" {
+				nodes := make([]error, 4096)
+				for i := range nodes {
+					nodes[i] = privatePrepareHostileError{}
+				}
+				cause = errors.Join(nodes...)
+			}
+			code := 1
+			if mode == "output-short" {
+				code = finishPrivateSourcePrepareDescribe(context.Background(), time.Now().Add(time.Second), inv.StagedPrepareDescribeV1{Packet: []byte("already-paid-packet")}, nil, readyShortWriter{}, writer)
+			} else {
+				code = finishPrivateSourcePrepareDescribe(context.Background(), time.Now().Add(time.Second), inv.StagedPrepareDescribeV1{}, cause, &out, writer)
+			}
+			if code != 1 || writer.calls != 1 || writer.attempted > 4096 || writer.attempted == 0 || out.Len() != 0 {
+				t.Fatal("ASSERT_DIAG_REPORT_CAP: FAIL", mode, writer.calls, writer.attempted)
+			}
+			if mode != "short" && mode != "error" {
+				privatePrepareAssertFixedReport(t, writer.Bytes())
+				if !strings.Contains(writer.String(), "diagnostic.v1 stage=NONE") || strings.Contains(writer.String(), "secret") {
+					t.Fatal("ASSERT_DIAG_REPORT_PRIVACY: FAIL")
+				}
+			}
+		})
+	}
+	writer := &privatePrepareDiagnosticWriter{}
+	privatePrepareFailureReport(writer, strings.Repeat("raw-secret", 1<<17), errors.New(strings.Repeat("raw-secret", 1<<17)))
+	privatePrepareAssertFixedReport(t, writer.Bytes())
+	if writer.calls != 1 || writer.attempted > 4096 || strings.Contains(writer.String(), "raw-secret") {
+		t.Fatal("ASSERT_DIAG_REPORT_PRIVACY: FAIL large")
+	}
+	t.Log("ASSERT_DIAG_REPORT_CAP: PASS; ASSERT_DIAG_REPORT_PRIVACY: PASS")
+}
+
+func TestPrivateSourcePrepareDescribeDiagnosticEarlyCleanup(t *testing.T) {
+	file, e := os.CreateTemp(t.TempDir(), "owned-early-data")
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	writer := &privatePrepareDiagnosticWriter{}
+	writer.before = func() {
+		if _, e := file.Stat(); e == nil {
+			t.Fatal("ASSERT_DIAG_REPORT_AFTER_CLOSE: FAIL")
+		}
+	}
+	var out bytes.Buffer
+	code := executePrivateSourcePrepareDescribe(ctx, privateSourcePrepareDescribeConfig{}, &out, writer, file)
+	if code != 1 || writer.calls != 1 || out.Len() != 0 || !strings.Contains(writer.String(), "canceled=CANCELED") {
+		t.Fatal("ASSERT_DIAG_REPORT_AFTER_CLOSE: FAIL")
+	}
+	t.Log("ASSERT_DIAG_REPORT_AFTER_CLOSE: PASS")
+}
 
 func TestPrivateSourcePrepareDescribeConfig(t *testing.T) {
 	c := privateSourcePrepareDescribeConfig{Schema: "private-source-prepare-describe.v1", AccountingRoot: "/tmp/private-accounting", CanonicalJob: []byte("unissued declaration"), ExpectedHead: "sha256:" + strings.Repeat("1", 64), Profile: runtimeprofile.Selector{Workspace: "/tmp/source"}, Workspace: "/tmp/source", ProcessPath: "/not-executed", PacketLimit: 1 << 20}

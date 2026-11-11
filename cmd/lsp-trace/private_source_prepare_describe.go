@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	inv "lsp-trace/internal/inventorysuccessor"
 	"lsp-trace/internal/managedprocess"
@@ -95,8 +94,11 @@ func privateSourcePrepareDescribeOwned(ctx context.Context, c privateSourcePrepa
 	if reports.root != nil {
 		closeErr = errors.Join(closeErr, reports.root())
 	}
-	terminalErr := errors.Join(executionErr, shutdownErr, dataErr, closeErr, control.Err(), ctx.Err())
+	controlErr, callerErr := control.Err(), ctx.Err()
+	terminalErr := errors.Join(executionErr, shutdownErr, dataErr, closeErr, controlErr, callerErr)
+	var deadlineErr error
 	if !time.Now().Before(c.Persist.Deadline) {
+		deadlineErr = context.DeadlineExceeded
 		terminalErr = errors.Join(terminalErr, context.DeadlineExceeded)
 	}
 	cancel()
@@ -106,13 +108,53 @@ func privateSourcePrepareDescribeOwned(ctx context.Context, c privateSourcePrepa
 	// Commit may already have selected durable data. Cleanup failure consumes
 	// this invocation without undo, refund, repair Observe or packet availability.
 	if terminalErr != nil {
-		return inv.StagedPrepareDescribeV1{}, terminalErr
+		var canceledErr error
+		if controlErr == context.Canceled || callerErr == context.Canceled || ctx.Err() == context.Canceled {
+			canceledErr = context.Canceled
+		}
+		if controlErr == context.DeadlineExceeded || callerErr == context.DeadlineExceeded || !time.Now().Before(c.Persist.Deadline) {
+			deadlineErr = context.DeadlineExceeded
+		}
+		return inv.StagedPrepareDescribeV1{}, inv.PrivatePrepareTerminalFailureV1(executionErr, terminalErr, shutdownErr, dataErr, closeErr, canceledErr, deadlineErr)
 	}
 	return staged, nil
 }
 
+// Explicit invocation-local CALLER-funded failure-report allowance, separately
+// approved from native job quotes. At most 4096 bytes, ONE Write, no retry;
+// fixed projection/formatting uses one closed node, six slots, <256 fixed steps.
+// No claim that an arbitrary external writer finishes by the source deadline.
+func privatePrepareFailureReport(stderr io.Writer, class string, err error) int {
+	const byteAllowance = 4096
+	writesRemaining := 1
+	switch class {
+	case "CONFIG_REFUSED", "FRESH_ADMISSION_REFUSED", "ROOT_REFUSED", "CANONICAL_OWNER_REFUSED", "PROFILE_REFUSED", "STARTER_REFUSED", "MANAGER_REFUSED", "OUTPUT_FAILED_POSSIBLY_PARTIAL":
+	default:
+		class = "REFUSED_OR_CONSUMED_PENDING_UNCERTAIN"
+	}
+	codes := inv.ProjectPrivatePrepareFailureV1(err)
+	var storage [byteAllowance]byte
+	report := append(storage[:0], "private Prepare: "...)
+	report = append(report, class...)
+	report = append(report, "\nprivate Prepare diagnostic.v1 stage="...)
+	report = append(report, codes.Stage.String()...)
+	report = append(report, " reason="...)
+	report = append(report, codes.Reason.String()...)
+	for i, name := range [6]string{" deferred_finish=", " shutdown=", " data_close=", " root_close=", " canceled=", " deadline="} {
+		report = append(report, name...)
+		report = append(report, codes.Cleanup[i].String()...)
+	}
+	report = append(report, '\n')
+	if len(report) > byteAllowance || writesRemaining == 0 {
+		return 1
+	}
+	writesRemaining--           // consume separate fixed caller allowance BEFORE IO
+	_, _ = stderr.Write(report) // partial/error is terminal: never a second write
+	return 1
+}
+
 func finishPrivateSourcePrepareDescribe(ctx context.Context, deadline time.Time, staged inv.StagedPrepareDescribeV1, err error, stdout, stderr io.Writer) int {
-	fail := func(class string) int { fmt.Fprintln(stderr, "private Prepare:", class); return 1 }
+	fail := func(class string) int { return privatePrepareFailureReport(stderr, class, err) }
 	if err != nil || len(staged.Packet) == 0 || ctx.Err() != nil || !time.Now().Before(deadline) {
 		return fail("REFUSED_OR_CONSUMED_PENDING_UNCERTAIN")
 	}
@@ -126,42 +168,66 @@ func finishPrivateSourcePrepareDescribe(ctx context.Context, deadline time.Time,
 }
 
 func executePrivateSourcePrepareDescribe(ctx context.Context, c privateSourcePrepareDescribeConfig, stdout, stderr io.Writer, data io.Closer) (code int) {
+	var earlyClass string
+	var earlyCause, earlyRootErr error
 	defer func() {
+		var dataErr error
 		if data != nil {
-			if err := data.Close(); err != nil {
+			dataErr = data.Close()
+			if dataErr != nil {
 				code = 1
 			}
 		}
+		// Early paths retain their old owned-close cardinality and order. Report
+		// only AFTER deferred data cleanup, never once here and again in finish.
+		if earlyClass != "" {
+			var canceledErr, deadlineErr error
+			if ctx != nil {
+				if ctx.Err() == context.Canceled {
+					canceledErr = context.Canceled
+				}
+				if ctx.Err() == context.DeadlineExceeded {
+					deadlineErr = context.DeadlineExceeded
+				}
+			}
+			terminal := errors.Join(earlyCause, dataErr, earlyRootErr, inv.ErrPreparedDescribeV1)
+			diag := inv.PrivatePrepareTerminalFailureV1(nil, terminal, nil, dataErr, earlyRootErr, canceledErr, deadlineErr)
+			code = privatePrepareFailureReport(stderr, earlyClass, diag)
+		}
 	}()
-	fail := func(class string) int { fmt.Fprintln(stderr, "private Prepare:", class); return 1 }
+	fail := func(class string, cause error) int { earlyClass, earlyCause = class, cause; return 1 }
 	if ctx == nil || ctx.Err() != nil || !time.Now().Before(c.Persist.Deadline) || time.Until(c.Persist.Deadline) > 15*time.Second {
-		return fail("FRESH_ADMISSION_REFUSED")
+		return fail("FRESH_ADMISSION_REFUSED", nil)
 	}
 	control, cancel := context.WithDeadline(ctx, c.Persist.Deadline)
 	defer cancel()
 	root, err := publication.OpenRoot(c.AccountingRoot)
 	if err != nil {
-		return fail("ROOT_REFUSED")
+		return fail("ROOT_REFUSED", err)
 	}
 	owner, err := inv.OpenPrivateManagedInputOwnerV2(control, root, c.CanonicalJob, c.ExpectedHead, c.Verification)
 	if err != nil {
-		err = errors.Join(err, root.Close())
-		return fail("CANONICAL_OWNER_REFUSED")
+		earlyRootErr = root.Close()
+		err = errors.Join(err, earlyRootErr)
+		return fail("CANONICAL_OWNER_REFUSED", err)
 	}
 	selected, err := runtimeprofile.Validate(c.Profile)
 	if err != nil {
-		err = errors.Join(err, root.Close())
-		return fail("PROFILE_REFUSED")
+		earlyRootErr = root.Close()
+		err = errors.Join(err, earlyRootErr)
+		return fail("PROFILE_REFUSED", err)
 	}
 	starter, err := productionCensusRunnerDependencies().newStarter()
 	if err != nil {
-		err = errors.Join(err, root.Close())
-		return fail("STARTER_REFUSED")
+		earlyRootErr = root.Close()
+		err = errors.Join(err, earlyRootErr)
+		return fail("STARTER_REFUSED", err)
 	}
 	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 16, MaxChildren: 16, MaxCancels: 8, MaxTombstones: 32, MaxObservations: 256, MaxOperations: 8}, Starter: starter})
 	if err != nil {
-		err = errors.Join(err, root.Close())
-		return fail("MANAGER_REFUSED")
+		earlyRootErr = root.Close()
+		err = errors.Join(err, earlyRootErr)
+		return fail("MANAGER_REFUSED", err)
 	}
 	start := sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.LanguageID, RelationProviders: []string{c.Provider}, Deadline: c.Persist.Deadline, Process: managedprocess.Spec{Path: c.ProcessPath, Dir: c.Workspace, Args: c.ProcessArgs}}
 	ownedData := data
@@ -171,7 +237,11 @@ func executePrivateSourcePrepareDescribe(ctx context.Context, c privateSourcePre
 }
 
 func runPrivateSourcePrepareDescribe(args []string, stdout, stderr io.Writer) int {
-	fail := func() int { fmt.Fprintln(stderr, "private Prepare: CONFIG_REFUSED"); return 1 }
+	var dataCloseErr error
+	fail := func() int {
+		diag := inv.PrivatePrepareTerminalFailureV1(nil, inv.ErrPreparedDescribeV1, nil, dataCloseErr, nil, nil, nil)
+		return privatePrepareFailureReport(stderr, "CONFIG_REFUSED", diag)
+	}
 	if len(args) != 2 || args[0] != "source-prepare-describe" {
 		return fail()
 	}
@@ -183,6 +253,7 @@ func runPrivateSourcePrepareDescribe(args []string, stdout, stderr io.Writer) in
 	info, statErr := f.Stat()
 	if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() > 64<<10 {
 		closeErr := f.Close()
+		dataCloseErr = closeErr
 		_ = errors.Join(statErr, closeErr)
 		return fail()
 	}
@@ -190,6 +261,7 @@ func runPrivateSourcePrepareDescribe(args []string, stdout, stderr io.Writer) in
 	c, decodeErr := decodePrivateSourcePrepareDescribeConfig(raw)
 	if err != nil || decodeErr != nil {
 		closeErr := f.Close()
+		dataCloseErr = closeErr
 		_ = errors.Join(err, decodeErr, closeErr)
 		return fail()
 	}

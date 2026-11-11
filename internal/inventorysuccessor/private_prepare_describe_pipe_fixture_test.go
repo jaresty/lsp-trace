@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func prepareDescribeNativeFixtureV1(t *testing.T, unfunded int) (PrepareDescribeRequestV1, *sessionruntime.ControlledDescribePipeFixture) {
+func prepareDescribeNativeFixtureV1(t *testing.T, unfunded int, finishFailure ...bool) (PrepareDescribeRequestV1, *sessionruntime.ControlledDescribePipeFixture) {
 	t.Helper()
 	dir, e := filepath.EvalSymlinks(t.TempDir())
 	if e != nil {
@@ -25,7 +25,7 @@ func prepareDescribeNativeFixtureV1(t *testing.T, unfunded int) (PrepareDescribe
 	if e = os.Chmod(dir, 0700); e != nil {
 		t.Fatal(e)
 	}
-	fixture, e := sessionruntime.NewControlledDescribePipeFixture(dir)
+	fixture, e := prepareDescribeFixedPipeFixtureV1(dir, len(finishFailure) == 1 && finishFailure[0])
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -75,6 +75,14 @@ func prepareDescribeNativeFixtureV1(t *testing.T, unfunded int) (PrepareDescribe
 	capture := PrivateMixedInputRequestV2{Manager: fixture.Manager(), Root: root, Start: fixture.StartRequest(deadline), URI: fixture.URI(), OccurrenceID: "unit2-query", Revision: "literal-revision", Privacy: "private-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 5, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}}
 	persist := PreparedDescribePersistRequestV1{Attempt: hashLabelV2("unit2-persist"), Nonce: hashLabelV2("unit2-nonce"), RootPath: dir, InitialHead: initial.Identity, Decision: a.Decision, Question: []byte("Explain Query"), Request: []byte("exact request"), ResponseSchema: []byte("exact schema"), Deadline: deadline, Expires: now.Add(5 * time.Minute), RetentionUntil: now.Add(10 * time.Minute), RecordLimit: 16 << 20}
 	return PrepareDescribeRequestV1{Owner: owner, Capture: capture, CaptureAttempt: hashLabelV2("unit2-capture"), PreparationAttempt: hashLabelV2("unit2-preparation"), PacketAttempt: hashLabelV2("unit2-packet"), RunID: "unit2-run", SeedNamespace: "unit2-seed", Seed: 7, Persist: persist, PacketLimit: 1 << 20}, fixture
+}
+
+// Private test setup selects only the two package-owned fixed constructors.
+func prepareDescribeFixedPipeFixtureV1(dir string, finishFailure bool) (*sessionruntime.ControlledDescribePipeFixture, error) {
+	if finishFailure {
+		return sessionruntime.NewControlledDescribeFinishFailurePipeFixture(dir)
+	}
+	return sessionruntime.NewControlledDescribePipeFixture(dir)
 }
 
 func TestPrepareDescribeV1Pipeline(t *testing.T) {

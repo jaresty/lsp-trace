@@ -3,7 +3,6 @@ package inventorysuccessor
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"slices"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	sourceclock "lsp-trace/internal/privatesourceclock"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
@@ -105,11 +105,16 @@ func privateMixedChargeV2(now, deadline time.Time, w sessionruntime.PrivateProvi
 }
 
 func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, attempt string, q PrivateMixedInputRequestV2) (PrivateMixedInputOperationV2, error) {
+	stage := privatePrepareReserveV1
+	var cause error
 	fail := func() (PrivateMixedInputOperationV2, error) {
-		return PrivateMixedInputOperationV2{}, ErrPrivateMixedInputV2
+		return PrivateMixedInputOperationV2{}, privatePrepareFailureAtV1(stage, ErrPrivateMixedInputV2, cause)
 	}
 	plan, ok := privateMixedPlanV2(q)
 	if o == nil || ctx == nil || ctx.Err() != nil || !ok || !hashV2(attempt) {
+		if ctx != nil {
+			cause = ctx.Err()
+		}
 		return fail()
 	}
 	now := time.Now()
@@ -118,6 +123,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 	}
 	envelope, err := q.Manager.PrivateProviderWindowEnvelope(q.Start, plan)
 	if err != nil {
+		stage, cause = privatePrepareWindowV1, err
 		return fail()
 	}
 	deadline := q.Start.Deadline
@@ -137,6 +143,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 		charge, err = sourceTimingMixedChargeV2(*q.Timing, now, envelope.Bounds(), o.limits)
 	}
 	if err != nil {
+		cause = err
 		return fail()
 	}
 	o.mu.Lock()
@@ -146,6 +153,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 	}
 	if q.Timing != nil {
 		if err = o.sourceTimingFundingV2(ctx, *q.Timing, charge, now); err != nil {
+			cause = err
 			return fail()
 		}
 	}
@@ -154,6 +162,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 		if errors.Is(err, errUncertainV2) {
 			o.uncertain = true
 		}
+		cause = err
 		return fail()
 	}
 	o.head = h.Identity
@@ -168,9 +177,10 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 // ExecuteMixedInputV2 is a fixed internal continuation, not a caller executor.
 // The only successful return is AFTER original-lease return, window worker join,
 // and confirmed Observe. Failures retain PENDING/uncertain cumulative accounting.
-func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q PrivateMixedInputRequestV2) (PrivateManagedGroupingInput, error) {
+func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q PrivateMixedInputRequestV2) (_ PrivateManagedGroupingInput, failure error) {
+	stage := privatePrepareReplayV1
 	fail := func(err error) (PrivateManagedGroupingInput, error) {
-		return PrivateManagedGroupingInput{}, errors.Join(ErrPrivateMixedInputV2, err)
+		return PrivateManagedGroupingInput{}, privatePrepareFailureAtV1(stage, ErrPrivateMixedInputV2, err)
 	}
 	if op.state == nil || ctx == nil {
 		return fail(nil)
@@ -186,7 +196,11 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		return fail(nil)
 	}
 	if ctx.Err() != nil || !reflect.DeepEqual(q, s.request) || !time.Now().Before(q.Start.Deadline) {
-		return fail(nil)
+		cause := ctx.Err()
+		if !time.Now().Before(q.Start.Deadline) {
+			cause = context.DeadlineExceeded
+		}
+		return fail(cause)
 	}
 	o := s.owner
 	o.mu.Lock()
@@ -197,21 +211,40 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 	}
 	execution, cancel := context.WithDeadline(ctx, q.Start.Deadline)
 	defer cancel()
+	stage = privatePrepareWindowV1
 	window, err := q.Manager.PrivateProviderWindowContext(execution, s.envelope, q.Start.Deadline)
 	if err != nil {
 		return fail(err)
 	}
 	// Failure cleanup uses the SAME original window; no deadline renewal/reset.
-	defer func() { _, _ = q.Manager.FinishPrivateProviderWindow(window) }()
+	defer func() {
+		_, finishErr := q.Manager.FinishPrivateProviderWindow(window)
+		// Retain failure-only cleanup attribution. The old repeated Finish after
+		// successful Observe MUST NOT change otherwise successful availability.
+		failure = privatePrepareDeferredFinishV1(failure, finishErr)
+	}()
+	stage = privatePrepareStartV1
 	start := q.Manager.Start(window, q.Start)
 	if start.Failure != "" {
-		return fail(errors.New(string(start.Failure)))
+		cause := execution.Err()
+		if start.Failure == "FAILEDUNJOINED" {
+			cause = sessionruntime.ErrPrivateProviderWindowUnjoined
+		}
+		return fail(cause)
 	}
+	stage = privatePrepareReadinessV1
 	pending := q.Manager.BeginReadiness(window, start.SessionID, start.Generation, q.Start.Deadline)
 	ready, ok := q.Manager.WaitReadiness(window, pending.ID)
 	if !ok || ready.State != sessionruntime.ReadinessReady {
-		return fail(fmt.Errorf("private mixed readiness: ok=%v state=%s failure=%s", ok, ready.State, ready.Failure))
+		cause := execution.Err()
+		if ready.Failure == "FAILEDUNJOINED" {
+			cause = sessionruntime.ErrPrivateProviderWindowUnjoined
+		} else if cause == nil && ok && ready.State == sessionruntime.ReadinessFailed && ready.Failure == session.ToolNotImplemented {
+			cause = ErrPrivateMixedInputUnavailableV2
+		}
+		return fail(cause)
 	}
+	stage = privatePrepareCaptureV1
 	session := sessionruntime.SessionLeaseRequest{SessionID: start.SessionID, Generation: start.Generation, Workspace: q.Start.Profile.Workspace().String()}
 	plan, _ := privateMixedPlanV2(q)
 	grouping := PrivateManagedGroupingRequest{Session: session, URI: q.URI, OccurrenceID: q.OccurrenceID, Revision: q.Revision, Privacy: q.Privacy, OccurrenceAdmissionPolicyID: q.OccurrencePolicy, CompositionPolicyID: q.CompositionPolicy, Line: q.Line, Character: q.Character, Kinds: q.Kinds, Root: q.Root, Deadline: q.Start.Deadline}
@@ -267,13 +300,18 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		}
 		return fail(ErrPrivateMixedInputEmptyV2)
 	}
+	stage = privatePrepareFinishV1
 	completion, err := q.Manager.FinishPrivateProviderWindow(window)
 	if err != nil || !completion.Completed || q.Manager.Census().Workers != 0 {
+		if err == nil {
+			err = sessionruntime.ErrPrivateProviderWindowUnjoined
+		}
 		return fail(err)
 	}
 	if !sourceclock.Now(ctx, "capture-complete").Before(q.Start.Deadline) {
 		return fail(context.DeadlineExceeded)
 	}
+	stage = privatePrepareObserveV1
 	if err = operation.completeFixed(execution); err != nil {
 		return fail(err)
 	}

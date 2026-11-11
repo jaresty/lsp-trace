@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"lsp-trace/internal/lspwire"
@@ -39,6 +40,17 @@ type ControlledDescribePipeFixture struct {
 }
 
 func NewControlledDescribePipeFixture(root string) (*ControlledDescribePipeFixture, error) {
+	return newControlledDescribePipeFixture(root, false)
+}
+
+// NewControlledDescribeFinishFailurePipeFixture simulates a failed resource-close
+// report AFTER actual pipe close and server join. It is not an OS-close fault.
+// Native failed custody remains failed on every subsequent Close report.
+func NewControlledDescribeFinishFailurePipeFixture(root string) (*ControlledDescribePipeFixture, error) {
+	return newControlledDescribePipeFixture(root, true)
+}
+
+func newControlledDescribePipeFixture(root string, failCloseReport bool) (*ControlledDescribePipeFixture, error) {
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
 		return nil, errors.New("canonical temporary root required")
 	}
@@ -90,7 +102,7 @@ func NewControlledDescribePipeFixture(root string) (*ControlledDescribePipeFixtu
 	uri := (&url.URL{Scheme: "file", Path: filepath.Join(root, "query.go")}).String()
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
-	child := &controlledDescribeChild{input: inW, serverInput: inR, output: outR, serverOutput: outW, done: make(chan struct{}), closing: make(chan struct{}), uri: uri}
+	child := &controlledDescribeChild{input: inW, serverInput: inR, output: outR, serverOutput: outW, done: make(chan struct{}), closing: make(chan struct{}), uri: uri, failCloseReport: failCloseReport}
 	go child.serve()
 	starter := &controlledDescribeStarter{child: child, root: root}
 	manager, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 16, MaxChildren: 16, MaxCancels: 8, MaxTombstones: 32, MaxObservations: 256, MaxOperations: 8}, Starter: starter})
@@ -101,6 +113,28 @@ func NewControlledDescribePipeFixture(root string) (*ControlledDescribePipeFixtu
 	}
 	return &ControlledDescribePipeFixture{manager: manager, child: child, root: handle, literal: literal, uri: uri, start: StartRequest{Profile: runtimeprofile.Resolve(selector), Process: managedprocess.Spec{Path: controlledDescribeProcess, Dir: root}, LanguageID: "go"}}, nil
 }
+
+// ControlledDescribeCloseSnapshot is detached test observation, not custody or
+// authority. Physical pipe join is distinct from Manager/native cleanup success.
+type ControlledDescribeCloseSnapshot struct {
+	CloseReports, ReferenceReplies uint64
+	PipeJoined, PhysicalCloseOK    bool
+}
+
+func (f *ControlledDescribePipeFixture) CloseSnapshot() ControlledDescribeCloseSnapshot {
+	c := f.child
+	s := ControlledDescribeCloseSnapshot{CloseReports: c.closeReports.Load(), ReferenceReplies: c.referenceReplies.Load()}
+	select {
+	case <-c.done:
+		s.PipeJoined = true
+	default:
+	}
+	if s.CloseReports != 0 {
+		s.PhysicalCloseOK = c.stopErr == nil && c.serveErr == nil
+	}
+	return s
+}
+
 func (f *ControlledDescribePipeFixture) Manager() *Manager { return f.manager }
 func (f *ControlledDescribePipeFixture) URI() string       { return f.uri }
 func (f *ControlledDescribePipeFixture) StartRequest(deadline time.Time) StartRequest {
@@ -178,6 +212,9 @@ type controlledDescribeChild struct {
 	uri               string
 	stopOnce          sync.Once
 	stopErr, serveErr error
+	failCloseReport   bool
+	closeReports      atomic.Uint64
+	referenceReplies  atomic.Uint64
 }
 
 func (c *controlledDescribeChild) Stdin() io.WriteCloser { return c.input }
@@ -191,7 +228,8 @@ func (c *controlledDescribeChild) stop() {
 func (c *controlledDescribeChild) Close() managedprocess.ResourceObservation {
 	c.stop()
 	<-c.done
-	if errors.Join(c.stopErr, c.serveErr) != nil {
+	c.closeReports.Add(1)
+	if c.failCloseReport || errors.Join(c.stopErr, c.serveErr) != nil {
 		return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesCloseFailed}
 	}
 	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
@@ -271,6 +309,9 @@ func (c *controlledDescribeChild) serve() {
 				c.serveErr = err
 			}
 			return
+		}
+		if msg.Method == "textDocument/references" {
+			c.referenceReplies.Add(1)
 		}
 	}
 	c.serveErr = errors.New("fixture frame cap exceeded")

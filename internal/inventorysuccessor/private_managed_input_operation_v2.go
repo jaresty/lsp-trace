@@ -325,26 +325,26 @@ func (p PrivateManagedInputOperationV2) bindOwnedFixed(h sessionruntime.PrivateG
 // not a caller's fresh replacement. Failure never refunds or revives authority.
 func (p PrivateManagedInputOperationV2) completeFixed(ctx context.Context) error {
 	if p.state == nil || ctx == nil {
-		return ErrPrivateManagedInputOperationV2
+		return privatePrepareFailureAtV1(privatePrepareObserveV1, ErrPrivateManagedInputOperationV2, nil)
 	}
 	s := p.state
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.used || s.execution == nil || ctx != s.execution || s.failed || ctx.Err() != nil || !time.Now().Before(s.binding.Deadline) || s.finished || s.source == "" {
 		s.failed = true
-		return ErrPrivateManagedInputOperationV2
+		return privatePrepareFailureAtV1(privatePrepareObserveV1, ErrPrivateManagedInputOperationV2, ctx.Err())
 	}
 	c := s.execution
 	o := s.owner
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.uncertain || o.head != s.head {
-		return ErrPrivateManagedInputOperationV2
+		return privatePrepareFailureAtV1(privatePrepareObserveV1, ErrPrivateManagedInputOperationV2, nil)
 	}
 	h, err := o.k.observe(c, o.job, s.head, s.attempt, "OBSERVED", time.Now().UnixNano(), o.limits)
 	if err != nil {
 		o.uncertain = true
-		return ErrPrivateManagedInputOperationV2
+		return privatePrepareFailureAtV1(privatePrepareObserveV1, ErrPrivateManagedInputOperationV2, err)
 	}
 	o.head = h.Identity
 	s.finished = true

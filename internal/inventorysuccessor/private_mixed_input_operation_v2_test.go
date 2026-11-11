@@ -794,6 +794,16 @@ func TestPrivateInventoryMixedLeaseReplayV2TerminalControls(t *testing.T) {
 			if mode == "unavailable" && !errors.Is(err, inventorysuccessor.ErrPrivateMixedInputUnavailableV2) && !strings.Contains(err.Error(), "state=FAILED failure=TOOL_NOT_IMPLEMENTED") {
 				t.Fatalf("ASSERT_MIXED_UNAVAILABLE_NOT_EMPTY: %v", err)
 			}
+			if mode == "unavailable" {
+				codes := inventorysuccessor.ProjectPrivatePrepareFailureV1(err)
+				if codes.Stage.String() != "READINESS" || codes.Reason.String() != "UNAVAILABLE" ||
+					!errors.Is(err, inventorysuccessor.ErrPrivateMixedInputV2) ||
+					!errors.Is(err, inventorysuccessor.ErrPrivateMixedInputUnavailableV2) ||
+					errors.Is(err, inventorysuccessor.ErrPrivateMixedInputEmptyV2) || len(got.Input.CanonicalBytes()) != 0 {
+					t.Fatalf("ASSERT_MIXED_READINESS_UNAVAILABLE_TYPED: stage=%s reason=%s err=%v", codes.Stage, codes.Reason, err)
+				}
+				t.Log("ASSERT_MIXED_READINESS_UNAVAILABLE_TYPED: PASS")
+			}
 			if mode == "empty" && !errors.Is(err, inventorysuccessor.ErrPrivateMixedInputEmptyV2) {
 				t.Fatalf("ASSERT_MIXED_EMPTY_NOT_UNAVAILABLE: %v", err)
 			}
