@@ -221,6 +221,9 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 	if len(args) > 0 && args[0] == "source-prepare-describe" {
 		return runPrivateSourcePrepareDescribe(args, applicationFullWriter{stdout}, stderr)
 	}
+	if len(args) > 0 && args[0] == "source-complete-describe" {
+		return runPrivateSourceCompleteDescribe(args, applicationFullWriter{stdout}, stderr)
+	}
 	stdout = applicationFullWriter{stdout}
 	fail := func(class string) int { fmt.Fprintln(stderr, "private application:", class); return 1 }
 	var startup *applicationStartupNotifier

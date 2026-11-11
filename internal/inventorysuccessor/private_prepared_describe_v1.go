@@ -68,7 +68,14 @@ type preparedDescribeOpenV1 struct {
 	parent      context.Context
 }
 type PreparedDescribeV1 struct{ state *preparedDescribeResultV1 }
-type OpenedPreparedDescribeV1 struct{ state *preparedDescribeResultV1 }
+type OpenedPreparedDescribeV1 struct {
+	state     *preparedDescribeResultV1
+	originals *preparedDescribeOriginalsV1
+}
+
+// Exact manifest bytes retained only by the independently paid Open. Neither
+// caller packets nor serialized data can construct this opaque metadata.
+type preparedDescribeOriginalsV1 struct{ question, request, responseSchema []byte }
 type preparedDescribeResultV1 struct {
 	anchors                PreparedDescribeAnchorsV1
 	definition, provenance []byte
@@ -688,7 +695,7 @@ func OpenPreparedDescribeV1(ctx context.Context, op PreparedDescribeOpenOperatio
 	if control.Err() != context.Canceled || ctx.Err() != nil || k.root.ValidatePrivate() != nil {
 		return fail()
 	}
-	return OpenedPreparedDescribeV1{&preparedDescribeResultV1{a, bytes.Clone(r.Definition), provenance}}, nil
+	return OpenedPreparedDescribeV1{state: &preparedDescribeResultV1{a, bytes.Clone(r.Definition), provenance}, originals: &preparedDescribeOriginalsV1{bytes.Clone(r.Question), bytes.Clone(r.Request), bytes.Clone(r.ResponseSchema)}}, nil
 }
 
 // preparedDescribePacketV1 is a NEW paid producer-side data read/encoding,
