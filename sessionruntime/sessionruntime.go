@@ -1915,6 +1915,7 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 	}
 	m.mu.Unlock()
 	if leaseCancel != nil {
+		privatePrepareTraceLeaseCancel(result.Failure, result.ServerError != nil, result.ownedMethodPair != nil)
 		leaseCancel(errSessionLeaseConflict)
 	}
 	if genericTerminal != nil {

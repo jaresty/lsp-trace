@@ -219,7 +219,7 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 		return runPrivateSourceHostApplication(args, applicationFullWriter{stdout}, stderr)
 	}
 	if len(args) > 0 && args[0] == "source-prepare-describe" {
-		return runPrivateSourcePrepareDescribe(args, applicationFullWriter{stdout}, stderr)
+		return runPrivateSourcePrepareDescribeTraced(args, applicationFullWriter{stdout}, stderr)
 	}
 	if len(args) > 0 && args[0] == "source-complete-describe" {
 		return runPrivateSourceCompleteDescribe(args, applicationFullWriter{stdout}, stderr)

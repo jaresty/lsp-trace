@@ -562,6 +562,7 @@ func (m *Manager) capturePrivateGroupingOwnedObserved(ctx context.Context, req P
 		wire := RoundTripRequest{SessionID: req.Session.SessionID, Generation: req.Session.Generation, Method: method, Params: params, Deadline: req.Deadline, MaxMessages: 4, MaxBytes: 65536, CaptureOwnedMethodPair: true, ExpectedOwnedDocument: &binding, ADR0011PrivateP2: method != "textDocument/documentSymbol"}
 		result := m.RoundTrip(ctx, wire)
 		ctxErr := ctx.Err() // the original single read, at the original transaction checkpoint
+		privatePrepareTraceTransaction(ctx, ctxErr, result.Failure, result.ServerError != nil, result.ownedMethodPair != nil)
 		if ctxErr != nil || result.Failure != "" || result.ServerError != nil || result.ownedMethodPair == nil {
 			return OwnedMethodPair{}, ErrPrivateGroupingOwned, privateGroupingCaptureTransactionResult(method == "textDocument/documentSymbol", ctxErr, result.Failure, result.ServerError != nil, result.ownedMethodPair == nil, false)
 		}
