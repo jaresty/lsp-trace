@@ -60,7 +60,8 @@ func privatePrepareAssertFixedReport(t *testing.T, raw []byte) {
 	pattern += " lease_result_observed=(?:YES|NO|UNKNOWN) inner_result=(?:UNOBSERVED|OK|KNOWN_UNJOINED|KNOWN_CONFLICT|CANCELED|DEADLINE|UNKNOWN)"
 	pattern += " callback_sample=(?:UNOBSERVED|CALLER_POST_RETURN_LOCK|UNKNOWN) callback_entered=(?:YES|NO|UNKNOWN)"
 	checkpoint := "(?:UNOBSERVED|OK|UNKNOWN|DEADLINE|CANCELED|KNOWN_UNJOINED|UNAVAILABLE|EMPTY|REFUSED|NOT_APPLICABLE)"
-	for _, name := range []string{" capture_result=", " issuance_result=", " calls_result="} {
+	pattern += " capture_result=(?:UNOBSERVED|OK|UNKNOWN|PRECHECK_REFUSED|RESOURCE_ENVELOPE_REFUSED|ENVELOPE_CONTEXT_REFUSED|ACTIVE_LEASE_REFUSED|METADATA_REFUSED|PREPARATION_UNKNOWN_FAILURE|PREPARATION_SUPPLY_INVALID|SOURCE_BOUND_REFUSED|TARGET_SELECTION_REFUSED|TARGET_BOUND_REFUSED|FINAL_LEASE_REFUSED|FINAL_BOUND_REFUSED|QUERY_GUARD_REFUSED|SYMBOL_CONTEXT_CANCELED|SYMBOL_CONTEXT_DEADLINE|SYMBOL_TOOL_NOT_IMPLEMENTED|SYMBOL_PROCESS_CONTAINMENT_UNAVAILABLE|SYMBOL_LIVE_LSP_DISABLED|SYMBOL_SESSION_NOT_FOUND|SYMBOL_LIST_CURSOR_INVALID|SYMBOL_STALE_GENERATION|SYMBOL_LIFECYCLE_CONFLICT|SYMBOL_SESSION_REAP_INCOMPLETE|SYMBOL_SESSION_STOPPING|SYMBOL_SESSION_POISONED|SYMBOL_RESOURCE_EXHAUSTED|SYMBOL_SPAWN_FAILED|SYMBOL_PIPE_SETUP_FAILED|SYMBOL_INITIALIZATION_FAILED|SYMBOL_INITIALIZATION_TIMEOUT|SYMBOL_SESSION_CRASHED|SYMBOL_REQUEST_CANCELLED|SYMBOL_REQUEST_TIMEOUT|SYMBOL_UNKNOWN_FAILURE|SYMBOL_SERVER_ERROR|SYMBOL_MISSING_PAIR|SYMBOL_INVALID_PAIR|RELATION_CONTEXT_CANCELED|RELATION_CONTEXT_DEADLINE|RELATION_TOOL_NOT_IMPLEMENTED|RELATION_PROCESS_CONTAINMENT_UNAVAILABLE|RELATION_LIVE_LSP_DISABLED|RELATION_SESSION_NOT_FOUND|RELATION_LIST_CURSOR_INVALID|RELATION_STALE_GENERATION|RELATION_LIFECYCLE_CONFLICT|RELATION_SESSION_REAP_INCOMPLETE|RELATION_SESSION_STOPPING|RELATION_SESSION_POISONED|RELATION_RESOURCE_EXHAUSTED|RELATION_SPAWN_FAILED|RELATION_PIPE_SETUP_FAILED|RELATION_INITIALIZATION_FAILED|RELATION_INITIALIZATION_TIMEOUT|RELATION_SESSION_CRASHED|RELATION_REQUEST_CANCELLED|RELATION_REQUEST_TIMEOUT|RELATION_UNKNOWN_FAILURE|RELATION_SERVER_ERROR|RELATION_MISSING_PAIR|RELATION_INVALID_PAIR|PREPARATION_TOOL_NOT_IMPLEMENTED|PREPARATION_PROCESS_CONTAINMENT_UNAVAILABLE|PREPARATION_LIVE_LSP_DISABLED|PREPARATION_SESSION_NOT_FOUND|PREPARATION_LIST_CURSOR_INVALID|PREPARATION_STALE_GENERATION|PREPARATION_LIFECYCLE_CONFLICT|PREPARATION_SESSION_REAP_INCOMPLETE|PREPARATION_SESSION_STOPPING|PREPARATION_SESSION_POISONED|PREPARATION_RESOURCE_EXHAUSTED|PREPARATION_SPAWN_FAILED|PREPARATION_PIPE_SETUP_FAILED|PREPARATION_INITIALIZATION_FAILED|PREPARATION_INITIALIZATION_TIMEOUT|PREPARATION_SESSION_CRASHED|PREPARATION_REQUEST_CANCELLED|PREPARATION_REQUEST_TIMEOUT|PREPARATION_DOCUMENT_SUPPLY_UNAVAILABLE|PREPARATION_LANGUAGE_ID_UNAVAILABLE|PREPARATION_DOCUMENT_URI_UNAVAILABLE|PREPARATION_DOCUMENT_OUTSIDE_WORKSPACE|PREPARATION_DOCUMENT_SOURCE_UNAVAILABLE|PREPARATION_WINDOW_UNJOINED)"
+	for _, name := range []string{" issuance_result=", " calls_result="} {
 		pattern += name + checkpoint
 	}
 	if !regexp.MustCompile(pattern + "\\n$").Match(raw) {
@@ -69,7 +70,7 @@ func privatePrepareAssertFixedReport(t *testing.T, raw []byte) {
 }
 
 func TestPrivateSourcePrepareDescribeLeaseUnknownEnums(t *testing.T) {
-	v := inv.PrivatePrepareLeaseObservationV1{Boundary: sessionruntime.PrivateLeaseBoundary(255), ResultObserved: inv.PrivatePrepareObservedV1(255), InnerResult: sessionruntime.PrivateLeaseResult(255), CallbackSample: inv.PrivatePrepareCallbackSampleV1(255), CallbackEntered: inv.PrivatePrepareObservedV1(255), CaptureResult: inv.PrivatePrepareCheckpointV1(255), IssuanceResult: inv.PrivatePrepareCheckpointV1(255), CallsResult: inv.PrivatePrepareCheckpointV1(255)}
+	v := inv.PrivatePrepareLeaseObservationV1{Boundary: sessionruntime.PrivateLeaseBoundary(255), ResultObserved: inv.PrivatePrepareObservedV1(255), InnerResult: sessionruntime.PrivateLeaseResult(255), CallbackSample: inv.PrivatePrepareCallbackSampleV1(255), CallbackEntered: inv.PrivatePrepareObservedV1(255), CaptureResult: sessionruntime.PrivateGroupingCaptureResult(255), IssuanceResult: inv.PrivatePrepareCheckpointV1(255), CallsResult: inv.PrivatePrepareCheckpointV1(255)}
 	raw := string(privatePrepareAppendLeaseReport(nil, v))
 	if strings.Count(raw, "=UNKNOWN") != 8 || strings.Contains(raw, "255") || len(raw) > 4096 {
 		t.Fatal("ASSERT_LEASE_UNKNOWN_ENUM_PRIVACY: FAIL", raw)
@@ -86,6 +87,56 @@ func TestPrivateSourcePrepareDescribeLeaseObservationFields(t *testing.T) {
 		t.Fatal("ASSERT_LEASE_FIELDS_DEFAULT: FAIL", writer.String())
 	}
 	t.Log("ASSERT_LEASE_FIELDS_DEFAULT: PASS")
+}
+
+func TestPrivateSourcePrepareDescribeCaptureVocabularyBound(t *testing.T) {
+	// Exhaustive numeric domain; expected vocabulary is the independent literal
+	// allowlist above, not a regex generated from production String output.
+	for i := 0; i < 256; i++ {
+		v := inv.PrivatePrepareLeaseObservationV1{CaptureResult: sessionruntime.PrivateGroupingCaptureResult(i)}
+		raw := []byte("private Prepare: CONFIG_REFUSED\nprivate Prepare diagnostic.v1 stage=NONE reason=NONE deferred_finish=NONE shutdown=NONE data_close=NONE root_close=NONE canceled=NONE deadline=NONE")
+		raw = privatePrepareAppendLeaseReport(raw, v)
+		raw = append(raw, '\n')
+		privatePrepareAssertFixedReport(t, raw)
+	}
+	maximum := func(value func(uint8) string) string {
+		var longest string
+		for i := 0; i < 256; i++ {
+			s := value(uint8(i))
+			if len(s) > len(longest) {
+				longest = s
+			}
+		}
+		return longest
+	}
+	stage := maximum(func(i uint8) string { return inv.PrivatePrepareStageV1(i).String() })
+	reason := maximum(func(i uint8) string { return inv.PrivatePrepareReasonV1(i).String() })
+	upper := "private Prepare: REFUSED_OR_CONSUMED_PENDING_UNCERTAIN\nprivate Prepare diagnostic.v1 stage=" + stage + " reason=" + reason
+	for _, name := range []string{" deferred_finish=", " shutdown=", " data_close=", " root_close=", " canceled=", " deadline="} {
+		upper += name + reason
+	}
+	fields := []struct {
+		name  string
+		value func(uint8) string
+	}{
+		{" lease_boundary=", func(i uint8) string { return sessionruntime.PrivateLeaseBoundary(i).String() }},
+		{" lease_result_observed=", func(i uint8) string { return inv.PrivatePrepareObservedV1(i).String() }},
+		{" inner_result=", func(i uint8) string { return sessionruntime.PrivateLeaseResult(i).String() }},
+		{" callback_sample=", func(i uint8) string { return inv.PrivatePrepareCallbackSampleV1(i).String() }},
+		{" callback_entered=", func(i uint8) string { return inv.PrivatePrepareObservedV1(i).String() }},
+		{" capture_result=", func(i uint8) string { return sessionruntime.PrivateGroupingCaptureResult(i).String() }},
+		{" issuance_result=", func(i uint8) string { return inv.PrivatePrepareCheckpointV1(i).String() }},
+		{" calls_result=", func(i uint8) string { return inv.PrivatePrepareCheckpointV1(i).String() }},
+	}
+	for _, field := range fields {
+		upper += field.name + maximum(field.value)
+	}
+	upper += "\n"
+	privatePrepareAssertFixedReport(t, []byte(upper))
+	if len(upper) != 567 || len(upper) > 4096 {
+		t.Fatal("ASSERT_CAPTURE_REPORT_BOUND", len(upper))
+	}
+	t.Logf("ASSERT_CAPTURE_REPORT_BOUND: PASS exhaustive 256 values, 88 closed codes, %d-byte independent all-slot maximum; original one-Write/16-slot/256-step limits unchanged", len(upper))
 }
 
 func TestPrivateSourcePrepareDescribeDiagnosticBudget(t *testing.T) {

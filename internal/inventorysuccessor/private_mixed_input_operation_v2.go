@@ -190,8 +190,7 @@ func (r *privatePrepareCallbackObservationV1) enter() {
 	r.value.CallbackEntered = PrivatePrepareObservedYesV1
 	r.mu.Unlock()
 }
-func (r *privatePrepareCallbackObservationV1) captured(err error) {
-	result := privatePrepareCheckpointV1(err)
+func (r *privatePrepareCallbackObservationV1) captured(result sessionruntime.PrivateGroupingCaptureResult) {
 	r.mu.Lock()
 	r.value.CaptureResult = result
 	r.mu.Unlock()
@@ -324,12 +323,13 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		req := sessionruntime.PrivateGroupingOwnedRequest{Session: session, URI: q.URI, OccurrenceID: q.OccurrenceID, Revision: q.Revision, Privacy: q.Privacy, Line: q.Line, Character: q.Character, References: plan.References, Definitions: plan.Definitions, Deadline: q.Start.Deadline}
 		var h sessionruntime.PrivateGroupingOwnedHandoff
 		var e error
+		var captureResult sessionruntime.PrivateGroupingCaptureResult
 		if plan.References || plan.Definitions {
-			h, e = q.Manager.CapturePrivateGroupingOwned(base, req)
+			h, e, captureResult = q.Manager.CapturePrivateGroupingOwnedObserved(base, req)
 		} else {
-			h, e = q.Manager.CapturePrivateGroupingQueryOwned(base, req)
+			h, e, captureResult = q.Manager.CapturePrivateGroupingQueryOwnedObserved(base, req)
 		}
-		checkpoints.captured(e)
+		checkpoints.captured(captureResult)
 		if e != nil {
 			return e
 		}

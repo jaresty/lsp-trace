@@ -193,12 +193,13 @@ func privatePrepareCheckpointV1(err error) PrivatePrepareCheckpointV1 {
 // Native sampling is at wrapper decision; callback sampling is ONLY at caller's
 // first post-return mutex acquisition and can include intervening worker progress.
 type PrivatePrepareLeaseObservationV1 struct {
-	Boundary                                   sessionruntime.PrivateLeaseBoundary
-	ResultObserved                             PrivatePrepareObservedV1
-	InnerResult                                sessionruntime.PrivateLeaseResult
-	CallbackSample                             PrivatePrepareCallbackSampleV1
-	CallbackEntered                            PrivatePrepareObservedV1
-	CaptureResult, IssuanceResult, CallsResult PrivatePrepareCheckpointV1
+	Boundary                    sessionruntime.PrivateLeaseBoundary
+	ResultObserved              PrivatePrepareObservedV1
+	InnerResult                 sessionruntime.PrivateLeaseResult
+	CallbackSample              PrivatePrepareCallbackSampleV1
+	CallbackEntered             PrivatePrepareObservedV1
+	CaptureResult               sessionruntime.PrivateGroupingCaptureResult
+	IssuanceResult, CallsResult PrivatePrepareCheckpointV1
 }
 
 func privatePrepareFailureWithLeaseV1(err error, observation PrivatePrepareLeaseObservationV1) error {

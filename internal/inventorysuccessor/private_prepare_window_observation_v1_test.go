@@ -33,9 +33,10 @@ func TestPrivatePrepareWindowPostReturnFreeze(t *testing.T) {
 	go func() {
 		<-wrapperReturn
 		r.enter()
-		r.captured(nil)
+		r.captured(sessionruntime.PrivateGroupingCaptureOK)
 		close(progress)
 		<-release
+		r.captured(sessionruntime.PrivateGroupingCaptureTargetSelectionRefused)
 		r.called(context.DeadlineExceeded)
 		r.issued(nil)
 		close(done)
@@ -45,13 +46,13 @@ func TestPrivatePrepareWindowPostReturnFreeze(t *testing.T) {
 	// Progress happened AFTER wrapper boundary but BEFORE caller lock: it must be
 	// visible. CALLS and issuance have not returned; neither is a failure claim.
 	snapshot := r.freeze(sessionruntime.PrivateLeaseBoundaryObservation{})
-	if snapshot.CallbackSample != PrivatePrepareCallbackCallerPostReturnLockV1 || snapshot.CallbackEntered != PrivatePrepareObservedYesV1 || snapshot.CaptureResult != PrivatePrepareCheckpointOKV1 || snapshot.CallsResult != PrivatePrepareCheckpointUnobservedV1 || snapshot.IssuanceResult != PrivatePrepareCheckpointUnobservedV1 {
+	if snapshot.CallbackSample != PrivatePrepareCallbackCallerPostReturnLockV1 || snapshot.CallbackEntered != PrivatePrepareObservedYesV1 || snapshot.CaptureResult != sessionruntime.PrivateGroupingCaptureOK || snapshot.CallsResult != PrivatePrepareCheckpointUnobservedV1 || snapshot.IssuanceResult != PrivatePrepareCheckpointUnobservedV1 {
 		t.Fatal("ASSERT_CALLBACK_POST_RETURN_FREEZE: FAIL sampling")
 	}
 	saved := snapshot
 	unblock()
 	prepareObservationAwaitV1(t, done)
-	if snapshot != saved || r.value.CallsResult != PrivatePrepareCheckpointDeadlineV1 || r.value.IssuanceResult != PrivatePrepareCheckpointOKV1 {
+	if snapshot != saved || r.value.CaptureResult != sessionruntime.PrivateGroupingCaptureTargetSelectionRefused || r.value.CallsResult != PrivatePrepareCheckpointDeadlineV1 || r.value.IssuanceResult != PrivatePrepareCheckpointOKV1 {
 		t.Fatal("ASSERT_CALLBACK_POST_RETURN_FREEZE: FAIL detached copy")
 	}
 	t.Log("ASSERT_CALLBACK_POST_RETURN_FREEZE: PASS")
@@ -59,20 +60,20 @@ func TestPrivatePrepareWindowPostReturnFreeze(t *testing.T) {
 func TestPrivatePrepareWindowCallsGap(t *testing.T) {
 	r := privatePrepareCallbackObservationV1{value: PrivatePrepareLeaseObservationV1{CallbackEntered: PrivatePrepareObservedNoV1}}
 	first := r.freeze(sessionruntime.PrivateLeaseBoundaryObservation{})
-	if first.CallbackEntered != PrivatePrepareObservedNoV1 || first.CaptureResult != PrivatePrepareCheckpointUnobservedV1 {
+	if first.CallbackEntered != PrivatePrepareObservedNoV1 || first.CaptureResult != sessionruntime.PrivateGroupingCaptureUnobserved {
 		t.Fatal("ASSERT_CALLBACK_NO_ENTRY: FAIL")
 	}
 	r.enter()
-	r.captured(nil)
+	r.captured(sessionruntime.PrivateGroupingCaptureOK)
 	r.called(context.Canceled)
 	gap := r.freeze(sessionruntime.PrivateLeaseBoundaryObservation{})
-	if gap.CaptureResult != PrivatePrepareCheckpointOKV1 || gap.CallsResult != PrivatePrepareCheckpointCanceledV1 || gap.IssuanceResult != PrivatePrepareCheckpointUnobservedV1 {
+	if gap.CaptureResult != sessionruntime.PrivateGroupingCaptureOK || gap.CallsResult != PrivatePrepareCheckpointCanceledV1 || gap.IssuanceResult != PrivatePrepareCheckpointUnobservedV1 {
 		t.Fatal("ASSERT_CALLBACK_CALLS_GAP: FAIL")
 	}
 	t.Log("ASSERT_CALLBACK_NO_ENTRY: PASS; ASSERT_CALLBACK_CALLS_GAP: PASS")
 }
 func TestPrivatePrepareWindowPropagation(t *testing.T) {
-	v := PrivatePrepareLeaseObservationV1{Boundary: sessionruntime.PrivateLeaseBoundaryContextDone, ResultObserved: PrivatePrepareObservedNoV1, CallbackSample: PrivatePrepareCallbackCallerPostReturnLockV1, CallbackEntered: PrivatePrepareObservedYesV1, CaptureResult: PrivatePrepareCheckpointUnobservedV1, CallsResult: PrivatePrepareCheckpointNotApplicableV1}
+	v := PrivatePrepareLeaseObservationV1{Boundary: sessionruntime.PrivateLeaseBoundaryContextDone, ResultObserved: PrivatePrepareObservedNoV1, CallbackSample: PrivatePrepareCallbackCallerPostReturnLockV1, CallbackEntered: PrivatePrepareObservedYesV1, CaptureResult: sessionruntime.PrivateGroupingCaptureUnobserved, CallsResult: PrivatePrepareCheckpointNotApplicableV1}
 	expected := v
 	base := privatePrepareFailureAtV1(privatePrepareCaptureV1, ErrPrivateMixedInputV2, sessionruntime.ErrPrivateProviderWindowUnjoined)
 	e := privatePrepareFailureWithLeaseV1(base, v)

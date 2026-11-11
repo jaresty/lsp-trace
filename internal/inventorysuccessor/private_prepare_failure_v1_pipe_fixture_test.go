@@ -177,7 +177,7 @@ func TestPrivatePrepareFailureCaptureChild(t *testing.T) {
 	trace.Readback, trace.OwnerUncertain = readErr == nil, q.Owner.uncertain
 	trace.PacketBytes, trace.ZeroContinuation = len(out.Packet), out.Continuation == (PreparedDescribeAnchorsV1{})
 	trace.WorkersBeforeCleanup = uint64(fixture.Manager().Census().Workers)
-	trace.Stage, trace.Reason, trace.DeferredFinish = codes.Stage.String(), codes.Reason.String(), codes.Cleanup[0].String()
+	trace.Stage, trace.Reason, trace.DeferredFinish = privatePrepareCaptureClassifiedStageV1(t, codes), codes.Reason.String(), codes.Cleanup[0].String()
 	trace.PreparedSentinel, trace.MixedSentinel, trace.UnjoinedSentinel = errors.Is(err, ErrPreparedDescribeV1), errors.Is(err, ErrPrivateMixedInputV2), errors.Is(err, sessionruntime.ErrPrivateProviderWindowUnjoined)
 	if os.Getenv("LSP_TRACE_DIAG_CAPTURE_EXTRA_ERROR") == "1" {
 		t.Error("ASSERT_UNRELATED_CHILD_FAILURE")
@@ -576,4 +576,20 @@ func TestPrivatePrepareFailureFinishOracleGrammar(t *testing.T) {
 			t.Log("ASSERT_DIAG_FINISH_GRAMMAR: PASS")
 		})
 	}
+}
+
+// Keep new definitions after every original line-sensitive child and oracle.
+func privatePrepareCaptureClassifiedStageV1(t *testing.T, codes PrivatePrepareFailureCodesV1) string {
+	if codes.Lease.CaptureResult.String() != "TARGET_SELECTION_REFUSED" {
+		t.Error("ASSERT_CAPTURE_TARGET_SELECTION_REFUSED: FAIL", codes.Lease.CaptureResult.String())
+	}
+	return codes.Stage.String()
+}
+
+func TestPrivatePrepareCaptureClassificationBadTarget(t *testing.T) {
+	raw := privatePrepareCaptureChildOutputV1(t, false)
+	if !privatePrepareCaptureOutputV1(raw) {
+		t.Fatalf("ASSERT_CAPTURE_TARGET_SELECTION_REFUSED: FAIL native transcript\n%s", raw)
+	}
+	t.Logf("ASSERT_CAPTURE_TARGET_SELECTION_REFUSED: PASS actual BADTARGET within lease; original failed cleanup retained\n%s", raw)
 }
