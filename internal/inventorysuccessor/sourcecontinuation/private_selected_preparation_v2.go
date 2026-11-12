@@ -124,6 +124,15 @@ func selectedSlotV2(c inv.PrivateSelectedConfigurationV2) cc.PrivateAllModeSlot 
 // AdmissionID/request equality confer source admission. Actual Matches below is
 // still mandatory against Run's retained native admissions.
 func selectSelectedRowV2(meta cc.PrivateAllModeResult, source PrivateAllModeSourcesResult, c inv.PrivateSelectedConfigurationV2, selector *PrivateSelectedEndpointV2) (PrivateSelectedEndpointV2, error) {
+	return selectSelectedRowCriterionV2(meta, source, c, selector, false)
+}
+
+// Closed selection policy only, never source authority. The legacy nil/exact
+// entry always passes false; no callback or general selector language exists.
+func selectSelectedRowCriterionV2(meta cc.PrivateAllModeResult, source PrivateAllModeSourcesResult, c inv.PrivateSelectedConfigurationV2, selector *PrivateSelectedEndpointV2, dTarget bool) (PrivateSelectedEndpointV2, error) {
+	if dTarget && (selector != nil || c.Mode != "RD") {
+		return PrivateSelectedEndpointV2{}, ErrPrivateSelectedRowV2
+	}
 	slot := selectedSlotV2(c)
 	if slot.Ordinal < 0 || len(meta.Intents) == 0 || len(meta.Intents) > 1000 || len(meta.Nominations) > 1000 || len(source.Outcomes) != len(meta.Intents) || meta.Counts.Ready != 1 || meta.Counts.Missing != 6 {
 		return PrivateSelectedEndpointV2{}, ErrPrivateSelectedRowV2
@@ -164,7 +173,11 @@ func selectSelectedRowV2(meta cc.PrivateAllModeResult, source PrivateAllModeSour
 			return PrivateSelectedEndpointV2{}, ErrPrivateSelectedRowV2
 		}
 		candidate := PrivateSelectedEndpointV2{RowPosition: row, Slot: slot, Intent: i}
-		if selector != nil {
+		if dTarget {
+			if i.Endpoint.Kind != "RESOLVES_TO_DEFINITION" || i.Endpoint.Role != "DEFINITION_TARGET" {
+				continue
+			}
+		} else if selector != nil {
 			if selector.RowPosition < -1 || selector.Slot != slot || selector.Intent != i || selector.RowPosition >= 0 && selector.RowPosition != row {
 				continue
 			}
@@ -180,11 +193,23 @@ func selectSelectedRowV2(meta cc.PrivateAllModeResult, source PrivateAllModeSour
 	return PrivateSelectedEndpointV2{RowPosition: chosen, Slot: slot, Intent: meta.Intents[chosen]}, nil
 }
 
-// The only fixed consumer entry. Begin consumes the paid S operation; Run creates
+// Shared fixed consumer path. Begin consumes the paid S operation; Run creates
 // native admissions; whole Resume compares the exact expected handoff, original
 // handles, definitions (none in this envelope), checkpoint and every material byte.
 // Store cleanup, Observe and exact accounting readback precede result minting.
-func PrepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperationV2, selector *PrivateSelectedEndpointV2) (result PrivateSelectedResultV2, err error) {
+func PrepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperationV2, selector *PrivateSelectedEndpointV2) (PrivateSelectedResultV2, error) {
+	return prepareSelectedV2(ctx, op, selector, false)
+}
+
+// PrepareSelectedDTargetV2 selects a unique actual admitted RD definition target.
+// The role is a filter, not authority: native Matches and all readback/Finish
+// guards below remain mandatory. A self-definition is not excluded; expected
+// target/body and non-query qualification belong to a separately funded driver.
+func PrepareSelectedDTargetV2(ctx context.Context, op inv.PrivateSelectedSourceOperationV2) (PrivateSelectedResultV2, error) {
+	return prepareSelectedV2(ctx, op, nil, true)
+}
+
+func prepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperationV2, selector *PrivateSelectedEndpointV2, dTarget bool) (result PrivateSelectedResultV2, err error) {
 	if selector != nil {
 		copy := *selector
 		selector = &copy
@@ -197,7 +222,7 @@ func PrepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperatio
 	defer cancel()
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
-	if selector != nil && !selectedSelectorBoundV2(*selector) {
+	if dTarget && (selector != nil || c.Mode != "RD") || selector != nil && !selectedSelectorBoundV2(*selector) {
 		_ = op.Finish(execution, ErrPrivateSelectedRowV2)
 		return result, ErrPrivateSelectedRowV2
 	}
@@ -244,7 +269,7 @@ func PrepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperatio
 	if len(store.lower) == 0 || int64(len(store.lower)) > store.cap || json.Unmarshal(store.lower, &meta) != nil || meta.Version != cc.PrivateAllModeVersion || meta.HandoffID != handoff.ID() || meta.ClaimCeiling != rg.EvaluationCeilingPrivate {
 		return result, ErrPrivateSelectedRowV2
 	}
-	row, err := selectSelectedRowV2(meta, *resumed.PrivateSources, c, selector)
+	row, err := selectSelectedRowCriterionV2(meta, *resumed.PrivateSources, c, selector, dTarget)
 	if err != nil {
 		return result, err
 	}

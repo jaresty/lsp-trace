@@ -15,6 +15,7 @@ type privateSelectedRequestV2 struct {
 	Capture       inv.PrivateMixedInputRequestV2
 	Configuration inv.PrivateSelectedConfigurationV2
 	Endpoint      *sc.PrivateSelectedEndpointV2
+	DTarget       bool // closed policy, copied by value before M
 }
 
 // Private, fixed, untimed M -> P -> S. No Host, worker, callback, persistent
@@ -23,6 +24,9 @@ type privateSelectedRequestV2 struct {
 // namespace, lineage and three distinct attempts are caller declarations whose
 // replay/retirement is still enforced by the existing canonical native chain.
 func privatePrepareSelectedKindsV2(ctx context.Context, q privateSelectedRequestV2) (out sc.PrivateSelectedResultV2, err error) {
+	if q.DTarget && (q.Endpoint != nil || !privateRDTargetInputV2(q.Capture, q.Configuration)) {
+		return out, inv.ErrPrivateSelectedV2
+	}
 	if ctx == nil || ctx.Err() != nil || q.Owner == nil || q.Capture.Timing != nil || q.Capture.Start.Deadline.IsZero() || !time.Now().Before(q.Capture.Start.Deadline) || time.Until(q.Capture.Start.Deadline) > 15*time.Second {
 		return out, inv.ErrPrivateSelectedV2
 	}
@@ -64,6 +68,9 @@ func privatePrepareSelectedKindsV2(ctx context.Context, q privateSelectedRequest
 	source, err := q.Owner.ReserveSelectedSourceV2(execution, prepared)
 	if err != nil {
 		return out, err
+	}
+	if q.DTarget {
+		return sc.PrepareSelectedDTargetV2(execution, source)
 	}
 	return sc.PrepareSelectedV2(execution, source, q.Endpoint)
 }
