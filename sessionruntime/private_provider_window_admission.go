@@ -52,7 +52,7 @@ func (m *Manager) privateWindowGenerationLocked(r *runtimeSession) bool {
 
 // Admission occurs before shared-transaction copies, pending IDs or effects.
 func (w *privateProviderWindow) admitTransaction(m *Manager, req RoundTripRequest) bool {
-	if !w.exactOwner(m, req.SessionID, req.Generation) || !req.Deadline.Equal(w.deadline) || len(req.Params) > 32<<10 || req.MaxMessages != 4 || req.MaxBytes <= 0 || uint64(req.MaxBytes) > w.spec.bounds.BodyBytes || len(req.SessionID) > 4096 || len(req.DiagnosticTargetID) > 4096 || len(req.DiagnosticCallerID) > 4096 {
+	if !w.exactOwner(m, req.SessionID, req.Generation) || !req.Deadline.Equal(w.deadline) || len(req.Params) > 32<<10 || req.MaxMessages != privateProviderWindowControlMessages || req.PrivateNotificationMaxMessages < 0 || req.PrivateNotificationMaxMessages > privateProviderWindowNotificationMessages || req.MaxBytes <= 0 || uint64(req.MaxBytes) > w.spec.bounds.BodyBytes || len(req.SessionID) > 4096 || len(req.DiagnosticTargetID) > 4096 || len(req.DiagnosticCallerID) > 4096 {
 		return false
 	}
 	w.mu.Lock()

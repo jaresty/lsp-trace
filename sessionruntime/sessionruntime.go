@@ -1384,7 +1384,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointCumulativeWire) {
 			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 		}
-		if window != nil && !window.frame() {
+		if window != nil && !window.transactionFrame() {
 			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 		}
 		go func() {

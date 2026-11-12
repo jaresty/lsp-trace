@@ -24,8 +24,17 @@ var ErrPrivateProviderWindowUnjoined = errors.New("sessionruntime: FAILEDUNJOINE
 
 const privateProviderWindowUnjoined session.Failure = "FAILEDUNJOINED"
 
+const (
+	privateProviderWindowControlMessages      = 4
+	privateProviderWindowNotificationMessages = 4
+	privateProviderWindowTransactionFrames    = privateProviderWindowControlMessages + privateProviderWindowNotificationMessages
+)
+
 // These are logical I/O bounds, never grants or physical resource guarantees.
 type PrivateProviderWindowPlan struct{ Calls, References, Definitions bool }
+
+// FramesPerExchange is the transaction aggregate; legacy phases remain capped at four.
+// Frames is the unchanged shared global budget, not FramesPerExchange times exchanges.
 type PrivateProviderWindowBounds struct {
 	SourceBytes, SourceReadBytes, SourcePreparations                                uint64
 	HeaderBytes, BodyBytes, FrameBytes, Frames, FramesPerExchange                   uint64
@@ -128,7 +137,7 @@ func (m *Manager) PrivateProviderWindowEnvelope(start StartRequest, plan Private
 		preparations++
 	}
 	frame := uint64(s.wire.MaxHeaderBytes + s.wire.MaxBodyBytes)
-	s.bounds = PrivateProviderWindowBounds{SourceBytes: 16 << 10, SourceReadBytes: preparations * ((16 << 10) + 1), SourcePreparations: preparations, HeaderBytes: uint64(s.wire.MaxHeaderBytes), BodyBytes: uint64(s.wire.MaxBodyBytes), FrameBytes: frame, Frames: 4 * exchanges, FramesPerExchange: 4, RequestBytes: (exchanges + preparations + 2) * (frame + 1), ResponseBytes: 4 * exchanges * (frame + 4096 + 1), StderrDeliveryBytes: 64 << 10, CensusBytes: 4096, CensusLines: 128, CensusMembers: 64, CensusInvocations: 2}
+	s.bounds = PrivateProviderWindowBounds{SourceBytes: 16 << 10, SourceReadBytes: preparations * ((16 << 10) + 1), SourcePreparations: preparations, HeaderBytes: uint64(s.wire.MaxHeaderBytes), BodyBytes: uint64(s.wire.MaxBodyBytes), FrameBytes: frame, Frames: 4 * exchanges, FramesPerExchange: privateProviderWindowTransactionFrames, RequestBytes: (exchanges + preparations + 2) * (frame + 1), ResponseBytes: 4 * exchanges * (frame + 4096 + 1), StderrDeliveryBytes: 64 << 10, CensusBytes: 4096, CensusLines: 128, CensusMembers: 64, CensusInvocations: 2}
 	s.bounds.WireBytes = s.bounds.RequestBytes + s.bounds.ResponseBytes
 	s.attempt, s.sequence, s.started = m.beginStartupAttempt()
 	return PrivateProviderWindowEnvelope{s}, nil
@@ -260,10 +269,22 @@ func (w *privateProviderWindow) enter(method string) bool {
 	}
 	return true
 }
+
+// frame preserves the legacy initialize/readiness/shutdown four-frame limit.
 func (w *privateProviderWindow) frame() bool {
+	return w.frameBounded(privateProviderWindowControlMessages)
+}
+
+// transactionFrame admits a finite aggregate before decode reveals the class.
+// Every admitted iteration is still charged to the original shared global budget.
+func (w *privateProviderWindow) transactionFrame() bool {
+	return w.frameBounded(privateProviderWindowTransactionFrames)
+}
+
+func (w *privateProviderWindow) frameBounded(limit uint64) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if !w.liveLocked() || w.exchangeFrames >= 4 || w.frames >= w.spec.bounds.Frames {
+	if !w.liveLocked() || w.exchangeFrames >= limit || w.frames >= w.spec.bounds.Frames {
 		w.failed = true
 		return false
 	}

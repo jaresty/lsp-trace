@@ -451,7 +451,7 @@ func TestPrivateProviderWindowFrameAndServerRequestLimits(t *testing.T) {
 			windowTestReady(t, m, start, ctx)
 			c := s.child
 			if kind == "notifications" {
-				c.notifications = 4
+				c.notifications = 5
 			}
 			if kind == "server-request" {
 				c.serverRequest = true
