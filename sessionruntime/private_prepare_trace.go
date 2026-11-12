@@ -93,6 +93,16 @@ func privatePrepareTraceLeaseCancel(failure session.Failure, serverError, pair b
 	privatePrepareTracePresence(ctx, serverError, pair)
 }
 
+// privatePrepareTraceMessages emits at most one fixed-layout annotation at the
+// capture checkpoint, including failed captures. It shares the existing opt-in
+// trace and its cap; it creates no logger, transport, store, or default artifact.
+func privatePrepareTraceMessages(ctx context.Context, result RoundTripResult) {
+	if !trace.IsEnabled() {
+		return
+	}
+	trace.Log(ctx, "private.prepare.messages", privateProviderMessageSummaryJSON(result))
+}
+
 func privatePrepareTraceTransaction(ctx context.Context, sampledErr error, failure session.Failure, serverError, pair bool) {
 	if !trace.IsEnabled() {
 		return

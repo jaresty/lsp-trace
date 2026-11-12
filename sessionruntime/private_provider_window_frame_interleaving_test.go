@@ -29,6 +29,7 @@ type frameInterleavingScript struct {
 
 type frameInterleavingConfig struct {
 	notifications, unmatched int
+	fault                    string // test-only closed cases: malformed, request
 }
 
 func frameInterleavingServe(c *windowPipeChild, config frameInterleavingConfig, scripted chan<- frameInterleavingScript) {
@@ -66,6 +67,16 @@ func frameInterleavingServe(c *windowPipeChild, config frameInterleavingConfig, 
 			raw = json.RawMessage(`[{"name":"fixture","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}]`)
 			if encoded.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: raw}) != nil {
 				return
+			}
+			switch config.fault {
+			case "malformed":
+				burst.Reset()
+				burst.WriteString("Content-Length: 1\r\n\r\n{")
+			case "request":
+				burst.Reset()
+				if encoded.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`777`), Method: "private-canary/server-request", Params: json.RawMessage(`{}`)}) != nil {
+					return
+				}
 			}
 			scripted <- frameInterleavingScript{count, append(json.RawMessage(nil), msg.ID...), append([]byte(nil), burst.Bytes()...)}
 			// Closing the owned pipe unblocks this write if an iteration is refused.

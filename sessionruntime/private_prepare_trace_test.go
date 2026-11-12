@@ -69,11 +69,12 @@ func TestPrivatePrepareTraceEOF(t *testing.T) {
 	var got RoundTripResult
 	var sampledErr, cause error
 	leaseErr := m.WithReadySessionLease(upstream, SessionLeaseRequest{SessionID: s.SessionID, Generation: s.Generation, Workspace: "/workspace"}, func(ctx context.Context) error {
-		got = m.RoundTrip(ctx, RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "textDocument/documentSymbol", Params: json.RawMessage(`{}`), Deadline: time.Now().Add(time.Second), MaxMessages: 4, MaxBytes: 65536})
+		got = m.RoundTrip(ctx, RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "textDocument/documentSymbol", Params: json.RawMessage(`{}`), Deadline: time.Now().Add(time.Second), MaxMessages: 4, MaxBytes: 65536, CaptureProviderMessageCompositionAllMethods: true, CaptureProviderTransactionObservationAllMethods: true})
 		sampledErr = ctx.Err()
 		controlCalls, actualCalls := 0, 0
 		cause = context.Cause(privatePrepareTraceCountingContext{ctx, &controlCalls})
 		privatePrepareTraceTransaction(privatePrepareTraceCountingContext{ctx, &actualCalls}, sampledErr, got.Failure, got.ServerError != nil, got.ownedMethodPair != nil)
+		privatePrepareTraceMessages(ctx, got)
 		if actualCalls != controlCalls {
 			t.Fatal("ASSERT_TRACE_CAUSE_READS: FAIL")
 		}
@@ -86,7 +87,7 @@ func TestPrivatePrepareTraceEOF(t *testing.T) {
 		t.Fatal("ASSERT_TRACE_EOF_FACTS: FAIL")
 	}
 	t.Log("ASSERT_TRACE_EOF_FACTS: PASS upstream live, failure SESSION_CRASHED, context CANCELED, cause LEASE_CONFLICT")
-	for _, marker := range []string{"ABOUT_TO_CANCEL", "SESSION_CRASHED", "CANCELED", "LEASE_CONFLICT", "private.prepare.context_err", "private.prepare.context_cause", "private.prepare.server_error", "private.prepare.owned_pair", "RETURN"} {
+	for _, marker := range []string{"ABOUT_TO_CANCEL", "SESSION_CRASHED", "CANCELED", "LEASE_CONFLICT", "private.prepare.context_err", "private.prepare.context_cause", "private.prepare.server_error", "private.prepare.owned_pair", "RETURN", "private.prepare.messages"} {
 		if !bytes.Contains(storage.Bytes(), []byte(marker)) {
 			t.Fatal("ASSERT_TRACE_FAILURE_PRESERVED: FAIL", marker)
 		}

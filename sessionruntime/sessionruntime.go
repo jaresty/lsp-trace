@@ -878,6 +878,7 @@ type RoundTripResult struct {
 	providerMessageCompositionPresent bool                                  `json:"-"`
 	providerMessageAccumulator        providerMessageCompositionAccumulator `json:"-"`
 	providerTransaction               privateProviderTransactionCapture
+	privateProviderMessages           privateProviderMessageEvidence
 }
 
 func checkedMessageClassIncrement(value int) (int, bool) {
@@ -1148,6 +1149,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
 	started := m.now()
 	result := RoundTripResult{directionalV5: req.directionalV5, Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
+	result.privateProviderMessages.enabled = window != nil && req.directionalV5 == nil
 	result.providerMessageAccumulator.enabled = req.CaptureProviderMessageCompositionAllMethods || req.CaptureProviderMessageComposition && req.Method == "textDocument/documentSymbol"
 	result.providerTransaction.enabled = req.CaptureProviderTransactionObservationAllMethods || req.CaptureProviderTransactionObservation && req.Method == "textDocument/documentSymbol"
 	var privateRetainedNotifications []lspwire.Message
@@ -1385,8 +1387,10 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 		}
 		if window != nil && !window.transactionFrame() {
+			result.privateProviderMessages.stop(privateMessageFrameAdmissionRefused)
 			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 		}
+		result.privateProviderMessages.admitted()
 		go func() {
 			if window != nil && req.directionalV5 == nil {
 				msg, frame, raw, retained, err := lspwire.ReadPrivateBoundedFrameObservedAtDecode(child.Stdout(), wire, int64(window.spec.bounds.FrameBytes), captureCap, m.cWireObserver, decodeEntry, retainEntry)
@@ -1484,7 +1488,8 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				}
 			} else {
 				owner.retire()
-				<-reads // Close/teardown interrupted the outstanding read; join it.
+				joined := <-reads // Close/teardown interrupted the outstanding read; join it.
+				result.privateProviderMessages.joined(joined.message, joined.frame.FrameBytes, joined.err != nil)
 			}
 			if state == lspwire.CancelWritten {
 				m.mu.Lock()
@@ -1508,6 +1513,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				result.callHierarchyLayer1GenericAttempt.captureResponseFrame(read.raw, read.frame)
 			}
 			if read.err != nil {
+				result.privateProviderMessages.stop(privateMessageReadFailed)
 				result.providerMessageAccumulator.invalid(read.err)
 				failure := session.SessionPoisoned
 				if privateReader != nil && !errors.Is(read.err, io.EOF) && !errors.Is(read.err, errPrivateB4Transport) &&
@@ -1522,11 +1528,14 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				}
 				return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
 			}
+			result.privateProviderMessages.decoded(read.message, read.frame.FrameBytes, false)
 			if window != nil && read.message.Kind() == lspwire.KindRequest {
+				result.privateProviderMessages.stop(privateMessageRequestRefused)
 				return m.finishRoundTrip(req.SessionID, owner, result, session.ToolNotImplemented, true)
 			}
 			if account, ok := adr0011work.AccountFromContext(parent); ok {
 				if err := account.ChargeMessagesProcessed(account.Snapshot().Identity, 1); err != nil {
+					result.privateProviderMessages.stop(privateMessageWorkRefused)
 					return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 				}
 			}
@@ -1538,11 +1547,13 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			collector.Record(diagnosticEventReadComplete, bodyBytes, true)
 			result.Bytes += bodyBytes
 			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointMessageCount) {
+				result.privateProviderMessages.stop(privateMessageRuntimeRefused)
 				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 			}
 			result.Messages++
 			if result.Bytes > maxBytes {
 				result.providerMessageAccumulator.byteLimit = true
+				result.privateProviderMessages.stop(privateMessageByteRefused)
 				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 			}
 			var classCount int
@@ -1555,6 +1566,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				result.controlMessages, classIncremented = checkedMessageClassIncrement(result.controlMessages)
 				classCount = result.controlMessages
 			default:
+				result.privateProviderMessages.stop(privateMessageProtocolRefused)
 				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 			}
 			classLimit := maxMessages
@@ -1563,6 +1575,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			if !classIncremented || classLimit >= 0 && classCount > classLimit {
 				result.providerMessageAccumulator.messageCeiling = true
+				result.privateProviderMessages.stop(privateMessageClassRefused)
 				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 			}
 			releaseUnselectedFrame := func() {
@@ -1587,6 +1600,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			if read.message.Kind() == lspwire.KindNotification || read.message.Kind() == lspwire.KindRequest {
 				result.providerMessageAccumulator.dispatch(read.message, false)
+				result.privateProviderMessages.dispatched(false)
 				if req.ADR0011PrivateNotificationLeaseV1 && private != nil && !private.nonCustodial && read.message.Kind() == lspwire.KindNotification {
 					privateRetainedNotifications = append(privateRetainedNotifications, read.message)
 				} else {
@@ -1598,6 +1612,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			responseID, err := strconv.ParseUint(string(read.message.ID), 10, 64)
 			if err != nil || responseID != key.ID {
 				result.providerMessageAccumulator.dispatch(read.message, false)
+				result.privateProviderMessages.dispatched(false)
 				collector.Record(diagnosticEventUnmatched, int64(responseID), false)
 				if req.ADR0011PrivateResponseLeaseV1 && private != nil && !private.nonCustodial {
 					privateRetainedResponses = append(privateRetainedResponses, read.message)
@@ -1613,6 +1628,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			if disposition != lspwire.ResponseAccepted {
 				result.providerMessageAccumulator.dispatch(read.message, false)
+				result.privateProviderMessages.dispatched(false)
 				collector.Record(diagnosticEventLate, int64(responseID), false)
 				if req.ADR0011PrivateResponseLeaseV1 && private != nil && !private.nonCustodial {
 					privateRetainedResponses = append(privateRetainedResponses, read.message)
@@ -1624,6 +1640,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			result.providerMessageAccumulator.dispatchDisposition(read.message, disposition)
 			result.providerTransaction.selectedResponseObserved = true
+			result.privateProviderMessages.dispatched(true)
 			collector.Record(diagnosticEventMatched, int64(responseID), true)
 			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDecodedMessage) {
 				releaseUnselectedFrame()

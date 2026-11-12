@@ -559,10 +559,11 @@ func (m *Manager) capturePrivateGroupingOwnedObserved(ctx context.Context, req P
 	binding := OwnedDocumentBinding{URI: req.URI, Version: d.Version, SHA256: fmt.Sprintf("sha256:%x", sha256.Sum256(source))}
 	query := adr0011querytarget.Query{OccurrenceID: req.OccurrenceID, URI: req.URI, Encoding: metadata.PositionEncoding, DocumentVersion: strconv.Itoa(d.Version), SourceDigest: binding.SHA256, SessionID: req.Session.SessionID, Generation: req.Session.Generation, Line: req.Line, Character: req.Character}
 	transact := func(method string, params []byte) (OwnedMethodPair, error, PrivateGroupingCaptureResult) {
-		wire := RoundTripRequest{SessionID: req.Session.SessionID, Generation: req.Session.Generation, Method: method, Params: params, Deadline: req.Deadline, MaxMessages: 4, MaxBytes: 65536, CaptureOwnedMethodPair: true, ExpectedOwnedDocument: &binding, ADR0011PrivateP2: method != "textDocument/documentSymbol"}
+		wire := RoundTripRequest{SessionID: req.Session.SessionID, Generation: req.Session.Generation, Method: method, Params: params, Deadline: req.Deadline, MaxMessages: 4, MaxBytes: 65536, CaptureProviderMessageCompositionAllMethods: true, CaptureProviderTransactionObservationAllMethods: true, CaptureOwnedMethodPair: true, ExpectedOwnedDocument: &binding, ADR0011PrivateP2: method != "textDocument/documentSymbol"}
 		result := m.RoundTrip(ctx, wire)
 		ctxErr := ctx.Err() // the original single read, at the original transaction checkpoint
 		privatePrepareTraceTransaction(ctx, ctxErr, result.Failure, result.ServerError != nil, result.ownedMethodPair != nil)
+		privatePrepareTraceMessages(ctx, result)
 		if ctxErr != nil || result.Failure != "" || result.ServerError != nil || result.ownedMethodPair == nil {
 			return OwnedMethodPair{}, ErrPrivateGroupingOwned, privateGroupingCaptureTransactionResult(method == "textDocument/documentSymbol", ctxErr, result.Failure, result.ServerError != nil, result.ownedMethodPair == nil, false)
 		}
