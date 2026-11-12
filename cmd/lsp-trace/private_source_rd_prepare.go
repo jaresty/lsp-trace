@@ -176,10 +176,10 @@ func decodePrivateRDConfig(raw []byte) (privateRDConfig, bool) {
 		}
 	}
 	for i, a := range c.Attempts {
-		if len(a) != 64 {
+		if len(a) != 71 || a[:7] != "sha256:" {
 			return privateRDConfig{}, false
 		}
-		for _, v := range a {
+		for _, v := range a[7:] {
 			if !(v >= '0' && v <= '9' || v >= 'a' && v <= 'f') {
 				return privateRDConfig{}, false
 			}

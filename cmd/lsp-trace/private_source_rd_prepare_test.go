@@ -213,7 +213,7 @@ func TestPrivateRDDriverConfigRoundTrip(t *testing.T) {
 	c.Profile.Workspace = c.Workspace
 	c.Deadline = time.Unix(1000, 0)
 	c.RetainUntil = c.Deadline.Add(time.Minute)
-	c.Attempts = [3]string{strings.Repeat("1", 64), strings.Repeat("2", 64), strings.Repeat("3", 64)}
+	c.Attempts = [3]string{"sha256:" + strings.Repeat("1", 64), "sha256:" + strings.Repeat("2", 64), "sha256:" + strings.Repeat("3", 64)}
 	pin := "sha256:" + strings.Repeat("0", 64)
 	c.ContractInput = cc.ContractInput{ContinuationID: pin, ProfileID: pin, WorkerPinID: pin, CaptureLimits: cc.ProductionCaptureLimits(), PacketMaxResponseBytes: 1 << 20, DescribeDeadlineMS: 1000, RetryPolicy: cc.RetryPolicy{MaxAttemptsPerRequest: 1}}
 	if _, err := cc.NewContinuationContract(c.ContractInput); err != nil {
@@ -236,6 +236,57 @@ func TestPrivateRDDriverConfigRoundTrip(t *testing.T) {
 		t.Fatal("duplicate attempt accepted")
 	}
 	t.Log("ASSERT_RD_CONFIG_DATA: PASS (not job/native admission)")
+}
+
+// Decoder/data-only regression: no SDK admission or native execution is exercised.
+func TestPrivateRDDriverAttemptFormat(t *testing.T) {
+	c, _, _ := privateRDDriverDTO()
+	c.Schema = "private-source-prepare-rd.v1"
+	c.AccountingRoot = "/synthetic-accounting"
+	c.CanonicalJob = []byte("synthetic metadata, not an admitted job")
+	c.ProcessPath = "/synthetic-provider"
+	c.Profile.Workspace = c.Workspace
+	c.Deadline = time.Unix(1000, 0)
+	c.RetainUntil = c.Deadline.Add(time.Minute)
+	canonical := [3]string{"sha256:" + strings.Repeat("1", 64), "sha256:" + strings.Repeat("a", 64), "sha256:" + strings.Repeat("f", 64)}
+	for _, tc := range []struct {
+		name    string
+		attempt string
+		want    bool
+	}{
+		{"canonical", canonical[0], true},
+		{"raw64", strings.Repeat("1", 64), false},
+		{"wrongPrefix", "sha512:" + strings.Repeat("1", 64), false},
+		{"upperPrefix", "SHA256:" + strings.Repeat("1", 64), false},
+		{"upperHex", "sha256:" + strings.Repeat("A", 64), false},
+		{"malformed", "sha256:" + strings.Repeat("1", 63) + "g", false},
+		{"nonASCII", "sha256:" + strings.Repeat("1", 62) + "é", false},
+		{"empty", "", false},
+		{"prefixOnly", "sha256:", false},
+		{"short", "sha256:" + strings.Repeat("1", 63), false},
+		{"long", "sha256:" + strings.Repeat("1", 65), false},
+		{"duplicate", canonical[1], false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c.Attempts = canonical
+			c.Attempts[0] = tc.attempt
+			raw, err := json.Marshal(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, ok := decodePrivateRDConfig(raw)
+			if ok != tc.want {
+				t.Fatalf("ASSERT_RD_ATTEMPT_FORMAT/%s: got %v want %v", tc.name, ok, tc.want)
+			}
+			t.Logf("ASSERT_RD_ATTEMPT_FORMAT/%s: PASS", tc.name)
+			if tc.want {
+				if decoded.Attempts != c.Attempts {
+					t.Fatal("ASSERT_RD_ATTEMPT_PRESERVED: changed decoded strings")
+				}
+				t.Log("ASSERT_RD_ATTEMPT_PRESERVED: PASS (decoder data only)")
+			}
+		})
+	}
 }
 
 func TestPrivateRDDriverConfigClosed(t *testing.T) {
