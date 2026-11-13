@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash"
 	"reflect"
+	"slices"
 	"sort"
 )
 
@@ -316,7 +317,7 @@ func equalStrings(a, b []string) bool {
 }
 
 func cloneCompositeProjectionAdmission(in CompositeProjectionAdmission) CompositeProjectionAdmission {
-	return CompositeProjectionAdmission{nodeIDs: in.NodeIdentities(), occurrences: in.Occurrences(), claimCeiling: in.claimCeiling, source: in.SourceBinding(), canonicalBytes: cloneBytes(in.canonicalBytes), valid: in.valid}
+	return CompositeProjectionAdmission{nodeIDs: slices.Clone(in.nodeIDs), occurrences: slices.Clone(in.occurrences), claimCeiling: in.claimCeiling, source: in.SourceBinding(), canonicalBytes: cloneBytes(in.canonicalBytes), valid: in.valid}
 }
 
 func (in TypedInput) retainedCallsAdmission() CompositeProjectionAdmission {
