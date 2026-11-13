@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"lsp-trace/internal/inventorytracediag"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
@@ -749,11 +750,13 @@ func (m *Manager) finishPrivateProviderWindow(w *privateProviderWindow) {
 }
 
 func (m *Manager) runPrivateProviderWindowReadiness(parent context.Context, child *privateProviderWindowChild, opID string, generation uint64, workspace string) {
+	defer inventorytracediag.Begin(parent, inventorytracediag.ReadinessRegion).End()
 	w := child.window
 	owner := &ownedTransport{child: child}
 	failureKind := session.InitializationFailure
 	var initializeBytes, initializedBytes int64
 	fail := func() {
+		inventorytracediag.Event(parent, inventorytracediag.ReadinessRefused)
 		owner.retire()
 		m.retainReadinessRetirement(opID, child, owner.teardown, owner.resources)
 		m.terminalReadinessEvent(opID, diagnosticEventTerminalFailure)
@@ -836,7 +839,12 @@ func (m *Manager) runPrivateProviderWindowReadiness(parent context.Context, chil
 	if metadata.PositionEncoding == "" {
 		metadata.PositionEncoding = "utf-16"
 	}
+	if inventorytracediag.Enabled() {
+		requested, observed, _ := inventorytracediag.CapabilityMasks(w.spec.plan.Calls, w.spec.plan.References, w.spec.plan.Definitions, metadata.DocumentSymbolSupport, metadata.CallHierarchySupport, metadata.ReferencesSupport, metadata.DefinitionSupport)
+		inventorytracediag.Capabilities(parent, requested, observed)
+	}
 	if !metadata.DocumentSymbolSupport || w.spec.plan.Calls && !metadata.CallHierarchySupport || w.spec.plan.References && !metadata.ReferencesSupport || w.spec.plan.Definitions && !metadata.DefinitionSupport {
+		inventorytracediag.Event(parent, inventorytracediag.CapabilityUnsupported)
 		failureKind = session.ToolNotImplemented
 		fail()
 		return

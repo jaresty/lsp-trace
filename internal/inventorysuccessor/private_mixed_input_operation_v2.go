@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"lsp-trace/internal/inventorytracediag"
 	sourceclock "lsp-trace/internal/privatesourceclock"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/publication"
@@ -227,10 +228,13 @@ func (r *privatePrepareCallbackObservationV1) freeze(native sessionruntime.Priva
 // The only successful return is AFTER original-lease return, window worker join,
 // and confirmed Observe. Failures retain PENDING/uncertain cumulative accounting.
 func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q PrivateMixedInputRequestV2) (_ PrivateManagedGroupingInput, failure error) {
+	// Early refusals do not consult an unvalidated context for task metadata.
+	inventorytracediag.Event(context.Background(), inventorytracediag.Replay)
 	stage := privatePrepareReplayV1
 	var leaseObservation PrivatePrepareLeaseObservationV1
 	leaseSampled := false
 	fail := func(err error) (PrivateManagedGroupingInput, error) {
+		inventorytracediag.Event(context.Background(), inventorytracediag.ExecuteRefused)
 		failure := privatePrepareFailureAtV1(stage, ErrPrivateMixedInputV2, err)
 		if leaseSampled {
 			failure = privatePrepareFailureWithLeaseV1(failure, leaseObservation)
@@ -264,21 +268,29 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 	if !live {
 		return fail(nil)
 	}
+	defer inventorytracediag.Begin(ctx, inventorytracediag.Execute).End()
 	execution, cancel := context.WithDeadline(ctx, q.Start.Deadline)
 	defer cancel()
 	stage = privatePrepareWindowV1
+	inventorytracediag.Event(ctx, inventorytracediag.Window)
 	window, err := q.Manager.PrivateProviderWindowContext(execution, s.envelope, q.Start.Deadline)
 	if err != nil {
 		return fail(err)
 	}
+	var operation PrivateManagedInputOperationV2
 	// Failure cleanup uses the SAME original window; no deadline renewal/reset.
 	defer func() {
+		inventorytracediag.Event(ctx, inventorytracediag.DeferredFinish)
 		_, finishErr := q.Manager.FinishPrivateProviderWindow(window)
 		// Retain failure-only cleanup attribution. The old repeated Finish after
 		// successful Observe MUST NOT change otherwise successful availability.
 		failure = privatePrepareDeferredFinishV1(failure, finishErr)
+		// Finish before abort cancels unfinished execution: Go defers are LIFO.
+		operation.abortFixed()
+		inventorytracediag.Event(ctx, inventorytracediag.DeferredFinishDone)
 	}()
 	stage = privatePrepareStartV1
+	inventorytracediag.Event(ctx, inventorytracediag.Start)
 	start := q.Manager.Start(window, q.Start)
 	if start.Failure != "" {
 		cause := execution.Err()
@@ -288,6 +300,7 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		return fail(cause)
 	}
 	stage = privatePrepareReadinessV1
+	inventorytracediag.Event(ctx, inventorytracediag.Readiness)
 	pending := q.Manager.BeginReadiness(window, start.SessionID, start.Generation, q.Start.Deadline)
 	ready, ok := q.Manager.WaitReadiness(window, pending.ID)
 	if !ok || ready.State != sessionruntime.ReadinessReady {
@@ -300,6 +313,7 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		return fail(cause)
 	}
 	stage = privatePrepareCaptureV1
+	inventorytracediag.Event(ctx, inventorytracediag.Capture)
 	session := sessionruntime.SessionLeaseRequest{SessionID: start.SessionID, Generation: start.Generation, Workspace: q.Start.Profile.Workspace().String()}
 	plan, _ := privateMixedPlanV2(q)
 	grouping := PrivateManagedGroupingRequest{Session: session, URI: q.URI, OccurrenceID: q.OccurrenceID, Revision: q.Revision, Privacy: q.Privacy, OccurrenceAdmissionPolicyID: q.OccurrencePolicy, CompositionPolicyID: q.CompositionPolicy, Line: q.Line, Character: q.Character, Kinds: q.Kinds, Root: q.Root, Deadline: q.Start.Deadline}
@@ -309,9 +323,8 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 	if err != nil {
 		return fail(err)
 	}
-	operation := PrivateManagedInputOperationV2{&privateManagedInputOperationV2{owner: o, binding: binding, attempt: s.attempt, head: s.head, used: true, execution: execution, cancel: cancel}}
+	operation = PrivateManagedInputOperationV2{&privateManagedInputOperationV2{owner: o, binding: binding, attempt: s.attempt, head: s.head, used: true, execution: execution, cancel: cancel}}
 	grouping.Operation = operation
-	defer operation.abortFixed()
 	var out PrivateManagedGroupingInput
 	checkpoints := privatePrepareCallbackObservationV1{value: PrivatePrepareLeaseObservationV1{CallbackEntered: PrivatePrepareObservedNoV1}}
 	if !plan.Calls {
@@ -320,6 +333,7 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 	var leaseBoundary sessionruntime.PrivateLeaseBoundaryObservation
 	err, leaseBoundary = q.Manager.WithReadySessionLeaseObserved(window, session, func(base context.Context) error {
 		checkpoints.enter() // first callback statement, not a never-runs claim
+		defer inventorytracediag.Begin(base, inventorytracediag.LeaseCallback).End()
 		req := sessionruntime.PrivateGroupingOwnedRequest{Session: session, URI: q.URI, OccurrenceID: q.OccurrenceID, Revision: q.Revision, Privacy: q.Privacy, Line: q.Line, Character: q.Character, References: plan.References, Definitions: plan.Definitions, Deadline: q.Start.Deadline}
 		var h sessionruntime.PrivateGroupingOwnedHandoff
 		var e error
@@ -331,20 +345,28 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		}
 		checkpoints.captured(captureResult)
 		if e != nil {
+			inventorytracediag.Event(base, inventorytracediag.CaptureRefused)
 			return e
 		}
 		if plan.Calls {
+			inventorytracediag.Event(base, inventorytracediag.NativeCallsAttempt)
 			line, ch := q.Line, q.Character
 			native, e := constructNativeCallsPrivateV2(base, q.Manager, PrivateNativeCallsRequestV2{Session: session, Revision: q.Revision, Privacy: q.Privacy, Directional: sessionruntime.DirectionalCallHierarchyRequestPrivate{SessionID: session.SessionID, Generation: session.Generation, URI: q.URI, LanguageID: q.Start.LanguageID, Line: &line, Character: &ch, Deadline: q.Start.Deadline, MaxMessages: 4, MaxBytes: 65536}}, true)
 			checkpoints.called(e)
 			if e != nil {
+				inventorytracediag.Event(base, inventorytracediag.NativeCallsRefused)
 				return e
 			}
+			inventorytracediag.Event(base, inventorytracediag.NativeCallsReturned)
 			grouping.Calls = native.Admission.Admission
 			grouping.nativeProof = native.nativeEvidence
 		}
+		inventorytracediag.Event(base, inventorytracediag.IssueAttempt)
 		out, e = issuePrivateManagedGroupingInput(base, q.Manager, h, grouping)
 		checkpoints.issued(e)
+		if e != nil {
+			inventorytracediag.Event(base, inventorytracediag.IssueRefused)
+		}
 		return e
 	})
 	leaseObservation = checkpoints.freeze(leaseBoundary)
@@ -362,12 +384,15 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 				method = "textDocument/definition"
 			}
 			if out.Dispositions[method] == "UNAVAILABLE" {
+				inventorytracediag.Event(ctx, inventorytracediag.LedgerUnavailable)
 				return fail(ErrPrivateMixedInputUnavailableV2)
 			}
 		}
+		inventorytracediag.Event(ctx, inventorytracediag.LedgerEmpty)
 		return fail(ErrPrivateMixedInputEmptyV2)
 	}
 	stage = privatePrepareFinishV1
+	inventorytracediag.Event(ctx, inventorytracediag.Finish)
 	completion, err := q.Manager.FinishPrivateProviderWindow(window)
 	if err != nil || !completion.Completed || q.Manager.Census().Workers != 0 {
 		if err == nil {
@@ -379,12 +404,14 @@ func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q
 		return fail(context.DeadlineExceeded)
 	}
 	stage = privatePrepareObserveV1
+	inventorytracediag.Event(ctx, inventorytracediag.Observe)
 	if err = operation.completeFixed(execution); err != nil {
 		return fail(err)
 	}
 	// The source token remained private through lease/window join and confirmed
 	// Observe. No failed or uncertain producer can expose source originals.
 	out.sourceConfirmed = true
+	inventorytracediag.Event(ctx, inventorytracediag.Confirmed)
 	if q.Timing != nil {
 		f := *q.Timing
 		prep := time.Now().Add(time.Duration(f.Profile.PreparationMS) * time.Millisecond)
