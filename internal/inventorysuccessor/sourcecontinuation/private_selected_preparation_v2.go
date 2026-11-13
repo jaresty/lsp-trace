@@ -130,6 +130,12 @@ func selectSelectedRowV2(meta cc.PrivateAllModeResult, source PrivateAllModeSour
 // Closed selection policy only, never source authority. The legacy nil/exact
 // entry always passes false; no callback or general selector language exists.
 func selectSelectedRowCriterionV2(meta cc.PrivateAllModeResult, source PrivateAllModeSourcesResult, c inv.PrivateSelectedConfigurationV2, selector *PrivateSelectedEndpointV2, dTarget bool) (PrivateSelectedEndpointV2, error) {
+	return selectSelectedRowRoleV3(meta, source, c, selector, dTarget, nil)
+}
+func selectSelectedRowRoleV3(meta cc.PrivateAllModeResult, source PrivateAllModeSourcesResult, c inv.PrivateSelectedConfigurationV2, selector *PrivateSelectedEndpointV2, dTarget bool, role *PrivateSelectedRoleV3) (PrivateSelectedEndpointV2, error) {
+	if role != nil && (selector != nil || dTarget || !role.matchesMode(c.Mode)) {
+		return PrivateSelectedEndpointV2{}, ErrPrivateSelectedRowV2
+	}
 	if dTarget && (selector != nil || c.Mode != "RD") {
 		return PrivateSelectedEndpointV2{}, ErrPrivateSelectedRowV2
 	}
@@ -173,7 +179,11 @@ func selectSelectedRowCriterionV2(meta cc.PrivateAllModeResult, source PrivateAl
 			return PrivateSelectedEndpointV2{}, ErrPrivateSelectedRowV2
 		}
 		candidate := PrivateSelectedEndpointV2{RowPosition: row, Slot: slot, Intent: i}
-		if dTarget {
+		if role != nil {
+			if i.Endpoint.Kind != role.Kind || i.Endpoint.Role != role.Role {
+				continue
+			}
+		} else if dTarget {
 			if i.Endpoint.Kind != "RESOLVES_TO_DEFINITION" || i.Endpoint.Role != "DEFINITION_TARGET" {
 				continue
 			}
@@ -209,7 +219,10 @@ func PrepareSelectedDTargetV2(ctx context.Context, op inv.PrivateSelectedSourceO
 	return prepareSelectedV2(ctx, op, nil, true)
 }
 
-func prepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperationV2, selector *PrivateSelectedEndpointV2, dTarget bool) (result PrivateSelectedResultV2, err error) {
+func prepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperationV2, selector *PrivateSelectedEndpointV2, dTarget bool) (PrivateSelectedResultV2, error) {
+	return prepareSelectedRoleCriterionV3(ctx, op, selector, dTarget, nil)
+}
+func prepareSelectedRoleCriterionV3(ctx context.Context, op inv.PrivateSelectedSourceOperationV2, selector *PrivateSelectedEndpointV2, dTarget bool, role *PrivateSelectedRoleV3) (result PrivateSelectedResultV2, err error) {
 	if selector != nil {
 		copy := *selector
 		selector = &copy
@@ -222,7 +235,7 @@ func prepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperatio
 	defer cancel()
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
-	if dTarget && (selector != nil || c.Mode != "RD") || selector != nil && !selectedSelectorBoundV2(*selector) {
+	if role != nil && (selector != nil || dTarget || !role.matchesMode(c.Mode)) || dTarget && (selector != nil || c.Mode != "RD") || selector != nil && !selectedSelectorBoundV2(*selector) {
 		_ = op.Finish(execution, ErrPrivateSelectedRowV2)
 		return result, ErrPrivateSelectedRowV2
 	}
@@ -269,7 +282,7 @@ func prepareSelectedV2(ctx context.Context, op inv.PrivateSelectedSourceOperatio
 	if len(store.lower) == 0 || int64(len(store.lower)) > store.cap || json.Unmarshal(store.lower, &meta) != nil || meta.Version != cc.PrivateAllModeVersion || meta.HandoffID != handoff.ID() || meta.ClaimCeiling != rg.EvaluationCeilingPrivate {
 		return result, ErrPrivateSelectedRowV2
 	}
-	row, err := selectSelectedRowCriterionV2(meta, *resumed.PrivateSources, c, selector, dTarget)
+	row, err := selectSelectedRowRoleV3(meta, *resumed.PrivateSources, c, selector, dTarget, role)
 	if err != nil {
 		return result, err
 	}
