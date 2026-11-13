@@ -2,6 +2,7 @@ package referencegrouping
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lsp-trace/internal/inventorytracediag"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/programccompose"
 )
@@ -338,7 +340,13 @@ func BuildInput(req InputRequest) (Artifact, error) {
 		return contribs[i].OccurrenceIdentity < contribs[j].OccurrenceIdentity
 	})
 
-	if err := validateRequiredPredecessors(selectorByRole, occurrences); err != nil {
+	callsCarrierPresent := false
+	for _, kind := range projection.SelectedKinds() {
+		if kind == programcadmission.TypedCalls && len(projection.RetainedCallsCanonicalBytes()) > 0 {
+			callsCarrierPresent = true
+		}
+	}
+	if err := validateRequiredPredecessors(selectorByRole, occurrences, callsCarrierPresent); err != nil {
 		return Artifact{}, err
 	}
 	custody, err := expandCustody(req.EndpointCustody, occurrences, roleBySelector)
@@ -485,8 +493,11 @@ func predecessorContract(role string) (string, string, bool) {
 	contract, ok := contracts[role]
 	return contract[0], contract[1], ok
 }
-func validateRequiredPredecessors(selectors map[string]string, occurrences []programcadmission.TypedOccurrence) error {
+func validateRequiredPredecessors(selectors map[string]string, occurrences []programcadmission.TypedOccurrence, callsCarrierPresent bool) error {
 	required := map[string]bool{"OCCURRENCE_LEDGER": true}
+	if callsCarrierPresent {
+		required["ACQUISITION_RECEIPT"], required["RETAINED_COMPOSITE"] = true, true
+	}
 	for _, occurrence := range occurrences {
 		if occurrence.Kind == programcadmission.TypedCalls {
 			required["ACQUISITION_RECEIPT"], required["RETAINED_COMPOSITE"] = true, true
@@ -496,6 +507,8 @@ func validateRequiredPredecessors(selectors map[string]string, occurrences []pro
 	}
 	if selectors["NATIVE_EVIDENCE"] != "" {
 		if !required["RETAINED_COMPOSITE"] {
+			// Contextless rejection: goroutine-local event, no parent-task claim.
+			inventorytracediag.Event(context.Background(), inventorytracediag.NativeProofWithoutCalls)
 			return errors.New("native proof without calls")
 		}
 		required["NATIVE_EVIDENCE"] = true
