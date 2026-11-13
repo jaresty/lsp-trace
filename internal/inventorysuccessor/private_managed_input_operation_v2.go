@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"lsp-trace/internal/adr0011methodsyntax"
 	"lsp-trace/internal/adr0011querytarget"
+	"lsp-trace/internal/inventorytracediag"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/referencegrouping"
 	"sort"
@@ -569,29 +570,37 @@ func IssuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 
 // Only the already consumed Acquire/Issue operation can reach this continuation.
 func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Manager, h sessionruntime.PrivateGroupingOwnedHandoff, q PrivateManagedGroupingRequest) (PrivateManagedGroupingInput, error) {
+	defer inventorytracediag.Begin(ctx, inventorytracediag.Issue).End()
 	var out PrivateManagedGroupingInput
 	err := m.ConsumePrivateGroupingOwned(ctx, h, func(v sessionruntime.PrivateGroupingOwnedView) error {
 		if !q.Deadline.Equal(v.Deadline) {
+			inventorytracediag.Event(ctx, inventorytracediag.OwnedDeadlineRefused)
 			return ErrPrivateManagedGrouping
 		}
 		if v.Workspace != q.Session.Workspace || v.Query.SessionID != q.Session.SessionID || v.Query.Generation != q.Session.Generation || v.Query.URI != q.URI || v.Query.OccurrenceID != q.OccurrenceID || v.Query.Line != q.Line || v.Query.Character != q.Character || v.Revision != q.Revision || v.Privacy != q.Privacy {
+			inventorytracediag.Event(ctx, inventorytracediag.OwnedIdentityRefused)
 			return ErrPrivateManagedGrouping
 		}
 		// Re-select from the exact owned result before any publication or admission.
 		target, err := adr0011querytarget.SelectDocumentSymbolCandidateV1(v.Query, v.Symbol.Result)
 		if err != nil || target != v.Target || v.Symbol.Source == nil || v.Query.SourceDigest != v.Symbol.Source.SHA256 || v.Query.SourceDigest != privateGroupingDigest(v.Source) {
+			inventorytracediag.Event(ctx, inventorytracediag.OwnedTargetRefused)
 			return ErrPrivateManagedGrouping
 		}
 		if err := q.Operation.bindOwnedFixed(h, v.Query.SourceDigest); err != nil {
+			inventorytracediag.Event(ctx, inventorytracediag.BindOwnedRefused)
 			return err
 		}
 		queryOriginal, err := privateGroupingQueryBytes(v)
 		if err != nil {
+			inventorytracediag.Event(ctx, inventorytracediag.QueryBytesRefused)
 			return err
 		}
+		inventorytracediag.Event(ctx, inventorytracediag.BuildAttempt)
 		out, err = privateGroupingBuild(v, q, queryOriginal)
 		out.sourceQueryOriginal = queryOriginal
 		if err != nil {
+			inventorytracediag.Event(ctx, inventorytracediag.BuildRefused)
 			return fmt.Errorf("private grouping build: %w", err)
 		}
 		if len(out.Ledger) == 0 {
@@ -605,6 +614,7 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 			}
 			selector, digest, err := chainPublish(q.Root, "private-grouping", p.Bytes)
 			if err != nil {
+				inventorytracediag.Event(ctx, inventorytracediag.PublicationRefused)
 				return err
 			}
 			if err := ctx.Err(); err != nil {
@@ -618,6 +628,7 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 		raw := out.Input.CanonicalBytes()
 		selector, digest, err := chainPublish(q.Root, "private-grouping-input", raw)
 		if err != nil {
+			inventorytracediag.Event(ctx, inventorytracediag.PublicationRefused)
 			return err
 		}
 		if err := ctx.Err(); err != nil {
@@ -646,9 +657,11 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 			return err
 		}
 		out.sourceOriginal = v.Query.SourceDigest
+		inventorytracediag.Event(ctx, inventorytracediag.ReplayAttempt)
 		return out.replayPrivate(ctx, q.Root)
 	})
 	if err != nil {
+		inventorytracediag.Event(ctx, inventorytracediag.ConsumeRefused)
 		return PrivateManagedGroupingInput{}, errors.Join(ErrPrivateManagedGrouping, err)
 	}
 	// Keep the token private until the enclosing producer confirms completion.
@@ -656,6 +669,7 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 	if len(out.ledgerOriginal) != 0 {
 		out.sourceEvidence, err = m.TakePrivateGroupingSourceEvidence(ctx, h)
 		if err != nil {
+			inventorytracediag.Event(ctx, inventorytracediag.TakeEvidenceRefused)
 			return PrivateManagedGroupingInput{}, errors.Join(ErrPrivateManagedGrouping, err)
 		}
 	}
@@ -787,6 +801,8 @@ func privateGroupingQueryBytes(v sessionruntime.PrivateGroupingOwnedView) ([]byt
 	}{v.Query, v.Target, v.Source, privateGroupingSupply{v.Supply.Classification, v.Supply.SessionID, v.Supply.Generation, v.Supply.URI, v.Supply.DocumentVersion, v.Supply.Method, v.Supply.Content, []byte(v.Supply.Params)}, v.Metadata, v.Revision, "CALLER_ASSERTED", v.Privacy, v.Workspace, v.Deadline, privateGroupingNativePair(v.Symbol), methods, v.Unavailable}, bound)
 }
 func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateManagedGroupingRequest, query []byte) (PrivateManagedGroupingInput, error) {
+	// No diagnostic context propagates into custody. Leaf logs claim no parent task.
+	defer inventorytracediag.Begin(context.Background(), inventorytracediag.Build).End()
 	out := PrivateManagedGroupingInput{Dispositions: map[string]string{}, Ledger: []PrivateManagedGroupingOccurrence{}}
 	// This reports the current provider capability, not the provenance of an
 	// optional separately admitted CALLS composite supplied by the operator.
@@ -799,14 +815,17 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 	envelope := programcadmission.UntrustedMethodEvidenceEnvelope{Family: programcadmission.MethodEvidenceFamily, Version: programcadmission.MethodEvidenceFamily, ClaimCeiling: programcadmission.MethodEvidenceClaimCeiling, Completeness: "UNKNOWN", Provider: v.Metadata.ProviderName, ProviderVersion: v.Metadata.ProviderVersion, SessionID: v.Query.SessionID, Generation: v.Query.Generation, Revision: v.Revision, Custody: "CALLER_ASSERTED", PositionEncoding: v.Query.Encoding}
 	// Missing provider metadata is unavailable provenance, not invented identity.
 	if envelope.Provider == "" || envelope.ProviderVersion == "" {
+		inventorytracediag.Event(context.Background(), inventorytracediag.ProviderMetadataRefused)
 		return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 	}
 	selected := map[programcadmission.RelationKind]bool{}
 	for _, kind := range q.Kinds {
 		if kind != programcadmission.TypedCalls && kind != programcadmission.TypedReferencesSymbol && kind != programcadmission.TypedResolvesToDefinition {
+			inventorytracediag.Event(context.Background(), inventorytracediag.KindRefused)
 			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 		}
 		if selected[kind] {
+			inventorytracediag.Event(context.Background(), inventorytracediag.DuplicateKindRefused)
 			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 		}
 		selected[kind] = true
@@ -818,6 +837,7 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 		} else if method == "textDocument/definition" {
 			observed[programcadmission.TypedResolvesToDefinition] = true
 		} else {
+			inventorytracediag.Event(context.Background(), inventorytracediag.MethodUnavailableRefused)
 			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 		}
 	}
@@ -827,11 +847,13 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 		} else if pair.Method == "textDocument/definition" {
 			observed[programcadmission.TypedResolvesToDefinition] = true
 		} else {
+			inventorytracediag.Event(context.Background(), inventorytracediag.MethodIdentityRefused)
 			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 		}
 	}
 	for _, kind := range []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition} {
 		if selected[kind] != observed[kind] {
+			inventorytracediag.Event(context.Background(), inventorytracediag.MethodCoverageRefused)
 			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 		}
 	}
@@ -841,11 +863,16 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 			kind, sr, tr = programcadmission.TypedResolvesToDefinition, "QUERY_SYMBOL", "DEFINITION_TARGET"
 		}
 		if !selected[kind] {
+			inventorytracediag.Event(context.Background(), inventorytracediag.MethodSelectionRefused)
 			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 		}
 		parsed, failure := methodsyntax.ParseRaw(pair.Method, pair.Result, 256)
 		if failure != nil {
+			inventorytracediag.Event(context.Background(), inventorytracediag.MethodParseRefused)
 			return PrivateManagedGroupingInput{}, failure
+		}
+		if inventorytracediag.Enabled() {
+			inventorytracediag.MethodState(context.Background(), kind == programcadmission.TypedResolvesToDefinition, len(parsed.Items) == 0)
 		}
 		if len(parsed.Items) == 0 {
 			out.Dispositions[pair.Method] = "OBSERVED_EMPTY"
@@ -881,10 +908,13 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 		// families. Do not silently discard a separately supplied CALLS input.
 		if selected[programcadmission.TypedCalls] {
 			if len(q.nativeProof) == 0 || len(q.Kinds) != 1 {
+				inventorytracediag.Event(context.Background(), inventorytracediag.EmptyCallsCompositionRefused)
 				return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 			}
+			inventorytracediag.Event(context.Background(), inventorytracediag.TypedCallsAttempt)
 			typed, err := programcadmission.PrepareTypedInput(programcadmission.TypedInputRequest{Kinds: q.Kinds, Calls: q.Calls})
 			if err != nil {
+				inventorytracediag.Event(context.Background(), inventorytracediag.TypedCallsRefused)
 				return PrivateManagedGroupingInput{}, err
 			}
 			out.TypedInput = typed
@@ -897,16 +927,20 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 	}
 	methods, err := programcadmission.AdmitUntrustedMethodEvidenceEnvelope(envelope)
 	if err != nil {
+		inventorytracediag.Event(context.Background(), inventorytracediag.MethodsAdmissionRefused)
 		return PrivateManagedGroupingInput{}, err
 	}
+	inventorytracediag.Event(context.Background(), inventorytracediag.TypedMethodsAttempt)
 	typed, err := programcadmission.PrepareTypedInput(programcadmission.TypedInputRequest{Methods: methods, EnableMethods: true, Kinds: q.Kinds, Calls: q.Calls})
 	if err != nil {
+		inventorytracediag.Event(context.Background(), inventorytracediag.TypedMethodsRefused)
 		return PrivateManagedGroupingInput{}, err
 	}
 	out.TypedInput = typed
 	return privateGroupingAssemble(out, query, methods, q)
 }
 func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, methods programcadmission.MethodProjectionAdmission, q PrivateManagedGroupingRequest) (PrivateManagedGroupingInput, error) {
+	defer inventorytracediag.Begin(context.Background(), inventorytracediag.Assemble).End()
 	type mapping struct {
 		Identity         string `json:"identity"`
 		Kind             string `json:"kind"`
@@ -997,21 +1031,22 @@ func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, meth
 	if len(methodRows) == 0 {
 		out.Predecessors = out.Predecessors[3:]
 	}
+	inventorytracediag.Event(context.Background(), inventorytracediag.ProjectionAttempt)
 	projection, err := programcadmission.PreparePrivateLeidenProjection(out.TypedInput)
 	if err != nil {
+		inventorytracediag.Event(context.Background(), inventorytracediag.ProjectionRefused)
 		return PrivateManagedGroupingInput{}, err
 	}
 	if retained := projection.RetainedCallsCanonicalBytes(); len(retained) > 0 {
-		// SourceBinding is the admission package's closed mirror/subset of the
-		// retained composite (no caller-added fields). Six times its original
-		// JSON bytes bounds re-escaping; 16 KiB covers added fixed identity keys
-		// and scalar envelope fields. Check before cloning/marshalling metadata.
-		bindingBound, ok := sessionruntime.PrivateGroupingCheckedEncodedSize(16<<10, uint64(len(retained)), 6, 0)
+		// The sealed owner checks the budget before the additional binding clone.
+		sourceBinding, bindingBound, ok := projection.PrivateCompositeSourceBindingBudget()
 		if !ok {
+			inventorytracediag.Event(context.Background(), inventorytracediag.CompositeBindingBoundRefused)
 			return PrivateManagedGroupingInput{}, fmt.Errorf("%w: composite binding bound bytes=%d", ErrPrivateManagedGrouping, len(retained))
 		}
-		binding, err := privateGroupingJSON(projection.CompositeSourceBinding(), bindingBound)
+		binding, err := privateGroupingJSON(sourceBinding, bindingBound)
 		if err != nil {
+			inventorytracediag.Event(context.Background(), inventorytracediag.CompositeBindingJSONRefused)
 			return PrivateManagedGroupingInput{}, err
 		}
 		out.Predecessors = append(out.Predecessors, referencegrouping.PredecessorRecord{Role: "RETAINED_COMPOSITE", Selector: "calls/composite.json", Schema: "lsp-trace.private.program-c-composite.v1", Bytes: retained}, referencegrouping.PredecessorRecord{Role: "ACQUISITION_RECEIPT", Selector: "calls/acquisition.json", Schema: "lsp-trace.private.program-c-acquisition-receipt.v1", Bytes: binding})
@@ -1023,11 +1058,13 @@ func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, meth
 	// encoding and before any publication. Original paths retain their old bounds.
 	if len(q.nativeProof) > 0 {
 		if len(out.Predecessors)+1 > 8 {
+			inventorytracediag.Event(context.Background(), inventorytracediag.NativePredecessorCountRefused)
 			return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 		}
 		var total uint64
 		for _, p := range out.Predecessors {
 			if uint64(len(p.Bytes)) > (1<<20)-total {
+				inventorytracediag.Event(context.Background(), inventorytracediag.NativePredecessorBytesRefused)
 				return PrivateManagedGroupingInput{}, ErrPrivateManagedGrouping
 			}
 			total += uint64(len(p.Bytes))
@@ -1042,12 +1079,15 @@ func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, meth
 			Predecessors any
 		}{rows, custody, metadata}, 1<<20)
 		if !ok || total > 1<<20 || bound > (1<<20)-total || 65536 > (1<<20)-total-bound {
+			inventorytracediag.Event(context.Background(), inventorytracediag.NativeAggregateBoundRefused)
 			return PrivateManagedGroupingInput{}, fmt.Errorf("%w: aggregate retention bound total=%d encoding=%d ok=%v", ErrPrivateManagedGrouping, total, bound, ok)
 		}
 	}
 	n := len(rows)
+	inventorytracediag.Event(context.Background(), inventorytracediag.BuildInputAttempt)
 	artifact, err := referencegrouping.BuildInput(referencegrouping.InputRequest{TypedInput: out.TypedInput, Predecessors: out.Predecessors, OccurrenceLedgerBytes: ledger, EndpointCustody: custody, OccurrenceAdmissionPolicyID: q.OccurrenceAdmissionPolicyID, CompositionPolicyID: q.CompositionPolicyID, PrivacyPolicy: q.Privacy, EligibleKinds: []programcadmission.RelationKind{programcadmission.TypedCalls, programcadmission.TypedReferencesSymbol, programcadmission.TypedResolvesToDefinition}, Limits: referencegrouping.ResourceLimits{MaxArtifacts: 8, MaxNodes: 1024, MaxOccurrences: 1024, MaxContributions: 1024, MaxCanonicalBytes: 1 << 20, MaxStringBytes: 4096}, CandidateOutcomes: outcomes, Accounting: referencegrouping.Accounting{Candidates: n, Included: n, Terminal: true}})
 	if err != nil {
+		inventorytracediag.Event(context.Background(), inventorytracediag.BuildInputRefused)
 		return PrivateManagedGroupingInput{}, err
 	}
 	if len(q.nativeProof) > 0 {
@@ -1059,8 +1099,10 @@ func privateGroupingAssemble(out PrivateManagedGroupingInput, query []byte, meth
 			total += len(p.Bytes)
 		}
 	}
+	inventorytracediag.Event(context.Background(), inventorytracediag.ParseAdmitAttempt)
 	out.Input, err = referencegrouping.ParseAndAdmit(artifact.CanonicalBytes(), out.Predecessors, privateGroupingParseLimits())
 	if err != nil {
+		inventorytracediag.Event(context.Background(), inventorytracediag.ParseAdmitRefused)
 		return PrivateManagedGroupingInput{}, err
 	}
 	return out, nil

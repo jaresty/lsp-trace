@@ -73,6 +73,21 @@ func (p privateLeidenProjection) CompositeSourceBinding() CompositeSourceBinding
 	}
 	return CloneCompositeSourceBinding(p.compositeSource)
 }
+
+// PrivateCompositeSourceBindingBudget checks the private encoding budget before
+// the additional defensive accessor clone. Earlier projection clones are unchanged.
+// Refusal returns no binding and no budget; this is not an admission constructor.
+func (p privateLeidenProjection) PrivateCompositeSourceBindingBudget() (CompositeSourceBinding, uint64, bool) {
+	if !p.calls.Valid() {
+		return CompositeSourceBinding{}, 0, false
+	}
+	bound, ok := privateCompositeBindingBound(p.compositeSource)
+	if !ok {
+		return CompositeSourceBinding{}, 0, false
+	}
+	return p.CompositeSourceBinding(), bound, true
+}
+
 func (p privateLeidenProjection) MethodClaimCeiling() string { return p.methodClaim }
 func (p privateLeidenProjection) MethodAuthority() int       { return p.methodAuthority }
 func (p privateLeidenProjection) MethodAccepted() bool       { return p.methodAccepted }
