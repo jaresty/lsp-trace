@@ -209,6 +209,10 @@ func (w applicationFullWriter) Write(p []byte) (int, error) {
 }
 
 func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return runPrivateHostApplicationWithInventoryInputsV3(args, stdin, stdout, stderr, nil)
+}
+
+func runPrivateHostApplicationWithInventoryInputsV3(args []string, stdin io.Reader, stdout, stderr io.Writer, inventoryInputs product.InventoryNativeInputsV3) int {
 	if len(args) > 0 && args[0] == "initialize-ready" {
 		return runPrivateReadyProvisioning(args, stdin, stdout, stderr)
 	}
@@ -256,7 +260,14 @@ func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io
 	if args[0] == "finalize" {
 		return applicationFinalizeDispatch(args, stdin, stdout, stderr)
 	}
-	r, e := decodeHostApplication(args[1], false)
+	rawApplication, e := readHostProductRequestRawV3(args[1])
+	if e != nil {
+		return fail("CONFIG_REFUSED")
+	}
+	if isApplicationInventoryV3(rawApplication) {
+		return runApplicationInventoryControllerV3(args, rawApplication, stdin, stdout, stderr, inventoryInputs, startup)
+	}
+	r, e := decodeHostApplicationRaw(rawApplication, false)
 	if e != nil {
 		return fail("CONFIG_REFUSED")
 	}

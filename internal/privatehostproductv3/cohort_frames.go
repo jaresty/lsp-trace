@@ -58,30 +58,46 @@ func readCohortNavigationBundleRoot(b Bundle, s *store) (CohortNavigationTask, e
 	if b.Protocol != CohortNavigationProtocol || b.Event != "NeedsHost" || b.Bytes < 1 || b.Bytes > 1<<20 || len(b.Parts) < 1 || len(b.Parts) > 128 {
 		return t, ErrInvalid
 	}
+	raw, e := readPhysicalBundleRoot(b, s)
+	if e != nil {
+		return t, e
+	}
+	h, e := parseCohortFrame(raw)
+	if e != nil || h.Role != b.Role || uint64(h.Sequence) != b.Sequence || h.RequestDigest != b.RequestDigest || strict(raw, &t) != nil {
+		return t, ErrInvalid
+	}
+	return t, nil
+}
+
+// Physical reconstruction is shared; protocol readers retain their own closed
+// schemas and digest validation. This helper grants no semantic admission.
+func readPhysicalBundleRoot(b Bundle, s *store) ([]byte, error) {
+	if b.Event != "NeedsHost" || b.Bytes < 1 || b.Bytes > 1<<20 || len(b.Parts) < 1 || len(b.Parts) > 128 {
+		return nil, ErrInvalid
+	}
 	receipt := b.ReceiptSHA256
 	b.ReceiptSHA256 = ""
 	if hash(mustJSON(b)) != receipt {
-		return t, ErrInvalid
+		return nil, ErrInvalid
 	}
 	b.ReceiptSHA256 = receipt
 	registered, e := s.read(fmt.Sprintf("request-%08d.json", b.Sequence), 47999)
 	if e != nil || !bytes.Equal(registered, mustJSON(b)) {
-		return t, ErrInvalid
+		return nil, ErrInvalid
 	}
 	var raw []byte
 	for n, p := range b.Parts {
 		if p.Path != filepath.Join(b.Directory, fmt.Sprintf("part-%08d-%04d.json", b.Sequence, n)) || p.Bytes < 1 || p.Bytes > 20000 {
-			return t, ErrInvalid
+			return nil, ErrInvalid
 		}
 		data, e := s.read(filepath.Base(p.Path), 20000)
 		if e != nil || len(data) != p.Bytes || hash(data) != p.SHA256 || len(raw) > b.Bytes-len(data) {
-			return t, ErrInvalid
+			return nil, ErrInvalid
 		}
 		raw = append(raw, data...)
 	}
-	h, e := parseCohortFrame(raw)
-	if e != nil || len(raw) != b.Bytes || h.Role != b.Role || uint64(h.Sequence) != b.Sequence || h.RequestDigest != b.RequestDigest || strict(raw, &t) != nil {
-		return t, ErrInvalid
+	if len(raw) != b.Bytes {
+		return nil, ErrInvalid
 	}
-	return t, nil
+	return raw, nil
 }

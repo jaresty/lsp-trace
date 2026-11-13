@@ -116,7 +116,8 @@ func applicationCanonicalPath(p string) bool {
 	return filepath.IsAbs(p) && filepath.Clean(p) == p && len(p) <= 4096
 }
 func validateApplication(c ApplicationConfig, now time.Time) error {
-	if c.Schema != "private-host-application-config.v1" || c.Profile != ApplicationProfile || !applicationCanonicalPath(c.Store) || !applicationCanonicalPath(c.SourceRoot) || c.Store == c.SourceRoot || len(c.RevisionAssertion) == 0 || len(c.RevisionAssertion) > 4096 || c.ApprovalSHA256 != ApplicationConfigDigest(c) {
+	v3 := c.Schema == "private-host-application-config.v3" && c.Profile == InventoryProfileV3
+	if (!v3 && (c.Schema != "private-host-application-config.v1" || c.Profile != ApplicationProfile)) || !applicationCanonicalPath(c.Store) || !applicationCanonicalPath(c.SourceRoot) || c.Store == c.SourceRoot || len(c.RevisionAssertion) == 0 || len(c.RevisionAssertion) > 4096 || c.ApprovalSHA256 != ApplicationConfigDigest(c) {
 		return ErrInvalid
 	}
 	for _, d := range []string{c.SelectionRuleSHA256, c.UnitPolicySHA256, c.ProducerConfigSHA256, c.ProducerExecutableSHA256, c.StorageIdentitySHA256, c.RolePromptSHA256[0], c.RolePromptSHA256[1]} {
@@ -124,7 +125,11 @@ func validateApplication(c ApplicationConfig, now time.Time) error {
 			return ErrInvalid
 		}
 	}
-	if c.RolePromptSHA256 != [2]string{hash([]byte(CohortRolePrompt("interpreter"))), hash([]byte(CohortRolePrompt("reviewer")))} {
+	prompts := [2]string{hash([]byte(CohortRolePrompt("interpreter"))), hash([]byte(CohortRolePrompt("reviewer")))}
+	if v3 {
+		prompts = [2]string{hash([]byte(InventoryRolePromptV3("interpreter"))), hash([]byte(InventoryRolePromptV3("reviewer")))}
+	}
+	if c.RolePromptSHA256 != prompts {
 		return ErrInvalid
 	}
 	g := c.Grant
@@ -206,7 +211,11 @@ func createApplication(c ApplicationConfig, now time.Time) (*ApplicationJournal,
 	if e = a.write("header.json", mustJSON(c)); e != nil {
 		return fail(e)
 	}
-	h := ApplicationHead{Schema: "private-host-application-head.v1", ApplicationSHA256: ApplicationConfigDigest(c), Reserved: reserved, FeatureIdentity: "UNRESOLVED", SourceCompleteness: "UNKNOWN", AbsenceInference: "PROHIBITED"}
+	headSchema := "private-host-application-head.v1"
+	if c.Schema == "private-host-application-config.v3" {
+		headSchema = "private-host-application-head.v3"
+	}
+	h := ApplicationHead{Schema: headSchema, ApplicationSHA256: ApplicationConfigDigest(c), Reserved: reserved, FeatureIdentity: "UNRESOLVED", SourceCompleteness: "UNKNOWN", AbsenceInference: "PROHIBITED"}
 	if e = a.append(applicationRecord{Head: h, Kind: "INITIAL_PREPAID_BOOTSTRAP_LANE"}); e != nil {
 		return fail(e)
 	}
@@ -350,7 +359,11 @@ func (a *applicationJournal) loadLast() error {
 		}
 	}
 	var r applicationRecord
-	if strict(slot[4:4+size], &r) != nil || r.Head.Sequence != uint64(st.Size()/applicationSlotBytes-1) || r.Head.Schema != "private-host-application-head.v1" || r.Head.Authority != 0 || r.Head.Accepted || r.Head.FeatureIdentity != "UNRESOLVED" || r.Head.SourceCompleteness != "UNKNOWN" || r.Head.AbsenceInference != "PROHIBITED" {
+	expectedSchema := "private-host-application-head.v1"
+	if a.config.Schema == "private-host-application-config.v3" {
+		expectedSchema = "private-host-application-head.v3"
+	}
+	if strict(slot[4:4+size], &r) != nil || r.Head.Sequence != uint64(st.Size()/applicationSlotBytes-1) || r.Head.Schema != expectedSchema || r.Head.Authority != 0 || r.Head.Accepted || r.Head.FeatureIdentity != "UNRESOLVED" || r.Head.SourceCompleteness != "UNKNOWN" || r.Head.AbsenceInference != "PROHIBITED" {
 		return ErrApplicationAmbiguous
 	}
 	// No higher immutable selector may be silently forgotten by a complete-slot

@@ -89,8 +89,14 @@ func (m CohortMailbox) ExchangeCohort(ctx context.Context, raw []byte) ([]byte, 
 			return nil, ErrInvalid
 		}
 	}
+	return exchangePhysicalRoot(ctx, s, m.Directory, m.ExchangeTimeout, t, raw)
+}
+
+// Shared physical send/wait only. Callers must admit their own closed protocol,
+// held root, pins and prepaid transaction before invoking this primitive.
+func exchangePhysicalRoot(ctx context.Context, s *store, directory string, timeout time.Duration, t cohortFrameHeader, raw []byte) ([]byte, error) {
 	var e error
-	b := Bundle{Event: "NeedsHost", Directory: m.Directory, Protocol: t.Protocol, Role: t.Role, RequestDigest: t.RequestDigest, Sequence: uint64(t.Sequence), Bytes: len(raw), Parts: []Part{}}
+	b := Bundle{Event: "NeedsHost", Directory: directory, Protocol: t.Protocol, Role: t.Role, RequestDigest: t.RequestDigest, Sequence: uint64(t.Sequence), Bytes: len(raw), Parts: []Part{}}
 	for start, index := 0, 0; start < len(raw); index++ {
 		end := min(start+20000, len(raw))
 		for end < len(raw) && !utf8.RuneStart(raw[end]) {
@@ -104,7 +110,7 @@ func (m CohortMailbox) ExchangeCohort(ctx context.Context, raw []byte) ([]byte, 
 		if e = s.write(name, part); e != nil {
 			return nil, e
 		}
-		b.Parts = append(b.Parts, Part{Path: filepath.Join(m.Directory, name), SHA256: hash(part), Bytes: len(part)})
+		b.Parts = append(b.Parts, Part{Path: filepath.Join(directory, name), SHA256: hash(part), Bytes: len(part)})
 		start = end
 	}
 	b.ReceiptSHA256 = hash(mustJSON(b))
@@ -114,28 +120,34 @@ func (m CohortMailbox) ExchangeCohort(ctx context.Context, raw []byte) ([]byte, 
 	if e = s.write(fmt.Sprintf("request-%08d.json", t.Sequence), mustJSON(b)); e != nil {
 		return nil, e
 	}
-	wait, cancel := context.WithTimeout(ctx, m.ExchangeTimeout)
+	wait, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		reply, e := s.read(fmt.Sprintf("reply-%08d.json", t.Sequence), (64<<10)+1)
+		reply, e := readPhysicalReplyRoot(s, fmt.Sprintf("reply-%08d.json", t.Sequence), t.Protocol == InventoryProtocolV3)
 		if e == nil {
 			return reply, wait.Err()
 		}
 		if !os.IsNotExist(e) {
-			return nil, e
+			if t.Protocol != InventoryProtocolV3 {
+				return nil, e
+			}
+			return reply, e
 		}
 		select {
 		case <-wait.Done():
 			// Deadline and a just-published reply are not synonymous with zero
 			// response. Observe physical bytes once more, without parsing them.
-			reply, readErr := s.read(fmt.Sprintf("reply-%08d.json", t.Sequence), (64<<10)+1)
+			reply, readErr := readPhysicalReplyRoot(s, fmt.Sprintf("reply-%08d.json", t.Sequence), t.Protocol == InventoryProtocolV3)
 			if readErr == nil {
 				return reply, wait.Err()
 			}
 			if !os.IsNotExist(readErr) {
-				return nil, readErr
+				if t.Protocol != InventoryProtocolV3 {
+					return nil, readErr
+				}
+				return reply, readErr
 			}
 			return nil, wait.Err()
 		case <-tick.C:
@@ -229,26 +241,9 @@ func readCohortBundleRoot(b Bundle, s *store) (CohortTask, error) {
 	if b.Protocol != CohortProtocol || b.Event != "NeedsHost" || b.Bytes < 1 || b.Bytes > 1<<20 || len(b.Parts) < 1 || len(b.Parts) > 128 {
 		return t, ErrInvalid
 	}
-	receipt := b.ReceiptSHA256
-	b.ReceiptSHA256 = ""
-	if receipt != hash(mustJSON(b)) {
-		return t, ErrInvalid
-	}
-	b.ReceiptSHA256 = receipt
-	registered, e := s.read(fmt.Sprintf("request-%08d.json", b.Sequence), 47999)
-	if e != nil || !bytes.Equal(registered, mustJSON(b)) {
-		return t, ErrInvalid
-	}
-	var raw []byte
-	for n, p := range b.Parts {
-		if p.Path != filepath.Join(b.Directory, fmt.Sprintf("part-%08d-%04d.json", b.Sequence, n)) || p.Bytes < 1 || p.Bytes > 20000 {
-			return t, ErrInvalid
-		}
-		data, e := s.read(filepath.Base(p.Path), 20000)
-		if e != nil || len(data) != p.Bytes || hash(data) != p.SHA256 || len(raw) > b.Bytes-len(data) {
-			return t, ErrInvalid
-		}
-		raw = append(raw, data...)
+	raw, e := readPhysicalBundleRoot(b, s)
+	if e != nil {
+		return t, e
 	}
 	if len(raw) != b.Bytes || strict(raw, &t) != nil || t.Protocol != CohortProtocol || t.Role != b.Role || uint64(t.Sequence) != b.Sequence || t.RequestDigest != b.RequestDigest {
 		return t, ErrInvalid

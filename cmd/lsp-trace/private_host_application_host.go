@@ -234,6 +234,16 @@ func applicationClaimWaitSlice(root, ticket string, claim []byte) error {
 func applicationRoleReadyPath(root, ticket, role string) string {
 	return filepath.Join(root, "role-"+ticket[7:]+"-"+role+".json")
 }
+func applicationHostRoleIndex(role string) (int, error) {
+	switch role {
+	case "interpreter":
+		return 0, nil
+	case "reviewer":
+		return 1, nil
+	}
+	return 0, product.ErrInvalid
+}
+
 func validApplicationDigest(id string) bool {
 	return len(id) == 71 && len(id) > 7 && id[:7] == "sha256:" && func() bool {
 		for _, c := range id[7:] {
@@ -293,10 +303,8 @@ func applicationHostHelper(args []string, r hostApplicationRequest, stdin io.Rea
 			return fail("INVALID_READY")
 		}
 		role, id, prompt := args[3], args[4], args[5]
-		idx := 0
-		if role == "reviewer" {
-			idx = 1
-		} else if role != "interpreter" {
+		idx, roleErr := applicationHostRoleIndex(role)
+		if roleErr != nil {
 			return fail("INVALID_ROLE")
 		}
 		if id == "" || len(id) > 256 || prompt != r.Configuration.RolePromptSHA256[idx] {

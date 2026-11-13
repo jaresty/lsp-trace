@@ -132,6 +132,9 @@ func applicationFinalizeDispatch(args []string, stdin io.Reader, out, errout io.
 	if lane.check() != nil {
 		return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
 	}
+	if isApplicationInventoryV3(raw) {
+		return applicationInventoryFinalizeV3(args, raw, locator.Configuration.Store, p, lane, stdin, out, errout)
+	}
 	r, e := decodeHostApplicationRaw(raw, true, lane)
 	if lane.check() != nil {
 		return fail("FINALIZE_SLICE_EXPIRED_CHARGED")
