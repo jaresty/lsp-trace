@@ -97,6 +97,9 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		fmt.Fprintln(stdout, censusUsage)
 		return 0
 	}
+	if options.PrivateInventoryBridgeConfigPath != "" {
+		return runCensusInventoryBridgePrivate(options, stdout, stderr, deps)
+	}
 	if options.EnumerationPreflight {
 		return runCensusEnumerationPreflight(options, stdout, stderr, deps.enumeratePreflight)
 	}

@@ -63,6 +63,7 @@ type censusCLIOptions struct {
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
 	PrivateProviderProbePath, PrivateProviderProbeVersion                      string
 	PrivateInventoryConfigPath                                                 string
+	PrivateInventoryBridgeConfigPath                                           string
 	PrivateInventoryScopePreview                                               bool `json:",omitempty"`
 	PrivateProviderProbeByteTimeNotifications                                  bool
 	ServerArgs                                                                 []string
@@ -104,6 +105,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.StringVar(&o.PrivateProviderProbePath, "private-provider-probe-path", "", "")
 	fs.StringVar(&o.PrivateProviderProbeVersion, "private-provider-probe-version", "v1", "")
 	fs.BoolVar(&o.PrivateProviderProbeByteTimeNotifications, "private-provider-probe-byte-time-notifications", false, "")
+	fs.StringVar(&o.PrivateInventoryBridgeConfigPath, "private-inventory-bridge-config", "", "")
 	fs.StringVar(&o.PrivateInventoryConfigPath, "private-inventory-config", "", "")
 	fs.BoolVar(&o.PrivateInventoryScopePreview, "private-inventory-scope-preview", false, "")
 	fs.BoolVar(&o.Catalog, "catalog", false, "continue to the provisional feature catalog")
@@ -210,6 +212,20 @@ func censusMachineFlagCount(args []string) int {
 
 func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 	if o.Help {
+		return nil
+	}
+	if o.PrivateInventoryBridgeConfigPath != "" {
+		if censusNamedFlagCount(args, "private-inventory-bridge-config") != 1 || !o.Machine || !filepath.IsAbs(o.PrivateInventoryBridgeConfigPath) || filepath.Clean(o.PrivateInventoryBridgeConfigPath) != o.PrivateInventoryBridgeConfigPath {
+			return errors.New("invalid private inventory bridge syntax")
+		}
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "-") {
+				name := strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-")
+				if name != "private-inventory-bridge-config" && name != "machine" {
+					return errors.New("private inventory bridge rejects ordinary controls")
+				}
+			}
+		}
 		return nil
 	}
 	if o.EnumerationPreflight {

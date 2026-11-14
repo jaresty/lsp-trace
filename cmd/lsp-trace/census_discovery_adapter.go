@@ -89,6 +89,16 @@ func (s censusRuntimeDocumentSupplier) Supply(ctx context.Context, file censusac
 	return nil
 }
 
+// This supplier exposes only the concrete private enclosure's closed discovery
+// surface; it cannot recover Manager or use its supply as native evidence.
+type censusPrivateDiscoverySupplier struct {
+	s *sessionruntime.PrivateDiscoverySession
+}
+
+func (s censusPrivateDiscoverySupplier) Supply(ctx context.Context, f censusacquisition.SourceFile) error {
+	return s.s.Supply(ctx, f.URI, f.LanguageID)
+}
+
 type censusProductionDiscoveryClient struct {
 	productionDiscoveryClient
 	callHierarchy bool

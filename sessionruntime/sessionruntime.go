@@ -142,6 +142,17 @@ func (s ManagedStarter) Start(ctx context.Context, spec managedprocess.Spec) (Ch
 	if s.Manager == nil {
 		return nil, managedprocess.StartObservation{Kind: managedprocess.StartUnavailable, Reason: "containment unavailable"}
 	}
+	if w := privateDiscoveryFrom(ctx); w != nil {
+		bound, e := w.bindManaged(ctx, s.Manager, spec)
+		if e != nil {
+			return nil, managedprocess.StartObservation{Kind: managedprocess.StartUnavailable, Reason: "private discovery refused"}
+		}
+		child, observation := s.Manager.Start(bound, spec)
+		if child == nil {
+			return nil, observation
+		}
+		return child, observation
+	}
 	return s.Manager.Start(ctx, spec)
 }
 
@@ -339,6 +350,9 @@ type DocumentRequest struct {
 	// PreparedNoFollow is an opt-in, host-private filesystem supply mode.
 	// It never accepts retained seed source or falls back to ordinary preparation.
 	PreparedNoFollow bool `json:",omitempty"`
+	// PrivateSourceByteLimit lowers no-follow source admission before opening or
+	// cloning. Zero retains legacy behavior and never raises the static ceiling.
+	PrivateSourceByteLimit int `json:",omitempty"`
 }
 
 // MaxDocumentSupplyBytes bounds opt-in notification evidence. It does not bound
@@ -500,6 +514,22 @@ func (m *Manager) validDocumentAcquisition(req DocumentRequest, result DocumentR
 }
 
 func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
+	if req.PrivateSourceByteLimit < 0 || req.PrivateSourceByteLimit > MaxDocumentSupplyBytes || req.PrivateSourceByteLimit != 0 && (!req.PreparedNoFollow || !req.CaptureSupply) {
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
+	sourceBound := MaxDocumentSupplyBytes
+	if req.PrivateSourceByteLimit != 0 {
+		sourceBound = req.PrivateSourceByteLimit
+	}
+	if d := privateDiscoveryFrom(ctx); d != nil {
+		if d.manager != m || !req.PreparedNoFollow || !req.CaptureSupply || refresh {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		sourceBound = min(sourceBound, d.sourceLimit())
+		if sourceBound <= 0 {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+	}
 	if failure := contextFailure(ctx); failure != "" {
 		return DocumentResult{Failure: failure}
 	}
@@ -552,6 +582,10 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		m.mu.Unlock()
 		return DocumentResult{Failure: DocumentSupplyUnavailable}
 	}
+	if req.PrivateSourceByteLimit != 0 && len(retainedSource) > sourceBound || privateDiscoveryFrom(ctx) != nil && retained {
+		m.mu.Unlock()
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
 	retainedSource = append([]byte(nil), retainedSource...)
 	diagnosticGeneration, identity := r.diagnosticGeneration, r.identity
 	m.mu.Unlock()
@@ -577,7 +611,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 			u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.Opaque != "" || u.User != nil {
 			return DocumentResult{Failure: DocumentSupplyUnavailable}
 		}
-		sourceLimit := MaxDocumentSupplyBytes
+		sourceLimit := sourceBound
 		if w := privateProviderWindowFrom(ctx); w != nil {
 			sourceLimit = int(w.spec.bounds.SourceBytes)
 		}
@@ -587,6 +621,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 			}
 			sourceLimit = int(resources.envelope.Bounds().SourceBytes)
 		}
+		sourceLimit = min(sourceLimit, sourceBound)
 		text, err = readPreparedNoFollow(workspace, path, sourceLimit)
 		if err != nil || !utf8.Valid(text) {
 			return DocumentResult{Failure: DocumentSupplyUnavailable}
@@ -661,6 +696,10 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	if opened && previous.digest == digest && !refresh && cacheCanSatisfy {
 		result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}
 		if req.CaptureSupply && previous.supply != nil {
+			if req.PrivateSourceByteLimit != 0 && len(previous.supply.Content) > sourceBound {
+				m.mu.Unlock()
+				return DocumentResult{Failure: DocumentSupplyUnavailable}
+			}
 			copy := *previous.supply
 			copy.Content = append([]byte(nil), previous.supply.Content...)
 			copy.Params = append(json.RawMessage(nil), previous.supply.Params...)
@@ -911,6 +950,19 @@ func (r RoundTripResult) privateCallHierarchyObservationLease() (callHierarchyOb
 // owning the exact generation's stdin/stdout stream. Concurrent transactions
 // and lifecycle operations are rejected rather than queued.
 func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
+	if d := privateDiscoveryFrom(parent); d != nil {
+		deadline, _ := d.ctx.Deadline()
+		if d.manager != m || !d.quoteRequest(len(req.Params)) || !req.Deadline.Equal(deadline) {
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+		d.mu.Lock()
+		req.MaxBytes = min(req.MaxBytes, int64(d.remaining.ResponseBytes))
+		req.MaxMessages = min(req.MaxMessages, int(d.remaining.Messages))
+		d.mu.Unlock()
+		if req.MaxBytes <= 0 || req.MaxMessages <= 0 {
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+	}
 	if w := privateProviderWindowFrom(parent); w != nil && !privateProviderWindowInner(parent) {
 		if !w.exactOwner(m, req.SessionID, req.Generation) {
 			return RoundTripResult{Failure: session.LifecycleConflict}
@@ -1392,6 +1444,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		}
 		result.privateProviderMessages.admitted()
 		go func() {
+			if dc, ok := child.(*privateDiscoveryChild); ok {
+				msg, frame, raw, retained, err := dc.window.frame(dc)
+				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
+				return
+			}
 			if window != nil && req.directionalV5 == nil {
 				msg, frame, raw, retained, err := lspwire.ReadPrivateBoundedFrameObservedAtDecode(child.Stdout(), wire, int64(window.spec.bounds.FrameBytes), captureCap, m.cWireObserver, decodeEntry, retainEntry)
 				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
@@ -2790,6 +2847,10 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	}{{URI: workspaceURI, Name: "workspace"}}}
 	initializeParams.Capabilities.TextDocument.DocumentSymbol.HierarchicalDocumentSymbolSupport = true
 	initializeParams.Capabilities.Workspace.Symbol.DynamicRegistration = false
+	if dc, ok := child.(*privateDiscoveryChild); ok && (!dc.window.quoteRequest(16384) || len(workspace) > 4096) {
+		m.abortReadiness(child, opID, session.ResourceExhausted)
+		return
+	}
 	params, _ := json.Marshal(initializeParams)
 	initializeMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: params}
 	initializeBody, _ := json.Marshal(initializeMessage)
@@ -2814,7 +2875,14 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	go func() {
 		reader := lspwire.NewReader(child.Stdout(), m.wire)
 		for messages := 0; messages < m.limits.MaxObservations; messages++ {
-			message, _, exactFrame, err := reader.ReadWithExactFrame(int64(privateHistoryMaxBytes))
+			var message lspwire.Message
+			var exactFrame []byte
+			var err error
+			if dc, ok := child.(*privateDiscoveryChild); ok {
+				message, _, exactFrame, _, err = dc.window.frame(dc)
+			} else {
+				message, _, exactFrame, err = reader.ReadWithExactFrame(int64(privateHistoryMaxBytes))
+			}
 			if err != nil {
 				response <- readinessResult{err: err}
 				return
@@ -3726,6 +3794,9 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 	if private, ok := child.(*privateProviderWindowChild); ok {
 		return m.privateProviderWindowShutdown(private, pending, generation)
 	}
+	if dc, ok := child.(*privateDiscoveryChild); ok && !dc.window.quoteRequest(1024) {
+		return shutdownObservation{}
+	}
 	key := pending.Begin(generation)
 	id := strconv.FormatUint(key.ID, 10)
 	writeCounter := &shutdownCountingWriterPrivateV2{source: child.Stdin()}
@@ -3762,6 +3833,11 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 		}
 		cancelled = budget.ctx.Done()
 	}
+	if dc, ok := child.(*privateDiscoveryChild); ok {
+		deadline, _ := dc.window.ctx.Deadline()
+		remaining = max(time.Duration(0), time.Until(deadline))
+		cancelled = dc.window.ctx.Done()
+	}
 	observed.facts.EffectiveResponseReadBudget = remaining
 	if budget != nil {
 		if ended := budget.ended(); ended != "" {
@@ -3785,7 +3861,14 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 		reader.LimitOriginalFrameBytes(maxBytes)
 		reader.LimitCumulativeOriginalFrameBytes(maxBytes)
 		for n := 0; n < m.limits.MaxObservations; n++ {
-			message, frame, err := reader.ReadWithFrame()
+			var message lspwire.Message
+			var frame lspwire.ReadFrameObservation
+			var err error
+			if dc, ok := child.(*privateDiscoveryChild); ok {
+				message, frame, _, _, err = dc.window.frame(dc)
+			} else {
+				message, frame, err = reader.ReadWithFrame()
+			}
 			if err != nil {
 				facts.ShutdownRead = ShutdownReadFailedPrivateV2
 				if errors.Is(err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
@@ -3835,7 +3918,11 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 		}
 	case <-cancelled:
 		rawIO.snapshot(&observed.facts, false)
-		observed.facts.ShutdownRead = budget.ended()
+		if budget != nil {
+			observed.facts.ShutdownRead = budget.ended()
+		} else {
+			observed.facts.ShutdownRead = ShutdownTimeoutPrivateV2
+		}
 		observed.readJoin = response
 		return observed
 	case <-timer.C:

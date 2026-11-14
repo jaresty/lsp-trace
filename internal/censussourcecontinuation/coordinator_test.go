@@ -253,6 +253,98 @@ func TestCanonicalReceiptNilAndForeignFailClosed(t *testing.T) {
 }
 func ptrTerminal(v Terminal) *Terminal { return &v }
 
+func TestReadHeadTerminalPrivateExactReadOnly(t *testing.T) {
+	ctx := context.Background()
+	p := plan3(t)
+	objects, heads := &memObjects{}, &memHeads{}
+	r := Request{Plan: p, PartitionSize: 1, WorkflowKey: "read-private", HeadKey: "private-head", Objects: objects, Heads: heads, ExistingOrdinalZero: ptrTerminal(terminal(p, 0, OutcomeSuccessfulEmpty))}
+	committed, e := CoordinateNext(ctx, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	r.Expected = committed.Head
+	puts, cas := objects.puts, heads.cas
+	result, recovered, e := ReadHeadTerminal(ctx, r)
+	if e != nil || result.Status != StatusCommitted || recovered == nil || !reflect.DeepEqual(*recovered, *r.ExistingOrdinalZero) || objects.puts != puts || heads.cas != cas {
+		t.Fatal("ASSERT_PRIVATE_LINKED_READ_NO_ADVANCE", e)
+	}
+	bad := r
+	bad.Expected = HeadRevision{}
+	if _, _, e = ReadHeadTerminal(ctx, bad); e == nil {
+		t.Fatal("ASSERT_PRIVATE_LINKED_STALE_REFUSED")
+	}
+	bad = r
+	bad.WorkflowKey = "foreign"
+	if _, _, e = ReadHeadTerminal(ctx, bad); e == nil {
+		t.Fatal("ASSERT_PRIVATE_LINKED_WORKFLOW_REFUSED")
+	}
+	objects.m[result.ReceiptSelector] = append(objects.m[result.ReceiptSelector], ' ')
+	if _, _, e = ReadHeadTerminal(ctx, r); e == nil {
+		t.Fatal("ASSERT_PRIVATE_LINKED_DIGEST_CANONICAL_REFUSED")
+	}
+	t.Log("ASSERT_PRIVATE_LINKED_READ_NO_ADVANCE PASS")
+}
+func TestReadHeadTerminalPrivateNilEmpty(t *testing.T) {
+	for _, empty := range []bool{false, true} {
+		p := plan3(t)
+		objects, heads := &memObjects{}, &memHeads{}
+		original := terminal(p, 0, OutcomeSuccessfulEmpty)
+		if empty {
+			original.Discovery.Targets = []censusacquisition.PreparedTarget{}
+			original.Discovery.Observations = []censusacquisition.DiscoveryObservation{}
+			original.Discovery.ProviderFailures = []censusacquisition.ProviderFailure{}
+		}
+		r := Request{Plan: p, PartitionSize: 1, WorkflowKey: "nil-empty", HeadKey: "head", Objects: objects, Heads: heads, ExistingOrdinalZero: &original}
+		result, e := CoordinateNext(context.Background(), r)
+		if e != nil {
+			t.Fatal(e)
+		}
+		r.Expected = result.Head
+		_, got, e := ReadHeadTerminal(context.Background(), r)
+		if e != nil || got == nil || !reflect.DeepEqual(*got, original) {
+			t.Fatal("ASSERT_PRIVATE_LINKED_NIL_EMPTY_PRESERVED", empty, e)
+		}
+	}
+	t.Log("ASSERT_PRIVATE_LINKED_NIL_EMPTY_PRESERVED PASS")
+}
+func TestReadHeadTerminalPrivateClaimedNotCommitted(t *testing.T) {
+	for _, at := range []int{1, 2} {
+		t.Run(string(rune('0'+at)), func(t *testing.T) {
+			p := plan3(t)
+			objects, heads := &memObjects{}, &memHeads{}
+			calls := 0
+			r := Request{Plan: p, PartitionSize: 1, WorkflowKey: "private-claimed", HeadKey: "private-head", Objects: objects, Heads: heads, ExistingOrdinalZero: ptrTerminal(terminal(p, 0, OutcomeSuccessfulEmpty)), Discover: func(context.Context, int, []censusacquisition.SourceFile) (Terminal, error) {
+				calls++
+				return terminal(p, 1, OutcomeSuccessfulEmpty), nil
+			}}
+			initial, e := CoordinateNext(context.Background(), r)
+			if e != nil {
+				t.Fatal(e)
+			}
+			r.Expected = initial.Head
+			heads.uncertainAt = heads.cas + at
+			_, _ = CoordinateNext(context.Background(), r)
+			inspected, e := InspectHead(heads.raw, r.WorkflowKey, p.Identity, len(p.Partitions))
+			if e != nil {
+				t.Fatal(e)
+			}
+			r.Expected = inspected.Revision
+			before := heads.cas
+			result, retained, e := ReadHeadTerminal(context.Background(), r)
+			if e != nil || result.Status == StatusCommitted || heads.cas != before {
+				t.Fatal("ASSERT_PRIVATE_CLAIMED_NEVER_PROMOTED", e)
+			}
+			if at == 1 && (retained != nil || result.Status != StatusIndeterminateExecution || calls != 0) {
+				t.Fatal("ASSERT_PRIVATE_UNRECEIPTED_INDETERMINATE")
+			}
+			if at == 2 && (retained == nil || result.Status != StatusRetained || calls != 1) {
+				t.Fatal("ASSERT_PRIVATE_RECEIPT_LINKED_CLAIMED_DISTINCT")
+			}
+		})
+	}
+	t.Log("ASSERT_PRIVATE_CLAIMED_DISTINCT PASS")
+}
+
 func rawHead(t *testing.T, h head) []byte {
 	t.Helper()
 	b, err := setHeadSelector(&h)

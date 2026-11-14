@@ -20,11 +20,12 @@ func defaultDiscoveryLimits() acquisitionops.Limits {
 }
 
 type productionDiscoveryClient struct {
-	runtime    *privateAcquisitionRuntime
-	sessionID  string
-	generation uint64
-	timeout    time.Duration
-	roundTrip  func(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
+	runtime          *privateAcquisitionRuntime
+	sessionID        string
+	generation       uint64
+	timeout          time.Duration
+	roundTrip        func(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
+	privateDiscovery *sessionruntime.PrivateDiscoverySession
 }
 
 func (c productionDiscoveryClient) SupportsDocumentSymbols() bool { return true }
@@ -58,11 +59,17 @@ func (c productionDiscoveryClient) call(ctx context.Context, method string, para
 }
 
 func (c productionDiscoveryClient) DocumentSymbols(ctx context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	if c.privateDiscovery != nil {
+		return c.privateDiscovery.DocumentSymbols(ctx, params)
+	}
 	var symbols []lsp.DocumentSymbol
 	return symbols, c.call(ctx, "textDocument/documentSymbol", params, &symbols)
 }
 
 func (c productionDiscoveryClient) PrepareCallHierarchy(ctx context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	if c.privateDiscovery != nil {
+		return c.privateDiscovery.PrepareCallHierarchy(ctx, params)
+	}
 	var items []lsp.CallHierarchyItem
 	return items, c.call(ctx, "textDocument/prepareCallHierarchy", params, &items)
 }

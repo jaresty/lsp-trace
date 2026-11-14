@@ -298,6 +298,51 @@ func DecodeReceipt(raw []byte, workflow string, p censussourceplan.Plan, ordinal
 	r, err := decodeReceipt(raw, workflow, p, ordinal)
 	return r.Terminal, err
 }
+
+// ReadHeadTerminal reads only the receipt selected by an exact inspected head.
+// It never advances a claim, invokes discovery, or turns metadata into authority.
+// Objects must be the existing bounded, digest-verifying private object store.
+func ReadHeadTerminal(ctx context.Context, r Request) (Result, *Terminal, error) {
+	if ctx == nil || ctx.Err() != nil || r.Objects == nil || r.Heads == nil || r.WorkflowKey == "" || r.HeadKey == "" || censussourceplan.Validate(r.Plan, r.PartitionSize) != nil {
+		return Result{}, nil, ErrInvalid
+	}
+	raw, err := r.Heads.Load(ctx, r.HeadKey)
+	if err != nil || len(raw) > 4<<20 {
+		return Result{}, nil, ErrInvalid
+	}
+	inspected, err := InspectHead(raw, r.WorkflowKey, r.Plan.Identity, len(r.Plan.Partitions))
+	if err != nil || inspected.Revision != r.Expected {
+		return Result{}, nil, ErrInvalid
+	}
+	if inspected.State == HeadStateAbsent {
+		return Result{Head: inspected.Revision}, nil, nil
+	}
+	var h head
+	if strict(raw, &h) != nil {
+		return Result{}, nil, ErrInvalid
+	}
+	if h.ReceiptSelector == "" {
+		return result(h, StatusIndeterminateExecution, ""), nil, nil
+	}
+	rr, err := r.Objects.Get(ctx, h.ReceiptSelector)
+	if err != nil || ctx.Err() != nil || len(rr) == 0 || len(rr) > 4<<20 || digest(rr) != h.ReceiptSelector {
+		return Result{}, nil, ErrInvalid
+	}
+	receipt, err := decodeReceipt(rr, r.WorkflowKey, r.Plan, h.ClaimOrdinal)
+	if err != nil || receipt.ClaimGeneration != h.ClaimGeneration || receipt.ClaimSelector != h.ClaimSelector || receipt.IdempotencyKey != h.IdempotencyKey {
+		return Result{}, nil, ErrInvalid
+	}
+	status := StatusRetained
+	if h.State == string(HeadStateCommitted) {
+		if !validOutcome(receipt.Terminal.Outcome) {
+			return Result{}, nil, ErrInvalid
+		}
+		status = StatusCommitted
+	}
+	terminal := cloneTerminal(receipt.Terminal)
+	return result(h, status, terminal.Outcome), &terminal, nil
+}
+
 func validOutcome(o Outcome) bool { return o == OutcomeCompleteNonempty || o == OutcomeSuccessfulEmpty }
 func validateTerminalSemantics(t Terminal) error {
 	switch t.Outcome {

@@ -145,6 +145,16 @@ func runCensusNativeCatalogWithDependencies(options censusCLIOptions, cfg census
 	}
 }
 
+// runCensusPrivateInventoryPartition is the separate one-step metadata route.
+// The ordinary native catalog retains its existing all-partitions behavior and
+// aggregate-unavailable terminal error. Empty progress is a valid private step.
+func runCensusPrivateInventoryPartition(ctx context.Context, r censussourceassembly.Request) (censussourcedriver.Result, *censussourceassembly.TerminalRecord) {
+	if r.StepBound != 1 || r.PartitionSize != censusNativeSourcePartitionSize || r.CoordinateForTest != nil || ctx == nil {
+		return censussourcedriver.Result{Stop: censussourcedriver.StopFailed, Err: errNativeCatalogAssemblyFailed}, nil
+	}
+	return censussourceassembly.Run(ctx, r)
+}
+
 func censusNativeCatalogTerminalError(stop censussourcedriver.Stop, err error) error {
 	if stop == censussourcedriver.StopComplete {
 		return errNativeCatalogAggregateUnavailable

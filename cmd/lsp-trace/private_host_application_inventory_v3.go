@@ -25,7 +25,7 @@ func isApplicationInventoryV3(raw []byte) bool {
 
 // Typed inputs are invocation-local. A nil embedding map selects the production
 // lazy owner route after readiness; declarations never serialize native custody.
-func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Reader, out, errout io.Writer, inputs product.InventoryNativeInputsV3, startup *applicationStartupNotifier) int {
+func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Reader, out, errout io.Writer, inputs product.InventoryNativeInputsV3, startup *applicationStartupNotifier, setupPermit ...*censusInventorySetupPermit) int {
 	fail := func(s string) int { fmt.Fprintln(errout, "private application inventory V3:", s); return 1 }
 	q, e := product.DecodeInventoryRequestV3(raw)
 	if e != nil {
@@ -33,6 +33,20 @@ func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Rea
 	}
 	if q.Inventory.MaxNativeAttempts == 0 {
 		return fail("NATIVE_ACQUISITION_DISABLED_NO_EFFECTS")
+	}
+	if len(args) == 0 {
+		return fail("INVALID_INVOCATION")
+	}
+	runIDForClaim := ""
+	if len(args) > 2 {
+		runIDForClaim = args[2]
+	}
+	connectedClaim, claimErr := claimCensusInventoryConnectedQ(q, args[0], runIDForClaim, setupPermit...)
+	if claimErr != nil {
+		return fail("CONNECTED_CURSOR_CLAIM_REFUSED_NO_REPLAY")
+	}
+	if connectedClaim != nil {
+		defer connectedClaim.finish()
 	}
 	if args[0] == "register" || args[0] == "wait" || args[0] == "respond" {
 		return applicationInventoryHostV3(args, q, stdin, out, errout)
@@ -52,7 +66,7 @@ func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Rea
 	if e != nil {
 		return fail("JOURNAL_ADMISSION_REFUSED")
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 	if args[0] == "setup" {
 		ticket, e := applicationTicket(a, q.Configuration.Store, 1, 16)
 		if e != nil {
@@ -156,7 +170,21 @@ func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Rea
 	runErr = errors.Join(runErr, transport.ReconcilePhysicalReturnsV3())
 	status, code := "PROVISIONAL", 0
 	if runErr == nil && report.Published {
-		_, e = a.PublishInventoryRunV3(q, runID, destination, report)
+		var publicationID string
+		publicationID, e = a.PublishInventoryRunV3(q, runID, destination, report)
+		if e == nil && connectedClaim != nil {
+			// The original journal owns an exclusive writer lock. Read back only after
+			// physical returns are reconciled and that original handle is closed.
+			transport.Close()
+			if e = a.Close(); e != nil {
+				return fail("CONNECTED_PUBLICATION_CLOSE_UNKNOWN_NO_REPLAY")
+			}
+			a, e = product.OpenApplication(q.Configuration, time.Now())
+			if e != nil {
+				return fail("CONNECTED_PUBLICATION_READBACK_REFUSED_NO_REPLAY")
+			}
+			e = connectedClaim.complete(a, publicationID)
+		}
 		runErr = errors.Join(runErr, e)
 	}
 	if runErr != nil || !report.Published {
