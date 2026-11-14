@@ -23,8 +23,8 @@ func isApplicationInventoryV3(raw []byte) bool {
 	return json.Unmarshal(raw, &h) == nil && h.Schema == "private-host-application-inventory-request.v3"
 }
 
-// Typed inputs are invocation-local. The CLI supplies nil; neither a serialized
-// owner nor a process-global callback can produce a selected native result.
+// Typed inputs are invocation-local. A nil embedding map selects the production
+// lazy owner route after readiness; declarations never serialize native custody.
 func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Reader, out, errout io.Writer, inputs product.InventoryNativeInputsV3, startup *applicationStartupNotifier) int {
 	fail := func(s string) int { fmt.Fprintln(errout, "private application inventory V3:", s); return 1 }
 	q, e := product.DecodeInventoryRequestV3(raw)
@@ -148,6 +148,10 @@ func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Rea
 	defer transport.Close()
 	destination := filepath.Join(q.Configuration.Store, "inventory-result-"+runID[7:])
 	request := q.Inventory.RunRequest(ctx, inputs, q.Configuration.SourceRoot, destination, transport.Binding.Ready[0].LaunchID, transport.Binding.Ready[1].LaunchID, transport)
+	// Readiness and inventory prepayment are complete before this closure can
+	// admit a native owner. Setup/register/fail never construct native inputs.
+	route := applicationInventoryOwnerRoute(q, a, runID, inputs)
+	request.Preparer = route.preparer
 	report, runErr := ai.Run(ctx, request)
 	runErr = errors.Join(runErr, transport.ReconcilePhysicalReturnsV3())
 	status, code := "PROVISIONAL", 0

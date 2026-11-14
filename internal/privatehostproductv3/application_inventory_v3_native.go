@@ -60,6 +60,23 @@ func InventoryNativeTargetV3(v InventoryNativeInputV3) InventoryTargetV3 {
 func pathRelatedInventoryV3(a, b string) bool {
 	return a == b || strings.HasPrefix(a, b+string(filepath.Separator)) || strings.HasPrefix(b, a+string(filepath.Separator))
 }
+
+// InventoryNativeDeadlineValidV3 only compares the supplied original absolute
+// deadline. It never binds a start instant, renews or creates a native window.
+func InventoryNativeDeadlineValidV3(ctx context.Context, deadline time.Time) bool {
+	if ctx == nil || ctx.Err() != nil || deadline.IsZero() {
+		return false
+	}
+	now := time.Now()
+	if !now.Before(deadline) || deadline.Sub(now) > 15*time.Second {
+		return false
+	}
+	if parent, ok := ctx.Deadline(); ok && parent.Before(deadline) {
+		return false
+	}
+	return true
+}
+
 func (inputs InventoryNativeInputsV3) Preparer(sourceRoot, revision string, targets ...InventoryTargetV3) ai.NativePreparer {
 	// Copy descriptors, not owners. Nothing constructs, opens, renews or funds one.
 	expected := make(map[string]InventoryTargetV3, len(targets))

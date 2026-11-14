@@ -209,6 +209,8 @@ func (w applicationFullWriter) Write(p []byte) (int, error) {
 }
 
 func runPrivateHostApplication(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	// Nil means the foreground V3 controller chooses its lazy production owner
+	// route, not an empty pre-funded capability map. Legacy dispatch is unchanged.
 	return runPrivateHostApplicationWithInventoryInputsV3(args, stdin, stdout, stderr, nil)
 }
 

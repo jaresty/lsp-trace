@@ -3,6 +3,7 @@
 package privatehostproductv3
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	ai "lsp-trace/internal/applicationinventory"
@@ -23,7 +24,8 @@ type InventoryOptionsV3 struct {
 	MaxNativeAttempts                int
 	NativeRetainedUpper, BudgetBytes uint64
 	HostWindowMS                     int
-	Targets                          []InventoryTargetV3 `json:",omitempty"`
+	Targets                          []InventoryTargetV3      `json:",omitempty"`
+	NativeOwners                     []InventoryNativeOwnerV3 `json:",omitempty"`
 }
 type InventoryRequestV3 struct {
 	Schema         string
@@ -44,10 +46,20 @@ func DecodeInventoryRequestV3(raw []byte) (InventoryRequestV3, error) {
 	if len(raw) > 64<<10 || cat.DecodeNativeV3(raw, &q) != nil || q.Schema != "private-host-application-inventory-request.v3" || q.ApprovalSHA256 != InventoryRequestDigestV3(q) || ValidateInventoryRequestV3(q) != nil {
 		return InventoryRequestV3{}, ErrInvalid
 	}
+	// New owner declarations use exact canonical spelling/order/bytes. The
+	// legacy absent-field grammar remains byte-for-byte compatible. This also
+	// rejects case-insensitive aliases accepted by encoding/json, null/empty
+	// owner fields, alternate base64 and aliases of nested descriptor fields.
+	if inventoryOwnersPresentV3(raw) && !bytes.Equal(raw, mustJSON(q)) {
+		return InventoryRequestV3{}, ErrInvalid
+	}
 	return q, nil
 }
 func ValidateInventoryRequestV3(q InventoryRequestV3) error {
 	c, o := q.Configuration, q.Inventory
+	if !inventoryOwnerShapeV3(o.NativeOwners) {
+		return ErrInvalid
+	}
 	if c.Schema != "private-host-application-config.v3" || c.Profile != InventoryProfileV3 || c.RevisionAssertion != InventorySourceRevisionV3 || o.SourceRevision != InventorySourceRevisionV3 || validateApplication(c, time.Now()) != nil || c.Store == c.SourceRoot || pathRelatedInventoryV3(c.Store, c.SourceRoot) || c.UnitPolicySHA256 != hash(mustJSON(o)) || c.ProducerConfigSHA256 != c.UnitPolicySHA256 || c.SelectionRuleSHA256 != hash(mustJSON(o.Manifest)) {
 		return ErrInvalid
 	}
@@ -85,12 +97,25 @@ func ValidateInventoryRequestV3(q InventoryRequestV3) error {
 	if e != nil || len(b)*6+32768 > 1<<20 {
 		return ErrInvalid
 	}
-	return nil
+	return validateInventoryOwnersV3(q)
 }
 func (o InventoryOptionsV3) Detached() InventoryOptionsV3 {
 	o.Manifest.Leads = append([]ai.Lead(nil), o.Manifest.Leads...)
 	o.Manifest.UntouchedGaps = append([]string(nil), o.Manifest.UntouchedGaps...)
 	o.Targets = append([]InventoryTargetV3(nil), o.Targets...)
+	if len(o.NativeOwners) != 0 {
+		// Closed data-only declarations; own every nested slice before deferral.
+		var detached []InventoryNativeOwnerV3
+		if inventoryOwnerShapeV3(o.NativeOwners) {
+			raw, err := json.Marshal(o.NativeOwners)
+			if err == nil && len(raw) <= 64<<10 {
+				if json.Unmarshal(raw, &detached) != nil {
+					detached = nil
+				}
+			}
+		}
+		o.NativeOwners = detached
+	}
 	return o
 }
 func (o InventoryOptionsV3) RunRequest(ctx context.Context, inputs InventoryNativeInputsV3, sourceRoot, destination, interpreter, reviewer string, transport *InventoryTransportV3) ai.Request {
