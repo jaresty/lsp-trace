@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/censussourceassembly"
 	continuation "lsp-trace/internal/censussourcecontinuation"
 	"lsp-trace/internal/censussourcedriver"
@@ -252,7 +253,7 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 		return discovery, nil
 	}})
 	if result.Stop != censussourcedriver.StopComplete && result.Stop != censussourcedriver.StopBoundReached {
-		return fail(errCensusInventoryPrivate)
+		return writeCensusInventoryDiscoveryFailure(stderr, options.Machine, result.Err)
 	}
 	cursor, e = store.load(ctx)
 	if e != nil {
@@ -269,6 +270,39 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 		return fail(e)
 	}
 	return encodeCensusInventoryProgress(stdout, cursor, "PARTITION_PROGRESS_METADATA_ONLY")
+}
+
+// Pure diagnostic forwarding: no cursor, authority, terminal, or retry effect.
+func censusInventoryDiscoveryDiagnostic(d sessionruntime.PrivateDiscoveryRefusal) (censusresult.Diagnostic, error) {
+	out, err := censusresult.NewDiagnostic(censusresult.StageDiscovery, nil)
+	if err != nil || !d.Valid() {
+		return censusresult.Diagnostic{}, errCensusInventoryPrivate
+	}
+	out.Retry = false
+	out.PrivateDiscoveryRefusal = &d
+	return out, nil
+}
+func writeCensusInventoryDiscoveryFailure(stderr io.Writer, machine bool, cause error) int {
+	d, known := inv.PrivateDiscoveryOperationRefusalV2(cause)
+	if !known {
+		d, known = sessionruntime.PrivateDiscoveryRefusalFromError(cause)
+	}
+	if !known {
+		return writeCensusFailure(stderr, censusStageConfig, machine, errCensusInventoryPrivate)
+	}
+	out, err := censusInventoryDiscoveryDiagnostic(d)
+	if err != nil {
+		return writeCensusFailure(stderr, censusStageConfig, machine, errCensusInventoryPrivate)
+	}
+	if machine {
+		raw, err := censusresult.MarshalDiagnostic(out)
+		if err == nil {
+			_, _ = stderr.Write(raw)
+		}
+	} else {
+		_, _ = io.WriteString(stderr, "private discovery enclosure refused\n")
+	}
+	return 1
 }
 func encodeCensusInventoryProgress(out io.Writer, c censusInventoryCursor, status string) int {
 	e := json.NewEncoder(out).Encode(struct {

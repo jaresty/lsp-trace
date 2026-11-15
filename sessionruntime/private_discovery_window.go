@@ -55,6 +55,7 @@ type privateDiscoveryWindow struct {
 	ctx               context.Context
 	limits, remaining PrivateDiscoveryLimits
 	failed            bool
+	refusal           PrivateDiscoveryRefusal
 	manager           *Manager
 	child             *privateDiscoveryChild
 	backendCtx        context.Context
@@ -71,20 +72,15 @@ func (w *privateDiscoveryWindow) prepayBackend() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.backendPaid || w.failed || w.ctx.Err() != nil {
-		w.failed = true
+		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryBackend})
 		return false
 	}
 	raw := uint64(managedprocess.PrivateProviderStderrReadLimit + managedprocess.PrivateProviderCensusReadLimit)
 	retained := uint64(managedprocess.PrivateProviderStderrReadLimit + managedprocess.PrivateProviderStderrScratch + 16384)
 	work := 32*(raw+retained) + 65536
-	if w.remaining.ResponseBytes < raw || w.remaining.WireBytes < raw || w.remaining.RetainedBytes < retained || w.remaining.Work < work {
-		w.failed = true
+	if !w.reserveLocked(PrivateDiscoveryBackend, privateDiscoveryCharge{&w.remaining.ResponseBytes, raw}, privateDiscoveryCharge{&w.remaining.WireBytes, raw}, privateDiscoveryCharge{&w.remaining.RetainedBytes, retained}, privateDiscoveryCharge{&w.remaining.Work, work}) {
 		return false
 	}
-	w.remaining.ResponseBytes -= raw
-	w.remaining.WireBytes -= raw
-	w.remaining.RetainedBytes -= retained
-	w.remaining.Work -= work
 	w.backendPaid = true
 	return true
 }
@@ -97,24 +93,24 @@ func (w *privateDiscoveryWindow) bindManaged(ctx context.Context, m *managedproc
 	defer w.mu.Unlock()
 	d, ok := w.ctx.Deadline()
 	if !ok || ctx.Err() != nil || w.ctx.Err() != nil || w.failed || !w.backendPaid || !reflect.DeepEqual(spec, w.expectedSpec) {
-		w.failed = true
+		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryUnknownStage})
 		return nil, ErrPrivateDiscovery
 	}
 	p := m.PrivateProviderWindowProfile()
 	if !p.Available || !p.LocalDarwin || p.StderrReadLimit != managedprocess.PrivateProviderStderrReadLimit || p.StderrScratch != managedprocess.PrivateProviderStderrScratch || p.CensusReadLimit != managedprocess.PrivateProviderCensusReadLimit || p.StderrRetention < 0 || p.StderrRetention > managedprocess.PrivateProviderStderrReadLimit {
-		w.failed = true
+		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryUnknownStage})
 		return nil, ErrPrivateDiscovery
 	}
 	if w.backendOwner != nil {
 		if w.backendOwner != m || w.backendProfile != p {
-			w.failed = true
+			w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryUnknownStage})
 			return nil, ErrPrivateDiscovery
 		}
 		return w.backendCtx, nil
 	}
 	bound, e := m.PrivateProviderWindowContext(w.ctx, p, d)
 	if e != nil {
-		w.failed = true
+		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryUnknownStage})
 		return nil, ErrPrivateDiscovery
 	}
 	w.backendOwner = m
@@ -132,52 +128,65 @@ func privateDiscoveryFrom(ctx context.Context) *privateDiscoveryWindow {
 func (w *privateDiscoveryWindow) spend(field *uint64, n uint64) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.failed || w.ctx.Err() != nil || n > *field {
-		w.failed = true
-		return false
-	}
-	*field -= n
-	return true
+	return w.reserveLocked(PrivateDiscoveryAccounting, privateDiscoveryCharge{field, n})
 }
 func (w *privateDiscoveryWindow) work(n uint64) bool { return w.spend(&w.remaining.Work, n) }
 func (w *privateDiscoveryWindow) sourceLimit() int {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.failed || w.ctx.Err() != nil || w.remaining.SourceBytes <= 1 {
-		w.failed = true
+	if w.failed || w.ctx.Err() != nil {
+		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoverySource})
+		return 0
+	}
+	if w.remaining.SourceBytes <= 1 {
+		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoverySource, Currency: PrivateDiscoverySourceBytes, Requested: 2, Remaining: w.remaining.SourceBytes, AmountsAvailable: true})
 		return 0
 	}
 	n := w.remaining.SourceBytes - 1
 	if n > MaxDocumentSupplyBytes {
 		n = MaxDocumentSupplyBytes
 	}
-	// Pay the rejecting byte and full read allowance before opening the leaf.
-	w.remaining.SourceBytes -= n + 1
-	// Source parsing, JSON escaping, hashes and every retained source copy are
-	// conservatively prepaid before any read or clone, including cached output.
+	// n is capped by MaxDocumentSupplyBytes before multiplication. Reserve all
+	// currencies, including the rejecting byte, before counters or source opens.
 	cost := 32*(n+1) + 65536
-	if cost > w.remaining.Work || 16*(n+1) > w.remaining.RetainedBytes {
-		w.failed = true
+	if !w.reserveLocked(PrivateDiscoverySource, privateDiscoveryCharge{&w.remaining.SourceBytes, n + 1}, privateDiscoveryCharge{&w.remaining.Work, cost}, privateDiscoveryCharge{&w.remaining.RetainedBytes, 16 * (n + 1)}) {
 		return 0
 	}
-	w.remaining.Work -= cost
-	w.remaining.RetainedBytes -= 16 * (n + 1)
 	return int(n)
 }
 func (w *privateDiscoveryWindow) quoteRequest(params int) bool {
 	if params < 0 || params > 64<<10 {
 		return false
 	}
-	return w.spend(&w.remaining.Requests, 1) && w.work(16*(uint64(params)+4096))
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.reserveLocked(PrivateDiscoveryAccounting, privateDiscoveryCharge{&w.remaining.Requests, 1}, privateDiscoveryCharge{&w.remaining.Work, 16 * (uint64(params) + 4096)})
 }
 func (w *privateDiscoveryWindow) frame(c wireChild) (lspwire.Message, lspwire.ReadFrameObservation, []byte, bool, error) {
-	if !w.spend(&w.remaining.Messages, 1) {
-		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
-	}
 	w.mu.Lock()
 	cap := min(w.limits.FrameBytes, w.remaining.ResponseBytes, w.remaining.WireBytes)
+	if cap > ^uint64(0)/16 {
+		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryFrame})
+		w.mu.Unlock()
+		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
+	}
+	if cap == 0 {
+		if w.limits.FrameBytes == 0 {
+			w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryFrame})
+			w.mu.Unlock()
+			return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
+		}
+		field := &w.remaining.ResponseBytes
+		if w.remaining.WireBytes == 0 {
+			field = &w.remaining.WireBytes
+		}
+		w.reserveLocked(PrivateDiscoveryFrame, privateDiscoveryCharge{field, 1})
+		w.mu.Unlock()
+		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
+	}
+	ok := w.reserveLocked(PrivateDiscoveryFrame, privateDiscoveryCharge{&w.remaining.Messages, 1}, privateDiscoveryCharge{&w.remaining.Work, 16 * cap}, privateDiscoveryCharge{&w.remaining.RetainedBytes, 4 * cap})
 	w.mu.Unlock()
-	if cap == 0 || !w.work(16*cap) || !w.spend(&w.remaining.RetainedBytes, 4*cap) {
+	if !ok {
 		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
 	}
 	return lspwire.ReadPrivateBoundedFrameObservedAtDecode(c.Stdout(), lspwire.Limits{MaxBodyBytes: int64(w.limits.FrameBytes), MaxHeaderBytes: int64(w.limits.HeaderBytes)}, int64(cap), int64(cap), nil, nil, nil)
@@ -274,14 +283,10 @@ type privateDiscoveryWriter struct {
 func (x privateDiscoveryWriter) Write(p []byte) (int, error) {
 	n := uint64(len(p))
 	x.w.mu.Lock()
-	if x.w.failed || x.w.ctx.Err() != nil || x.w.remaining.Messages == 0 || n > x.w.remaining.RequestBytes || n > x.w.remaining.WireBytes {
-		x.w.failed = true
+	if !x.w.reserveLocked(PrivateDiscoveryWrite, privateDiscoveryCharge{&x.w.remaining.Messages, 1}, privateDiscoveryCharge{&x.w.remaining.RequestBytes, n}, privateDiscoveryCharge{&x.w.remaining.WireBytes, n}) {
 		x.w.mu.Unlock()
 		return 0, ErrPrivateDiscovery
 	}
-	x.w.remaining.Messages--
-	x.w.remaining.RequestBytes -= n
-	x.w.remaining.WireBytes -= n
 	x.w.mu.Unlock()
 	return x.WriteCloser.Write(p)
 }
@@ -294,12 +299,21 @@ type privateDiscoveryReader struct {
 func (x privateDiscoveryReader) Read(p []byte) (int, error) {
 	x.w.mu.Lock()
 	if x.w.failed || x.w.ctx.Err() != nil {
+		x.w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryRead})
 		x.w.mu.Unlock()
 		return 0, ErrPrivateDiscovery
 	}
 	n := min(uint64(len(p)), x.w.remaining.ResponseBytes, x.w.remaining.WireBytes)
 	if n == 0 {
-		x.w.failed = true
+		field := &x.w.remaining.ResponseBytes
+		if x.w.remaining.WireBytes == 0 {
+			field = &x.w.remaining.WireBytes
+		}
+		if len(p) == 0 {
+			x.w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryRead})
+		} else {
+			x.w.reserveLocked(PrivateDiscoveryRead, privateDiscoveryCharge{field, 1})
+		}
 		x.w.mu.Unlock()
 		return 0, ErrPrivateDiscovery
 	}
@@ -329,6 +343,11 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 	w := &privateDiscoveryWindow{ctx: ctx, limits: c.Limits, remaining: c.Limits, expectedSpec: c.Start.Process}
 	ctx = context.WithValue(ctx, privateDiscoveryContextKey{}, w)
 	w.ctx = ctx
+	defer func() {
+		if err != nil {
+			err = w.refusalErrorFrom(err, PrivateDiscoveryUnknownStage, false)
+		}
+	}()
 	effectiveDeadline, _ := ctx.Deadline()
 	// Fixed Manager/supervisor bookkeeping is reserved before either constructor.
 	if !w.work(4<<20) || !w.spend(&w.remaining.RetainedBytes, 4<<20) || !w.prepayBackend() {
@@ -352,7 +371,11 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 		joined = joined && (child == nil || child.cleanupJoined())
 		observation = PrivateDiscoveryObservation{CleanupJoined: joined, Failed: err != nil || failed || !joined}
 		if observation.Failed {
-			err = ErrPrivateDiscovery
+			fallback := PrivateDiscoveryUnknownStage
+			if err == nil && !joined {
+				fallback = PrivateDiscoveryCleanup
+			}
+			err = w.refusalErrorFrom(err, fallback, !joined)
 		}
 	}()
 	started := m.Start(ctx, c.Start)
@@ -369,17 +392,10 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 		return observation, ErrPrivateDiscovery
 	}
 	surface := &PrivateDiscoverySession{client: privateDiscoveryClient{m: m, w: w, id: started.SessionID, generation: started.Generation, deadline: effectiveDeadline, metadata: metadata}, members: append([]PrivateDiscoveryMember(nil), c.Members...), supplied: make(map[string]bool)}
-	err = consume(ctx, surface)
-	surface.mu.Lock()
-	surface.closed = true
-	allSupplied := len(surface.supplied) == len(c.Members)
-	surface.mu.Unlock()
-	if !allSupplied {
-		err = ErrPrivateDiscovery
-	}
+	err = surface.finalize(consume(ctx, surface))
 	stop := m.Stop(ctx, started.SessionID, "private-discovery")
 	if stop.Failure != "" {
-		err = ErrPrivateDiscovery
+		err = w.refusalErrorFrom(err, PrivateDiscoveryUnknownStage, false)
 	}
 	return observation, err
 }

@@ -222,9 +222,39 @@ func (op PrivateDiscoveryOperationV2) Execute(ctx context.Context, c sessionrunt
 	s.executionErr = e
 	s.mu.Unlock()
 	if e != nil || observation.Failed || !observation.CleanupJoined {
-		return ErrPrivateDiscoveryOperationV2
+		d, known := sessionruntime.PrivateDiscoveryRefusalFromError(e)
+		return privateDiscoveryOperationFailureV2(d, known)
 	}
 	return nil
+}
+
+// The forwarding helper carries only validated bounded values, not raw causes.
+// It does not create execution observations, grants, or publication authority.
+type privateDiscoveryOperationFailureV2Value struct {
+	diagnostic sessionruntime.PrivateDiscoveryRefusal
+}
+
+func (e privateDiscoveryOperationFailureV2Value) Error() string {
+	return "private discovery operation refused"
+}
+func (e privateDiscoveryOperationFailureV2Value) Unwrap() error {
+	return ErrPrivateDiscoveryOperationV2
+}
+func (e privateDiscoveryOperationFailureV2Value) Is(target error) bool {
+	return target == sessionruntime.ErrPrivateDiscovery
+}
+func privateDiscoveryOperationFailureV2(d sessionruntime.PrivateDiscoveryRefusal, known bool) error {
+	if !known || !d.Valid() {
+		return ErrPrivateDiscoveryOperationV2
+	}
+	return privateDiscoveryOperationFailureV2Value{d}
+}
+func PrivateDiscoveryOperationRefusalV2(err error) (sessionruntime.PrivateDiscoveryRefusal, bool) {
+	var e privateDiscoveryOperationFailureV2Value
+	if errors.As(err, &e) && e.diagnostic.Valid() {
+		return e.diagnostic, true
+	}
+	return sessionruntime.PrivateDiscoveryRefusal{}, false
 }
 
 // Complete performs the original kernel observation after the caller's bounded
