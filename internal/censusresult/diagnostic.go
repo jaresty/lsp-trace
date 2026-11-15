@@ -27,6 +27,8 @@ const (
 	CodeInvalidSyntax               Code = "INVALID_SYNTAX"
 	CodeInvalidConfig               Code = "INVALID_CONFIG"
 	CodeDiscoveryFailed             Code = "DISCOVERY_FAILED"
+	CodeDiscoveryRetained           Code = "DISCOVERY_RETAINED"
+	CodeDiscoveryIndeterminate      Code = "DISCOVERY_INDETERMINATE"
 	CodeAcquisitionFailed           Code = "ACQUISITION_FAILED"
 	CodeAssemblyFailed              Code = "ASSEMBLY_FAILED"
 	CodePublicationFailed           Code = "PUBLICATION_FAILED"
@@ -128,6 +130,16 @@ func MarshalDiagnostic(d Diagnostic) ([]byte, error) {
 	expected, err := NewDiagnostic(d.Stage, d.BatchOrdinal)
 	if d.Stage == StageCommitted && d.Code == CodeContinuationHostUnavailable {
 		expected = NewContinuationHostUnavailableDiagnostic()
+	}
+	// Only these closed connected-discovery outcomes permit retry=false without
+	// a numerical refusal. They do not assert PARTIAL, successful closure, or empty.
+	stopped := d.Stage == StageDiscovery && (d.Code == CodeDiscoveryRetained || d.Code == CodeDiscoveryIndeterminate)
+	if stopped {
+		expected.Code = d.Code
+		expected.Retry = false
+		if d.Detail != "" || d.PublicationFailure != "" || d.PublicationAccounting != nil {
+			return nil, errors.New("invalid census diagnostic")
+		}
 	}
 	privateDiscoveryValid := true
 	if d.PrivateDiscoveryRefusal != nil {

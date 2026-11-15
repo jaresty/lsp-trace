@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusenumerationprojection"
+	"lsp-trace/internal/discoveryfailure"
 	"lsp-trace/internal/discoveryfilter"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/seedformat"
@@ -288,6 +289,12 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				case ctx.Err() != nil:
 					disposition = census.SymbolIncomplete
 					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "CANCELED", ordinal)
+					// Cancellation governs disposition, not the producer's known cause.
+					cause := discoveryfailure.FromError(prepareErr)
+					if cause == discoveryfailure.Unknown {
+						cause = discoveryfailure.FromError(ctx.Err())
+					}
+					out.ProviderFailures[len(out.ProviderFailures)-1].PrepareCause = cause
 					appendSymbolIncompleteCause(&out, "DISCOVERY", "CANCELED", ordinal)
 					fileCanceled = true
 					fileComplete, complete = false, false
@@ -301,6 +308,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 						code = "CANCELED"
 					}
 					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", code, ordinal)
+					out.ProviderFailures[len(out.ProviderFailures)-1].PrepareCause = discoveryfailure.FromError(prepareErr)
 				case len(items) == 0:
 					disposition = census.SymbolPrepareMissing
 					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "UNAVAILABLE", ordinal)

@@ -253,7 +253,7 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 		return discovery, nil
 	}})
 	if result.Stop != censussourcedriver.StopComplete && result.Stop != censussourcedriver.StopBoundReached {
-		return writeCensusInventoryDiscoveryFailure(stderr, options.Machine, result.Err)
+		return writeCensusInventoryDiscoveryFailure(stderr, options.Machine, result.Err, result.Stop)
 	}
 	cursor, e = store.load(ctx)
 	if e != nil {
@@ -282,16 +282,9 @@ func censusInventoryDiscoveryDiagnostic(d sessionruntime.PrivateDiscoveryRefusal
 	out.PrivateDiscoveryRefusal = &d
 	return out, nil
 }
-func writeCensusInventoryDiscoveryFailure(stderr io.Writer, machine bool, cause error) int {
-	d, known := inv.PrivateDiscoveryOperationRefusalV2(cause)
-	if !known {
-		d, known = sessionruntime.PrivateDiscoveryRefusalFromError(cause)
-	}
-	if !known {
-		return writeCensusFailure(stderr, censusStageConfig, machine, errCensusInventoryPrivate)
-	}
-	out, err := censusInventoryDiscoveryDiagnostic(d)
-	if err != nil {
+func writeCensusInventoryDiscoveryFailure(stderr io.Writer, machine bool, cause error, stop censussourcedriver.Stop) int {
+	out, err := censusInventoryStoppedDiagnostic(stop, cause)
+	if err != nil || out.Code == censusresult.CodeInvalidConfig {
 		return writeCensusFailure(stderr, censusStageConfig, machine, errCensusInventoryPrivate)
 	}
 	if machine {
@@ -300,7 +293,14 @@ func writeCensusInventoryDiscoveryFailure(stderr io.Writer, machine bool, cause 
 			_, _ = stderr.Write(raw)
 		}
 	} else {
-		_, _ = io.WriteString(stderr, "private discovery enclosure refused\n")
+		switch out.Code {
+		case censusresult.CodeDiscoveryRetained:
+			_, _ = io.WriteString(stderr, "private discovery retained; no retry granted\n")
+		case censusresult.CodeDiscoveryIndeterminate:
+			_, _ = io.WriteString(stderr, "private discovery indeterminate; no retry granted\n")
+		default:
+			_, _ = io.WriteString(stderr, "private discovery enclosure refused\n")
+		}
 	}
 	return 1
 }

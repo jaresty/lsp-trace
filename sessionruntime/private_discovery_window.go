@@ -469,7 +469,16 @@ func (c privateDiscoveryClient) SupportsDocumentSymbols() bool {
 	return c.metadata.DocumentSymbolSupport
 }
 func (c privateDiscoveryClient) SupportsCallHierarchy() bool { return c.metadata.CallHierarchySupport }
-func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, out any) error {
+func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, out any) (err error) {
+	// Only the private prepare boundary gains a bounded cause. Other discovery
+	// methods keep their existing error/public-payload compatibility.
+	if method == "textDocument/prepareCallHierarchy" {
+		defer func() {
+			if err != nil {
+				err = c.w.prepareFailure(ctx.Err(), err)
+			}
+		}()
+	}
 	// Both closed parameter types have bounded URI/position values. The census
 	// adapter already bounds retained symbol strings; quote the maximal JSON form.
 	var uri string
@@ -497,6 +506,9 @@ func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, 
 	}
 	r := c.m.RoundTrip(ctx, RoundTripRequest{SessionID: c.id, Generation: c.generation, Method: method, Params: raw, Deadline: c.deadline, MaxBytes: int64(b), MaxMessages: int(n)})
 	if r.Failure != session.Failure("") || r.ServerError != nil {
+		if method == "textDocument/prepareCallHierarchy" {
+			return privateDiscoveryPrepareRPCFailure(r.Failure, r.ServerError != nil)
+		}
 		return ErrPrivateDiscovery
 	}
 	if !c.w.work(64*uint64(len(r.Result))) || !c.w.spend(&c.w.remaining.RetainedBytes, 64*uint64(len(r.Result))) {

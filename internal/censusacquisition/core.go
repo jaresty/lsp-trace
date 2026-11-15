@@ -22,6 +22,7 @@ import (
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusenumerationprojection"
+	"lsp-trace/internal/discoveryfailure"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/seedformat"
@@ -118,6 +119,9 @@ type ProviderFailure struct {
 	Code          string
 	FileOrdinal   *int
 	SymbolOrdinal *int
+	// PrepareCause is diagnostic-only. Unknown is omitted so old receipt bytes
+	// and identities are unchanged; known causes naturally affect new hashes.
+	PrepareCause discoveryfailure.Cause `json:"PrepareCause,omitempty"`
 }
 
 // IncompleteCause is the normalized, closed reason for one incomplete ledger member.
@@ -462,6 +466,11 @@ func validateCompleteProviderFailures(d Discovery) error {
 }
 
 func validateDiscovery(d Discovery) error {
+	for _, failure := range d.ProviderFailures {
+		if !failure.PrepareCause.Valid() || failure.PrepareCause != discoveryfailure.Unknown && (failure.Stage != "PREPARE_CALL_HIERARCHY" || failure.Code != "REQUEST_FAILED" && failure.Code != "CANCELED") {
+			return errors.New("invalid prepare failure metadata")
+		}
+	}
 	if d.Accounting.FileDenominator < 0 || d.Accounting.FileDenominator > captureset.MaxResources || d.Accounting.SymbolDenominator < 0 || d.Accounting.SymbolDenominator > censusenumerationprojection.MaxSymbols || len(d.Targets) > captureset.MaxTargets {
 		return errors.New("discovery bounds exceeded")
 	}
