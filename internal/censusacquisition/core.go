@@ -121,7 +121,46 @@ type ProviderFailure struct {
 	SymbolOrdinal *int
 	// PrepareCause is diagnostic-only. Unknown is omitted so old receipt bytes
 	// and identities are unchanged; known causes naturally affect new hashes.
-	PrepareCause discoveryfailure.Cause `json:"PrepareCause,omitempty"`
+	PrepareCause       discoveryfailure.Cause              `json:"PrepareCause,omitempty"`
+	ServerCodeCategory discoveryfailure.ServerCodeCategory `json:"ServerCodeCategory,omitempty"`
+}
+
+// Validate constrains diagnostic metadata only; it grants no authority.
+func (f ProviderFailure) Validate() error {
+	if !f.PrepareCause.Valid() || !f.ServerCodeCategory.Valid() ||
+		f.PrepareCause != discoveryfailure.Unknown && (f.Stage != "PREPARE_CALL_HIERARCHY" || f.Code != "REQUEST_FAILED" && f.Code != "CANCELED") ||
+		f.ServerCodeCategory != discoveryfailure.ServerCodeUnknown && f.PrepareCause != discoveryfailure.RPCServer {
+		return errors.New("invalid prepare failure metadata")
+	}
+	return nil
+}
+
+func (f ProviderFailure) MarshalJSON() ([]byte, error) {
+	if err := f.Validate(); err != nil {
+		return nil, err
+	}
+	type plain ProviderFailure
+	return json.Marshal(plain(f))
+}
+func (f *ProviderFailure) UnmarshalJSON(raw []byte) error {
+	type plain ProviderFailure
+	var value plain
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&value); err != nil {
+		return errors.New("invalid prepare failure metadata")
+	}
+	// json.Unmarshal rejects trailing values; call it on the alias as well so
+	// direct method use has the same strict single-value boundary.
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return errors.New("invalid prepare failure metadata")
+	}
+	next := ProviderFailure(value)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*f = next
+	return nil
 }
 
 // IncompleteCause is the normalized, closed reason for one incomplete ledger member.
@@ -467,8 +506,8 @@ func validateCompleteProviderFailures(d Discovery) error {
 
 func validateDiscovery(d Discovery) error {
 	for _, failure := range d.ProviderFailures {
-		if !failure.PrepareCause.Valid() || failure.PrepareCause != discoveryfailure.Unknown && (failure.Stage != "PREPARE_CALL_HIERARCHY" || failure.Code != "REQUEST_FAILED" && failure.Code != "CANCELED") {
-			return errors.New("invalid prepare failure metadata")
+		if err := failure.Validate(); err != nil {
+			return err
 		}
 	}
 	if d.Accounting.FileDenominator < 0 || d.Accounting.FileDenominator > captureset.MaxResources || d.Accounting.SymbolDenominator < 0 || d.Accounting.SymbolDenominator > censusenumerationprojection.MaxSymbols || len(d.Targets) > captureset.MaxTargets {

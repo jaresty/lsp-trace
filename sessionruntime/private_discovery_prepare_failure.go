@@ -6,14 +6,22 @@ import (
 	"errors"
 
 	"lsp-trace/internal/discoveryfailure"
+	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
 
-// Static error values carry no RPC message, code, URI, or native error. Returning
+// Static error values carry no RPC message, raw code, URI, or native error. Returning
 // a pointer into this fixed table allocates no owned error object in a failed
 // window; it neither spends residual currency nor changes existing precharges.
 // The original ErrPrivateDiscovery identity and closed Error text are preserved.
-type privateDiscoveryPrepareError struct{ cause discoveryfailure.Cause }
+type privateDiscoveryPrepareError struct {
+	cause    discoveryfailure.Cause
+	category discoveryfailure.ServerCodeCategory
+}
+
+func (e *privateDiscoveryPrepareError) PrepareFailureRPCCodeCategory() uint8 {
+	return uint8(e.category)
+}
 
 func (*privateDiscoveryPrepareError) Error() string                                 { return "private discovery enclosure refused" }
 func (*privateDiscoveryPrepareError) Unwrap() error                                 { return ErrPrivateDiscovery }
@@ -23,9 +31,9 @@ func (e *privateDiscoveryPrepareError) Is(target error) bool {
 }
 
 var privateDiscoveryPrepareErrors = [...]privateDiscoveryPrepareError{
-	{discoveryfailure.Unknown}, {discoveryfailure.Canceled}, {discoveryfailure.Deadline},
-	{discoveryfailure.RPCServer}, {discoveryfailure.SessionUnavailable}, {discoveryfailure.SessionCrashed},
-	{discoveryfailure.EnclosureBudget}, {discoveryfailure.InvalidResponse},
+	{cause: discoveryfailure.Unknown}, {cause: discoveryfailure.Canceled}, {cause: discoveryfailure.Deadline},
+	{cause: discoveryfailure.RPCServer}, {cause: discoveryfailure.SessionUnavailable}, {cause: discoveryfailure.SessionCrashed},
+	{cause: discoveryfailure.EnclosureBudget}, {cause: discoveryfailure.InvalidResponse},
 }
 
 func privateDiscoveryPrepareCauseError(cause discoveryfailure.Cause) error {
@@ -56,6 +64,32 @@ func privateDiscoveryPrepareRPCFailure(failure session.Failure, serverError bool
 		}
 	}
 	return privateDiscoveryPrepareCauseError(cause)
+}
+
+// One static entry per closed category: a failed request allocates no wrapper
+// and never retains the source RPCError pointer or its Message/Data.
+var privateDiscoveryRPCCodeErrors = [...]privateDiscoveryPrepareError{
+	{discoveryfailure.RPCServer, discoveryfailure.ServerCodeUnknown},
+	{discoveryfailure.RPCServer, discoveryfailure.ParseError},
+	{discoveryfailure.RPCServer, discoveryfailure.InvalidRequest},
+	{discoveryfailure.RPCServer, discoveryfailure.MethodNotFound},
+	{discoveryfailure.RPCServer, discoveryfailure.InvalidParams},
+	{discoveryfailure.RPCServer, discoveryfailure.InternalError},
+	{discoveryfailure.RPCServer, discoveryfailure.ServerNotInitialized},
+	{discoveryfailure.RPCServer, discoveryfailure.UnknownErrorCode},
+	{discoveryfailure.RPCServer, discoveryfailure.RequestCancelled},
+	{discoveryfailure.RPCServer, discoveryfailure.ContentModified},
+	{discoveryfailure.RPCServer, discoveryfailure.ServerCancelled},
+	{discoveryfailure.RPCServer, discoveryfailure.RequestFailed},
+	{discoveryfailure.RPCServer, discoveryfailure.ServerCodeOther},
+}
+
+func privateDiscoveryPrepareRPCCodeFailure(failure session.Failure, serverError *lspwire.RPCError) error {
+	err := privateDiscoveryPrepareRPCFailure(failure, serverError != nil)
+	if failure == "" && serverError != nil {
+		return &privateDiscoveryRPCCodeErrors[discoveryfailure.ClassifyServerCode(serverError.Code)]
+	}
+	return err
 }
 
 // Snapshot only the existing first refusal. It is not a new recorder or an

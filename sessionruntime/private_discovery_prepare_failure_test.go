@@ -104,7 +104,7 @@ func TestPrepare66ProductionSourceCallsite(t *testing.T) {
 		if !ok {
 			return true
 		}
-		if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "privateDiscoveryPrepareRPCFailure" {
+		if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "privateDiscoveryPrepareRPCCodeFailure" {
 			mapped = true
 		}
 		if s, ok := c.Fun.(*ast.SelectorExpr); ok && s.Sel.Name == "prepareFailure" {

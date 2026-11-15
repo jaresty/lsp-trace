@@ -290,11 +290,12 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 					disposition = census.SymbolIncomplete
 					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "CANCELED", ordinal)
 					// Cancellation governs disposition, not the producer's known cause.
-					cause := discoveryfailure.FromError(prepareErr)
+					cause, category := discoveryfailure.DetailsFromError(prepareErr)
 					if cause == discoveryfailure.Unknown {
-						cause = discoveryfailure.FromError(ctx.Err())
+						cause, category = discoveryfailure.DetailsFromError(ctx.Err())
 					}
 					out.ProviderFailures[len(out.ProviderFailures)-1].PrepareCause = cause
+					out.ProviderFailures[len(out.ProviderFailures)-1].ServerCodeCategory = category
 					appendSymbolIncompleteCause(&out, "DISCOVERY", "CANCELED", ordinal)
 					fileCanceled = true
 					fileComplete, complete = false, false
@@ -308,7 +309,9 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 						code = "CANCELED"
 					}
 					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", code, ordinal)
-					out.ProviderFailures[len(out.ProviderFailures)-1].PrepareCause = discoveryfailure.FromError(prepareErr)
+					cause, category := discoveryfailure.DetailsFromError(prepareErr)
+					out.ProviderFailures[len(out.ProviderFailures)-1].PrepareCause = cause
+					out.ProviderFailures[len(out.ProviderFailures)-1].ServerCodeCategory = category
 				case len(items) == 0:
 					disposition = census.SymbolPrepareMissing
 					appendSymbolProviderFailure(&out, "PREPARE_CALL_HIERARCHY", "UNAVAILABLE", ordinal)

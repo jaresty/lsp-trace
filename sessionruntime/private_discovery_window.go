@@ -507,7 +507,7 @@ func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, 
 	r := c.m.RoundTrip(ctx, RoundTripRequest{SessionID: c.id, Generation: c.generation, Method: method, Params: raw, Deadline: c.deadline, MaxBytes: int64(b), MaxMessages: int(n)})
 	if r.Failure != session.Failure("") || r.ServerError != nil {
 		if method == "textDocument/prepareCallHierarchy" {
-			return privateDiscoveryPrepareRPCFailure(r.Failure, r.ServerError != nil)
+			return privateDiscoveryPrepareRPCCodeFailure(r.Failure, r.ServerError)
 		}
 		return ErrPrivateDiscovery
 	}
