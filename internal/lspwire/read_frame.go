@@ -2,6 +2,7 @@ package lspwire
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -202,6 +203,119 @@ func ReadPrivateBoundedFrameObservedAtDecode(source io.Reader, limits Limits, ma
 	}
 	message, observation, err := reader.ReadWithFrame()
 	return message, observation, nil, false, err
+}
+
+// ReadPrivateDiscoveryFrame is the discovery-only admitted sibling. It never
+// reparses a buffered frame, invokes the ordinary decoder, or falls back on a
+// refused admission. Canonical bytes are a count, not a second serialization.
+func ReadPrivateDiscoveryFrame(ctx context.Context, source io.Reader, limits Limits, maxFrame int64, admit PrivateDiscoveryAdmission) (Message, ReadFrameObservation, []byte, uint64, error) {
+	fail := func(err error) (Message, ReadFrameObservation, []byte, uint64, error) {
+		return Message{}, ReadFrameObservation{}, nil, 0, err
+	}
+	if source == nil || limits.MaxHeaderBytes <= 0 || limits.MaxHeaderBytes > 64<<10 || limits.MaxBodyBytes <= 0 || limits.MaxBodyBytes > 16<<20 || maxFrame <= 0 || maxFrame > (16<<20)+(64<<10) {
+		return fail(ErrInvalidFrameCaptureLimit)
+	}
+	// A: H header + at most H disjoint line strings + one-byte reject scratch,
+	// SHA256 [32], prefixed hex [71], returned hash string [71] = 2H+175.
+	if err := discoveryPay(ctx, admit, PrivateDiscoveryCharge{Messages: 1, Retained: 2*uint64(limits.MaxHeaderBytes) + 175, Work: 16*uint64(maxFrame) + uint64(limits.MaxHeaderBytes) + 1}); err != nil {
+		return fail(err)
+	}
+	header := make([]byte, int(limits.MaxHeaderBytes))
+	used, start := 0, 0
+	length := int64(-1)
+	lines := 0
+	var one [1]byte
+	for {
+		if _, err := io.ReadFull(source, one[:]); err != nil {
+			return fail(err)
+		}
+		if int64(used) >= limits.MaxHeaderBytes || int64(used) >= maxFrame {
+			return fail(ErrHeaderTooLarge)
+		}
+		header[used] = one[0]
+		used++
+		if one[0] != '\n' {
+			continue
+		}
+		line := strings.TrimRight(string(header[start:used]), "\r\n")
+		start = used
+		if line == "" {
+			break
+		}
+		lines++
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return fail(ErrInvalidContentLength)
+		}
+		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
+			if length >= 0 {
+				return fail(ErrDuplicateContentLength)
+			}
+			value = strings.TrimSpace(value)
+			neg := false
+			i := 0
+			if len(value) > 0 && (value[0] == '+' || value[0] == '-') {
+				neg = value[0] == '-'
+				i++
+			}
+			if i == len(value) {
+				return fail(ErrInvalidContentLength)
+			}
+			var n uint64
+			for ; i < len(value); i++ {
+				c := value[i]
+				if c < '0' || c > '9' {
+					return fail(ErrInvalidContentLength)
+				}
+				d := uint64(c - '0')
+				if n > (uint64(1<<63-1)-d)/10 {
+					return fail(ErrInvalidContentLength)
+				}
+				n = 10*n + d
+			}
+			if neg && n != 0 {
+				return fail(ErrInvalidContentLength)
+			}
+			length = int64(n)
+		}
+	}
+	if length < 0 {
+		if lines == 0 {
+			return fail(ErrEmptyHeaderBlock)
+		}
+		return fail(ErrNonemptyHeaderMissingContentLength)
+	}
+	if length > limits.MaxBodyBytes || length > maxFrame-int64(used) {
+		return fail(ErrFrameTooLarge)
+	}
+	size := used + int(length)
+	// B: exact acquisition and independent returned raw, before body allocation/read.
+	if err := discoveryPay(ctx, admit, PrivateDiscoveryCharge{Retained: 2 * uint64(size), Work: 8*uint64(size) + 175}); err != nil {
+		return fail(err)
+	}
+	frame := make([]byte, size)
+	copy(frame, header[:used])
+	if _, err := io.ReadFull(source, frame[used:]); err != nil {
+		return fail(err)
+	}
+	message, count, err := decodePrivateDiscovery(ctx, frame[used:], admit)
+	if err != nil {
+		return fail(err)
+	}
+	sum := sha256.Sum256(frame)
+	var encoded [71]byte
+	copy(encoded[:], "sha256:")
+	const digits = "0123456789abcdef"
+	for i, v := range sum {
+		encoded[7+2*i] = digits[v>>4]
+		encoded[8+2*i] = digits[v&15]
+	}
+	raw := make([]byte, size)
+	copy(raw, frame)
+	if ctx.Err() != nil {
+		return fail(ErrPrivateDiscoveryAdmission)
+	}
+	return message, ReadFrameObservation{FrameBytes: int64(size), FrameSHA256: string(encoded[:])}, raw, count, nil
 }
 
 // WriteDirectionalReserved builds exactly one owned frame. Prefix/header are

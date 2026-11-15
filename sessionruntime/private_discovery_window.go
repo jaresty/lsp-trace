@@ -163,33 +163,18 @@ func (w *privateDiscoveryWindow) quoteRequest(params int) bool {
 	return w.reserveLocked(PrivateDiscoveryAccounting, privateDiscoveryCharge{&w.remaining.Requests, 1}, privateDiscoveryCharge{&w.remaining.Work, 16 * (uint64(params) + 4096)})
 }
 func (w *privateDiscoveryWindow) frame(c wireChild) (lspwire.Message, lspwire.ReadFrameObservation, []byte, bool, error) {
-	w.mu.Lock()
-	cap := min(w.limits.FrameBytes, w.remaining.ResponseBytes, w.remaining.WireBytes)
-	if cap > ^uint64(0)/16 {
+	dc, ok := c.(*privateDiscoveryChild)
+	if !ok {
+		w.mu.Lock()
 		w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryFrame})
 		w.mu.Unlock()
 		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
 	}
-	if cap == 0 {
-		if w.limits.FrameBytes == 0 {
-			w.failLocked(PrivateDiscoveryRefusal{Stage: PrivateDiscoveryFrame})
-			w.mu.Unlock()
-			return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
-		}
-		field := &w.remaining.ResponseBytes
-		if w.remaining.WireBytes == 0 {
-			field = &w.remaining.WireBytes
-		}
-		w.reserveLocked(PrivateDiscoveryFrame, privateDiscoveryCharge{field, 1})
-		w.mu.Unlock()
-		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
+	f, err := w.frameRecord(dc)
+	if err != nil {
+		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, err
 	}
-	ok := w.reserveLocked(PrivateDiscoveryFrame, privateDiscoveryCharge{&w.remaining.Messages, 1}, privateDiscoveryCharge{&w.remaining.Work, 16 * cap}, privateDiscoveryCharge{&w.remaining.RetainedBytes, 4 * cap})
-	w.mu.Unlock()
-	if !ok {
-		return lspwire.Message{}, lspwire.ReadFrameObservation{}, nil, false, ErrPrivateDiscovery
-	}
-	return lspwire.ReadPrivateBoundedFrameObservedAtDecode(c.Stdout(), lspwire.Limits{MaxBodyBytes: int64(w.limits.FrameBytes), MaxHeaderBytes: int64(w.limits.HeaderBytes)}, int64(cap), int64(cap), nil, nil, nil)
+	return f.message, f.observation, f.raw, true, nil
 }
 
 type privateDiscoveryStarter struct {

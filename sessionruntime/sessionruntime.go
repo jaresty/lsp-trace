@@ -1386,6 +1386,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		retained            bool
 		responseDisposition lspwire.ResponseDisposition
 		responseLinearized  bool
+		discovery           *privateDiscoveryFrame
 		err                 error
 	}
 	captureCap := int64(0)
@@ -1397,6 +1398,19 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	case "textDocument/documentSymbol":
 		if documentSymbolCapture {
 			captureCap = req.CaptureDocumentSymbolResponseFrameMaxBytes
+		}
+	}
+	var discoverySlots *privateDiscoverySlots
+	if dc, ok := child.(*privateDiscoveryChild); ok {
+		// Discovery has no owned-frame capture contract. Refuse rather than
+		// visiting unrelated ordinary capture/clone branches.
+		if captureCap != 0 || private != nil || req.directionalV5 != nil || req.callHierarchyLayer1GenericAttempt != nil {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		}
+		var err error
+		discoverySlots, err = dc.window.consumerSlots()
+		if err != nil {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 		}
 	}
 	reads := make(chan readResult, 1)
@@ -1445,8 +1459,12 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		result.privateProviderMessages.admitted()
 		go func() {
 			if dc, ok := child.(*privateDiscoveryChild); ok {
-				msg, frame, raw, retained, err := dc.window.frame(dc)
-				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
+				f, err := dc.window.frameRecord(dc)
+				if err != nil {
+					reads <- readResult{err: err}
+					return
+				}
+				reads <- readResult{message: f.message, frame: f.observation, raw: f.raw, retained: err == nil, discovery: f, err: err}
 				return
 			}
 			if window != nil && req.directionalV5 == nil {
@@ -1597,7 +1615,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				}
 			}
 			bodyBytes := read.bodyBytes
-			if privateReader == nil && req.directionalV5 == nil {
+			if read.discovery != nil {
+				bodyBytes = int64(read.discovery.canonical)
+			} else if privateReader == nil && req.directionalV5 == nil {
 				body, _ := json.Marshal(read.message)
 				bodyBytes = int64(len(body))
 			}
@@ -1660,19 +1680,40 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				result.privateProviderMessages.dispatched(false)
 				if req.ADR0011PrivateNotificationLeaseV1 && private != nil && !private.nonCustodial && read.message.Kind() == lspwire.KindNotification {
 					privateRetainedNotifications = append(privateRetainedNotifications, read.message)
+				} else if discoverySlots != nil {
+					var err error
+					result.Notifications, err = discoverySlots.store(read.discovery, true)
+					if err != nil {
+						return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+					}
 				} else {
 					result.Notifications = append(result.Notifications, read.message)
 				}
 				releaseUnselectedFrame()
 				continue
 			}
-			responseID, err := strconv.ParseUint(string(read.message.ID), 10, 64)
+			var responseID uint64
+			var err error
+			if read.discovery != nil {
+				var valid bool
+				responseID, valid = privateDiscoveryID(read.message.ID)
+				if !valid {
+					err = ErrPrivateDiscovery
+				}
+			} else {
+				responseID, err = strconv.ParseUint(string(read.message.ID), 10, 64)
+			}
 			if err != nil || responseID != key.ID {
 				result.providerMessageAccumulator.dispatch(read.message, false)
 				result.privateProviderMessages.dispatched(false)
 				collector.Record(diagnosticEventUnmatched, int64(responseID), false)
 				if req.ADR0011PrivateResponseLeaseV1 && private != nil && !private.nonCustodial {
 					privateRetainedResponses = append(privateRetainedResponses, read.message)
+				} else if discoverySlots != nil {
+					result.Responses, err = discoverySlots.store(read.discovery, false)
+					if err != nil {
+						return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+					}
 				} else {
 					result.Responses = append(result.Responses, read.message)
 				}
@@ -1689,6 +1730,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				collector.Record(diagnosticEventLate, int64(responseID), false)
 				if req.ADR0011PrivateResponseLeaseV1 && private != nil && !private.nonCustodial {
 					privateRetainedResponses = append(privateRetainedResponses, read.message)
+				} else if discoverySlots != nil {
+					result.Responses, err = discoverySlots.store(read.discovery, false)
+					if err != nil {
+						return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+					}
 				} else {
 					result.Responses = append(result.Responses, read.message)
 				}
@@ -1770,6 +1816,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 					return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 				}
 				result.Result = nil
+			} else if discoverySlots != nil {
+				result.Result, err = discoverySlots.owner.selectedResult(read.discovery)
+				if err != nil {
+					return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+				}
 			} else {
 				result.Result = append(json.RawMessage(nil), read.message.Result...)
 				if private != nil && read.message.Kind() == lspwire.KindSuccessResponse {
@@ -2877,9 +2928,14 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		for messages := 0; messages < m.limits.MaxObservations; messages++ {
 			var message lspwire.Message
 			var exactFrame []byte
+			var canonicalBytes int64
+			var discovery *privateDiscoveryFrame
 			var err error
 			if dc, ok := child.(*privateDiscoveryChild); ok {
-				message, _, exactFrame, _, err = dc.window.frame(dc)
+				discovery, err = dc.window.frameRecord(dc)
+				if err == nil {
+					message, exactFrame, canonicalBytes = discovery.message, discovery.raw, int64(discovery.canonical)
+				}
 			} else {
 				message, _, exactFrame, err = reader.ReadWithExactFrame(int64(privateHistoryMaxBytes))
 			}
@@ -2887,13 +2943,22 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 				response <- readinessResult{err: err}
 				return
 			}
-			body, _ := json.Marshal(message)
-			m.recordReadinessResponse(opID, int64(len(body)))
-			m.recordReadinessEvent(opID, diagnosticEventReadComplete, int64(len(body)), true)
+			if discovery == nil {
+				body, _ := json.Marshal(message)
+				canonicalBytes = int64(len(body))
+			}
+			m.recordReadinessResponse(opID, canonicalBytes)
+			m.recordReadinessEvent(opID, diagnosticEventReadComplete, canonicalBytes, true)
 			if message.Kind() == lspwire.KindNotification {
 				continue
 			}
-			if message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || message.Error != nil || len(message.Result) == 0 {
+			idMatches := false
+			if discovery != nil {
+				idMatches = privateDiscoveryIDEqual(message.ID, id)
+			} else {
+				idMatches = string(message.ID) == id
+			}
+			if message.Kind() != lspwire.KindSuccessResponse || !idMatches || message.Error != nil || len(message.Result) == 0 {
 				response <- readinessResult{err: errors.New("sessionruntime: invalid readiness response")}
 				return
 			}
@@ -3865,7 +3930,11 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 			var frame lspwire.ReadFrameObservation
 			var err error
 			if dc, ok := child.(*privateDiscoveryChild); ok {
-				message, frame, _, _, err = dc.window.frame(dc)
+				var f *privateDiscoveryFrame
+				f, err = dc.window.frameRecord(dc)
+				if err == nil {
+					message, frame = f.message, f.observation
+				}
 			} else {
 				message, frame, err = reader.ReadWithFrame()
 			}
@@ -3887,7 +3956,13 @@ func (m *Manager) gracefulShutdownWithResponsePrivateV2(child wireChild, pending
 				// JSON-RPC params, when present, must be structured.
 			}
 			facts.ShutdownRead = ShutdownUnexpectedPrivateV2
-			if message.Kind() == lspwire.KindSuccessResponse && string(message.ID) == id && pending.Accept(key) == lspwire.ResponseAccepted {
+			idMatches := false
+			if _, private := child.(*privateDiscoveryChild); private {
+				idMatches = privateDiscoveryIDEqual(message.ID, id)
+			} else {
+				idMatches = string(message.ID) == id
+			}
+			if message.Kind() == lspwire.KindSuccessResponse && idMatches && pending.Accept(key) == lspwire.ResponseAccepted {
 				facts.ShutdownRead = ShutdownMatchedPrivateV2
 			}
 			response <- facts
