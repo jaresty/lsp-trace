@@ -229,7 +229,13 @@ func (s censusInventoryCursorStore) replace(ctx context.Context, old, next censu
 	return parseCensusInventoryCursor(actual)
 }
 func (s censusInventoryCursorStore) put(ctx context.Context, v any) (string, error) {
-	raw, e := censusInventoryMarshal(v, 4<<20)
+	var raw []byte
+	var e error
+	if h, ok := v.(censusInventoryHeader); ok && h.QualifiedAdmission != nil {
+		raw, e = censusInventoryQualifiedMarshal(h, 4<<20)
+	} else {
+		raw, e = censusInventoryMarshal(v, 4<<20)
+	}
 	if e != nil {
 		return "", e
 	}
