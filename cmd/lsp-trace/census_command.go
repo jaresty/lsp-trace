@@ -63,6 +63,7 @@ type censusCLIOptions struct {
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
 	PrivateProviderProbePath, PrivateProviderProbeVersion                      string
 	PrivateInventoryConfigPath                                                 string
+	PrivateInventoryQualifiedPrepareConfigPath                                 string
 	PrivateInventoryBridgeConfigPath                                           string
 	PrivateInventoryScopePreview                                               bool `json:",omitempty"`
 	PrivateProviderProbeByteTimeNotifications                                  bool
@@ -107,6 +108,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.BoolVar(&o.PrivateProviderProbeByteTimeNotifications, "private-provider-probe-byte-time-notifications", false, "")
 	fs.StringVar(&o.PrivateInventoryBridgeConfigPath, "private-inventory-bridge-config", "", "")
 	fs.StringVar(&o.PrivateInventoryConfigPath, "private-inventory-config", "", "")
+	fs.StringVar(&o.PrivateInventoryQualifiedPrepareConfigPath, "private-inventory-qualified-prepare-config", "", "absolute caller-authored qualified preparation envelope; offline only")
 	fs.BoolVar(&o.PrivateInventoryScopePreview, "private-inventory-scope-preview", false, "")
 	fs.BoolVar(&o.Catalog, "catalog", false, "continue to the provisional feature catalog")
 	fs.StringVar(&o.Resume, "resume", "", "resume an opaque catalog continuation selector")
@@ -211,6 +213,34 @@ func censusMachineFlagCount(args []string) int {
 }
 
 func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
+	prepareCount, prepareMachineCount := 0, 0
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--server-arg" || arg == "-server-arg" {
+			i++
+			continue
+		}
+		switch strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-") {
+		case "private-inventory-qualified-prepare-config":
+			prepareCount++
+		case "machine":
+			prepareMachineCount++
+		}
+	}
+	if o.PrivateInventoryQualifiedPrepareConfigPath != "" || prepareCount != 0 {
+		if prepareCount != 1 || prepareMachineCount != 1 || !o.Machine || !filepath.IsAbs(o.PrivateInventoryQualifiedPrepareConfigPath) || filepath.Clean(o.PrivateInventoryQualifiedPrepareConfigPath) != o.PrivateInventoryQualifiedPrepareConfigPath {
+			return errors.New("invalid qualified preparation syntax")
+		}
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "-") {
+				name := strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-")
+				if name != "private-inventory-qualified-prepare-config" && name != "machine" {
+					return errors.New("qualified preparation rejects ordinary controls")
+				}
+			}
+		}
+		return nil
+	}
 	if o.Help {
 		return nil
 	}

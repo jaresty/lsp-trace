@@ -30,7 +30,7 @@ import (
 )
 
 const censusInvocationUsage = "lsp-trace census (((--workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--catalog --catalog-config HOST_JSON] [--stop-after describe-requests] [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--batch-targets N] [--timeout DURATION] [--request-timeout DURATION]) | (--workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine)) | (--resume SELECTOR --catalog-config HOST_JSON --publication-root ABSOLUTE_PATH [--workspace PATH] [--stop-after describe-requests])) [--machine]"
-const censusUsage = "usage: " + censusInvocationUsage
+const censusUsage = "usage: " + censusInvocationUsage + "\n       lsp-trace census --machine --private-inventory-qualified-prepare-config ABSOLUTE_PATH\nQualified preparation only: strict caller-declared complete universe, original bindings and explicit selection; private bounded artifacts; no provider startup or execution admission."
 
 type censusRunnerDependencies struct {
 	openRoot                 func(string) (*publication.Root, error)
@@ -96,6 +96,9 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	if options.Help {
 		fmt.Fprintln(stdout, censusUsage)
 		return 0
+	}
+	if options.PrivateInventoryQualifiedPrepareConfigPath != "" {
+		return runCensusApplicationQualifiedCLIPrivate(options, stdout, stderr)
 	}
 	if options.PrivateInventoryBridgeConfigPath != "" {
 		return runCensusInventoryBridgePrivate(options, stdout, stderr, deps)
