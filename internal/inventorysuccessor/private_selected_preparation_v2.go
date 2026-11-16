@@ -33,6 +33,9 @@ type PrivateSelectedConfigurationV2 struct {
 	// Bounded metadata attestation only; must match Contract.ID(). Never native authority.
 	ContractInput cc.ContractInput
 	SourceLimits  tp.PrivateSourceLimits
+	// Optional binding data, not authority. The admitted job is checked under
+	// the owner lock before any selected reservation reaches the kernel.
+	ExpectedSourceAuthorization string `json:",omitempty"`
 }
 
 var selectedModesV2 = [7]string{"RD", "C", "CRD", "D", "CD", "R", "CR"}
@@ -271,6 +274,9 @@ func selectedCheckedContractV2(c PrivateSelectedConfigurationV2) (PrivateSelecte
 }
 
 func selectedConfigValidV2(c PrivateSelectedConfigurationV2) bool {
+	if c.ExpectedSourceAuthorization != "" && !hashV2(c.ExpectedSourceAuthorization) {
+		return false
+	}
 	for _, s := range []string{c.RunID, c.SeedNamespace, c.Lineage} {
 		if !sessionFieldRPreparationV1(s) || len(s) > 256 {
 			return false

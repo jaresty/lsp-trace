@@ -30,6 +30,7 @@ type censusInventoryHeader struct {
 	Plan                                                                         censussourceplan.Plan
 	UntouchedGaps                                                                []string
 	Exclusions                                                                   []string
+	QualifiedAdmission                                                           *censusInventoryQualifiedAdmission `json:",omitempty"`
 }
 type censusInventoryModeState struct {
 	Mode, State, QDigest, QSelector, RunID, Attempt, Predecessor, Publication string
@@ -165,13 +166,17 @@ func (s censusInventoryCursorStore) load(ctx context.Context) (censusInventoryCu
 		return c, errCensusInventoryPrivate
 	}
 	var h censusInventoryHeader
-	if censusInventoryDecode(header, &h, 4<<20) != nil || h.Schema != "private-connected-inventory-header.v1" || h.SourceRevision != censusInventorySourceRevision || h.PlanIdentity != h.Plan.Identity || h.Workflow != s.key || h.Workspace == "" || censussourceplan.Validate(h.Plan, 16) != nil || c.IndexedPrefix > len(h.Plan.Partitions) {
+	if censusInventoryDecode(header, &h, 4<<20) != nil {
+		return c, errCensusInventoryPrivate
+	}
+	_, canonical, headerErr := canonicalCensusInventoryHeader(h)
+	if headerErr != nil || !bytes.Equal(header, canonical) || h.Workflow != s.key || c.IndexedPrefix > len(h.Plan.Partitions) {
 		return c, errCensusInventoryPrivate
 	}
 	for i, p := range c.Partitions {
 		var claim censusInventoryPartitionClaim
 		raw, e := s.objects.Get(ctx, p.Claim)
-		if e != nil || censusInventoryDigest(raw) != p.Claim || censusInventoryDecode(raw, &claim, 64<<10) != nil || claim.Schema != "private-connected-partition-claim.v1" || claim.Header != c.Header || claim.Root != s.root || claim.Workflow != s.key || claim.Plan != h.Plan.Identity || claim.Ordinal != i || i >= len(h.Plan.Partitions) || !censusInventoryHash(claim.Members) || claim.Members != censusInventoryMembersDigest(h.Plan.Partitions[i].Members) || !censusInventoryHash(claim.FundingJob) || !censusInventoryHash(claim.FundingHead) || !censusInventoryHash(claim.Attempt) || !censusInventoryHash(claim.CursorPredecessor) || claim.Deadline.IsZero() || i == 0 && claim.SourceHead != (continuation.HeadRevision{}) || i > 0 && (claim.SourceHead.Generation == 0 || !censusInventoryHash(claim.SourceHead.Selector)) {
+		if !censusInventoryPartitionAvailable(h, i) || e != nil || censusInventoryDigest(raw) != p.Claim || censusInventoryDecode(raw, &claim, 64<<10) != nil || claim.Schema != "private-connected-partition-claim.v1" || claim.Header != c.Header || claim.Root != s.root || claim.Workflow != s.key || claim.Plan != h.Plan.Identity || claim.Ordinal != i || i >= len(h.Plan.Partitions) || !censusInventoryHash(claim.Members) || claim.Members != censusInventoryMembersDigest(h.Plan.Partitions[i].Members) || !censusInventoryHash(claim.FundingJob) || !censusInventoryHash(claim.FundingHead) || !censusInventoryHash(claim.Attempt) || !censusInventoryHash(claim.CursorPredecessor) || claim.Deadline.IsZero() || i == 0 && claim.SourceHead != (continuation.HeadRevision{}) || i > 0 && (claim.SourceHead.Generation == 0 || !censusInventoryHash(claim.SourceHead.Selector)) {
 			return c, errCensusInventoryPrivate
 		}
 	}
@@ -239,10 +244,10 @@ func (s censusInventoryCursorStore) put(ctx context.Context, v any) (string, err
 	return id, nil
 }
 func (s censusInventoryCursorStore) initialize(ctx context.Context, h censusInventoryHeader) (censusInventoryCursor, error) {
-	if h.SourceRevision != censusInventorySourceRevision || h.PlanIdentity != h.Plan.Identity || censussourceplan.Validate(h.Plan, 16) != nil {
+	h, _, e := canonicalCensusInventoryHeader(h)
+	if e != nil || h.Workflow != s.key {
 		return censusInventoryCursor{}, errCensusInventoryPrivate
 	}
-	h.Schema = "private-connected-inventory-header.v1"
 	id, e := s.put(ctx, h)
 	if e != nil {
 		return censusInventoryCursor{}, e
@@ -273,6 +278,10 @@ func (s censusInventoryCursorStore) indexTerminal(ctx context.Context, c censusI
 	headerRaw, e := s.objects.Get(ctx, c.Header)
 	var header censusInventoryHeader
 	if e != nil || censusInventoryDecode(headerRaw, &header, 4<<20) != nil {
+		return c, errCensusInventoryPrivate
+	}
+	_, canonical, headerErr := canonicalCensusInventoryHeader(header)
+	if headerErr != nil || !bytes.Equal(headerRaw, canonical) || censusInventoryDigest(canonical) != c.Header || !censusInventoryPartitionAvailable(header, t.Ordinal) {
 		return c, errCensusInventoryPrivate
 	}
 	for _, target := range t.Discovery.Targets {
@@ -430,13 +439,11 @@ func censusInventoryMembersDigest(files []censusacquisition.SourceFile) string {
 	return censusInventoryDigest(raw)
 }
 func (s censusInventoryCursorStore) claimPartition(ctx context.Context, c censusInventoryCursor, cfg censusInventoryBridgeConfig, r continuation.Request) (censusInventoryCursor, *censusInventoryPartitionPermit, error) {
-	if censusInventoryCheckContext(ctx) != nil || !time.Now().Before(cfg.Deadline) || time.Until(cfg.Deadline) > 15*time.Second || len(c.Partitions) != c.IndexedPrefix || c.IndexedPrefix >= len(r.Plan.Partitions) || cfg.Root != s.root || r.WorkflowKey != s.key || r.HeadKey != s.key || r.Plan.Identity != cfg.Header.PlanIdentity || !censusInventoryHash(cfg.ExpectedHead) || !censusInventoryHash(cfg.Attempt) {
+	if censusInventoryCheckContext(ctx) != nil || !time.Now().Before(cfg.Deadline) || time.Until(cfg.Deadline) > 15*time.Second || len(c.Partitions) != c.IndexedPrefix || c.IndexedPrefix >= len(r.Plan.Partitions) || cfg.Root != s.root || r.WorkflowKey != s.key || r.HeadKey != s.key || r.Plan.Identity != cfg.Header.Plan.Identity || !censusInventoryHash(cfg.ExpectedHead) || !censusInventoryHash(cfg.Attempt) {
 		return c, nil, errCensusInventoryPartitionBlocked
 	}
-	headerValue := cfg.Header
-	headerValue.Schema = "private-connected-inventory-header.v1"
-	header, e := censusInventoryMarshal(headerValue, 4<<20)
-	if e != nil || censusInventoryDigest(header) != c.Header {
+	_, header, e := canonicalCensusInventoryHeader(cfg.Header)
+	if e != nil || censusInventoryDigest(header) != c.Header || !censusInventoryPartitionAvailable(cfg.Header, c.IndexedPrefix) || !reflect.DeepEqual(r.Plan, cfg.Header.Plan) {
 		return c, nil, errCensusInventoryPrivate
 	}
 	raw, e := r.Heads.Load(ctx, r.HeadKey)

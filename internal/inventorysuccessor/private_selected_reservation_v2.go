@@ -112,7 +112,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveSelectedMixedInputV2(ctx context.Con
 	stages[0] = m // actual M quote; original future quotes dominate later stages
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.k == nil || o.uncertain || q.Root != o.k.root || o.head != s.expectedHead {
+	if o.k == nil || o.uncertain || q.Root != o.k.root || o.head != s.expectedHead || s.config.ExpectedSourceAuthorization != "" && o.job.SourceAuthorization != s.config.ExpectedSourceAuthorization {
 		return PrivateMixedInputOperationV2{}, ErrPrivateSelectedV2
 	}
 	h, err := o.k.reserveSelectedPreparationV2(ctx, o.job, o.head, attempt, stages, q.Start.Deadline.UnixNano(), now.UnixNano(), o.limits)

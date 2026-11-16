@@ -50,6 +50,11 @@ func decodeCensusInventoryBridge(raw []byte) (censusInventoryBridgeConfig, error
 	if censusInventoryDecode(raw, &c, 4<<20) != nil || c.Schema != "private-connected-inventory-bridge.v1" || !filepath.IsAbs(c.Root) || filepath.Clean(c.Root) != c.Root || c.Header.SourceRevision != censusInventorySourceRevision || c.Header.Workspace == "" || c.Header.Workflow == "" || len(c.Header.Workflow) > 4096 || len(c.Request) > 64<<10 || c.Target < 0 || c.Mode < 0 || c.Mode >= 7 {
 		return c, errCensusInventoryPrivate
 	}
+	var headerErr error
+	c.Header, _, headerErr = canonicalCensusInventoryHeader(c.Header)
+	if headerErr != nil {
+		return c, errCensusInventoryPrivate
+	}
 	switch c.Action {
 	case "discover", "setup", "register", "wait", "respond", "run", "fail", "finalize":
 	default:
@@ -130,9 +135,7 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 	if len(members) == 0 || len(c.Header.Plan.Files) > censusMaxDiscoveredEntries {
 		return fail(errCensusInventoryPrivate)
 	}
-	header := c.Header
-	header.Schema = "private-connected-inventory-header.v1"
-	headerRaw, e := censusInventoryMarshal(header, 4<<20)
+	_, headerRaw, e := canonicalCensusInventoryHeader(c.Header)
 	if e != nil {
 		return fail(e)
 	}
@@ -184,7 +187,7 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 		}
 		return encodeCensusInventoryProgress(stdout, cursor, "COMPLETE_DISCOVERY_METADATA_ONLY")
 	}
-	if len(members[ordinal].Members) == 0 || len(members[ordinal].Members) > 16 {
+	if len(members[ordinal].Members) == 0 || len(members[ordinal].Members) > 16 || !censusInventoryPartitionAvailable(c.Header, ordinal) {
 		return fail(errCensusInventoryPrivate)
 	}
 	construction := sessionruntime.PrivateDiscoveryConstruction{NewStarter: deps.newStarter, Start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.LanguageID, Process: c.Process}, Deadline: c.Deadline, Limits: c.Limits}
@@ -334,16 +337,14 @@ func runCensusInventoryBridgeLifecycle(c censusInventoryBridgeConfig, out, errou
 	if e != nil || c.Target >= len(cursor.Targets) {
 		return fail()
 	}
-	header := c.Header
-	header.Schema = "private-connected-inventory-header.v1"
-	headerRaw, e := censusInventoryMarshal(header, 4<<20)
+	_, headerRaw, e := canonicalCensusInventoryHeader(c.Header)
 	if e != nil || censusInventoryDigest(headerRaw) != cursor.Header {
 		return fail()
 	}
 	target := cursor.Targets[c.Target]
 	if c.Action == "setup" {
 		q, e := product.DecodeInventoryRequestV3(c.Request)
-		if e != nil || len(q.Inventory.NativeOwners) != 1 || len(q.Inventory.Targets) != 1 || len(q.Inventory.Manifest.Leads) != 1 {
+		if e != nil || !censusInventoryQualifiedNativeBinding(c.Header, cursor.Header, q) || len(q.Inventory.NativeOwners) != 1 || len(q.Inventory.Targets) != 1 || len(q.Inventory.Manifest.Leads) != 1 {
 			return fail()
 		}
 		raw, e := store.objects.Get(ctx, target.Record)
@@ -460,6 +461,12 @@ type censusInventorySetupPermit struct {
 func claimCensusInventoryConnectedQ(q product.InventoryRequestV3, action, runID string, setupPermit ...*censusInventorySetupPermit) (*censusInventoryConnectedClaim, error) {
 	provenance := q.Inventory.Manifest.Provenance
 	if len(provenance) < len(censusInventoryBindingPrefix) || provenance[:len(censusInventoryBindingPrefix)] != censusInventoryBindingPrefix {
+		// Expected binding data cannot route around the connected custody claim.
+		for _, owner := range q.Inventory.NativeOwners {
+			if owner.ExpectedSourceAuthorization != "" {
+				return nil, errCensusInventoryPrivate
+			}
+		}
 		return nil, nil
 	}
 	var binding censusInventoryBridgeBinding
@@ -478,6 +485,11 @@ func claimCensusInventoryConnectedQ(q product.InventoryRequestV3, action, runID 
 	fail := func() (*censusInventoryConnectedClaim, error) { closeRoots(); return nil, errCensusInventoryPrivate }
 	c, e := store.load(context.Background())
 	if e != nil || c.Header != binding.Header || binding.Mode < 0 || binding.Mode >= 7 {
+		return fail()
+	}
+	headerRaw, e := store.objects.Get(context.Background(), c.Header)
+	var header censusInventoryHeader
+	if e != nil || censusInventoryDecode(headerRaw, &header, 4<<20) != nil || !censusInventoryQualifiedNativeBinding(header, c.Header, q) {
 		return fail()
 	}
 	target := -1

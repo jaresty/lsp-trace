@@ -74,6 +74,8 @@ type InventoryNativeOwnerV3 struct {
 	Contract                                                                  cc.ContractInput
 	SourceLimits                                                              targetpacket.PrivateSourceLimits
 	Role                                                                      sc.PrivateSelectedRoleV3
+	// Binding data only; actual admitted source authority is checked at reserve.
+	ExpectedSourceAuthorization string `json:",omitempty"`
 }
 
 // Reject oversized nested DATA before marshaling/copying, including direct Go
@@ -153,6 +155,9 @@ func (d InventoryNativeOwnerV3) DescriptorInput() (InventoryNativeInputV3, error
 	if !inventoryOwnerShapeV3([]InventoryNativeOwnerV3{d}) {
 		return fail()
 	}
+	if d.ExpectedSourceAuthorization != "" && !digestValue(d.ExpectedSourceAuthorization) {
+		return fail()
+	}
 	if !ownerPathV3(d.AccountingRoot) || !ownerPathV3(d.ProcessPath) || !ownerPathV3(d.Profile.Workspace) || len(d.CanonicalJob) == 0 || len(d.CanonicalJob) > 16<<10 || !json.Valid(d.CanonicalJob) || !digestValue(d.ExpectedHead) || len(d.ProcessArgs) > 64 || len(d.Profile.Options) > 32 || len(d.Kinds) == 0 || len(d.Kinds) > 3 || len(d.Lead.ID) == 0 || len(d.Lead.ID) > 256 || len(d.Lead.Provenance) > 4096 || d.Deadline.IsZero() || !d.Role.Valid() || !d.SourceLimits.Valid() || d.Contract.ProgramCSeed != d.Seed {
 		return fail()
 	}
@@ -230,7 +235,7 @@ func (d InventoryNativeOwnerV3) DescriptorInput() (InventoryNativeInputV3, error
 		return fail()
 	}
 	capture := inv.PrivateMixedInputRequestV2{Start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(p), LanguageID: d.LanguageID, RelationProviders: []string{d.Provider}, Deadline: d.Deadline, Process: managedprocess.Spec{Path: d.ProcessPath, Dir: d.Profile.Workspace, Args: append([]string(nil), d.ProcessArgs...)}}, URI: d.URI, OccurrenceID: d.OccurrenceID, Revision: d.Revision, Privacy: d.Privacy, OccurrencePolicy: d.OccurrencePolicy, CompositionPolicy: d.CompositionPolicy, Line: d.Line, Character: d.Character, Kinds: append([]pa.RelationKind(nil), d.Kinds...)}
-	configuration := inv.PrivateSelectedConfigurationV2{RunID: d.RunID, SeedNamespace: d.SeedNamespace, Lineage: d.Lineage, Seed: d.Seed, Attempts: d.Attempts, Contract: c, ContractInput: d.Contract, SourceLimits: d.SourceLimits}
+	configuration := inv.PrivateSelectedConfigurationV2{RunID: d.RunID, SeedNamespace: d.SeedNamespace, Lineage: d.Lineage, Seed: d.Seed, Attempts: d.Attempts, Contract: c, ContractInput: d.Contract, SourceLimits: d.SourceLimits, ExpectedSourceAuthorization: d.ExpectedSourceAuthorization}
 	return InventoryNativeInputV3{Lead: d.Lead, Capture: capture, Configuration: configuration, Role: d.Role}, nil
 }
 
