@@ -47,7 +47,23 @@ type identityEnvelope struct {
 	Files         []censusacquisition.SourceFile `json:"files"`
 }
 
+// pathIdentityPolicy keeps path comparison and URI-relative derivation together.
+// Qualified preparation supplies a lexical policy; legacy Build keeps its host
+// behavior. Partitioning, duplicate detection and hashing remain shared.
+type pathIdentityPolicy struct {
+	key      func(string) string
+	relative func(string, string) (string, error)
+}
+
+func legacyPathIdentityPolicy() pathIdentityPolicy {
+	return pathIdentityPolicy{key: platformPathKey, relative: canonicalWorkspaceRelativePath}
+}
+
 func Build(files []censusacquisition.SourceFile, workspace string, partitionSize int) (Plan, error) {
+	return buildWithPathIdentity(files, workspace, partitionSize, legacyPathIdentityPolicy())
+}
+
+func buildWithPathIdentity(files []censusacquisition.SourceFile, workspace string, partitionSize int, policy pathIdentityPolicy) (Plan, error) {
 	if partitionSize <= 0 || partitionSize > MaxPartitionSize {
 		return Plan{}, ErrInvalidPartitionSize
 	}
@@ -56,12 +72,12 @@ func Build(files []censusacquisition.SourceFile, workspace string, partitionSize
 	}
 	planned := append([]censusacquisition.SourceFile(nil), files...)
 	for i := range planned {
-		if err := validate(planned[i], workspace); err != nil {
+		if err := validateWithPathIdentity(planned[i], workspace, policy); err != nil {
 			return Plan{}, err
 		}
 	}
 	sort.Slice(planned, func(i, j int) bool {
-		left, right := platformPathKey(planned[i].Path), platformPathKey(planned[j].Path)
+		left, right := policy.key(planned[i].Path), policy.key(planned[j].Path)
 		if left != right {
 			return left < right
 		}
@@ -75,7 +91,7 @@ func Build(files []censusacquisition.SourceFile, workspace string, partitionSize
 	})
 	paths, uris := make(map[string]struct{}, len(planned)), make(map[string]struct{}, len(planned))
 	for _, file := range planned {
-		pathKey := platformPathKey(file.Path)
+		pathKey := policy.key(file.Path)
 		if _, exists := paths[pathKey]; exists {
 			return Plan{}, ErrDuplicateIdentity
 		}
@@ -139,11 +155,15 @@ func canonicalIdentity(files []censusacquisition.SourceFile, partitionSize int) 
 }
 
 func validate(file censusacquisition.SourceFile, workspace string) error {
+	return validateWithPathIdentity(file, workspace, legacyPathIdentityPolicy())
+}
+
+func validateWithPathIdentity(file censusacquisition.SourceFile, workspace string, policy pathIdentityPolicy) error {
 	if !validRelativePath(file.Path) {
 		return ErrInvalidIdentity
 	}
-	relative, err := canonicalWorkspaceRelativePath(workspace, file.URI)
-	if err != nil || !platformPathEqual(relative, file.Path) {
+	relative, err := policy.relative(workspace, file.URI)
+	if err != nil || policy.key(relative) != policy.key(file.Path) {
 		return ErrInvalidIdentity
 	}
 	switch file.Disposition {
@@ -170,14 +190,11 @@ func canonicalWorkspaceRelativePath(workspace, rawURI string) (string, error) {
 	if workspace == "" || !filepath.IsAbs(workspace) || filepath.Clean(workspace) != workspace {
 		return "", ErrInvalidIdentity
 	}
-	u, err := url.Parse(rawURI)
-	if err != nil || u.Scheme != "file" || u.Opaque != "" || u.User != nil || u.Host != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
-		return "", ErrInvalidIdentity
+	uriPath, err := canonicalFileURIPath(rawURI)
+	if err != nil {
+		return "", err
 	}
-	if rawURI != (&url.URL{Scheme: "file", Path: u.Path}).String() {
-		return "", ErrInvalidIdentity
-	}
-	target := filepath.FromSlash(u.Path)
+	target := filepath.FromSlash(uriPath)
 	if runtime.GOOS == "windows" && len(target) >= 3 && target[0] == filepath.Separator && target[2] == ':' {
 		target = target[1:]
 	}
@@ -193,6 +210,19 @@ func canonicalWorkspaceRelativePath(workspace, rawURI string) (string, error) {
 		return "", ErrInvalidIdentity
 	}
 	return relative, nil
+}
+
+// canonicalFileURIPath is shared by both policies. It rejects URI aliases,
+// hosts, queries and fragments without touching the filesystem.
+func canonicalFileURIPath(rawURI string) (string, error) {
+	u, err := url.Parse(rawURI)
+	if err != nil || u.Scheme != "file" || u.Opaque != "" || u.User != nil || u.Host != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", ErrInvalidIdentity
+	}
+	if rawURI != (&url.URL{Scheme: "file", Path: u.Path}).String() {
+		return "", ErrInvalidIdentity
+	}
+	return u.Path, nil
 }
 
 func platformPathEqual(left, right string) bool {
