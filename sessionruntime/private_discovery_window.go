@@ -42,11 +42,21 @@ type PrivateDiscoveryConstruction struct {
 	Limits     PrivateDiscoveryLimits
 	Deadline   time.Time
 	Members    []PrivateDiscoveryMember
+	// Optional caller-preverified diagnostics, not runtime identity/authority.
+	Fingerprints PrivateDiscoveryFingerprints
+	// Original monotonic funded-window anchor, supplied only by its trusted
+	// owner. The operation installs its reserve snapshot, overriding caller
+	// values. The runner rejects wall-clock-only anchors and never invents one.
+	DiagnosticAnchor time.Time
+	// Explicit opt-in only. Admission is overwritten by the reserved operation.
+	FailureCapture   *PrivateDiscoveryCaptureOptions
+	CaptureAdmission PrivateDiscoveryCaptureAdmission
 }
 type PrivateDiscoveryMember struct{ Path, URI, LanguageID string }
 type PrivateDiscoveryObservation struct {
 	CleanupJoined bool
 	Failed        bool
+	ResponseFacts PrivateDiscoveryResponseFacts
 }
 
 type privateDiscoveryContextKey struct{}
@@ -63,6 +73,12 @@ type privateDiscoveryWindow struct {
 	backendOwner      *managedprocess.Manager
 	backendProfile    managedprocess.PrivateProviderWindowProfile
 	backendPaid       bool
+	responseFacts     *PrivateDiscoveryResponseFacts
+	capture           *privateDiscoveryCapture
+	// Preparation uncertainty exists independently of a capture owner, the
+	// first functional refusal and accounting poison. It is monotonic.
+	capturePreparationUncertain          bool
+	diagnosticAnchor, diagnosticDeadline time.Time
 }
 
 // Pay the entire nonrefundable backend pool, not retained bytes observed later.
@@ -315,7 +331,11 @@ func (x privateDiscoveryReader) Read(p []byte) (int, error) {
 // The runner itself creates no funding, kernel records, native proof or grants.
 func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction, consume func(context.Context, *PrivateDiscoverySession) error) (observation PrivateDiscoveryObservation, err error) {
 	observation.Failed = true
-	if parent == nil || consume == nil || c.NewStarter == nil || !c.Limits.Valid() || len(c.Members) == 0 || len(c.Members) > 16 || c.Deadline.IsZero() || !time.Now().Before(c.Deadline) || time.Until(c.Deadline) > 15*time.Second || c.Start.SeedBinding != nil || len(c.Start.Profile.Workspace().String()) > 4096 {
+	now := time.Now()
+	if !c.Fingerprints.Valid() || !c.DiagnosticAnchor.IsZero() && (c.DiagnosticAnchor == c.DiagnosticAnchor.Round(0) || c.DiagnosticAnchor.After(now) || !c.Deadline.After(c.DiagnosticAnchor) || c.Deadline.Sub(c.DiagnosticAnchor) > 15*time.Second) {
+		return observation, ErrPrivateDiscovery
+	}
+	if parent == nil || consume == nil || c.NewStarter == nil || !c.Limits.Valid() || len(c.Members) == 0 || len(c.Members) > 16 || c.Deadline.IsZero() || !now.Before(c.Deadline) || c.Deadline.Sub(now) > 15*time.Second || c.Start.SeedBinding != nil || len(c.Start.Profile.Workspace().String()) > 4096 {
 		return observation, ErrPrivateDiscovery
 	}
 	for _, f := range c.Members {
@@ -329,13 +349,32 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 	ctx = context.WithValue(ctx, privateDiscoveryContextKey{}, w)
 	w.ctx = ctx
 	defer func() {
+		if w.capture != nil && !w.capture.close(ctx) {
+			observation.CleanupJoined = false
+			observation.Failed = true
+			err = w.refusalErrorFrom(err, PrivateDiscoveryCleanup, true)
+		}
+		w.mu.Lock()
+		preparationUncertain := w.capturePreparationUncertain
+		w.mu.Unlock()
+		if preparationUncertain {
+			observation.CleanupJoined = false
+			observation.Failed = true
+			err = w.refusalErrorFrom(err, PrivateDiscoveryUnknownStage, true)
+		}
+		observation.ResponseFacts = w.responseFactsSnapshot()
 		if err != nil {
 			err = w.refusalErrorFrom(err, PrivateDiscoveryUnknownStage, false)
 		}
 	}()
 	effectiveDeadline, _ := ctx.Deadline()
+	w.diagnosticAnchor, w.diagnosticDeadline = c.DiagnosticAnchor, effectiveDeadline
 	// Fixed Manager/supervisor bookkeeping is reserved before either constructor.
-	if !w.work(4<<20) || !w.spend(&w.remaining.RetainedBytes, 4<<20) || !w.prepayBackend() {
+	if !w.work(4<<20) || !w.spend(&w.remaining.RetainedBytes, 4<<20) || !w.prepayBackend() || !w.prepayResponseFacts() {
+		return observation, ErrPrivateDiscovery
+	}
+	w.responseFacts.Context.Fingerprints = c.Fingerprints
+	if !w.prepayCapture(c.FailureCapture, c.CaptureAdmission) {
 		return observation, ErrPrivateDiscovery
 	}
 	starter, e := c.NewStarter()
@@ -388,11 +427,13 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 // PrivateDiscoverySession exposes no Manager, underlying transport, grouping,
 // prepared handoff, native target or other proof-producing operation.
 type PrivateDiscoverySession struct {
-	client   privateDiscoveryClient
-	members  []PrivateDiscoveryMember
-	mu       sync.Mutex
-	closed   bool
-	supplied map[string]bool
+	client          privateDiscoveryClient
+	members         []PrivateDiscoveryMember
+	mu              sync.Mutex
+	closed          bool
+	supplied        map[string]bool
+	digests         [16][32]byte
+	digestAvailable [16]bool
 }
 
 func (s *PrivateDiscoverySession) admitURI(uri, language string, requireSupplied bool) bool {
@@ -440,6 +481,9 @@ func (s *PrivateDiscoverySession) Supply(ctx context.Context, uri, language stri
 	if s.closed {
 		return ErrPrivateDiscovery
 	}
+	// Reuse the exact hash already computed by PrepareDocument AFTER its bounded
+	// source read and successful supply. No new read, hash pass or URI export.
+	s.captureSuppliedDigestLocked(uri, r)
 	s.supplied[uri] = true
 	return nil
 }
@@ -447,13 +491,13 @@ func (s *PrivateDiscoverySession) DocumentSymbols(ctx context.Context, p lsp.Doc
 	if !s.admitURI(p.TextDocument.URI, "", true) {
 		return nil, ErrPrivateDiscovery
 	}
-	return s.client.DocumentSymbols(s.client.w.ctx, p)
+	return s.client.DocumentSymbols(s.diagnosticContext(ctx, p.TextDocument.URI), p)
 }
 func (s *PrivateDiscoverySession) PrepareCallHierarchy(ctx context.Context, p lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
 	if !s.admitURI(p.TextDocument.URI, "", true) {
 		return nil, ErrPrivateDiscovery
 	}
-	return s.client.PrepareCallHierarchy(s.client.w.ctx, p)
+	return s.client.PrepareCallHierarchy(s.diagnosticContext(ctx, p.TextDocument.URI), p)
 }
 
 type privateDiscoveryClient struct {
@@ -470,6 +514,12 @@ func (c privateDiscoveryClient) SupportsDocumentSymbols() bool {
 }
 func (c privateDiscoveryClient) SupportsCallHierarchy() bool { return c.metadata.CallHierarchySupport }
 func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, out any) (err error) {
+	record := -1
+	defer func() {
+		if record >= 0 {
+			c.w.classifyResponseFacts(record, err)
+		}
+	}()
 	// Only the private prepare boundary gains a bounded cause. Other discovery
 	// methods keep their existing error/public-payload compatibility.
 	if method == "textDocument/prepareCallHierarchy" {
@@ -504,7 +554,12 @@ func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, 
 	if b == 0 || n == 0 {
 		return ErrPrivateDiscovery
 	}
+	if !c.w.admitDiagnosticContext() {
+		return ErrPrivateDiscovery
+	}
+	ctx = privatePositionContext(ctx, p)
 	r := c.m.RoundTrip(ctx, RoundTripRequest{SessionID: c.id, Generation: c.generation, Method: method, Params: raw, Deadline: c.deadline, MaxBytes: int64(b), MaxMessages: int(n)})
+	record = int(r.privateDiscoveryRecord) - 1
 	if r.Failure != session.Failure("") || r.ServerError != nil {
 		if method == "textDocument/prepareCallHierarchy" {
 			return privateDiscoveryPrepareRPCCodeFailure(r.Failure, r.ServerError)

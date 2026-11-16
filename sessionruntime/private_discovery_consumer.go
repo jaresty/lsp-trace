@@ -16,9 +16,12 @@ type privateDiscoveryFrame struct {
 	observation lspwire.ReadFrameObservation
 	raw         []byte
 	canonical   uint64
+	facts       lspwire.ResponseFacts
+	stages      PrivateDiscoveryReadStages
+	errorSpan   lspwire.PrivateDiscoveryErrorObjectSpan
 }
 
-func (w *privateDiscoveryWindow) frameRecord(c *privateDiscoveryChild) (*privateDiscoveryFrame, error) {
+func (w *privateDiscoveryWindow) frameRecord(c *privateDiscoveryChild, expectedID ...uint64) (*privateDiscoveryFrame, error) {
 	w.mu.Lock()
 	cap := min(w.limits.FrameBytes, w.remaining.ResponseBytes, w.remaining.WireBytes)
 	valid := c != nil && c.window == w && w.child == c
@@ -49,6 +52,42 @@ func (w *privateDiscoveryWindow) frameRecord(c *privateDiscoveryChild) (*private
 		}
 		return nil
 	}
+	// The diagnostic sibling owns its fixed record BEFORE reading. Even a
+	// rejected decode can then hand off facts without allocating in failure.
+	if len(expectedID) == 1 {
+		k := uint64(unsafe.Sizeof(privateDiscoveryFrame{}))
+		if err := admit(lspwire.PrivateDiscoveryCharge{Retained: k, Work: 3*k + 4*uint64(unsafe.Sizeof((*privateDiscoveryFrame)(nil)))}); err != nil {
+			return nil, err
+		}
+		f := &privateDiscoveryFrame{owner: w, child: c}
+		var err error
+		var span *lspwire.PrivateDiscoveryErrorObjectSpan
+		if w.capture != nil {
+			span = &f.errorSpan
+		}
+		f.message, f.observation, f.raw, f.canonical, f.facts, err = lspwire.ReadPrivateDiscoveryFrameCapture(w.ctx, c.Stdout(), limits, int64(cap), admit, expectedID[0], span, func(stage lspwire.PrivateDiscoveryReadStage) {
+			at := w.eventTime()
+			switch stage {
+			case lspwire.PrivateDiscoveryFrameComplete:
+				f.stages.FrameComplete = true
+				f.stages.Received = at
+			case lspwire.PrivateDiscoveryDecodeSucceeded, lspwire.PrivateDiscoveryDecodeRejected, lspwire.PrivateDiscoveryDecodeRefused:
+				f.stages.DecodeAttempted = true
+				f.stages.Decoded = at
+				f.stages.Outcome = PrivateDecodeSucceeded
+				if stage == lspwire.PrivateDiscoveryDecodeRejected {
+					f.stages.Outcome = PrivateDecodeRejected
+				}
+				if stage == lspwire.PrivateDiscoveryDecodeRefused {
+					f.stages.Outcome = PrivateDecodeRefused
+				}
+			}
+		})
+		if err == nil && w.ctx.Err() != nil {
+			err = ErrPrivateDiscovery
+		}
+		return f, err
+	}
 	m, o, raw, count, err := lspwire.ReadPrivateDiscoveryFrame(w.ctx, c.Stdout(), limits, int64(cap), admit)
 	if err != nil {
 		return nil, err
@@ -59,7 +98,7 @@ func (w *privateDiscoveryWindow) frameRecord(c *privateDiscoveryChild) (*private
 	if err := admit(lspwire.PrivateDiscoveryCharge{Retained: k, Work: 3*k + 4*uint64(unsafe.Sizeof((*privateDiscoveryFrame)(nil)))}); err != nil {
 		return nil, err
 	}
-	f := &privateDiscoveryFrame{w, c, m, o, raw, count}
+	f := &privateDiscoveryFrame{owner: w, child: c, message: m, observation: o, raw: raw, canonical: count}
 	if w.ctx.Err() != nil {
 		return nil, ErrPrivateDiscovery
 	}

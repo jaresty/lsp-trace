@@ -393,11 +393,13 @@ func ProducedLifecycleSubcauses() []LifecycleSubcause {
 }
 
 type DocumentResult struct {
-	URI, LanguageID     string
-	Version             int
-	Failure             session.Failure
-	LifecycleSubcause   LifecycleSubcause         `json:"-"`
-	DiagnosticOperation DiagnosticOperationHandle `json:"-"`
+	privateDiscoveryDigest          [32]byte
+	privateDiscoveryDigestAvailable bool
+	URI, LanguageID                 string
+	Version                         int
+	Failure                         session.Failure
+	LifecycleSubcause               LifecycleSubcause         `json:"-"`
+	DiagnosticOperation             DiagnosticOperationHandle `json:"-"`
 	// Supply is nil for omitted capture, unchanged/cached documents, and errors.
 	// A cached digest is never promoted to evidence of a new notification.
 	Supply *DocumentSupply `json:",omitempty"`
@@ -705,6 +707,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 			copy.Params = append(json.RawMessage(nil), previous.supply.Params...)
 			result.Supply = &copy
 		}
+		privateDiscoverySupplyDigest(ctx, &result, digest)
 		m.mu.Unlock()
 		collector.Record(diagnosticEventCacheHit, int64(previous.version), true)
 		return finishDocument(result, diagnosticEventTerminalResponse)
@@ -793,6 +796,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		copy.Params = append(json.RawMessage(nil), retainedSupply.Params...)
 		result.Supply = &copy
 	}
+	privateDiscoverySupplyDigest(ctx, &result, digest)
 	m.mu.Unlock()
 	return finishDocument(result, diagnosticEventTerminalResponse)
 }
@@ -874,6 +878,8 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 }
 
 type RoundTripResult struct {
+	// One-based private diagnostic slot; zero means no admitted record.
+	privateDiscoveryRecord            uint16
 	directionalV5                     *privateDirectionalCallV5
 	Key                               lspwire.RequestKey
 	DiagnosticOperation               DiagnosticOperationHandle `json:"-"`
@@ -1165,6 +1171,15 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		m.mu.Unlock()
 		return RoundTripResult{Failure: session.ToolNotImplemented}
 	}
+	responseFactsIndex := -1
+	if dc, ok := child.(*privateDiscoveryChild); ok {
+		var admitted bool
+		responseFactsIndex, admitted = dc.window.beginResponseFacts(privateCorrelation(parent, req.Method))
+		if !admitted {
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+	}
 	key := r.pending.Begin(req.Generation)
 	if req.directionalV5 != nil {
 		req.directionalV5.admit(key, req.Method)
@@ -1200,7 +1215,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	}
 	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
 	started := m.now()
-	result := RoundTripResult{directionalV5: req.directionalV5, Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
+	result := RoundTripResult{privateDiscoveryRecord: uint16(responseFactsIndex + 1), directionalV5: req.directionalV5, Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector, callHierarchyLayer1GenericAttempt: req.callHierarchyLayer1GenericAttempt}
 	result.privateProviderMessages.enabled = window != nil && req.directionalV5 == nil
 	result.providerMessageAccumulator.enabled = req.CaptureProviderMessageCompositionAllMethods || req.CaptureProviderMessageComposition && req.Method == "textDocument/documentSymbol"
 	result.providerTransaction.enabled = req.CaptureProviderTransactionObservationAllMethods || req.CaptureProviderTransactionObservation && req.Method == "textDocument/documentSymbol"
@@ -1340,6 +1355,16 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			return err
 		}
 	}
+	if dc, ok := child.(*privateDiscoveryChild); ok {
+		write := writeRequest
+		writeRequest = func() error {
+			err := write()
+			if err == nil {
+				dc.window.sentResponseFacts(responseFactsIndex)
+			}
+			return err
+		}
+	}
 	if err := owner.run(ctx, writeRequest); err != nil {
 		if req.directionalV5 != nil && errors.Is(err, directionalraw.ErrReservationRefused) {
 			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, false)
@@ -1459,8 +1484,8 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		result.privateProviderMessages.admitted()
 		go func() {
 			if dc, ok := child.(*privateDiscoveryChild); ok {
-				f, err := dc.window.frameRecord(dc)
-				if err != nil {
+				f, err := dc.window.frameRecord(dc, key.ID)
+				if f == nil {
 					reads <- readResult{err: err}
 					return
 				}
@@ -1564,6 +1589,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			} else {
 				owner.retire()
 				joined := <-reads // Close/teardown interrupted the outstanding read; join it.
+				if joined.discovery != nil {
+					joined.discovery.owner.observeResponseFacts(responseFactsIndex, joined.discovery, PrivateResponseJoined)
+				}
 				result.privateProviderMessages.joined(joined.message, joined.frame.FrameBytes, joined.err != nil)
 			}
 			if state == lspwire.CancelWritten {
@@ -1579,6 +1607,13 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			return m.finishRoundTrip(req.SessionID, owner, result, failure, req.directionalV5 == nil)
 		case read := <-reads:
 			stopDirectionalCancel()
+			if read.discovery != nil {
+				disposition := PrivateResponseBoundary
+				if read.err != nil {
+					disposition = PrivateResponseDecodeRejected
+				}
+				read.discovery.owner.observeResponseFacts(responseFactsIndex, read.discovery, disposition)
+			}
 			if len(read.raw) == 0 && read.err != nil && genericResponseCapture != nil {
 				read.raw, _ = genericResponseCapture.retainedFrame()
 				read.frame.FrameBytes = int64(len(read.raw))
@@ -1704,6 +1739,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				responseID, err = strconv.ParseUint(string(read.message.ID), 10, 64)
 			}
 			if err != nil || responseID != key.ID {
+				if read.discovery != nil {
+					read.discovery.owner.observeResponseFacts(responseFactsIndex, read.discovery, PrivateResponseUnmatched)
+				}
 				result.providerMessageAccumulator.dispatch(read.message, false)
 				result.privateProviderMessages.dispatched(false)
 				collector.Record(diagnosticEventUnmatched, int64(responseID), false)
@@ -1725,6 +1763,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				disposition = r.pending.Accept(lspwire.ResponseKey{Generation: req.Generation, ID: responseID})
 			}
 			if disposition != lspwire.ResponseAccepted {
+				if read.discovery != nil {
+					read.discovery.owner.observeResponseFacts(responseFactsIndex, read.discovery, PrivateResponseLate)
+				}
 				result.providerMessageAccumulator.dispatch(read.message, false)
 				result.privateProviderMessages.dispatched(false)
 				collector.Record(diagnosticEventLate, int64(responseID), false)
@@ -1740,6 +1781,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				}
 				releaseUnselectedFrame()
 				continue
+			}
+			if read.discovery != nil {
+				read.discovery.owner.observeResponseFacts(responseFactsIndex, read.discovery, PrivateResponseSelected)
 			}
 			result.providerMessageAccumulator.dispatchDisposition(read.message, disposition)
 			result.providerTransaction.selectedResponseObserved = true
@@ -2963,25 +3007,16 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 				return
 			}
 			metadata := SessionMetadata{}
-			var initialized struct {
-				ServerInfo struct {
-					Name    string `json:"name"`
-					Version string `json:"version"`
-				} `json:"serverInfo"`
-				Capabilities struct {
-					PositionEncoding        string          `json:"positionEncoding"`
-					CallHierarchyProvider   json.RawMessage `json:"callHierarchyProvider"`
-					DocumentSymbolProvider  json.RawMessage `json:"documentSymbolProvider"`
-					WorkspaceSymbolProvider json.RawMessage `json:"workspaceSymbolProvider"`
-					DefinitionProvider      json.RawMessage `json:"definitionProvider"`
-					ReferencesProvider      json.RawMessage `json:"referencesProvider"`
-				} `json:"capabilities"`
+			var initializationWindow *privateDiscoveryWindow
+			if discovery != nil {
+				initializationWindow = discovery.owner
 			}
-			if err := json.Unmarshal(message.Result, &initialized); err != nil {
+			initialized, decodeErr := decodePrivateInitialization(message.Result, initializationWindow)
+			if decodeErr != nil {
 				response <- readinessResult{err: errors.New("sessionruntime: malformed initialize result")}
 				return
 			}
-			metadata.PositionEncoding = initialized.Capabilities.PositionEncoding
+			metadata.PositionEncoding = initialized.Capabilities.PositionEncoding.Value
 			metadata.ProviderName, metadata.ProviderVersion = initialized.ServerInfo.Name, initialized.ServerInfo.Version
 			if metadata.PositionEncoding == "" {
 				metadata.PositionEncoding = "utf-16"

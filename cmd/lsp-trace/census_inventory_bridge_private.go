@@ -253,7 +253,10 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 		return discovery, nil
 	}})
 	if result.Stop != censussourcedriver.StopComplete && result.Stop != censussourcedriver.StopBoundReached {
-		return writeCensusInventoryDiscoveryFailure(stderr, options.Machine, result.Err, result.Stop)
+		// Execute's runtime finalization has completed before assembly returns.
+		// Do not depend on result.Err: retained per-symbol failures can have nil
+		// error. Complete remains in its original custody/publication positions.
+		return writeCensusInventoryDiscoveryFailure(stderr, options.Machine, result.Err, result.Stop, op.ResponseFacts())
 	}
 	cursor, e = store.load(ctx)
 	if e != nil {
@@ -282,8 +285,8 @@ func censusInventoryDiscoveryDiagnostic(d sessionruntime.PrivateDiscoveryRefusal
 	out.PrivateDiscoveryRefusal = &d
 	return out, nil
 }
-func writeCensusInventoryDiscoveryFailure(stderr io.Writer, machine bool, cause error, stop censussourcedriver.Stop) int {
-	out, err := censusInventoryStoppedDiagnostic(stop, cause)
+func writeCensusInventoryDiscoveryFailure(stderr io.Writer, machine bool, cause error, stop censussourcedriver.Stop, snapshots ...sessionruntime.PrivateDiscoveryResponseFacts) int {
+	out, err := censusInventoryStoppedDiagnostic(stop, cause, snapshots...)
 	if err != nil || out.Code == censusresult.CodeInvalidConfig {
 		return writeCensusFailure(stderr, censusStageConfig, machine, errCensusInventoryPrivate)
 	}

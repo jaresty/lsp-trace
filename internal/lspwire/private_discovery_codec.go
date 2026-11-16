@@ -41,10 +41,15 @@ const discoveryDepth = 10000
 
 // Slots: version, ID, method, params, result, error code, message, data.
 type discoverySpan struct{ start, end int }
+
+// Offsets refer only to the owned original JSON body, never borrowed payload.
+// The zero span means no structurally validated final error object.
+type PrivateDiscoveryErrorObjectSpan struct{ Start, End int }
 type discoveryPlan struct {
 	slots                   [8]discoverySpan
 	errorPresent, typeError bool
 	code                    int
+	errorObject             PrivateDiscoveryErrorObjectSpan
 	// Key/scalar scratch is fixed and included in compiler-derived P even though
 	// matching itself streams. No occurrence-count-dependent state exists.
 	key    [7]rune
@@ -448,7 +453,7 @@ func discoveryInt(b []byte) (int, bool) {
 	}
 	return int(n), true
 }
-func (s discoveryScanner) object(p *discoveryPlan, start int, nested bool) {
+func (s discoveryScanner) object(p *discoveryPlan, start int, nested bool, facts *ResponseFacts) {
 	i := s.ws(start + 1)
 	for i < len(s.b) && s.b[i] != '}' {
 		end, _ := s.str(i)
@@ -460,6 +465,17 @@ func (s discoveryScanner) object(p *discoveryPlan, start int, nested bool) {
 		slot := discoverySlot(s.b, key, nested)
 		if slot >= 0 {
 			c := s.b[i]
+			if facts != nil {
+				switch slot {
+				case 1:
+					facts.ID = responseValueKind(c)
+				case 4:
+					facts.Result = responseValueKind(c)
+				case 8:
+					facts.Error = responseValueKind(c)
+					facts.CodeState, facts.Code = ResponseCodeAbsent, 0
+				}
+			}
 			switch slot {
 			case 0, 2, 6:
 				if c == '"' {
@@ -477,14 +493,16 @@ func (s discoveryScanner) object(p *discoveryPlan, start int, nested bool) {
 					}
 				}
 			case 8:
+				p.errorObject = PrivateDiscoveryErrorObjectSpan{}
 				if c == 'n' {
 					p.errorPresent = false
 					p.code = 0
 					p.slots[6] = discoverySpan{}
 					p.slots[7] = discoverySpan{}
 				} else if c == '{' {
+					p.errorObject = PrivateDiscoveryErrorObjectSpan{Start: i, End: end}
 					p.errorPresent = true
-					s.objectError(p, i)
+					s.objectError(p, i, facts)
 				} else {
 					p.typeError = true
 				}
@@ -503,7 +521,7 @@ func (s discoveryScanner) object(p *discoveryPlan, start int, nested bool) {
 
 // Explicit separate entry: schema depth is fixed at two; grammar traversal is
 // nonrecursive even for unknown nested data. There is no schema recursion.
-func (s discoveryScanner) objectError(p *discoveryPlan, start int) {
+func (s discoveryScanner) objectError(p *discoveryPlan, start int, facts *ResponseFacts) {
 	i := s.ws(start + 1)
 	for i < len(s.b) && s.b[i] != '}' {
 		end, _ := s.str(i)
@@ -513,6 +531,9 @@ func (s discoveryScanner) objectError(p *discoveryPlan, start int) {
 		end, _ = s.value(i)
 		switch discoverySlot(s.b, key, true) {
 		case 5:
+			if facts != nil {
+				facts.Code, facts.CodeState = responseCode(s.b[i:end])
+			}
 			if s.b[i] != 'n' {
 				v, ok := discoveryInt(s.b[i:end])
 				if !ok {
@@ -682,6 +703,22 @@ func discoveryCanonicalCount(m Message) uint64 {
 }
 
 func decodePrivateDiscovery(ctx context.Context, b []byte, admit PrivateDiscoveryAdmission) (Message, uint64, error) {
+	return decodePrivateDiscoveryFacts(ctx, b, admit, nil, 0)
+}
+
+func decodePrivateDiscoveryFacts(ctx context.Context, b []byte, admit PrivateDiscoveryAdmission, facts *ResponseFacts, expectedID uint64) (Message, uint64, error) {
+	return decodePrivateDiscoveryFactsSpan(ctx, b, admit, facts, expectedID, nil)
+}
+
+func decodePrivateDiscoveryFactsSpan(ctx context.Context, b []byte, admit PrivateDiscoveryAdmission, facts *ResponseFacts, expectedID uint64, span *PrivateDiscoveryErrorObjectSpan) (Message, uint64, error) {
+	// Extra opt-in code/ID scalar visits and fixed value initialization are paid
+	// before inspection. The legacy entry's allocation and charge contract stays
+	// unchanged; the caller prepays the returned value's own record storage.
+	if facts != nil {
+		if err := discoveryPay(ctx, admit, PrivateDiscoveryCharge{Work: 4*uint64(len(b)) + uint64(unsafe.Sizeof(ResponseFacts{}))}); err != nil {
+			return Message{}, 0, err
+		}
+	}
 	// P and D are charged BEFORE either fixed store is allocated/zeroed. Work:
 	// initialization D+P; grammar <=2B; schema <=3B plus <=9 key comparisons,
 	// each at most 7 rune-fold steps and 6-byte escapes; 128B covers these visits.
@@ -695,14 +732,27 @@ func decodePrivateDiscovery(ctx context.Context, b []byte, admit PrivateDiscover
 	p := new(discoveryPlan)
 	s := discoveryScanner{b, states}
 	end, ok := s.value(0)
+	if facts != nil {
+		*facts = ResponseFacts{State: ResponseInvalidJSON}
+	}
 	if !ok || s.ws(end) != len(b) {
 		return Message{}, 0, ErrMalformedJSON
 	}
 	start := s.ws(0)
+	if facts != nil {
+		*facts = ResponseFacts{State: ResponseValidJSON, Envelope: responseValueKind(b[start])}
+	}
 	if b[start] == '{' {
-		s.object(p, start, false)
+		s.object(p, start, false, facts)
 	} else if b[start] != 'n' {
 		return Message{}, 0, ErrMalformedJSON
+	}
+	if facts != nil {
+		sp := p.slots[1]
+		facts.Association = responseAssociation(b[sp.start:sp.end], expectedID)
+	}
+	if span != nil {
+		*span = p.errorObject
 	}
 	if p.typeError {
 		return Message{}, 0, ErrMalformedJSON

@@ -208,7 +208,41 @@ func ReadPrivateBoundedFrameObservedAtDecode(source io.Reader, limits Limits, ma
 // ReadPrivateDiscoveryFrame is the discovery-only admitted sibling. It never
 // reparses a buffered frame, invokes the ordinary decoder, or falls back on a
 // refused admission. Canonical bytes are a count, not a second serialization.
+// ReadPrivateDiscoveryFrameFacts is the opt-in structural sibling. The caller
+// owns and prepays its fixed returned value independently of decode success.
+// Optional observations identify acquisition and decoder-return boundaries; they
+// never change ordinary readers or confer pending-response acceptance.
+func ReadPrivateDiscoveryFrameFacts(ctx context.Context, source io.Reader, limits Limits, maxFrame int64, admit PrivateDiscoveryAdmission, expectedID uint64, observers ...func(PrivateDiscoveryReadStage)) (Message, ReadFrameObservation, []byte, uint64, ResponseFacts, error) {
+	var facts ResponseFacts
+	m, o, raw, n, err := readPrivateDiscoveryFrame(ctx, source, limits, maxFrame, admit, &facts, expectedID, nil, observers...)
+	return m, o, raw, n, facts, err
+}
+
 func ReadPrivateDiscoveryFrame(ctx context.Context, source io.Reader, limits Limits, maxFrame int64, admit PrivateDiscoveryAdmission) (Message, ReadFrameObservation, []byte, uint64, error) {
+	return readPrivateDiscoveryFrame(ctx, source, limits, maxFrame, admit, nil, 0, nil)
+}
+
+type PrivateDiscoveryReadStage uint8
+
+const (
+	PrivateDiscoveryFrameComplete PrivateDiscoveryReadStage = iota + 1
+	PrivateDiscoveryDecodeSucceeded
+	PrivateDiscoveryDecodeRejected
+	PrivateDiscoveryDecodeRefused
+)
+
+// ReadPrivateDiscoveryFrameCapture adds only original-body offsets to the
+// dedicated admitted route. Raw bytes still have independent owned backing.
+func ReadPrivateDiscoveryFrameCapture(ctx context.Context, source io.Reader, limits Limits, maxFrame int64, admit PrivateDiscoveryAdmission, expectedID uint64, span *PrivateDiscoveryErrorObjectSpan, observer func(PrivateDiscoveryReadStage)) (Message, ReadFrameObservation, []byte, uint64, ResponseFacts, error) {
+	if span != nil {
+		*span = PrivateDiscoveryErrorObjectSpan{}
+	}
+	var facts ResponseFacts
+	m, o, raw, n, err := readPrivateDiscoveryFrame(ctx, source, limits, maxFrame, admit, &facts, expectedID, span, observer)
+	return m, o, raw, n, facts, err
+}
+
+func readPrivateDiscoveryFrame(ctx context.Context, source io.Reader, limits Limits, maxFrame int64, admit PrivateDiscoveryAdmission, facts *ResponseFacts, expectedID uint64, span *PrivateDiscoveryErrorObjectSpan, observers ...func(PrivateDiscoveryReadStage)) (Message, ReadFrameObservation, []byte, uint64, error) {
 	fail := func(err error) (Message, ReadFrameObservation, []byte, uint64, error) {
 		return Message{}, ReadFrameObservation{}, nil, 0, err
 	}
@@ -298,7 +332,25 @@ func ReadPrivateDiscoveryFrame(ctx context.Context, source io.Reader, limits Lim
 	if _, err := io.ReadFull(source, frame[used:]); err != nil {
 		return fail(err)
 	}
-	message, count, err := decodePrivateDiscovery(ctx, frame[used:], admit)
+	observe := func(stage PrivateDiscoveryReadStage) {
+		if len(observers) == 1 && observers[0] != nil {
+			observers[0](stage)
+		}
+	}
+	observe(PrivateDiscoveryFrameComplete)
+	message, count, err := decodePrivateDiscoveryFactsSpan(ctx, frame[used:], admit, facts, expectedID, span)
+	if span != nil && span.End > span.Start {
+		span.Start += used
+		span.End += used
+	}
+	stage := PrivateDiscoveryDecodeSucceeded
+	if err != nil {
+		stage = PrivateDiscoveryDecodeRejected
+	}
+	if errors.Is(err, ErrPrivateDiscoveryAdmission) {
+		stage = PrivateDiscoveryDecodeRefused
+	}
+	observe(stage)
 	if err != nil {
 		return fail(err)
 	}

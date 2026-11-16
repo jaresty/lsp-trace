@@ -13,6 +13,42 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
+// This subaccount is carved from the existing PARTITION metadata slice. It
+// cannot charge/borrow provider requests, messages, protocol bytes, or time.
+// The kernel quote is unchanged and already nonrefundable before Execute.
+// Runtime retained backing/work additionally spends its concrete child balances.
+type privateDiscoveryCaptureAccountV2 struct {
+	mu        sync.Mutex
+	remaining [14]uint64
+	used      bool
+}
+
+func privateDiscoveryCaptureCurrenciesV2(q sessionruntime.PrivateDiscoveryCaptureQuote) [14]uint64 {
+	return [14]uint64{q.LogicalBytes, q.ReadHashBytes, q.WriteBytes, q.Records, q.ParserBytes, q.ProviderRequests, q.ProviderMessages, q.Work, q.ActiveNS, q.Calls, q.RequestBytes, q.ResponseBytes, q.WireBytes, q.OutputBytes}
+}
+func privateDiscoveryCaptureAccountNewV2() privateDiscoveryCaptureAccountV2 {
+	const metadata = 32 << 20
+	return privateDiscoveryCaptureAccountV2{remaining: [14]uint64{32 * metadata, 32 * metadata, 8 * metadata, 8192, 32 * metadata, 0, 0, 32 * metadata, 0, 65536, 0, 0, 0, metadata}}
+}
+func (a *privateDiscoveryCaptureAccountV2) reserve(q sessionruntime.PrivateDiscoveryCaptureQuote) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.used {
+		return ErrPrivateDiscoveryOperationV2
+	}
+	requested := privateDiscoveryCaptureCurrenciesV2(q)
+	for i, n := range requested {
+		if n > a.remaining[i] {
+			return ErrPrivateDiscoveryOperationV2
+		}
+	}
+	for i, n := range requested {
+		a.remaining[i] -= n
+	}
+	a.used = true
+	return nil
+}
+
 var ErrPrivateDiscoveryOperationV2 = errors.New("private discovery operation refused")
 
 // PrivateDiscoveryOwnerV2 can reopen only an existing canonical, authorized READY
@@ -40,6 +76,7 @@ type privateDiscoveryOperationV2 struct {
 	used, finished, executed bool
 	observation              sessionruntime.PrivateDiscoveryObservation
 	executionErr             error
+	diagnosticAnchor         time.Time
 }
 
 func OpenPrivateDiscoveryOwnerV2(ctx context.Context, root *publication.Root, canonicalJob []byte, expected string, l PrivateManagedInputVerificationV2) (*PrivateDiscoveryOwnerV2, error) {
@@ -176,7 +213,7 @@ func (o *PrivateDiscoveryOwnerV2) ReservePartition(ctx context.Context, b Privat
 		return PrivateDiscoveryOperationV2{}, ErrPrivateDiscoveryOperationV2
 	}
 	o.head = h.Identity
-	return PrivateDiscoveryOperationV2{&privateDiscoveryOperationV2{owner: o, binding: b, attempt: attempt, head: h.Identity}}, nil
+	return PrivateDiscoveryOperationV2{&privateDiscoveryOperationV2{owner: o, binding: b, attempt: attempt, head: h.Identity, diagnosticAnchor: now}}, nil
 }
 
 // Execute exposes only the closed discovery session, not Manager or native
@@ -215,6 +252,31 @@ func (op PrivateDiscoveryOperationV2) Execute(ctx context.Context, c sessionrunt
 		s.mu.Unlock()
 		return ErrPrivateDiscoveryOperationV2
 	}
+	// Capture permission/configuration is diagnostic-only, not native identity.
+	// Freeze it and install this operation's own nonrenewable metadata subaccount;
+	// never trust a caller-supplied funding callback on the native route.
+	c.CaptureAdmission = nil
+	if c.FailureCapture != nil {
+		options := *c.FailureCapture
+		if _, ok := sessionruntime.PrivateDiscoveryCaptureQuoteForOptions(&options); !ok {
+			s.mu.Lock()
+			s.executed = true
+			s.executionErr = ErrPrivateDiscoveryOperationV2
+			s.mu.Unlock()
+			return ErrPrivateDiscoveryOperationV2
+		}
+		account := privateDiscoveryCaptureAccountNewV2()
+		c.FailureCapture = &options
+		c.CaptureAdmission = account.reserve
+	}
+	// One bounded, operation-owned error handoff is allocated before provider
+	// effects, within the existing fixed metadata allowance. It never keeps the
+	// source error, session, native pointer, or payload. Runtime separately prepays
+	// the fixed record store/copies before constructing its Starter.
+	handoff := new(privateDiscoveryOperationResponseFailureV2)
+	// Diagnostic elapsed time belongs to the original funded reservation, not
+	// Execute, per-request, serialization, or a renewed deadline.
+	c.DiagnosticAnchor = s.diagnosticAnchor
 	observation, e := sessionruntime.RunPrivateDiscovery(ctx, c, consume)
 	s.mu.Lock()
 	s.executed = true
@@ -223,7 +285,7 @@ func (op PrivateDiscoveryOperationV2) Execute(ctx context.Context, c sessionrunt
 	s.mu.Unlock()
 	if e != nil || observation.Failed || !observation.CleanupJoined {
 		d, known := sessionruntime.PrivateDiscoveryRefusalFromError(e)
-		return privateDiscoveryOperationFailureV2(d, known)
+		return handoff.capture(d, known, observation.ResponseFacts)
 	}
 	return nil
 }
@@ -250,11 +312,58 @@ func privateDiscoveryOperationFailureV2(d sessionruntime.PrivateDiscoveryRefusal
 	return privateDiscoveryOperationFailureV2Value{d}
 }
 func PrivateDiscoveryOperationRefusalV2(err error) (sessionruntime.PrivateDiscoveryRefusal, bool) {
+	var handoff *privateDiscoveryOperationResponseFailureV2
+	if errors.As(err, &handoff) && handoff.known && handoff.diagnostic.Valid() {
+		return handoff.diagnostic, true
+	}
 	var e privateDiscoveryOperationFailureV2Value
 	if errors.As(err, &e) && e.diagnostic.Valid() {
 		return e.diagnostic, true
 	}
 	return sessionruntime.PrivateDiscoveryRefusal{}, false
+}
+
+// Response facts remain separate from canonical provider-failure receipts.
+// This preallocated carrier survives Execute's failure/refusal mapping.
+type privateDiscoveryOperationResponseFailureV2 struct {
+	diagnostic sessionruntime.PrivateDiscoveryRefusal
+	known      bool
+	responses  sessionruntime.PrivateDiscoveryResponseFacts
+}
+
+func (e *privateDiscoveryOperationResponseFailureV2) capture(d sessionruntime.PrivateDiscoveryRefusal, known bool, responses sessionruntime.PrivateDiscoveryResponseFacts) error {
+	e.diagnostic, e.known, e.responses = d, known && d.Valid(), responses
+	if responses.Available && responses.Valid() {
+		return e
+	}
+	return privateDiscoveryOperationFailureV2(d, known)
+}
+func (*privateDiscoveryOperationResponseFailureV2) Error() string {
+	return "private discovery operation refused"
+}
+func (*privateDiscoveryOperationResponseFailureV2) Unwrap() error {
+	return ErrPrivateDiscoveryOperationV2
+}
+func (e *privateDiscoveryOperationResponseFailureV2) Is(target error) bool {
+	return e.known && target == sessionruntime.ErrPrivateDiscovery
+}
+func PrivateDiscoveryOperationResponseFactsV2(err error) (sessionruntime.PrivateDiscoveryResponseFacts, bool) {
+	var e *privateDiscoveryOperationResponseFailureV2
+	if errors.As(err, &e) && e.responses.Available && e.responses.Valid() {
+		return e.responses, true
+	}
+	return sessionruntime.PrivateDiscoveryResponseFacts{}, false
+}
+
+// ResponseFacts returns an independent bounded copy after Execute, on success
+// or failure, without changing completion or publication authority.
+func (op PrivateDiscoveryOperationV2) ResponseFacts() sessionruntime.PrivateDiscoveryResponseFacts {
+	if op.state == nil {
+		return sessionruntime.PrivateDiscoveryResponseFacts{}
+	}
+	op.state.mu.Lock()
+	defer op.state.mu.Unlock()
+	return op.state.observation.ResponseFacts
 }
 
 // Complete performs the original kernel observation after the caller's bounded

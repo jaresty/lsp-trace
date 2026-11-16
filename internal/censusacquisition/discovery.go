@@ -218,7 +218,15 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			providerIncomplete = true
 			continue
 		}
-		symbols, err := a.Client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}})
+		// Optional scalar diagnostic context; ordinary clients keep the exact
+		// existing interface and request coordinates. No canonical receipt changes.
+		documentContext := ctx
+		if diagnostics, ok := a.Client.(interface {
+			DiscoveryDiagnosticContext(context.Context, int, int) context.Context
+		}); ok {
+			documentContext = diagnostics.DiscoveryDiagnosticContext(ctx, fileOrdinal, -1)
+		}
+		symbols, err := a.Client.DocumentSymbols(documentContext, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}})
 		if err != nil || ctx.Err() != nil {
 			code := "REQUEST_FAILED"
 			disposition := census.FileDocumentSymbolFailed
@@ -284,7 +292,13 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				fileComplete, complete = false, false
 				providerIncomplete = true
 			} else {
-				items, prepareErr := a.Client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}, Position: symbol.SelectionRange.Start})
+				prepareContext := ctx
+				if diagnostics, ok := a.Client.(interface {
+					DiscoveryDiagnosticContext(context.Context, int, int) context.Context
+				}); ok {
+					prepareContext = diagnostics.DiscoveryDiagnosticContext(ctx, fileOrdinal, ordinal)
+				}
+				items, prepareErr := a.Client.PrepareCallHierarchy(prepareContext, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}, Position: symbol.SelectionRange.Start})
 				switch {
 				case ctx.Err() != nil:
 					disposition = census.SymbolIncomplete

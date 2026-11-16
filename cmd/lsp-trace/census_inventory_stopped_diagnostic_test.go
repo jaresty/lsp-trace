@@ -108,13 +108,25 @@ func TestStopped66ProductionCallsite(t *testing.T) {
 		if !ok || id.Name != "writeCensusInventoryDiscoveryFailure" {
 			return true
 		}
-		if len(c.Args) != 4 {
+		if len(c.Args) != 5 {
 			return true
 		}
 		s, ok := c.Args[3].(*ast.SelectorExpr)
 		if ok && s.Sel.Name == "Stop" {
 			v, ok := s.X.(*ast.Ident)
 			found = ok && v.Name == "result"
+			get, getOK := c.Args[4].(*ast.CallExpr)
+			if !getOK || len(get.Args) != 0 {
+				found = false
+				return true
+			}
+			sel, selOK := get.Fun.(*ast.SelectorExpr)
+			if !selOK || sel.Sel.Name != "ResponseFacts" {
+				found = false
+				return true
+			}
+			receiver, receiverOK := sel.X.(*ast.Ident)
+			found = found && receiverOK && receiver.Name == "op"
 		}
 		return true
 	})

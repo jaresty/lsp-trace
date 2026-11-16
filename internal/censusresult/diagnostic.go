@@ -80,15 +80,16 @@ func validPublicationFailureStage(stage PublicationFailureStage) bool {
 type Diagnostic struct {
 	// Present only for the connected private discovery failure path. This is a
 	// closed value observation, not funding, authority, or permission to retry.
-	PrivateDiscoveryRefusal *sessionruntime.PrivateDiscoveryRefusal `json:"private_discovery_refusal,omitempty"`
-	SchemaVersion           string                                  `json:"schema_version"`
-	Status                  string                                  `json:"status"`
-	Stage                   Stage                                   `json:"stage"`
-	Code                    Code                                    `json:"code"`
-	BatchOrdinal            *int                                    `json:"batch_ordinal,omitempty"`
-	Retry                   bool                                    `json:"retry"`
-	PublicationFailure      PublicationFailureStage                 `json:"publication_failure,omitempty"`
-	PublicationAccounting   *PublicationAccounting                  `json:"publication_accounting,omitempty"`
+	PrivateDiscoveryRefusal   *sessionruntime.PrivateDiscoveryRefusal         `json:"private_discovery_refusal,omitempty"`
+	PrivateDiscoveryResponses *sessionruntime.PrivateDiscoveryResponseSummary `json:"private_discovery_responses,omitempty"`
+	SchemaVersion             string                                          `json:"schema_version"`
+	Status                    string                                          `json:"status"`
+	Stage                     Stage                                           `json:"stage"`
+	Code                      Code                                            `json:"code"`
+	BatchOrdinal              *int                                            `json:"batch_ordinal,omitempty"`
+	Retry                     bool                                            `json:"retry"`
+	PublicationFailure        PublicationFailureStage                         `json:"publication_failure,omitempty"`
+	PublicationAccounting     *PublicationAccounting                          `json:"publication_accounting,omitempty"`
 	// Detail is an optional, human-readable, non-authoritative explanation of
 	// which specific check produced the failure. It never changes the stage or
 	// code contract; it exists so an opaque stage code (for example
@@ -146,6 +147,9 @@ func MarshalDiagnostic(d Diagnostic) ([]byte, error) {
 		privateDiscoveryValid = d.Stage == StageDiscovery && d.PrivateDiscoveryRefusal.Valid() && d.Detail == "" && d.PublicationFailure == "" && d.PublicationAccounting == nil
 		expected.Retry = false
 	}
+	if d.PrivateDiscoveryResponses != nil && (d.Stage != StageDiscovery || !d.PrivateDiscoveryResponses.Valid() || d.Detail != "" || d.PublicationFailure != "" || d.PublicationAccounting != nil) {
+		return nil, errors.New("invalid private discovery summary")
+	}
 	publicationFailureValid := d.PublicationFailure == "" || d.Stage == StagePublication && validPublicationFailureStage(d.PublicationFailure)
 	accountingValid := validPublicationAccounting(d.Stage, d.PublicationAccounting)
 	if err != nil || !privateDiscoveryValid || !publicationFailureValid || !accountingValid || d.SchemaVersion != expected.SchemaVersion || d.Status != expected.Status || d.Stage != expected.Stage || d.Code != expected.Code || d.Retry != expected.Retry {
@@ -157,6 +161,9 @@ func MarshalDiagnostic(d Diagnostic) ([]byte, error) {
 	b, err := json.Marshal(d)
 	if err != nil {
 		return nil, err
+	}
+	if d.PrivateDiscoveryResponses != nil && len(b)+1 > 48000 {
+		return nil, errors.New("private discovery diagnostic bound")
 	}
 	return append(b, '\n'), nil
 }
