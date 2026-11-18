@@ -76,7 +76,7 @@ func censusCallerHostStable(c censusInventoryBridgeConfig) (censusCallerHostSett
 	// product decoder still checks both seals on every executable request.
 	policy := censusCallerHostPick(configuration, "Schema", "Profile", "SourceRoot", "RevisionAssertion", "ProducerExecutableSHA256")
 	policy["GrantPolicy"] = censusCallerHostPick(censusCallerHostMap(configuration, "Grant"), "Ceiling", "BootstrapAttempts", "BootstrapEach")
-	ip := censusCallerHostPick(inventory, "SourceRevision", "MaxNativeAttempts", "NativeRetainedUpper", "BudgetBytes", "HostWindowMS")
+	ip := censusCallerHostPick(inventory, "SourceRevision", "MaxNativeAttempts", "NativeRetainedUpper", "BudgetBytes", "HostWindowMS", "ReviewMode")
 	ip["Pins"] = censusCallerHostPick(censusCallerHostMap(inventory, "Pins"), "grammar_sha256", "model_sha256", "worker_sha256")
 	owners, ok := inventory["NativeOwners"].([]any)
 	if !ok || len(owners) != 1 {

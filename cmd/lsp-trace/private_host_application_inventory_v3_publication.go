@@ -191,8 +191,8 @@ func applicationInventoryFinalizeV3(args []string, raw []byte, store string, p a
 	kind := "HOST_OBSERVED_RETURNS_NOT_AUTHENTICATED"
 	for i, role := range []string{"interpreter", "reviewer"} {
 		b, e := lane.read(applicationRoleReadyPath(store, args[2], role), 4096)
-		var ready product.Ready
-		if e != nil || json.Unmarshal(b, &ready) != nil || ready.Protocol != product.InventoryProtocolV3 || ready.Role != role || ready.PromptSHA256 != q.Configuration.RolePromptSHA256[i] || applicationReturnReason(returns[i], ready, role, pilot.Digest(terminal), ids[returns[i].LaunchID]) != "" || returns[i].Sequence != t.LastSequences[i] || lane.check() != nil {
+		var ready product.InventoryReadyV3
+		if e != nil || json.Unmarshal(b, &ready) != nil || ready.ReviewMode != q.Inventory.ReviewMode || ready.Protocol != product.InventoryProtocolV3 || ready.Role != role || ready.PromptSHA256 != q.Configuration.RolePromptSHA256[i] || applicationReturnReason(returns[i], ready.Ready, role, pilot.Digest(terminal), ids[returns[i].LaunchID] && !q.Inventory.ReviewMode.AllowsSameActor()) != "" || returns[i].Sequence != t.LastSequences[i] || lane.check() != nil {
 			return fail("FINALIZE_ROLE_BINDING_REFUSED_CHARGED")
 		}
 		ids[returns[i].LaunchID] = true
@@ -225,7 +225,8 @@ func applicationInventoryFinalizeV3(args []string, raw []byte, store string, p a
 		Authority                                                               int
 		Accepted                                                                bool
 		Completeness, OriginalCleanup                                           string
-	}{"private-application-inventory-host-observation.v3", kind, p.ApplicationSHA256, args[2], pilot.Digest(terminal), t.InventoryHead, 0, false, "UNKNOWN", t.OriginalCleanup}
+		ReviewMode                                                              string `json:",omitempty"`
+	}{"private-application-inventory-host-observation.v3", kind, p.ApplicationSHA256, args[2], pilot.Digest(terminal), t.InventoryHead, 0, false, "UNKNOWN", t.OriginalCleanup, string(q.Inventory.ReviewMode)}
 	b, _ := json.Marshal(view)
 	if lane.check() != nil || applicationFinalizePublish(lane.root, "host-observation-"+args[2][7:]+".json", b, true, lane) != nil || lane.check() != nil {
 		return fail("FINALIZE_PUBLICATION_FAILED_CHARGED")

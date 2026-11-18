@@ -10,6 +10,7 @@ import (
 	ai "lsp-trace/internal/applicationinventory"
 	dr "lsp-trace/internal/describerequest"
 	dw "lsp-trace/internal/describeworker"
+	cat "lsp-trace/internal/provisionalfeaturecatalog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,22 @@ import (
 
 // Reuses only the inspected temporary-filesystem configuration helper, never a
 // native fixture, original controller, campaign, provider, model or grant mint.
-func inventoryProductFixtureV3(t *testing.T) (InventoryRequestV3, string, *ApplicationJournal, *InventoryTransportV3) {
+func inventoryProductFixtureV3(t *testing.T, modes ...cat.ReviewModeV3) (InventoryRequestV3, string, *ApplicationJournal, *InventoryTransportV3) {
+	t.Helper()
+	var mode cat.ReviewModeV3
+	if len(modes) == 1 {
+		mode = modes[0]
+	}
+	q, id, j, mailbox := inventoryProductSetupV3(t, mode)
+	tr, e := NewInventoryTransportV3(j, q, id, mailbox)
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(tr.Close)
+	return q, id, j, tr
+}
+
+func inventoryProductSetupV3(t *testing.T, mode cat.ReviewModeV3) (InventoryRequestV3, string, *ApplicationJournal, string) {
 	t.Helper()
 	c, now := applicationFixture(t)
 	c.Schema = "private-host-application-config.v3"
@@ -32,6 +48,7 @@ func inventoryProductFixtureV3(t *testing.T) (InventoryRequestV3, string, *Appli
 	c.Grant.Ceiling.Work = 1 << 26
 	d := hash([]byte("scripted physical adapter only"))
 	q := InventoryRequestV3{Schema: "private-host-application-inventory-request.v3", Configuration: c, Inventory: InventoryOptionsV3{SourceRevision: InventorySourceRevisionV3, Manifest: ai.Manifest{Scope: "all seven configurations", Provenance: "synthetic detached metadata", Leads: []ai.Lead{}, UntouchedGaps: []string{"non-Go unvisited"}}, Pins: dw.HostPinsV2{WorkerSHA256: d, ModelSHA256: d, GrammarSHA256: d}, MaxNativeAttempts: 1, NativeRetainedUpper: 1 << 20, HostWindowMS: 1000}}
+	q.Inventory.ReviewMode = mode
 	q.Configuration.RolePromptSHA256 = [2]string{hash([]byte(InventoryRolePromptV3("interpreter"))), hash([]byte(InventoryRolePromptV3("reviewer")))}
 	q.Configuration.SelectionRuleSHA256 = hash(mustJSON(q.Inventory.Manifest))
 	q.Configuration.UnitPolicySHA256 = hash(mustJSON(q.Inventory))
@@ -52,16 +69,15 @@ func inventoryProductFixtureV3(t *testing.T) (InventoryRequestV3, string, *Appli
 		t.Fatal(e)
 	}
 	for _, role := range []string{"interpreter", "reviewer"} {
-		if e = MarkInventoryReadyV3(mailbox, Ready{Protocol: InventoryProtocolV3, Role: role, LaunchID: "scripted-" + role, PromptSHA256: hash([]byte(InventoryRolePromptV3(role)))}); e != nil {
+		id := "scripted-" + role
+		if mode.AllowsSameActor() {
+			id = "scripted-one-context"
+		}
+		if e = MarkInventoryReadyV3(mailbox, Ready{Protocol: InventoryProtocolV3, Role: role, LaunchID: id, PromptSHA256: hash([]byte(InventoryRolePromptV3(role)))}, mode); e != nil {
 			t.Fatal(e)
 		}
 	}
-	tr, e := NewInventoryTransportV3(j, q, id, mailbox)
-	if e != nil {
-		t.Fatal(e)
-	}
-	t.Cleanup(tr.Close)
-	return q, id, j, tr
+	return q, id, j, mailbox
 }
 func inventoryProductDescribeV3() []byte {
 	prompt := "SYNTHETIC TRANSPORT ONLY; NOT NATIVE SELECTED"

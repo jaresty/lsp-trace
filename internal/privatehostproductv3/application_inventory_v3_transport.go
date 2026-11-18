@@ -56,7 +56,7 @@ func parseInventoryFrameV3(raw []byte) (InventoryFrameV3, error) {
 func inventoryPayloadV3(op string, raw []byte) (string, error) {
 	if op == "Describe" {
 		var r dr.Record
-		if cat.DecodeNativeV3(raw, &r) != nil || r.Envelope.Protocol != dr.Protocol || r.Envelope.MessageType != dr.MessageType || r.Envelope.SourceRevision != InventorySourceRevisionV3 || r.Envelope.Prompt == "" || len(r.Envelope.Prompt) > 1<<20 || r.Lineage.Authority != 0 || r.Lineage.Accepted || len(r.Envelope.InputSHA256) != 64 {
+		if cat.DecodeNativeV3(raw, &r) != nil || r.Envelope.Protocol != dr.Protocol || r.Envelope.MessageType != dr.MessageType || !inventoryDescribeRevisionV3(r) || r.Envelope.Prompt == "" || len(r.Envelope.Prompt) > 1<<20 || r.Lineage.Authority != 0 || r.Lineage.Accepted || len(r.Envelope.InputSHA256) != 64 {
 			return "", ErrInvalid
 		}
 		d := "sha256:" + r.Envelope.InputSHA256
@@ -97,7 +97,22 @@ func readInventoryBundleRootV3(b Bundle, s *store) (InventoryFrameV3, error) {
 	}
 	return f, nil
 }
-func MarkInventoryReadyV3(path string, r Ready) error {
+
+// InventoryReadyV3 extends only inventory readiness. The shared legacy Ready
+// wire stays unchanged. A declared mode never authenticates context identity.
+type InventoryReadyV3 struct {
+	Ready
+	ReviewMode cat.ReviewModeV3 `json:",omitempty"`
+}
+
+func MarkInventoryReadyV3(path string, r Ready, modes ...cat.ReviewModeV3) error {
+	var mode cat.ReviewModeV3
+	if len(modes) == 1 {
+		mode = modes[0]
+	}
+	if len(modes) > 1 || !mode.Valid() {
+		return ErrInvalid
+	}
 	if r.Protocol != InventoryProtocolV3 || inventoryRoleV3(map[string]string{"interpreter": "Describe", "reviewer": "Reviewer"}[r.Role]) != r.Role || r.LaunchID == "" || len(r.LaunchID) > 256 || r.PromptSHA256 != hash([]byte(InventoryRolePromptV3(r.Role))) {
 		return ErrInvalid
 	}
@@ -112,25 +127,25 @@ func MarkInventoryReadyV3(path string, r Ready) error {
 	}
 	raw, e := s.read("ready-"+other+".json", 4096)
 	if e == nil {
-		var o Ready
-		if strict(raw, &o) != nil || o.LaunchID == r.LaunchID {
+		var o InventoryReadyV3
+		if strict(raw, &o) != nil || o.ReviewMode != mode || (o.LaunchID == r.LaunchID && !mode.AllowsSameActor()) {
 			return ErrInvalid
 		}
 	} else if !os.IsNotExist(e) {
 		return e
 	}
-	return s.write("ready-"+r.Role+".json", mustJSON(r))
+	return s.write("ready-"+r.Role+".json", mustJSON(InventoryReadyV3{Ready: r, ReviewMode: mode}))
 }
-func inventoryReadReadyV3(s *store) ([2]Ready, error) {
-	var out [2]Ready
+func inventoryReadReadyV3(s *store) ([2]InventoryReadyV3, error) {
+	var out [2]InventoryReadyV3
 	for i, role := range []string{"interpreter", "reviewer"} {
 		raw, e := s.read("ready-"+role+".json", 4096)
 		r := &out[i]
-		if e != nil || strict(raw, r) != nil || r.Protocol != InventoryProtocolV3 || r.Role != role || r.LaunchID == "" || len(r.LaunchID) > 256 || r.PromptSHA256 != hash([]byte(InventoryRolePromptV3(role))) {
+		if e != nil || strict(raw, r) != nil || !r.ReviewMode.Valid() || r.Protocol != InventoryProtocolV3 || r.Role != role || r.LaunchID == "" || len(r.LaunchID) > 256 || r.PromptSHA256 != hash([]byte(InventoryRolePromptV3(role))) {
 			return out, ErrInvalid
 		}
 	}
-	if out[0].LaunchID == out[1].LaunchID {
+	if out[0].ReviewMode != out[1].ReviewMode || (out[0].LaunchID == out[1].LaunchID && !out[0].ReviewMode.AllowsSameActor()) {
 		return out, ErrInvalid
 	}
 	return out, nil
@@ -152,7 +167,7 @@ func inventoryRootIdentityV3(s *store) (string, error) {
 type InventoryBindingV3 struct {
 	PlannedCalls, ResponseLimit                                                          uint64
 	ApplicationSHA256, ConfigSHA256, Grant, RunID, SourceRevision, Mailbox, RootIdentity string
-	Ready                                                                                [2]Ready
+	Ready                                                                                [2]InventoryReadyV3
 	Pins                                                                                 dw.HostPinsV2
 }
 type inventoryLedgerV3 struct {
@@ -192,8 +207,8 @@ func NewInventoryTransportV3(j *ApplicationJournal, q InventoryRequestV3, runID,
 	}
 	fail := func(e error) (*InventoryTransportV3, error) { s.close(); return nil, e }
 	ready, e := inventoryReadReadyV3(s)
-	if e != nil {
-		return fail(e)
+	if e != nil || ready[0].ReviewMode != q.Inventory.ReviewMode {
+		return fail(ErrInvalid)
 	}
 	identity, e := inventoryRootIdentityV3(s)
 	if e != nil {
@@ -478,7 +493,7 @@ func WaitInventoryV3(ctx context.Context, path, role string, after uint64, q Inv
 			if f.Role == "reviewer" {
 				idx = 1
 			}
-			if readyErr != nil || f.LaunchID != ready[idx].LaunchID || f.PromptSHA256 != ready[idx].PromptSHA256 {
+			if readyErr != nil || ready[0].ReviewMode != q.Inventory.ReviewMode || f.LaunchID != ready[idx].LaunchID || f.PromptSHA256 != ready[idx].PromptSHA256 {
 				return CohortWait{}, ErrInvalid
 			}
 			if f.Role == role {
@@ -518,7 +533,7 @@ func SubmitInventoryV3(path, role string, seq uint64, payload []byte, q Inventor
 	if role == "reviewer" {
 		idx = 1
 	}
-	if ready[idx].LaunchID != f.LaunchID || ready[idx].PromptSHA256 != f.PromptSHA256 {
+	if ready[0].ReviewMode != q.Inventory.ReviewMode || ready[idx].LaunchID != f.LaunchID || ready[idx].PromptSHA256 != f.PromptSHA256 {
 		return ErrInvalid
 	}
 	// Publish invalid semantic bytes too: physical accounting precedes refusal.

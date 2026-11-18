@@ -26,6 +26,7 @@ type InventoryOptionsV3 struct {
 	HostWindowMS                     int
 	Targets                          []InventoryTargetV3      `json:",omitempty"`
 	NativeOwners                     []InventoryNativeOwnerV3 `json:",omitempty"`
+	ReviewMode                       cat.ReviewModeV3         `json:",omitempty"`
 }
 type InventoryRequestV3 struct {
 	Schema         string
@@ -57,7 +58,7 @@ func DecodeInventoryRequestV3(raw []byte) (InventoryRequestV3, error) {
 }
 func ValidateInventoryRequestV3(q InventoryRequestV3) error {
 	c, o := q.Configuration, q.Inventory
-	if !inventoryOwnerShapeV3(o.NativeOwners) {
+	if !inventoryOwnerShapeV3(o.NativeOwners) || !o.ReviewMode.Valid() {
 		return ErrInvalid
 	}
 	if c.Schema != "private-host-application-config.v3" || c.Profile != InventoryProfileV3 || c.RevisionAssertion != InventorySourceRevisionV3 || o.SourceRevision != InventorySourceRevisionV3 || validateApplication(c, time.Now()) != nil || c.Store == c.SourceRoot || pathRelatedInventoryV3(c.Store, c.SourceRoot) || c.UnitPolicySHA256 != hash(mustJSON(o)) || c.ProducerConfigSHA256 != c.UnitPolicySHA256 || c.SelectionRuleSHA256 != hash(mustJSON(o.Manifest)) {
@@ -120,5 +121,5 @@ func (o InventoryOptionsV3) Detached() InventoryOptionsV3 {
 }
 func (o InventoryOptionsV3) RunRequest(ctx context.Context, inputs InventoryNativeInputsV3, sourceRoot, destination, interpreter, reviewer string, transport *InventoryTransportV3) ai.Request {
 	o = o.Detached()
-	return ai.Request{Manifest: o.Manifest, Preparer: inputs.Preparer(sourceRoot, o.SourceRevision, o.Targets...), DescribeHost: transport.Exchange("Describe"), GroupDecision: transport.Exchange("GroupDecision"), Reviewer: transport.Exchange("Reviewer"), Interpreter: interpreter, ReviewerIdentity: reviewer, Pins: o.Pins, Destination: destination, MaxNativeAttempts: o.MaxNativeAttempts, NativeRetainedUpper: o.NativeRetainedUpper, BudgetBytes: o.BudgetBytes, HostWindow: time.Duration(o.HostWindowMS) * time.Millisecond, ResponseLimits: dw.SuppliedResponseLimits{MaxAdapterBytes: 64 << 10, MaxSemanticBytes: 16 << 10}}
+	return ai.Request{Manifest: o.Manifest, ReviewMode: o.ReviewMode, Preparer: inputs.Preparer(sourceRoot, o.SourceRevision, o.Targets...), DescribeHost: transport.Exchange("Describe"), GroupDecision: transport.Exchange("GroupDecision"), Reviewer: transport.Exchange("Reviewer"), Interpreter: interpreter, ReviewerIdentity: reviewer, Pins: o.Pins, Destination: destination, MaxNativeAttempts: o.MaxNativeAttempts, NativeRetainedUpper: o.NativeRetainedUpper, BudgetBytes: o.BudgetBytes, HostWindow: time.Duration(o.HostWindowMS) * time.Millisecond, ResponseLimits: dw.SuppliedResponseLimits{MaxAdapterBytes: 64 << 10, MaxSemanticBytes: 16 << 10}}
 }

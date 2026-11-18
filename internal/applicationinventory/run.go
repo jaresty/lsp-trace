@@ -43,6 +43,7 @@ type Report struct {
 	CallerAccounting                                                             string
 	CatalogRevision                                                              string
 	Published                                                                    bool
+	ReviewMode                                                                   cat.ReviewModeV3 `json:",omitempty"`
 }
 type NativeResult struct {
 	Selected sc.PrivateSelectedResultV2
@@ -65,6 +66,7 @@ type Request struct {
 	BudgetBytes                           uint64        // zero selects the quoted64MiB caller ceiling, not native credit
 	HostWindow                            time.Duration // zero selects30s; cumulative reservations<=120s
 	ResponseLimits                        dw.SuppliedResponseLimits
+	ReviewMode                            cat.ReviewModeV3 `json:",omitempty"`
 }
 type boundedOutputV3 struct {
 	mu     sync.Mutex
@@ -121,9 +123,10 @@ func Run(ctx context.Context, q Request) (out Report, err error) {
 	for _, name := range []string{"census", "native_preparation", "describe", "group_decision", "review", "catalog", "publication"} {
 		out.Stages[name] = Stage{}
 	}
-	if ctx == nil || ctx.Err() != nil {
+	if ctx == nil || ctx.Err() != nil || !q.ReviewMode.Valid() {
 		return out, ErrInventoryV3
 	}
+	out.ReviewMode = q.ReviewMode
 	ctx, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
 	if len(q.Manifest.Leads) > 10000 || len(q.Manifest.UntouchedGaps) > 10000 || q.MaxNativeAttempts < 0 || q.MaxNativeAttempts > 100 || len(q.Manifest.Scope) == 0 || len(q.Manifest.Scope) > 4096 || len(q.Manifest.Provenance) == 0 || len(q.Manifest.Provenance) > 4096 {
@@ -297,7 +300,7 @@ func Run(ctx context.Context, q Request) (out Report, err error) {
 	for i, d := range descriptions {
 		nativeDescriptions[i] = d
 	}
-	base, e := cat.BuildNativeV3(ctx, budget, q.Interpreter, nativeDescriptions)
+	base, e := cat.BuildNativeV3(ctx, budget, q.Interpreter, nativeDescriptions, q.ReviewMode)
 	stage("catalog", e == nil)
 	if e != nil {
 		return out, e
@@ -317,7 +320,7 @@ func Run(ctx context.Context, q Request) (out Report, err error) {
 	if e != nil {
 		return out, e
 	}
-	if q.ReviewerIdentity == q.Interpreter || len(q.ReviewerIdentity) == 0 || len(q.ReviewerIdentity) > 256 {
+	if (q.ReviewerIdentity == q.Interpreter && !q.ReviewMode.AllowsSameActor()) || len(q.ReviewerIdentity) == 0 || len(q.ReviewerIdentity) > 256 {
 		stage("review", false)
 		return out, ErrInventoryV3
 	}

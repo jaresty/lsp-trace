@@ -44,8 +44,8 @@ func applicationInventoryHostV3(args []string, q product.InventoryRequestV3, inp
 		if e != nil || id == "" || len(id) > 256 || prompt != q.Configuration.RolePromptSHA256[idx] {
 			return fail("INVALID_READY_BINDING")
 		}
-		ready := product.Ready{Protocol: product.InventoryProtocolV3, Role: role, LaunchID: id, PromptSHA256: prompt}
-		if product.MarkInventoryReadyV3(mailbox, ready) != nil {
+		ready := product.InventoryReadyV3{Ready: product.Ready{Protocol: product.InventoryProtocolV3, Role: role, LaunchID: id, PromptSHA256: prompt}, ReviewMode: q.Inventory.ReviewMode}
+		if product.MarkInventoryReadyV3(mailbox, ready.Ready, ready.ReviewMode) != nil {
 			return fail("READY_REFUSED")
 		}
 		raw, _ := json.Marshal(ready)

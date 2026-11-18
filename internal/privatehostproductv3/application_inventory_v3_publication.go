@@ -257,7 +257,7 @@ func inventoryPublicationAdmissionV3(q InventoryRequestV3, runID string, read fu
 			return empty, ErrInvalid
 		}
 	}
-	if b.Ready[0].LaunchID == b.Ready[1].LaunchID {
+	if b.Ready[0].LaunchID == b.Ready[1].LaunchID && !q.Inventory.ReviewMode.AllowsSameActor() {
 		return empty, ErrInvalid
 	}
 	return b, nil
@@ -304,7 +304,7 @@ func inventoryCatalogReportV3(cs [3]cat.NativeCatalogWireV3, r ai.Report, b Inve
 	leadEvidence := map[string]string{}
 	eligible := map[string]bool{}
 	for i, e := range cs[0].Evidence {
-		if e.ID == "" || (i > 0 && cs[0].Evidence[i-1].ID >= e.ID) || e.Interpreter != b.Ready[0].LaunchID || e.Origin != dw.SuppliedTerminalResponseOnly || e.Execution != dw.NoProcessOrHostExecutionVerified || e.Request.Envelope.SourceRevision != b.SourceRevision {
+		if e.ID == "" || (i > 0 && cs[0].Evidence[i-1].ID >= e.ID) || e.Interpreter != b.Ready[0].LaunchID || e.Origin != dw.SuppliedTerminalResponseOnly || e.Execution != dw.NoProcessOrHostExecutionVerified || !inventoryEvidenceRevisionV3(e, b.SourceRevision) {
 			return ErrInvalid
 		}
 		record, err := dw.ParseResponseRecordV2(e.Record)

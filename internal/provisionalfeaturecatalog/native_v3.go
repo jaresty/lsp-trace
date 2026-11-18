@@ -82,6 +82,7 @@ type NativeCatalogWireV3 struct {
 	Groups            []NativeGroupV3      `json:"groups"`
 	WithMembership    int                  `json:"with_membership"`
 	WithoutMembership int                  `json:"without_membership"`
+	ReviewMode        ReviewModeV3         `json:"review_mode,omitempty"`
 }
 type NativeCatalogV3 struct{ state *nativeCatalogStateV3 }
 type nativeCatalogStateV3 struct {
@@ -155,11 +156,19 @@ func DecodeNativeV3(raw []byte, v any) error {
 	}
 	return nil
 }
-func BuildNativeV3(ctx context.Context, budget NativeBudgetV3, actor string, descriptions []NativeBoundDescriptionV3) (NativeCatalogV3, error) {
+func BuildNativeV3(ctx context.Context, budget NativeBudgetV3, actor string, descriptions []NativeBoundDescriptionV3, reviewModes ...ReviewModeV3) (NativeCatalogV3, error) {
+	var mode ReviewModeV3
+	if len(reviewModes) == 1 {
+		mode = reviewModes[0]
+	}
+	if len(reviewModes) > 1 || !mode.Valid() {
+		return NativeCatalogV3{}, ErrNativeCatalogV3
+	}
 	if len(actor) == 0 || len(actor) > 256 || len(descriptions) > 100 || budget.Reserve(ctx, uint64(len(descriptions))*4096+4096) != nil {
 		return NativeCatalogV3{}, ErrNativeCatalogV3
 	}
 	w := NativeCatalogWireV3{Version: "lsp-trace.native-catalog.v3", Status: "PROVISIONAL", Feature: "UNRESOLVED", Consumer: "UNRESOLVED", Completeness: "UNKNOWN", Absence: "PROHIBITED", Origin: "SUPPLIED_UNAUTHENTICATED", Actor: actor, ReviewIdentity: "NOT_AUTHENTICATED", Evidence: []SelectedEvidenceV3{}, Groups: []NativeGroupV3{}, Affected: []string{}}
+	w.ReviewMode = mode
 	seen := map[string]bool{}
 	for _, b := range descriptions {
 		if !genuineNativeBoundV3(b) {
@@ -237,7 +246,9 @@ func ApplyNativeDecisionV3(ctx context.Context, c NativeCatalogV3, raw []byte, r
 		return NativeCatalogV3{}, ErrNativeCatalogV3
 	}
 	if review {
-		if d.Actor == s.interpreter || s.corrected {
+		// Same-thread review is still a separate successor of a proposal. It
+		// cannot relabel the base as reviewed or consume a correction twice.
+		if (d.Actor == s.interpreter && !s.wire.ReviewMode.AllowsSameActor()) || s.corrected || (s.wire.ReviewMode.AllowsSameActor() && s.wire.Predecessor == "") {
 			return NativeCatalogV3{}, ErrNativeCatalogV3
 		}
 	} else if d.Actor != s.interpreter || s.corrected || s.wire.Predecessor != "" {
