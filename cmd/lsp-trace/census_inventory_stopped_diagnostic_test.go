@@ -192,7 +192,7 @@ func TestStopped66ProductionAssemblyAndReceiptCompatibility(t *testing.T) {
 		t.Fatal(e)
 	}
 	discover := func(ctx context.Context, _ int, fs []censusacquisition.SourceFile) (censusacquisition.Discovery, error) {
-		return (censusacquisition.DiscoveryAdapter{Workspace: "/offline", Files: censusacquisition.StaticFiles(fs), Supplier: supplier66{}, Client: client66{}}).Discover(ctx, censusacquisition.SessionIdentity{"offline", 1})
+		return (censusacquisition.DiscoveryAdapter{Workspace: "/offline", Files: censusacquisition.StaticFiles(fs), Supplier: supplier66{}, Client: client66{}}).Discover(ctx, censusacquisition.SessionIdentity{SessionID: "offline", Generation: 1})
 	}
 	m := &memory66{objects: map[string][]byte{}}
 	result, terminal := censussourceassembly.Run(ctx, censussourceassembly.Request{Plan: plan, PartitionSize: 16, WorkflowKey: "offline", HeadKey: "offline", Objects: m, Heads: m, StepBound: 1, Discover: discover})

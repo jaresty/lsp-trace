@@ -24,6 +24,7 @@ import (
 const censusNativeSourcePartitionSize = 16
 
 var (
+	errCensusCallerHostUnavailable       = errors.New("caller-hosted inventory connection is unavailable; no native acquisition was started")
 	errNativeCatalogAggregateUnavailable = errors.New("native census catalog handoff unavailable")
 	errNativeCatalogBoundReached         = errors.New("native census catalog assembly bound reached")
 	errNativeCatalogDeadlineReached      = errors.New("native census catalog assembly deadline reached")
@@ -62,6 +63,12 @@ func runCensusNativeCatalog(options censusCLIOptions, cfg censusCoreConfig, stdo
 }
 
 func runCensusNativeCatalogWithDependencies(options censusCLIOptions, cfg censusCoreConfig, _ io.Writer, stderr io.Writer, deps censusNativeCatalogDependencies) int {
+	// Normal inventory has no connected caller-host route yet. Do not spend
+	// native work only to discover the unavailable semantic handoff afterward.
+	// Explicit legacy acquisition remains separate from this inventory entry.
+	if options.FolderInvocation {
+		return writeCensusFailure(stderr, censusStageConfig, options.Machine, errCensusCallerHostUnavailable)
+	}
 	fail := func(stage censusFailureStage, err error) int {
 		cfg.controlFlow.cause(censuscontrolflow.CoreFailed, censusControlFlowPhase(stage))
 		return writeCensusFailure(stderr, stage, options.Machine, err)

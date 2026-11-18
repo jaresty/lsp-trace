@@ -122,6 +122,13 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 	if e != nil {
 		return fail(e)
 	}
+	return runCensusInventoryBridgeConfig(c, stdout, stderr, deps, options.Machine)
+}
+
+// Both public saved-settings and private entry paths execute the same decoded
+// value; the public policy comparison must not be followed by a second file read.
+func runCensusInventoryBridgeConfig(c censusInventoryBridgeConfig, stdout, stderr io.Writer, deps censusRunnerDependencies, machine bool) int {
+	fail := func(e error) int { return writeCensusFailure(stderr, censusStageConfig, machine, e) }
 	if c.Action != "discover" {
 		return runCensusInventoryBridgeLifecycle(c, stdout, stderr)
 	}
@@ -259,7 +266,7 @@ func runCensusInventoryBridgePrivate(options censusCLIOptions, stdout, stderr io
 		// Execute's runtime finalization has completed before assembly returns.
 		// Do not depend on result.Err: retained per-symbol failures can have nil
 		// error. Complete remains in its original custody/publication positions.
-		return writeCensusInventoryDiscoveryFailure(stderr, options.Machine, result.Err, result.Stop, op.ResponseFacts())
+		return writeCensusInventoryDiscoveryFailure(stderr, machine, result.Err, result.Stop, op.ResponseFacts())
 	}
 	cursor, e = store.load(ctx)
 	if e != nil {

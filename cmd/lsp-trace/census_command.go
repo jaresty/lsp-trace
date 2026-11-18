@@ -58,6 +58,7 @@ func marshalCensusCLIDiagnostic(d censusCLIDiagnostic) ([]byte, error) {
 }
 
 type censusCLIOptions struct {
+	FolderInvocation                                                           bool // Normal inventory entry; runtime resolution owns all IO.
 	Sources, Includes, Excludes, PrunedDirectories                             []string
 	Workspace, Server, Profile, ConfigPath, CatalogConfigPath, PublicationRoot string
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
@@ -72,6 +73,8 @@ type censusCLIOptions struct {
 	Timeout, RequestTimeout                                                    time.Duration
 	Resume, StopAfter                                                          string
 	Machine, Help, Catalog, PrivateEnumerationProjection, EnumerationPreflight bool
+	CallerHost                                                                 bool
+	CallerHostAttemptConfigPath, SaveCallerHostSettingsPath                    string
 }
 type censusStringFlags []string
 
@@ -111,6 +114,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.StringVar(&o.PrivateInventoryQualifiedPrepareConfigPath, "private-inventory-qualified-prepare-config", "", "absolute caller-authored qualified preparation envelope; offline only")
 	fs.BoolVar(&o.PrivateInventoryScopePreview, "private-inventory-scope-preview", false, "")
 	fs.BoolVar(&o.Catalog, "catalog", false, "continue to the provisional feature catalog")
+	fs.BoolVar(&o.CallerHost, "caller-host", false, "use the connected caller-HOST lifecycle from catalog-config")
+	fs.StringVar(&o.CallerHostAttemptConfigPath, "caller-host-attempt-config", "", "fresh connected execution configuration for saved settings")
+	fs.StringVar(&o.SaveCallerHostSettingsPath, "save-caller-host-settings", "", "export non-expiring settings to a new private file; no execution")
 	fs.StringVar(&o.Resume, "resume", "", "resume an opaque catalog continuation selector")
 	fs.StringVar(&o.StopAfter, "stop-after", "", "stop catalog continuation after describe-requests")
 	fs.IntVar(&o.DownDepth, "down-depth", o.DownDepth, "")
@@ -124,7 +130,30 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.BoolVar(&o.PrivateEnumerationProjection, "private-enumeration-projection", false, "")
 	fs.BoolVar(&o.Help, "help", false, "show census help")
 	fs.BoolVar(&o.Help, "h", false, "show census help")
-	if err := fs.Parse(clean); err != nil {
+	// flag.FlagSet stops at the first positional argument. Move only actual
+	// positionals past the flags, preserving flag values (including --server-arg).
+	var flags, folders []string
+	for i := 0; i < len(clean); i++ {
+		arg := clean[i]
+		if arg == "--" {
+			folders = append(folders, clean[i+1:]...)
+			break
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			folders = append(folders, arg)
+			continue
+		}
+		flags = append(flags, arg)
+		name := strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-")
+		if f := fs.Lookup(name); f != nil && !strings.Contains(arg, "=") {
+			b, isBool := f.Value.(interface{ IsBoolFlag() bool })
+			if (!isBool || !b.IsBoolFlag()) && i+1 < len(clean) {
+				i++
+				flags = append(flags, clean[i])
+			}
+		}
+	}
+	if err := fs.Parse(append(flags, append([]string{"--"}, folders...)...)); err != nil {
 		return o, errors.New("invalid census syntax")
 	}
 	if machineCount > 1 {
@@ -162,8 +191,22 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	if err != nil {
 		return o, err
 	}
-	if fs.NArg() != 0 {
-		return o, errors.New("census accepts no positional arguments")
+	legacy := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "workspace" || f.Name == "catalog" || f.Name == "catalog-config" || f.Name == "caller-host" || f.Name == "caller-host-attempt-config" || f.Name == "save-caller-host-settings" || f.Name == "resume" || f.Name == "stop-after" || f.Name == "enumeration-preflight" || strings.HasPrefix(f.Name, "private-") {
+			legacy = true
+		}
+	})
+	if fs.NArg() > 1 || fs.NArg() != 0 && (legacy || o.Help) {
+		return o, errors.New("folder invocation rejects legacy/private controls and accepts one folder")
+	}
+	o.FolderInvocation = !legacy && !o.Help
+	if o.FolderInvocation {
+		o.Workspace = "."
+		if fs.NArg() == 1 {
+			o.Workspace = fs.Arg(0)
+		}
+		o.Catalog = true
 	}
 	if o.Resume != "" {
 		o.Catalog = true
@@ -176,18 +219,13 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	return o, nil
 }
 func censusFlagPresent(args []string, wanted string) bool {
-	for _, arg := range args {
-		if strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--") == wanted {
-			return true
-		}
-	}
-	return false
+	return censusNamedFlagCount(args, wanted) > 0
 }
 
 func censusNamedFlagCount(args []string, wanted string) int {
 	count := 0
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--server-arg" {
+		if args[i] == "--server-arg" || args[i] == "-server-arg" {
 			i++
 			continue
 		}
@@ -201,7 +239,7 @@ func censusNamedFlagCount(args []string, wanted string) int {
 func censusMachineFlagCount(args []string) int {
 	count := 0
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--server-arg" {
+		if args[i] == "--server-arg" || args[i] == "-server-arg" {
 			i++
 			continue
 		}
@@ -213,6 +251,52 @@ func censusMachineFlagCount(args []string) int {
 }
 
 func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
+	callerHostCount := 0
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--server-arg" || arg == "-server-arg" {
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			name := strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-")
+			if name == "caller-host" {
+				callerHostCount++
+			}
+			if !o.Help && (name == "caller-host-attempt-config" || name == "save-caller-host-settings") {
+				if !o.CallerHost || name == "caller-host-attempt-config" && o.CallerHostAttemptConfigPath == "" || name == "save-caller-host-settings" && o.SaveCallerHostSettingsPath == "" {
+					return errors.New("caller-host settings controls require caller-host and a nonempty path")
+				}
+			}
+		}
+	}
+	if !o.Help && (o.CallerHost || callerHostCount != 0) {
+		if callerHostCount != 1 || !o.CallerHost || !o.Catalog || !o.Machine || o.Resume != "" || !filepath.IsAbs(o.CatalogConfigPath) || filepath.Clean(o.CatalogConfigPath) != o.CatalogConfigPath {
+			return errors.New("caller-host requires catalog, machine and an absolute catalog config")
+		}
+		if o.CallerHostAttemptConfigPath != "" && o.SaveCallerHostSettingsPath != "" {
+			return errors.New("caller-host save and execution controls are exclusive")
+		}
+		for _, path := range []string{o.CallerHostAttemptConfigPath, o.SaveCallerHostSettingsPath} {
+			if path != "" && (!filepath.IsAbs(path) || filepath.Clean(path) != path) {
+				return errors.New("caller-host settings paths must be absolute and canonical")
+			}
+		}
+		// Source, owner, budgets and lifecycle action come from the one strict
+		// connected envelope. Never silently ignore competing acquisition flags.
+		allowed := map[string]bool{"catalog": true, "caller-host": true, "catalog-config": true, "machine": true, "caller-host-attempt-config": true, "save-caller-host-settings": true}
+		seen := map[string]bool{}
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "-") {
+				name := strings.TrimLeft(strings.SplitN(arg, "=", 2)[0], "-")
+				if !allowed[name] || seen[name] {
+					return errors.New("caller-host rejects duplicate or ordinary acquisition controls")
+				}
+				seen[name] = true
+			}
+		}
+		return nil
+	}
 	prepareCount, prepareMachineCount := 0, 0
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -316,16 +400,16 @@ func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
 		}
 		return nil
 	}
-	if o.Workspace == "" || len(o.Sources) == 0 || o.PublicationRoot == "" {
+	if o.Workspace == "" || len(o.Sources) == 0 || !o.FolderInvocation && o.PublicationRoot == "" {
 		return errors.New("workspace, source, and publication root are required")
 	}
-	if o.Catalog && o.CatalogConfigPath == "" {
+	if o.Catalog && !o.FolderInvocation && o.CatalogConfigPath == "" {
 		return errors.New("catalog requires catalog config and publication root")
 	}
 	if !o.Catalog && o.CatalogConfigPath != "" {
 		return errors.New("catalog config requires catalog or resume")
 	}
-	if o.Server == "" && o.Profile == "" {
+	if !o.FolderInvocation && o.Server == "" && o.Profile == "" {
 		return errors.New("server or profile is required")
 	}
 	if o.ConfigPath != "" && o.Profile == "" {

@@ -265,7 +265,7 @@ func TestParseCensusCLIOptionsPureDefaultsMachineAndPreflight(t *testing.T) {
 	}
 	bad := [][]string{
 		{"census", "--machine", "--machine=true"},
-		{"census", "positional"},
+		{"census", "positional", "second-folder"},
 		append([]string{}, base...),
 		append(append([]string{}, base...), "--config", "profiles.toml", "--server", "gopls"),
 		append(append([]string{}, base...), "--server-arg", "orphan"),

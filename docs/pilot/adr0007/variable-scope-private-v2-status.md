@@ -282,3 +282,40 @@ product/domain meaning, granularity and stakeholder acceptance. None may be
 presumed from source, grouping, publication or test counts. The technical finish
 may be PROVISIONAL_WITH_UNRESOLVED; accepted feature identity still requires an
 explicit external acceptance contract and attributable correction lineage.
+
+### 2026-10-30: bounded real automatic delivery observed
+
+The preceding map is retained as the pre-run checkpoint. The missing edge is now
+observed for one approved real scope, not universally resolved:
+
+- Code baseline `630f7f04fef3e68c18cff2838a7e9247a66b420f`; one nominated
+  `internal/source/identity_policy.go` (3,980 bytes), 24 discovered symbols,
+  22 non-callable and both callable targets prepared; zero source/resource gaps.
+- Fresh approved config
+  `sha256:c6f31fc5e61fef0e03ba45553c6b5292cee16ccd3a13d6c71cfd0784260259f3`.
+  Local gopls acquisition and verified cleanup preceded caller-owned inference.
+- Two isolated existing host roles were ready before worker launch. Each consumed
+  complete exported parts and immediately published its own exact caller payload
+  through the unchanged helper as host transport; the original Go worker alone
+  sequenced interpretation, independent review, navigation, review and retention.
+  No new inference backend, required SDK, runtime controller or Go/Python model
+  invocation was introduced.
+- Six exchanges, no corrections; two reviewed provisional candidates and one
+  reviewed reversible caller-to-helper navigation hypothesis. Actual wall
+  observation 214.323s; every exchange met its original 60s deadline. Approved
+  operation/handoff limits stayed 240s/180s; no byte or call budget increased.
+- `PROVISIONAL_COMPLETE`; native machine/human envelope 511,859 bytes per copy,
+  `sha256:ae76e6fa499e399aea4bfd6caf27cc328ad911b369dfd14d0ee6f5229797d6f3`.
+  Parent rehashed, compared and verified physically distinct copies. Process
+  receipt: Joined=true, ExitCode=0, Stopped=false; one Stop/Shutdown/terminal read.
+- Evidence: `/Users/schwa/.local/state/lsp-trace-evidence/host-real-proposal-qpqh9_b0/`;
+  `logs/parent-delivery-verification.json` and verbatim native `inventory.md` view.
+
+The earlier failed real and owned attempts remain spent; the 1 MiB synthetic case
+remains failed/stopped. The successful owned full loop and this real run are
+separate observations. This advances the plan's real-delivery checkpoint for the
+named scope only: AST remains not FULL_DEFINITION or qualified Describe, ordinary
+Native/Describe/workflow remain NOT_ATTEMPTED, authority=0, accepted=false,
+feature identity UNRESOLVED, source completeness UNKNOWN and absence PROHIBITED.
+Broader scales/scopes, authenticated independence and stakeholder acceptance
+remain unobserved. This grant is spent; another execution needs fresh approval.
