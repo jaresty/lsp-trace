@@ -37,15 +37,15 @@ func capacityRefusal(reason, unit string, spent, protected, limit uint64) error 
 // are preserved. Malformed counters cannot turn subtraction into underflow.
 func (h durableInventoryHead) startCapacityRefusal() error {
 	protected, packets, ok := h.protectedCapacity()
-	if !ok || h.Used > h.Limit || h.Work > 1<<32 {
+	if !ok || h.Used > h.Limit || h.Work > h.workLimit() {
 		return &CapacityRefusal{Reason: CapacityInvalidQuote}
 	}
 	if protected > h.Limit-h.Used {
 		return capacityRefusal(CapacityBytes, "bytes", h.Used, protected, h.Limit)
 	}
-	if protected > ((1<<32)-h.Work)/32 {
+	if protected > (h.workLimit()-h.Work)/32 {
 		// A valid protectedCapacity quote is <=64 MiB, so *32 is bounded.
-		return capacityRefusal(CapacityWork, "work_units", h.Work, protected*32, 1<<32)
+		return capacityRefusal(CapacityWork, "work_units", h.Work, protected*32, h.workLimit())
 	}
 	if packets > 64 {
 		// Start's original guard compares the protected packet count with 64,

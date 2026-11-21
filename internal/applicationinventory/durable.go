@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"time"
 
 	dw "lsp-trace/internal/describeworker"
@@ -35,6 +36,7 @@ type durableInventoryState struct {
 	Report                               Report
 	Cursor                               int
 	Prepared, Descriptions               []publication.StoredObject
+	PreparedAdmissions                   []publication.StoredObject `json:",omitempty"`
 	Base, Proposed, Corrected            publication.StoredObject
 	ManifestCost                         uint64
 }
@@ -57,6 +59,7 @@ type durableInventoryHead struct {
 	Native                                               *is.InventoryNativeClaimV1   `json:",omitempty"`
 	Selected                                             *is.InventorySelectedClaimV1 `json:",omitempty"`
 	Checkpoint                                           *is.InventoryCheckpointV1    `json:",omitempty"`
+	Closure                                              *connectedClosureV1          `json:",omitempty"`
 }
 type DurableTask struct {
 	Contract                                                                                TaskContract
@@ -137,7 +140,7 @@ func (s DurableStore) headContext(ctx context.Context, run string) (durableInven
 		}
 		return h, raw, nil
 	}
-	if (h.Schema != durableHeadVersion && h.Schema != ownedHeadVersion) || h.RunID != run || !validDurableID(h.TaskID) || h.Sequence < 1 || h.Sequence > 102 || !h.State.Valid() || !h.Input.Valid() || h.Limit == 0 || h.Limit > durableRunLimit || h.Used > h.Limit || h.OutputBytes > 32<<20 || h.Phase == "Published" && (!h.Manifest.Valid() || h.Manifest.Bytes > 65536) || h.Work > 1<<32 || h.Packets > 64 || h.Window <= 0 || h.Window > int64(30*time.Second) || h.SemanticNS < 0 || h.SemanticNS > int64(120*time.Second) || !validInventoryDeadlines(h) {
+	if (h.Schema != durableHeadVersion && !h.independentTaskLeases()) || h.RunID != run || !validDurableID(h.TaskID) || h.Sequence < 1 || h.Sequence > 102 || !h.State.Valid() || !h.Input.Valid() || h.Limit == 0 || h.Limit > h.runLimit() || h.Used > h.Limit || h.OutputBytes > 32<<20 || h.Phase == "Published" && (!h.Manifest.Valid() || h.Manifest.Bytes > 65536) || h.Work > h.workLimit() || h.Packets > 64 || h.Window <= 0 || h.Window > int64(30*time.Second) || h.SemanticNS < 0 || h.SemanticNS > int64(120*time.Second) || !validInventoryDeadlines(h) {
 		return h, nil, ErrDurableInventory
 	}
 	if h.Status != "READY" && h.Status != "CLAIMED" {
@@ -184,7 +187,7 @@ func (s DurableStore) change(ctx context.Context, old []byte, h durableInventory
 	if e != nil {
 		return nil, e
 	}
-	if (h.Schema == ownedHeadVersion || h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || h.Schema == is.InventoryResumeHeadVersionV1) && (len(raw) > inventoryHeadLimit(h) || ctx == nil || ctx.Err() != nil) {
+	if (h.independentTaskLeases() || h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || is.InventoryResumableHeadV1(h.Schema)) && (len(raw) > inventoryHeadLimit(h) || ctx == nil || ctx.Err() != nil) {
 		return nil, ErrDurableInventory
 	}
 	pred := publication.BoundFilePredecessor{Absent: old == nil, Selector: inventoryHeadName(h.RunID), Digest: cat.NativeDigestV3(old), ByteLength: uint64(len(old))}
@@ -208,10 +211,10 @@ func (s DurableStore) reserve(ctx context.Context, h durableInventoryHead, old [
 		if h.CompletionCursor >= len(h.Completion.Stages) || n != h.Completion.Stages[h.CompletionCursor] {
 			return h, nil, ErrDurableInventory
 		}
-	} else if n > h.Limit-h.Used-protected || h.Packets+packets >= 64 || n > ((1<<32)-h.Work-protected*32)/32 {
+	} else if n > h.Limit-h.Used-protected || h.Packets+packets >= 64 || n > (h.workLimit()-h.Work-protected*32)/32 {
 		return h, nil, ErrDurableInventory
 	}
-	if ctx == nil || ctx.Err() != nil || h.Status != "READY" || s.accepted(h) != nil || n > h.Limit-h.Used || h.Packets >= 64 || n > ((1<<32)-h.Work)/32 {
+	if ctx == nil || ctx.Err() != nil || h.Status != "READY" || s.accepted(h) != nil || n > h.Limit-h.Used || h.Packets >= 64 || n > (h.workLimit()-h.Work)/32 {
 		return h, nil, ErrDurableInventory
 	}
 	if h.Phase != "Published" {
@@ -237,7 +240,14 @@ func (s DurableStore) state(ctx context.Context, h durableInventoryHead, b *sc.C
 		return v, ErrDurableInventory
 	}
 	raw, e := publication.ReadObject(s.Root, "inventory-state-", h.State)
-	if e != nil || strictInventory(raw, &v) != nil || (h.Schema == ownedHeadVersion && v.Schema != "lsp-trace.inventory-state.v2" || h.Schema != ownedHeadVersion && v.Schema != "lsp-trace.inventory-state.v1") || v.RunID != h.RunID || len(v.Prepared) != len(v.Report.Census) || len(v.Report.Dispositions) != len(v.Prepared) || v.Cursor < 0 || v.Cursor > len(v.Prepared) || len(v.Descriptions) > v.Cursor || v.Report.Authority != 0 || v.Report.Accepted || v.Report.Completeness != "UNKNOWN" {
+	if e != nil || strictInventory(raw, &v) != nil || (h.independentTaskLeases() && v.Schema != "lsp-trace.inventory-state.v2" || !h.independentTaskLeases() && v.Schema != "lsp-trace.inventory-state.v1") || v.RunID != h.RunID || len(v.Prepared) != len(v.Report.Census) || len(v.Report.Dispositions) != len(v.Prepared) || v.Cursor < 0 || v.Cursor > len(v.Prepared) || len(v.Descriptions) > v.Cursor || v.Report.Authority != 0 || v.Report.Accepted || v.Report.Completeness != "UNKNOWN" {
+		return v, ErrDurableInventory
+	}
+	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+		if len(v.PreparedAdmissions) != 2 {
+			return v, ErrDurableInventory
+		}
+	} else if len(v.PreparedAdmissions) != 0 {
 		return v, ErrDurableInventory
 	}
 	return v, nil
@@ -293,7 +303,14 @@ func (s DurableStore) descriptions(ctx context.Context, v durableInventoryState,
 		if disposition.Status != "DESCRIBED_UNMATCHED" && disposition.Status != "DESCRIBED_WITH_MEMBERSHIP" {
 			continue
 		}
-		d, e := sc.ReopenInventoryDescription(ctx, s.Root, v.Descriptions[len(out)], b)
+		var d sc.BoundSelectedDescriptionV3
+		var e error
+		if len(v.PreparedAdmissions) == 2 {
+			i := len(out)
+			d, e = sc.ReopenInventoryReferenceDescriptionV1(ctx, s.Root, v.Descriptions[i], b, v.RunID, disposition.LeadID, v.PreparedAdmissions[i], v.Prepared[i])
+		} else {
+			d, e = sc.ReopenInventoryDescriptionForRunV1(ctx, s.Root, v.Descriptions[len(out)], b, v.RunID, disposition.LeadID)
+		}
 		if e != nil {
 			return nil, e
 		}
@@ -341,7 +358,7 @@ func (s DurableStore) issueNext(h *durableInventoryHead, v durableInventoryState
 		}
 		h.SemanticNS += h.Window
 		h.Deadline = time.Now().Add(time.Duration(h.Window)).UnixNano()
-		if h.Schema != ownedHeadVersion {
+		if !h.independentTaskLeases() {
 			h.Deadline = min(h.Deadline, h.RunDeadline)
 		}
 		if h.Deadline <= time.Now().UnixNano() {
@@ -518,16 +535,26 @@ func (s DurableStore) Task(ctx context.Context, run, task string) (DurableTask, 
 	t := DurableTask{Schema: "lsp-trace.durable-inventory-task.v1", RunID: run, TaskID: h.TaskID, PreviousTaskID: h.PreviousTaskID, Phase: h.Phase, Status: status, Role: h.Role, Actor: h.Actor, Prompt: h.Prompt, PromptSHA256: cat.NativeDigestV3([]byte(h.Prompt)), Sequence: h.Sequence, DeadlineUnixNano: h.Deadline, RunDeadlineUnixNano: h.RunDeadline, Used: h.Used, Work: h.Work, Packets: h.Packets, SemanticReservedNS: h.SemanticNS, Artifacts: []sc.DurableDescribeArtifactV1{{ID: "input", Bytes: h.Input.Bytes}}, Completeness: "UNKNOWN"}
 	t.RequiredInputNextOffset = h.Delivery.Next
 	t.InputIndexBytes = h.Delivery.Index.Bytes
-	if h.Schema == ownedHeadVersion {
+	if h.independentTaskLeases() {
 		t.Schema = "lsp-trace.durable-inventory-task.v2"
 	}
 	t.Contract = taskContract(t)
-	if h.Schema == ownedHeadVersion && h.Phase == "Describe" {
+	if h.independentTaskLeases() && h.Phase == "Describe" {
 		t.Contract.MaxSubmissionBytes = h.Completion.Limits.MaxAdapterBytes
 		t.Contract.MaxSemanticBytes = h.Completion.Limits.MaxSemanticBytes
 		t.Contract.Rules += " For this configured job, MaxSubmissionBytes and MaxSemanticBytes are the binding ceilings even where the general grammar describes larger absolute maxima."
 	}
 	t.Contract.RunByteLimit = h.Limit
+	if is.InventoryConnectedHead(h.Schema) {
+		t.Contract.Operations = nil // Slice 1 is API-only; do not advertise CLI dispatch.
+		t.Contract.Rules = strings.ReplaceAll(t.Contract.Rules, "RunByteLimit is the stored run byte ceiling (at most 67108864);", "RunByteLimit is the stored initial connected-profile ceiling;")
+		t.Contract.Rules = strings.TrimPrefix(t.Contract.Rules, "Operations are argv arrays, not shell strings. ")
+		t.Contract.Rules = "API-only connected profile: call DurableStore.Task, Read, Submit and Result with this RunID and current TaskID. No CLI operation is activated. RunByteLimit is the stored cumulative profile limit, not the historical 64MiB enclosure. Distinct configured actors are declarations, not authenticated independent judgment. " + t.Contract.Rules
+	}
+	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+		t.Contract.Rules = strings.ReplaceAll(t.Contract.Rules, "$.Request.Envelope.Prompt", "$.Request.envelope.prompt")
+		t.Contract.Rules += " Original R observations are at $.OriginalReferences for Describe and $.evidence[*].OriginalReferences for grouping/review; the latter also carries $.evidence[*].InventoryAdmission with actual admission/evidence/witness digests. QUERY_TO_REPORTED_REFERENCE_LOCATION is query/result direction, not CALLS or feature membership. Target source is NOT_CAPTURED_BY_THIS_WITNESS; provider/global completeness remains unknown. Co-presence does not establish an edge or a feature. Read all supplied evidence and preserve these qualifications."
+	}
 	return t, nil
 }
 
@@ -585,7 +612,7 @@ func (s DurableStore) Submit(ctx context.Context, run, task, role string, answer
 	if e != nil {
 		return bad(e)
 	}
-	b, e := cat.NewReservedCallerBudgetV3(time.Unix(0, h.budgetDeadline()), allocation, h.Used-allocation, time.Duration(h.SemanticNS))
+	b, e := h.sliceBudget(time.Unix(0, h.budgetDeadline()), allocation, h.Used-allocation, time.Duration(h.SemanticNS))
 	if e != nil {
 		return bad(e)
 	}
@@ -605,7 +632,12 @@ func (s DurableStore) Submit(ctx context.Context, run, task, role string, answer
 		if v.Cursor >= len(v.Prepared) || h.Input != v.Prepared[v.Cursor] {
 			return bad(ErrDurableInventory)
 		}
-		d, e := sc.CompleteInventoryEvidence(ctx, s.Root, h.Input, run, v.Report.Census[v.Cursor].ID, v.Interpreter, time.Unix(0, h.Deadline), b, answer)
+		var d sc.BoundSelectedDescriptionV3
+		if h.Schema == is.InventoryReferenceHeadVersionV1 {
+			d, e = sc.CompleteInventoryReferenceEvidenceV1(ctx, s.Root, h.Input, v.PreparedAdmissions[v.Cursor], run, v.Report.Census[v.Cursor].ID, v.Interpreter, time.Unix(0, h.Deadline), b, answer)
+		} else {
+			d, e = sc.CompleteInventoryEvidence(ctx, s.Root, h.Input, run, v.Report.Census[v.Cursor].ID, v.Interpreter, time.Unix(0, h.Deadline), b, answer)
+		}
 		if e != nil {
 			return bad(e)
 		}
@@ -809,6 +841,11 @@ func (s DurableStore) Result(ctx context.Context, run, task string) (Report, err
 	}
 	if remaining != 0 || !report.Published || report.Authority != 0 || report.Accepted || report.Completeness != "UNKNOWN" || ctx.Err() != nil {
 		return Report{}, ErrDurableInventory
+	}
+	if is.InventoryConnectedHead(h.Schema) {
+		if e := root.Close(); e != nil {
+			return Report{}, e
+		}
 	}
 	return report, nil
 }

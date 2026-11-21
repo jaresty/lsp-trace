@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"lsp-trace/internal/targetpacket"
+	"lsp-trace/sessionruntime"
 	"time"
 )
 
@@ -14,8 +15,9 @@ type PrivateProducerOriginals struct {
 	candidate targetpacket.CandidateOriginals
 }
 type privateProducerOriginalsV1 struct {
-	candidate targetpacket.CandidateOriginals
-	timing    *privateSourceTimingStateV2
+	candidate         targetpacket.CandidateOriginals
+	timing            *privateSourceTimingStateV2
+	inventoryEvidence sessionruntime.PrivateGroupingSourceEvidence
 }
 
 func mintPrivateProducerOriginals(c targetpacket.CandidateOriginals) PrivateProducerOriginals {
@@ -93,6 +95,7 @@ func (in PrivateManagedGroupingInput) SourceOriginalsV1() (PrivateProducerOrigin
 	}
 	o := mintPrivateProducerOriginals(c)
 	o.state.timing = in.sourceTiming
+	o.state.inventoryEvidence = in.sourceEvidence
 	return o, nil
 }
 func (in PrivateManagedGroupingInput) SourceDeadlineV1() time.Time {

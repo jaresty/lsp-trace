@@ -79,6 +79,7 @@ func submitPlan(h durableInventoryHead, answerBytes int) (durableCompletionPlan,
 	if e != nil || len(next.Stages) != len(p.Stages) {
 		return p, 0, 0, ErrDurableInventory
 	}
+	h.referenceCompletion(&next)
 	next.PreparationUsed = p.PreparationUsed
 	// Spent stages are never requoted/refunded. The current semantic stage keeps
 	// its original full allocation too; only its successor construction is added.
@@ -176,7 +177,7 @@ func (s DurableStore) claimSubmit(ctx context.Context, h durableInventoryHead, o
 	topup := allocation - baseAllocation
 	tail, ok := capacitySum(next.Stages[h.CompletionCursor:]...)
 	required, sumOK := capacitySum(topup, currentRead, tail, delivery)
-	if !ok || !sumOK || required > h.Limit-h.Used || required > ((1<<32)-h.Work)/32 || h.Packets+currentPackets+uint64(len(next.Stages)-h.CompletionCursor)+packets > 64 {
+	if !ok || !sumOK || required > h.Limit-h.Used || required > (h.workLimit()-h.Work)/32 || h.Packets+currentPackets+uint64(len(next.Stages)-h.CompletionCursor)+packets > 64 {
 		return bad()
 	}
 	h.Completion = next

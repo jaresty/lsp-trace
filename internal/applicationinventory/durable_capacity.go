@@ -213,10 +213,19 @@ func (h durableInventoryHead) completionValid() bool {
 	}
 	spent, valid := capacitySum(h.Completion.Stages[:h.CompletionCursor]...)
 	floor, validFloor := capacitySum(h.Completion.PreparationUsed, spent, h.DeliverySpent)
+	if h.Schema == "lsp-trace.durable-inventory-head.v8" || h.Schema == "lsp-trace.durable-inventory-head.v9" {
+		validFloor = h.Completion.PreparationUsed <= h.runLimit() && spent <= h.runLimit()-h.Completion.PreparationUsed && h.DeliverySpent <= h.runLimit()-h.Completion.PreparationUsed-spent
+		if validFloor {
+			floor = h.Completion.PreparationUsed + spent + h.DeliverySpent
+		}
+		if !connectedSemanticValid(h) {
+			return false
+		}
+	}
 	if !valid || !validFloor || h.Used < floor || h.Work != h.Used*32 || h.Packets < uint64(h.CompletionCursor) {
 		return false
 	}
-	if !ok || h.Used > h.Limit || n > h.Limit-h.Used || h.Work > 1<<32 || n > ((1<<32)-h.Work)/32 || h.Packets > 64 || packets > 64-h.Packets || uint64(h.State.Bytes) > h.Completion.StateUpper {
+	if !ok || h.Used > h.Limit || n > h.Limit-h.Used || h.Work > h.workLimit() || n > (h.workLimit()-h.Work)/32 || h.Packets > 64 || packets > 64-h.Packets || uint64(h.State.Bytes) > h.Completion.StateUpper {
 		return false
 	}
 	expected := h.Sequence - 1

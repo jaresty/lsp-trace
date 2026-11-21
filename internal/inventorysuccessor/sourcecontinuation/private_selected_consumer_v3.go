@@ -243,6 +243,11 @@ func (b BoundSelectedDescriptionV3) Evidence(ctx context.Context) (SelectedEvide
 	}
 	e := b.state.evidence
 	e.Record = append(json.RawMessage(nil), e.Record...)
+	e.OriginalReferences = append(json.RawMessage(nil), e.OriginalReferences...)
+	if e.InventoryAdmission != nil {
+		m := *e.InventoryAdmission
+		e.InventoryAdmission = &m
+	}
 	return e, nil
 }
 func (b BoundSelectedDescriptionV3) Bytes(ctx context.Context) ([]byte, error) {

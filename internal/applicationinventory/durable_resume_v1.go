@@ -38,7 +38,7 @@ func resumeConfigValidV1(c OwnedInventoryConfig) bool {
 	return selectedInventoryConfigValidV1(c)
 }
 func resumeHeadValidV1(h durableInventoryHead) bool {
-	if h.Schema != is.InventoryResumeHeadVersionV1 || h.Limit != cat.InventoryResumeLimitV1 || h.Used > h.Limit || h.Work != h.Used*32 {
+	if (h.Schema != is.InventoryResumeHeadVersionV1 && h.Schema != is.InventoryReferenceHeadVersionV1) || h.Limit != h.acquisitionLimit() || h.Used > h.Limit || h.Work != h.Used*32 {
 		return false
 	}
 	if h.Phase == "Creating" {
@@ -99,6 +99,12 @@ func resumeHeadValidV1(h durableInventoryHead) bool {
 			return false
 		}
 		h.Used -= cat.InventoryCheckpointBytesV1
+		if h.Schema == is.InventoryReferenceHeadVersionV1 {
+			if h.Used < cat.InventoryReferenceRetentionV1 {
+				return false
+			}
+			h.Used -= cat.InventoryReferenceRetentionV1
+		}
 	}
 	if ordinal == 1 && h.Phase != "Admitted" {
 		h.Input = publication.StoredObject{}
@@ -111,7 +117,7 @@ func resumeHeadValidV1(h durableInventoryHead) bool {
 }
 
 func (s DurableStore) verifyResumeCheckpointV1(ctx context.Context, h durableInventoryHead) error {
-	if h.Schema != is.InventoryResumeHeadVersionV1 {
+	if !is.InventoryResumableHeadV1(h.Schema) {
 		return ErrDurableInventory
 	}
 	if h.Sequence == 0 && h.Checkpoint == nil {
@@ -120,5 +126,5 @@ func (s DurableStore) verifyResumeCheckpointV1(ctx context.Context, h durableInv
 	if h.Sequence != 1 || h.Checkpoint == nil || h.Input != h.Checkpoint.Admission || h.OutputBytes != h.Checkpoint.OutputBytes {
 		return ErrDurableInventory
 	}
-	return is.VerifyInventoryCheckpointV1(ctx, s.Root, h.RunID, *h.Checkpoint)
+	return is.VerifyInventoryCheckpointForHeadV1(ctx, s.Root, h.Schema, h.RunID, *h.Checkpoint)
 }

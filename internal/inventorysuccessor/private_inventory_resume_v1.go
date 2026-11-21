@@ -38,14 +38,20 @@ func NewInventoryResumeProfileV1() InventoryResumeProfileV1 {
 }
 func (p InventoryResumeProfileV1) Valid() bool { return p == NewInventoryResumeProfileV1() }
 func inventoryResumeProfileMatchesV1(schema string, p *InventoryResumeProfileV1) bool {
-	if schema == InventoryResumeHeadVersionV1 {
+	if schema == InventoryReferenceHeadVersionV1 {
+		return p != nil && *p == NewInventoryReferenceProfileV1()
+	}
+	if schema == InventoryConnectedHeadVersionV1 {
+		return p != nil && *p == NewInventoryConnectedProfileV1()
+	}
+	if InventoryResumableHeadV1(schema) {
 		return p != nil && p.Valid()
 	}
 	return p == nil
 }
 func inventoryParentWorkLimitV1(schema string) uint64 {
-	if schema == InventoryResumeHeadVersionV1 {
-		return cat.InventoryResumeLimitV1 * 32
+	if InventoryResumableHeadV1(schema) {
+		return inventoryParentLimitV1(schema) * 32
 	}
 	return 1 << 32
 }
@@ -63,14 +69,17 @@ func InventoryNamespaceV1(kind, run string, ordinal int) string {
 	return fmt.Sprintf("inventory-%s-%s-%06d", kind, run, ordinal)
 }
 func InventoryNativeControlForHeadV1(schema string) uint64 {
-	if schema == InventoryResumeHeadVersionV1 {
+	if InventoryResumableHeadV1(schema) {
 		return cat.InventoryNativeControlBytesV2
 	}
 	return InventoryNativeControlBytesV1
 }
 func InventorySelectedControlForHeadV1(schema string) uint64 {
 	n := cat.InventorySelectedControlBytesV1 + cat.InventoryAdmissionBytesV4
-	if schema == InventoryResumeHeadVersionV1 {
+	if schema == InventoryReferenceHeadVersionV1 {
+		n += cat.InventoryReferenceRetentionV1
+	}
+	if InventoryResumableHeadV1(schema) {
 		n += cat.InventoryCheckpointBytesV1
 	}
 	return n
@@ -82,6 +91,17 @@ func (c InventoryCheckpointV1) Valid(run string) bool {
 // VerifyInventoryCheckpointV1 checks actual immutable admission/evidence bytes.
 // Its return is a verification result, not permission. No owner is reconstructed.
 func VerifyInventoryCheckpointV1(ctx context.Context, root *publication.Root, run string, c InventoryCheckpointV1) error {
+	return verifyInventoryCheckpoint(ctx, root, run, c, false)
+}
+func VerifyInventoryCheckpointForHeadV1(ctx context.Context, root *publication.Root, schema, run string, c InventoryCheckpointV1) error {
+	return verifyInventoryCheckpoint(ctx, root, run, c, schema == InventoryReferenceHeadVersionV1)
+}
+func verifyInventoryCheckpoint(ctx context.Context, root *publication.Root, run string, c InventoryCheckpointV1, references bool) error {
+	admissionSchema, evidenceSchema := "lsp-trace.inventory-admission.v2", "lsp-trace.inventory-evidence.v1"
+	if references {
+		admissionSchema = "lsp-trace.inventory-admission.v3"
+		evidenceSchema = "lsp-trace.inventory-evidence.v2"
+	}
 	if ctx == nil || ctx.Err() != nil || !c.Valid(run) {
 		return ErrPrivateDiscoveryOperationV2
 	}
@@ -96,7 +116,7 @@ func VerifyInventoryCheckpointV1(ctx context.Context, root *publication.Root, ru
 		}
 		Payload, AdmittedEvidenceBytes uint64
 	}
-	if e != nil || cat.DecodeNativeV3(raw, &a) != nil || a.Schema != "lsp-trace.inventory-admission.v2" || a.RunID != run || a.Index != 0 || a.Binding.Index != 0 || a.Previous != (publication.StoredObject{}) || a.Evidence != c.Evidence || a.AdmittedEvidenceBytes != c.OutputBytes || a.LeadID != fmt.Sprintf("%s-000000", run) || a.Binding.RequestID == "" || a.Binding.SourceUnitID == "" {
+	if e != nil || cat.DecodeNativeV3(raw, &a) != nil || a.Schema != admissionSchema || a.RunID != run || a.Index != 0 || a.Binding.Index != 0 || a.Previous != (publication.StoredObject{}) || a.Evidence != c.Evidence || a.AdmittedEvidenceBytes != c.OutputBytes || a.LeadID != fmt.Sprintf("%s-000000", run) || a.Binding.RequestID == "" || a.Binding.SourceUnitID == "" {
 		return ErrPrivateDiscoveryOperationV2
 	}
 	evidence, e := publication.ReadObject(root, "inventory-evidence-", c.Evidence)
@@ -106,8 +126,13 @@ func VerifyInventoryCheckpointV1(ctx context.Context, root *publication.Root, ru
 		Unit                                       struct{ ID, SourceDigest string }
 		Request                                    describerequest.Record
 	}
-	if e != nil || json.Unmarshal(evidence, &v) != nil || v.Schema != "lsp-trace.inventory-evidence.v1" || v.RunID != run || v.LeadID != a.LeadID || v.Accounting != c.Selected.Accounting || v.Handoff == "" || v.Checkpoint == "" || v.Unit.ID != a.Binding.SourceUnitID || v.Request.RecordID != a.Binding.RequestID || v.Unit.ID != v.Request.Envelope.AdmissionID || describerequest.ValidateRecord(v.Request) != nil {
+	if e != nil || json.Unmarshal(evidence, &v) != nil || v.Schema != evidenceSchema || v.RunID != run || v.LeadID != a.LeadID || v.Accounting != c.Selected.Accounting || v.Handoff == "" || v.Checkpoint == "" || v.Unit.ID != a.Binding.SourceUnitID || v.Request.RecordID != a.Binding.RequestID || v.Unit.ID != v.Request.Envelope.AdmissionID || describerequest.ValidateRecord(v.Request) != nil {
 		return ErrPrivateDiscoveryOperationV2
+	}
+	if references {
+		if _, e := ValidateInventoryReferenceEvidenceV1(evidence, run, a.LeadID); e != nil {
+			return e
+		}
 	}
 	return ctx.Err()
 }

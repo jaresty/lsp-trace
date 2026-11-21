@@ -128,10 +128,13 @@ func inventoryParentDecodeV1(raw []byte) (inventoryParentViewV1, map[string]json
 	var env inventoryParentEnvelopeV1
 	var h inventoryParentViewV1
 	var fields map[string]json.RawMessage
-	if len(raw) == 0 || len(raw) > 16384 || cat.DecodeNativeV3(raw, &env) != nil || cat.NativeDigestV3(env.Content) != env.Digest || cat.DecodeNativeV3(env.Content, &fields) != nil || json.Unmarshal(env.Content, &h) != nil || (h.Schema != InventoryNativeHeadVersionV1 && h.Schema != InventorySelectedHeadVersionV1 && h.Schema != InventoryResumeHeadVersionV1) {
+	if len(raw) == 0 || len(raw) > 16384 || cat.DecodeNativeV3(raw, &env) != nil || cat.NativeDigestV3(env.Content) != env.Digest || cat.DecodeNativeV3(env.Content, &fields) != nil || json.Unmarshal(env.Content, &h) != nil || (h.Schema != InventoryNativeHeadVersionV1 && h.Schema != InventorySelectedHeadVersionV1 && !InventoryResumableHeadV1(h.Schema)) {
 		return h, nil, ErrPrivateDiscoveryOperationV2
 	}
-	if h.Schema != InventoryResumeHeadVersionV1 && (h.Checkpoint != nil || h.Native != nil && h.Native.Schema != "lsp-trace.inventory-native-claim.v1" || h.Selected != nil && h.Selected.Schema != "lsp-trace.inventory-selected-claim.v1") {
+	if _, present := fields["Closure"]; present {
+		return h, nil, ErrPrivateDiscoveryOperationV2
+	} // semantic closure is never acquisition authority
+	if !InventoryResumableHeadV1(h.Schema) && (h.Checkpoint != nil || h.Native != nil && h.Native.Schema != "lsp-trace.inventory-native-claim.v1" || h.Selected != nil && h.Selected.Schema != "lsp-trace.inventory-selected-claim.v1") {
 		return h, nil, ErrPrivateDiscoveryOperationV2
 	}
 	return h, fields, nil
@@ -159,14 +162,14 @@ func InventoryNativePermitFromCommitV1(ctx context.Context, proof publication.Bo
 		return InventoryNativePermitV1{}, e
 	}
 	h, fields, e := inventoryParentDecodeV1(after)
-	if e != nil || old.Native != nil || old.Phase != "ReadyForAcquisition" || old.Status != "READY" || h.Native == nil || old.Schema != h.Schema || old.Selected != nil || h.Selected != nil || !h.Native.Valid() || h.Native.Outcome != "CLAIMED" || h.RunID != old.RunID || selector != "inventory-run-"+h.RunID+".json" || h.Native.RunID != h.RunID || h.Native.ParentHead != cat.NativeDigestV3(before) || h.Phase != "NativeAcquisition" || h.Status != "CLAIMED" || h.Deadline != h.Native.Binding.Deadline.UnixNano() || !hashV2("sha256:"+h.TaskID) || h.Limit == 0 || h.Limit > inventoryParentLimitV1(h.Schema) || h.Schema == InventorySelectedHeadVersionV1 && h.Limit != inventoryParentLimitV1(h.Schema) || h.Used > h.Limit || h.Work > inventoryParentWorkLimitV1(h.Schema) || h.RunDeadline != 0 || h.Sequence != old.Sequence || h.Native.Ordinal != h.Sequence || h.Sequence != 0 && h.Schema != InventoryResumeHeadVersionV1 || old.Deadline != 0 || old.TaskID != "" || time.Until(h.Native.Binding.Deadline) > 15*time.Second || h.Used != old.Used+InventoryNativeControlForHeadV1(h.Schema) || h.Work != h.Used*32 || h.Packets != old.Packets+1 || !time.Now().Before(h.Native.Binding.Deadline) {
+	if e != nil || old.Native != nil || old.Phase != "ReadyForAcquisition" || old.Status != "READY" || h.Native == nil || old.Schema != h.Schema || old.Selected != nil || h.Selected != nil || !h.Native.Valid() || h.Native.Outcome != "CLAIMED" || h.RunID != old.RunID || selector != "inventory-run-"+h.RunID+".json" || h.Native.RunID != h.RunID || h.Native.ParentHead != cat.NativeDigestV3(before) || h.Phase != "NativeAcquisition" || h.Status != "CLAIMED" || h.Deadline != h.Native.Binding.Deadline.UnixNano() || !hashV2("sha256:"+h.TaskID) || h.Limit == 0 || h.Limit > inventoryParentLimitV1(h.Schema) || h.Schema == InventorySelectedHeadVersionV1 && h.Limit != inventoryParentLimitV1(h.Schema) || h.Used > h.Limit || h.Work > inventoryParentWorkLimitV1(h.Schema) || h.RunDeadline != 0 || h.Sequence != old.Sequence || h.Native.Ordinal != h.Sequence || h.Sequence != 0 && !InventoryResumableHeadV1(h.Schema) || old.Deadline != 0 || old.TaskID != "" || time.Until(h.Native.Binding.Deadline) > 15*time.Second || h.Used != old.Used+InventoryNativeControlForHeadV1(h.Schema) || h.Work != h.Used*32 || h.Packets != old.Packets+1 || !time.Now().Before(h.Native.Binding.Deadline) {
 		return InventoryNativePermitV1{}, ErrPrivateDiscoveryOperationV2
 	}
-	if h.Schema == InventoryResumeHeadVersionV1 {
-		if h.Limit != cat.InventoryResumeLimitV1 || h.Native.Schema != "lsp-trace.inventory-native-claim.v2" || h.Sequence < 0 || h.Sequence > 1 {
+	if InventoryResumableHeadV1(h.Schema) {
+		if h.Limit != inventoryParentLimitV1(h.Schema) || h.Native.Schema != "lsp-trace.inventory-native-claim.v2" || h.Sequence < 0 || h.Sequence > 1 {
 			return InventoryNativePermitV1{}, ErrPrivateDiscoveryOperationV2
 		}
-		if h.Sequence == 1 && (old.Checkpoint == nil || old.Input != old.Checkpoint.Admission || old.OutputBytes != old.Checkpoint.OutputBytes || old.Used != old.Checkpoint.Used || VerifyInventoryCheckpointV1(ctx, root, h.RunID, *old.Checkpoint) != nil) {
+		if h.Sequence == 1 && (old.Checkpoint == nil || old.Input != old.Checkpoint.Admission || old.OutputBytes != old.Checkpoint.OutputBytes || old.Used != old.Checkpoint.Used || VerifyInventoryCheckpointForHeadV1(ctx, root, h.Schema, h.RunID, *old.Checkpoint) != nil) {
 			return InventoryNativePermitV1{}, ErrPrivateDiscoveryOperationV2
 		}
 	}
@@ -236,7 +239,7 @@ func verifyInventoryNativeEnumerationV1(ctx context.Context, root *publication.R
 	const enumerationFixed = 4 * (scopejob.HeadBytes + scopejob.StopBytes)
 	expectedUsed := creationMinimum + 8*uint64(configBytes) + enumerationFixed + scopejob.BatchBytes
 	expectedPackets := uint64(4)
-	if h.Schema == InventoryResumeHeadVersionV1 && h.Sequence == 1 {
+	if InventoryResumableHeadV1(h.Schema) && h.Sequence == 1 {
 		expectedUsed += InventoryNativeControlForHeadV1(h.Schema) + InventorySelectedControlForHeadV1(h.Schema)
 		expectedPackets += 2
 	}
@@ -268,10 +271,10 @@ func verifyInventoryNativeEnumerationV1(ctx context.Context, root *publication.R
 			continue
 		}
 		supported++
-		if h.Schema == InventoryResumeHeadVersionV1 && supported > 17 {
+		if InventoryResumableHeadV1(h.Schema) && supported > 17 {
 			return ErrPrivateDiscoveryOperationV2
 		}
-		if h.Schema != InventoryResumeHeadVersionV1 && len(members) == 16 {
+		if !InventoryResumableHeadV1(h.Schema) && len(members) == 16 {
 			break
 		}
 		language := record.LanguageID
@@ -284,7 +287,7 @@ func verifyInventoryNativeEnumerationV1(ctx context.Context, root *publication.R
 		path := filepath.Join(config.Workspace, record.Path)
 		members = append(members, sessionruntime.PrivateDiscoveryMember{Path: path, URI: (&url.URL{Scheme: "file", Path: path}).String(), LanguageID: language})
 	}
-	if h.Schema == InventoryResumeHeadVersionV1 {
+	if InventoryResumableHeadV1(h.Schema) {
 		if supported != 17 {
 			return ErrPrivateDiscoveryOperationV2
 		}
@@ -465,7 +468,7 @@ func (o InventoryFundedDiscoveryV1) Complete(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.completed = nativeErr == nil && head.Disposition == "OBSERVED"
-	if s.completed && (s.permit.schema == InventorySelectedHeadVersionV1 || s.permit.schema == InventoryResumeHeadVersionV1) {
+	if s.completed && (s.permit.schema == InventorySelectedHeadVersionV1 || InventoryResumableHeadV1(s.permit.schema)) {
 		s.completedParent = bytes.Clone(raw)
 	}
 	s.mu.Unlock()

@@ -19,7 +19,13 @@ const InventorySelectedHeadVersionV1 = "lsp-trace.durable-inventory-head.v6"
 const InventorySelectedConfigVersionV1 = "lsp-trace.inventory-owned-config.v4"
 
 func inventoryParentLimitV1(schema string) uint64 {
-	if schema == InventoryResumeHeadVersionV1 {
+	if schema == InventoryReferenceHeadVersionV1 {
+		return cat.InventoryReferenceLimitV1
+	}
+	if schema == InventoryConnectedHeadVersionV1 {
+		return cat.InventoryConnectedLimitV1
+	}
+	if InventoryResumableHeadV1(schema) {
 		return cat.InventoryResumeLimitV1
 	}
 	if schema == InventorySelectedHeadVersionV1 {
@@ -28,7 +34,13 @@ func inventoryParentLimitV1(schema string) uint64 {
 	return 64 << 20
 }
 func inventoryNativeConfigVersionMatchesV1(head, config string, p *InventorySelectedProfileV1) bool {
-	if head == InventoryResumeHeadVersionV1 {
+	if head == InventoryReferenceHeadVersionV1 {
+		return config == InventoryReferenceConfigVersionV1 && p != nil && p.Valid()
+	}
+	if head == InventoryConnectedHeadVersionV1 {
+		return config == InventoryConnectedConfigVersionV1 && p != nil && p.Valid()
+	}
+	if InventoryResumableHeadV1(head) {
 		return config == InventoryResumeConfigVersionV1 && p != nil && p.Valid()
 	}
 	if head == InventorySelectedHeadVersionV1 {
@@ -154,10 +166,10 @@ func OpenInventoryFundedSelectedV1(ctx context.Context, proof publication.BoundF
 		return bad()
 	}
 	h, fields, e := inventoryParentDecodeV1(after)
-	if e != nil || (h.Schema != InventorySelectedHeadVersionV1 && h.Schema != InventoryResumeHeadVersionV1) || old.Schema != h.Schema || old.Native == nil || !old.Native.Valid() || old.Native.Outcome != "OBSERVED" || old.Selected != nil || h.Selected == nil || !h.Selected.Valid() || h.Selected.Outcome != "CLAIMED" || h.Selected.RunID != h.RunID || h.Selected.ParentHead != cat.NativeDigestV3(before) || selector != "inventory-run-"+h.RunID+".json" || old.Phase != "NativeAcquisition" || old.Status != "PARTIAL" || h.Phase != "SelectedAdmission" || h.Status != "CLAIMED" || h.Limit != inventoryParentLimitV1(h.Schema) || h.Used != old.Used+InventorySelectedControlForHeadV1(h.Schema) || h.Used > h.Limit || h.Work != h.Used*32 || h.Packets != old.Packets+1 || h.Deadline != h.Selected.Deadline || h.Deadline != old.Native.Binding.Deadline.UnixNano() || !hashV2("sha256:"+h.TaskID) || ctx == nil || ctx.Err() != nil || !time.Now().Before(old.Native.Binding.Deadline) {
+	if e != nil || (h.Schema != InventorySelectedHeadVersionV1 && !InventoryResumableHeadV1(h.Schema)) || old.Schema != h.Schema || old.Native == nil || !old.Native.Valid() || old.Native.Outcome != "OBSERVED" || old.Selected != nil || h.Selected == nil || !h.Selected.Valid() || h.Selected.Outcome != "CLAIMED" || h.Selected.RunID != h.RunID || h.Selected.ParentHead != cat.NativeDigestV3(before) || selector != "inventory-run-"+h.RunID+".json" || old.Phase != "NativeAcquisition" || old.Status != "PARTIAL" || h.Phase != "SelectedAdmission" || h.Status != "CLAIMED" || h.Limit != inventoryParentLimitV1(h.Schema) || h.Used != old.Used+InventorySelectedControlForHeadV1(h.Schema) || h.Used > h.Limit || h.Work != h.Used*32 || h.Packets != old.Packets+1 || h.Deadline != h.Selected.Deadline || h.Deadline != old.Native.Binding.Deadline.UnixNano() || !hashV2("sha256:"+h.TaskID) || ctx == nil || ctx.Err() != nil || !time.Now().Before(old.Native.Binding.Deadline) {
 		return bad()
 	}
-	if h.Schema == InventoryResumeHeadVersionV1 && (h.Selected.Schema != "lsp-trace.inventory-selected-claim.v2" || h.Selected.Ordinal != old.Native.Ordinal || h.Selected.Ordinal != h.Sequence) {
+	if InventoryResumableHeadV1(h.Schema) && (h.Selected.Schema != "lsp-trace.inventory-selected-claim.v2" || h.Selected.Ordinal != old.Native.Ordinal || h.Selected.Ordinal != h.Sequence) {
 		return bad()
 	}
 	for _, k := range []string{"Selected", "Phase", "Status", "Deadline", "TaskID", "Used", "Work", "Packets"} {

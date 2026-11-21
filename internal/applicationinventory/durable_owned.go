@@ -82,33 +82,42 @@ type ownedAdmissionOperation struct {
 }
 
 func ownedPhase(h durableInventoryHead) bool {
-	if h.Schema == is.InventoryResumeHeadVersionV1 {
+	if is.InventoryConnectedHead(h.Schema) {
+		return h.Closure == nil || h.Phase == "Sealing"
+	}
+	if is.InventoryResumableHeadV1(h.Schema) {
 		return true
 	}
 	if h.Schema == is.InventorySelectedHeadVersionV1 {
 		return true
 	} // closed validator below rejects unknown phases
-	return (h.Schema == ownedHeadVersion || h.Schema == is.InventoryNativeHeadVersionV1) && (h.Schema == is.InventoryNativeHeadVersionV1 && h.Phase == "NativeAcquisition" || h.Phase == "Creating" || h.Phase == "Collecting" || h.Phase == "Sealing" || h.Phase == "Enumerating" || h.Phase == "ReadyForAcquisition" || h.Phase == "EnumerationPartial")
+	return (h.independentTaskLeases() || h.Schema == is.InventoryNativeHeadVersionV1) && (h.Schema == is.InventoryNativeHeadVersionV1 && h.Phase == "NativeAcquisition" || h.Phase == "Creating" || h.Phase == "Collecting" || h.Phase == "Sealing" || h.Phase == "Enumerating" || h.Phase == "ReadyForAcquisition" || h.Phase == "EnumerationPartial")
 }
 func (h durableInventoryHead) operationDeadline() int64 {
-	if h.Schema == ownedHeadVersion {
+	if h.independentTaskLeases() {
 		return h.Deadline
 	}
 	return min(h.Deadline, h.RunDeadline)
 }
 func (h durableInventoryHead) budgetDeadline() int64 {
-	if h.Schema == ownedHeadVersion {
+	if h.independentTaskLeases() {
 		return h.Deadline
 	}
 	return h.RunDeadline
 }
 func validInventoryDeadlines(h durableInventoryHead) bool {
-	if h.Schema == ownedHeadVersion {
+	if h.independentTaskLeases() {
 		return h.RunDeadline == 0 && h.Deadline > 0 && h.AcceptanceDeadline > 0
 	}
 	return h.RunDeadline > h.Issued && h.RunDeadline-h.Issued <= int64(180*time.Second) && h.Deadline <= h.RunDeadline && h.AcceptanceDeadline <= h.RunDeadline
 }
 func ownedConfigValid(c OwnedInventoryConfig) bool {
+	if c.Schema == is.InventoryReferenceConfigVersionV1 {
+		return referenceConfigValid(c)
+	}
+	if c.Schema == is.InventoryConnectedConfigVersionV1 {
+		return connectedConfigValid(c)
+	}
 	if c.Schema == is.InventoryResumeConfigVersionV1 {
 		return resumeConfigValidV1(c)
 	}
@@ -158,7 +167,10 @@ func ownedConfigValid(c OwnedInventoryConfig) bool {
 	return true // Encoded-length quote and funding are validated before effects.
 }
 func ownedHeadValid(h durableInventoryHead) bool {
-	if h.Schema == is.InventoryResumeHeadVersionV1 {
+	if is.InventoryConnectedHead(h.Schema) {
+		return connectedAcquisitionValid(h)
+	}
+	if is.InventoryResumableHeadV1(h.Schema) {
 		return resumeHeadValidV1(h)
 	}
 	if h.Checkpoint != nil || h.Native != nil && h.Native.Schema != "lsp-trace.inventory-native-claim.v1" || h.Selected != nil && h.Selected.Schema != "lsp-trace.inventory-selected-claim.v1" {
@@ -232,7 +244,7 @@ func (s DurableStore) JobStatus(ctx context.Context, run string) (result Invento
 	if e != nil {
 		return InventoryJobStatus{}, e
 	}
-	if ctx == nil || ctx.Err() != nil || (h.Schema != ownedHeadVersion && h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && h.Schema != is.InventoryResumeHeadVersionV1) {
+	if ctx == nil || ctx.Err() != nil || (!h.independentTaskLeases() && h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && !is.InventoryResumableHeadV1(h.Schema)) {
 		return InventoryJobStatus{}, ErrDurableInventory
 	}
 	status := h.Status
@@ -262,11 +274,11 @@ func (s DurableStore) JobStatus(ctx context.Context, run string) (result Invento
 		}
 		result.Enumeration = &enumeration
 	}
-	if h.Schema == is.InventorySelectedHeadVersionV1 || h.Schema == is.InventoryResumeHeadVersionV1 {
+	if h.Schema == is.InventorySelectedHeadVersionV1 || is.InventoryResumableHeadV1(h.Schema) {
 		result.Selected = h.Selected
 		result.Checkpoint = h.Checkpoint
 	}
-	if h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || h.Schema == is.InventoryResumeHeadVersionV1 {
+	if h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || is.InventoryResumableHeadV1(h.Schema) {
 		result.Schema = "lsp-trace.inventory-job-status.v3"
 		result.Native = h.Native
 	}
@@ -340,11 +352,13 @@ func (s DurableStore) Admit(ctx context.Context, op AdmissionReservation, r sc.P
 	defer cancel()
 	var b *cat.CallerBudgetV3
 	var e error
-	if h.Schema == is.InventorySelectedHeadVersionV1 || h.Schema == is.InventoryResumeHeadVersionV1 {
+	if h.Schema == is.InventorySelectedHeadVersionV1 || is.InventoryResumableHeadV1(h.Schema) {
 		if h.Selected == nil || h.Selected.Outcome != "OBSERVED" || !r.InventoryAccountingMatchesV1(h.Selected.Accounting) || time.Now().UnixNano() >= h.Selected.Deadline {
 			return InventoryJobStatus{}, ErrDurableInventory
 		}
-		if h.Schema == is.InventoryResumeHeadVersionV1 {
+		if h.Schema == is.InventoryReferenceHeadVersionV1 {
+			b, e = cat.NewInventoryReferenceBudgetV1(time.Unix(0, h.Deadline), o.config.AdmissionBytes, h.Used-o.config.AdmissionBytes, 0)
+		} else if is.InventoryResumableHeadV1(h.Schema) {
 			b, e = cat.NewInventoryAdmissionBudgetV5(time.Unix(0, h.Deadline), o.config.AdmissionBytes, h.Used-o.config.AdmissionBytes)
 		} else {
 			b, e = cat.NewInventoryAdmissionBudgetV4(time.Unix(0, h.Deadline), o.config.AdmissionBytes, h.Used-o.config.AdmissionBytes)
@@ -364,11 +378,18 @@ func (s DurableStore) Admit(ctx context.Context, op AdmissionReservation, r sc.P
 	pins := o.config.Pins
 	pins.PromptSHA256 = "sha256:" + q.Envelope.InputSHA256
 	lead := fmt.Sprintf("%s-%06d", h.RunID, o.binding.Index)
-	ref, payload, e := sc.RetainInventoryEvidence(ctx, s.Root, h.RunID, lead, r, sc.CallerDescribeBindingV3{AttemptID: lead, Interpreter: o.config.Interpreter, Pins: pins, Deadline: time.Unix(0, h.Deadline), Limits: o.config.ResponseLimits, Budget: b})
+	retain := sc.RetainInventoryEvidence
+	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+		retain = sc.RetainInventoryReferenceEvidenceV1
+	}
+	ref, payload, e := retain(ctx, s.Root, h.RunID, lead, r, sc.CallerDescribeBindingV3{AttemptID: lead, Interpreter: o.config.Interpreter, Pins: pins, Deadline: time.Unix(0, h.Deadline), Limits: o.config.ResponseLimits, Budget: b})
 	if e != nil {
 		return InventoryJobStatus{}, e
 	}
-	if h.Schema == is.InventoryResumeHeadVersionV1 && ref.Bytes > 8<<20 {
+	if is.InventoryConnectedHead(h.Schema) && (ref.Bytes > cat.InventoryConnectedEvidenceV1 || payload > cat.InventoryConnectedPayloadV1) {
+		return InventoryJobStatus{}, ErrDurableInventory
+	}
+	if is.InventoryResumableHeadV1(h.Schema) && ref.Bytes > 8<<20 {
 		return InventoryJobStatus{}, ErrDurableInventory
 	}
 	retained := h.OutputBytes + uint64(ref.Bytes)
@@ -376,7 +397,7 @@ func (s DurableStore) Admit(ctx context.Context, op AdmissionReservation, r sc.P
 	if retained > o.config.MaxAdmittedEvidenceBytes {
 		return InventoryJobStatus{}, ErrDurableInventory
 	}
-	node := ownedAdmissionRecord{Schema: "lsp-trace.inventory-admission.v2", RunID: h.RunID, LeadID: lead, Index: h.Sequence, Previous: h.Input, Evidence: ref, Binding: o.binding, Payload: payload, AdmittedEvidenceBytes: retained}
+	node := ownedAdmissionRecord{Schema: h.admissionSchema(), RunID: h.RunID, LeadID: lead, Index: h.Sequence, Previous: h.Input, Evidence: ref, Binding: o.binding, Payload: payload, AdmittedEvidenceBytes: retained}
 	raw, e := json.Marshal(node)
 	if e != nil || b.Reserve(ctx, uint64(len(raw))*16+32768) != nil {
 		return InventoryJobStatus{}, ErrDurableInventory
@@ -396,11 +417,11 @@ func (s DurableStore) Admit(ctx context.Context, op AdmissionReservation, r sc.P
 		h.Phase = "Admitted"
 		h.Status = "PARTIAL"
 	}
-	if h.Schema == is.InventoryResumeHeadVersionV1 {
+	if is.InventoryResumableHeadV1(h.Schema) {
 		h.Phase, h.Status = "Admitted", "PARTIAL"
 		if h.Sequence == 1 {
 			cp := &is.InventoryCheckpointV1{Native: *h.Native, Selected: *h.Selected, Admission: record, Evidence: ref, Used: h.Used, OutputBytes: retained}
-			if is.VerifyInventoryCheckpointV1(ctx, s.Root, h.RunID, *cp) != nil {
+			if is.VerifyInventoryCheckpointForHeadV1(ctx, s.Root, h.Schema, h.RunID, *cp) != nil {
 				return InventoryJobStatus{}, ErrDurableInventory
 			}
 			h.Checkpoint = cp
@@ -422,7 +443,14 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 	if e != nil {
 		return bad(e)
 	}
-	if ctx == nil || ctx.Err() != nil || h.Schema == is.InventorySelectedHeadVersionV1 || !ownedPhase(h) || h.Phase != "Collecting" || h.Status != "READY" || h.Sequence < 1 || cat.NativeDigestV3(old) != expectedHead || ownedSealCost > h.Limit-h.Used {
+	connected := is.InventoryConnectedHead(h.Schema)
+	sealCost := ownedSealCost
+	eligible := h.Phase == "Collecting" && h.Status == "READY"
+	if connected {
+		sealCost = h.connectedSealBytes()
+		eligible = h.Phase == "Admitted" && h.Status == "PARTIAL" && h.Sequence == 2 && h.Closure == nil
+	}
+	if ctx == nil || ctx.Err() != nil || h.Schema == is.InventorySelectedHeadVersionV1 || !ownedPhase(h) || !eligible || h.Sequence < 1 || cat.NativeDigestV3(old) != expectedHead || sealCost > h.Limit-h.Used {
 		return bad(ErrDurableInventory)
 	}
 	c, e := s.ownedConfig(h)
@@ -437,6 +465,9 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 	}
 	count := h.Sequence
 	last := h.Input
+	if connected {
+		h.Closure = &connectedClosureV1{Head: ownedConfigReference(old), Used: h.Used}
+	}
 	h.Phase = "Sealing"
 	h.Status = "CLAIMED"
 	h.TaskID, e = newDurableID()
@@ -444,7 +475,7 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 		return bad(e)
 	}
 	h.Deadline = time.Now().Add(c.OperationWindow).UnixNano()
-	h.Used += ownedSealCost
+	h.Used += sealCost
 	h.Work = h.Used * 32
 	h.Packets++
 	ctx, cancel := context.WithDeadline(ctx, time.Unix(0, h.Deadline))
@@ -453,15 +484,26 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 	if e != nil {
 		return bad(e)
 	}
-	b, e := cat.NewReservedCallerBudgetV3(time.Unix(0, h.Deadline), ownedSealCost, h.Used-ownedSealCost, 0)
+	b, e := h.sliceBudget(time.Unix(0, h.Deadline), sealCost, h.Used-sealCost, 0)
 	if e != nil {
 		return bad(e)
+	}
+	var connectedGaps []string
+	if connected {
+		connectedGaps, e = s.verifyConnectedAdmissions(ctx, h, old)
+		if e != nil {
+			return bad(fmt.Errorf("connected admission verification: %w", e))
+		}
 	}
 	if b.Reserve(ctx, uint64(count)*32768+32768) != nil {
 		return bad(ErrDurableInventory)
 	}
 	leads := make([]Lead, count)
 	refs := make([]publication.StoredObject, count)
+	var admissionRefs []publication.StoredObject
+	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+		admissionRefs = make([]publication.StoredObject, count)
+	}
 	payloads := make([]uint64, count)
 	retained := h.OutputBytes
 	for i := count - 1; i >= 0; i-- {
@@ -470,10 +512,13 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 		}
 		raw, e := publication.ReadObject(s.Root, "inventory-admission-", last)
 		var n ownedAdmissionRecord
-		if e != nil || strictInventory(raw, &n) != nil || n.Schema != "lsp-trace.inventory-admission.v2" || n.RunID != run || n.Index != i || n.Binding.Index != i || n.LeadID != fmt.Sprintf("%s-%06d", run, i) || !n.Evidence.Valid() || n.Payload == 0 || n.AdmittedEvidenceBytes != retained || uint64(n.Evidence.Bytes) > retained {
+		if e != nil || strictInventory(raw, &n) != nil || n.Schema != h.admissionSchema() || n.RunID != run || n.Index != i || n.Binding.Index != i || n.LeadID != fmt.Sprintf("%s-%06d", run, i) || !n.Evidence.Valid() || n.Payload == 0 || n.AdmittedEvidenceBytes != retained || uint64(n.Evidence.Bytes) > retained {
 			return bad(ErrDurableInventory)
 		}
 		retained -= uint64(n.Evidence.Bytes)
+		if admissionRefs != nil {
+			admissionRefs[i] = last
+		}
 		leads[i] = Lead{n.LeadID, n.Binding.Provenance}
 		refs[i] = n.Evidence
 		payloads[i] = n.Payload
@@ -488,6 +533,9 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 	if h.Enumeration != nil {
 		gaps = []string{"ENUMERATED_METADATA_REQUIRES_NATIVE_REVALIDATION_AND_COVERAGE"}
 	}
+	if connected {
+		gaps = connectedGaps
+	}
 	report, cost, e := admitInventoryManifest(ctx, Request{Manifest: Manifest{Scope: c.Scope, Provenance: c.Provenance, Leads: leads, UntouchedGaps: gaps}, MaxNativeAttempts: count}, b, report)
 	if e != nil {
 		return bad(e)
@@ -496,11 +544,20 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 		report.Dispositions[i] = Disposition{leads[i].ID, "PREPARED", "DESCRIBE_PENDING"}
 		recordInventoryStage(&report, "native_preparation", true)
 	}
-	v := durableInventoryState{Schema: "lsp-trace.inventory-state.v2", RunID: run, Interpreter: c.Interpreter, Reviewer: c.Policy.Reviewer, Policy: c.Policy, Report: report, Prepared: refs, Descriptions: []publication.StoredObject{}, ManifestCost: cost}
+	v := durableInventoryState{Schema: "lsp-trace.inventory-state.v2", RunID: run, Interpreter: c.Interpreter, Reviewer: c.Policy.Reviewer, Policy: c.Policy, Report: report, Prepared: refs, PreparedAdmissions: admissionRefs, Descriptions: []publication.StoredObject{}, ManifestCost: cost}
+	if connected {
+		raw, err := json.Marshal(v)
+		if err != nil || len(raw) > cat.InventoryConnectedStateV1 || cost > h.manifestLimit() {
+			return bad(fmt.Errorf("connected state bounds bytes=%d manifest=%d: %w", len(raw), cost, ErrDurableInventory))
+		}
+	}
 	h.State, e = s.saveState(ctx, v, b)
 	if e != nil {
 		return bad(e)
 	}
+	if connected {
+		h.Native, h.Selected, h.Checkpoint = nil, nil, nil
+	} // immutable closure retains acquisition provenance
 	h.Phase = "Describe"
 	h.Sequence = 0
 	h.TaskID = ""
@@ -517,6 +574,7 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 		return bad(e)
 	}
 	h.Completion, e = quoteDurableCompletion(refs, h.State.Bytes, cost, c.ResponseLimits, payloads)
+	h.referenceCompletion(&h.Completion)
 	h.Completion.PreparationUsed = h.Used
 	if e != nil {
 		return bad(e)

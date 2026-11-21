@@ -393,7 +393,7 @@ func (s DurableStore) inspectEnumerationAt(ctx context.Context, h durableInvento
 		return out, ErrDurableInventory
 	}
 	expectedSequence := 0
-	if h.Schema == is.InventoryResumeHeadVersionV1 && h.Checkpoint != nil && h.Phase == "ReadyForAcquisition" {
+	if is.InventoryResumableHeadV1(h.Schema) && h.Checkpoint != nil && h.Phase == "ReadyForAcquisition" {
 		minimum += is.InventoryNativeControlForHeadV1(h.Schema) + is.InventorySelectedControlForHeadV1(h.Schema)
 		minimumPackets += 2
 		expectedSequence = 1

@@ -86,10 +86,10 @@ func (s DurableStore) NativeDiscoveryBatchV1(ctx context.Context, run, expectedH
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	h, raw, e := s.headContext(ctx, run)
-	if e != nil || (h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && h.Schema != is.InventoryResumeHeadVersionV1) || h.Status != "READY" || h.Phase != "ReadyForAcquisition" || h.Native != nil || cat.NativeDigestV3(raw) != expectedHead || h.Enumeration == nil || h.Enumeration.Batches != 1 {
+	if e != nil || (h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && !is.InventoryResumableHeadV1(h.Schema)) || h.Status != "READY" || h.Phase != "ReadyForAcquisition" || h.Native != nil || cat.NativeDigestV3(raw) != expectedHead || h.Enumeration == nil || h.Enumeration.Batches != 1 {
 		return InventoryNativeBatchV1{}, ErrDurableInventory
 	}
-	if h.Schema == is.InventoryResumeHeadVersionV1 && s.verifyResumeCheckpointV1(ctx, h) != nil {
+	if is.InventoryResumableHeadV1(h.Schema) && s.verifyResumeCheckpointV1(ctx, h) != nil {
 		return InventoryNativeBatchV1{}, ErrDurableInventory
 	}
 	return s.nativeBatchAt(ctx, h, expectedHead)
@@ -109,7 +109,7 @@ func (s DurableStore) nativeBatchAt(ctx context.Context, h durableInventoryHead,
 		return InventoryNativeBatchV1{}, ErrDurableInventory
 	}
 	batch := InventoryNativeBatchV1{RunID: h.RunID, Head: head, Workspace: config.Scope, PlanIdentity: cat.NativeDigestV3([]byte("inventory-native-plan.v1/" + h.RunID + "/" + h.Enumeration.Last)), DenominatorDigest: "sha256:" + h.Enumeration.Last, Policy: h.Enumeration.Policy + "/" + h.State.ID, Counts: status.Counts, UnknownRemainder: status.UnknownRemainder}
-	if h.Schema == is.InventoryResumeHeadVersionV1 {
+	if is.InventoryResumableHeadV1(h.Schema) {
 		batch.Ordinal = h.Sequence
 	}
 	supported := 0
@@ -118,10 +118,10 @@ func (s DurableStore) nativeBatchAt(ctx context.Context, h durableInventoryHead,
 			continue
 		}
 		supported++
-		if h.Schema == is.InventoryResumeHeadVersionV1 && supported > 17 {
+		if is.InventoryResumableHeadV1(h.Schema) && supported > 17 {
 			return InventoryNativeBatchV1{}, ErrDurableInventory
 		}
-		if h.Schema != is.InventoryResumeHeadVersionV1 && len(batch.Members) == 16 {
+		if !is.InventoryResumableHeadV1(h.Schema) && len(batch.Members) == 16 {
 			break
 		}
 		language := r.LanguageID
@@ -134,7 +134,7 @@ func (s DurableStore) nativeBatchAt(ctx context.Context, h durableInventoryHead,
 		path := filepath.Join(config.Scope, r.Path)
 		batch.Members = append(batch.Members, sessionruntime.PrivateDiscoveryMember{Path: path, URI: (&url.URL{Scheme: "file", Path: path}).String(), LanguageID: language})
 	}
-	if h.Schema == is.InventoryResumeHeadVersionV1 {
+	if is.InventoryResumableHeadV1(h.Schema) {
 		if supported != 17 {
 			return InventoryNativeBatchV1{}, ErrDurableInventory
 		}
@@ -159,10 +159,10 @@ func (s DurableStore) ReserveNativeDiscoveryV1(ctx context.Context, run, expecte
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	h, old, e := s.headContext(ctx, run)
-	if e != nil || (h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && h.Schema != is.InventoryResumeHeadVersionV1) || h.Phase != "ReadyForAcquisition" || h.Status != "READY" || h.Native != nil || cat.NativeDigestV3(old) != expectedHead || h.Enumeration == nil || h.Enumeration.Batches != 1 {
+	if e != nil || (h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && !is.InventoryResumableHeadV1(h.Schema)) || h.Phase != "ReadyForAcquisition" || h.Status != "READY" || h.Native != nil || cat.NativeDigestV3(old) != expectedHead || h.Enumeration == nil || h.Enumeration.Batches != 1 {
 		return bad()
 	}
-	if h.Schema == is.InventoryResumeHeadVersionV1 && s.verifyResumeCheckpointV1(ctx, h) != nil {
+	if is.InventoryResumableHeadV1(h.Schema) && s.verifyResumeCheckpointV1(ctx, h) != nil {
 		return bad()
 	}
 	batch, e := s.nativeBatchAt(ctx, h, expectedHead)
@@ -179,7 +179,7 @@ func (s DurableStore) ReserveNativeDiscoveryV1(ctx context.Context, run, expecte
 	}
 	binding := is.PrivateDiscoveryBindingV2{Revision: "e1b9c3b13ace77cd015ebe0f6c4bfe63d970ba73", PlanIdentity: batch.PlanIdentity, DenominatorDigest: batch.DenominatorDigest, MemberDigest: members, Workspace: batch.Workspace, RuntimeFingerprint: runtime, Ordinal: 0, Deadline: c.Deadline, Limits: c.Limits}
 	claim := &is.InventoryNativeClaimV1{Schema: "lsp-trace.inventory-native-claim.v1", RunID: run, ParentHead: expectedHead, ChildNamespace: "inventory-native-" + run + "-000000", Policy: batch.Policy, Ordinal: 0, Binding: binding, Members: append([]sessionruntime.PrivateDiscoveryMember(nil), batch.Members...), Profile: *config.NativeProfile, Allocated: config.NativeProfile.Allocation, Outcome: "CLAIMED"}
-	if h.Schema == is.InventoryResumeHeadVersionV1 {
+	if is.InventoryResumableHeadV1(h.Schema) {
 		claim.Schema = "lsp-trace.inventory-native-claim.v2"
 		claim.Ordinal, claim.Binding.Ordinal = batch.Ordinal, batch.Ordinal
 		claim.ChildNamespace = is.InventoryNamespaceV1("native", run, batch.Ordinal)

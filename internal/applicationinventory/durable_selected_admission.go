@@ -111,7 +111,7 @@ func (s DurableStore) continueSelectedAdmissionV1(ctx context.Context, run, expe
 		return fail(ErrDurableInventory)
 	}
 	h, old, e := s.headContext(ctx, run)
-	if e != nil || (h.Schema != is.InventorySelectedHeadVersionV1 && h.Schema != is.InventoryResumeHeadVersionV1) || h.Native == nil || h.Native.Outcome != "OBSERVED" || h.Selected != nil || h.Status != "PARTIAL" || h.Phase != "NativeAcquisition" || cat.NativeDigestV3(old) != expected || index < 0 || index >= 128 || config.RunID != run || config.ExpectedSourceAuthorization != h.Native.Binding.DenominatorDigest {
+	if e != nil || (h.Schema != is.InventorySelectedHeadVersionV1 && !is.InventoryResumableHeadV1(h.Schema)) || h.Native == nil || h.Native.Outcome != "OBSERVED" || h.Selected != nil || h.Status != "PARTIAL" || h.Phase != "NativeAcquisition" || cat.NativeDigestV3(old) != expected || index < 0 || index >= 128 || config.RunID != run || config.ExpectedSourceAuthorization != h.Native.Binding.DenominatorDigest {
 		return fail(ErrDurableInventory)
 	}
 	ctx, cancel := context.WithDeadline(ctx, h.Native.Binding.Deadline)
@@ -128,7 +128,7 @@ func (s DurableStore) continueSelectedAdmissionV1(ctx context.Context, run, expe
 		return fail(ErrDurableInventory)
 	}
 	h.Selected = &is.InventorySelectedClaimV1{Schema: "lsp-trace.inventory-selected-claim.v1", RunID: run, ParentHead: expected, Namespace: "inventory-selected-" + run + "-000000", Configuration: digest, Index: index, Deadline: h.Native.Binding.Deadline.UnixNano(), Profile: *c.SelectedProfile, Allocated: c.SelectedProfile.Allocation, Outcome: "CLAIMED"}
-	if h.Schema == is.InventoryResumeHeadVersionV1 {
+	if is.InventoryResumableHeadV1(h.Schema) {
 		h.Selected.Schema = "lsp-trace.inventory-selected-claim.v2"
 		h.Selected.Ordinal = h.Native.Ordinal
 		h.Selected.Namespace = is.InventoryNamespaceV1("selected", run, h.Native.Ordinal)

@@ -40,6 +40,20 @@ func TestInventoryResumeProcess(t *testing.T) {
 		t.Skip("explicit pipe-only child")
 	}
 	dir, run, mode := os.Args[n-3], os.Args[n-2], os.Args[n-1]
+	references := strings.HasPrefix(mode, "references-")
+	mode = strings.TrimPrefix(mode, "references-")
+	connected := references || strings.HasPrefix(mode, "connected-")
+	mode = strings.TrimPrefix(mode, "connected-")
+	externalActors := references && strings.HasPrefix(mode, "actors-")
+	mode = strings.TrimPrefix(mode, "actors-")
+	shape := ""
+	for _, candidate := range []string{"duplicate", "overflow", "empty", "null"} {
+		if references && strings.HasPrefix(mode, candidate+"-") {
+			shape = candidate
+			mode = strings.TrimPrefix(mode, candidate+"-")
+			break
+		}
+	}
 	tmp, e := filepath.EvalSymlinks(os.TempDir())
 	if e != nil {
 		t.Fatal(e)
@@ -78,13 +92,31 @@ func TestInventoryResumeProcess(t *testing.T) {
 		t.Log("REOPEN_REFUSED: PASS")
 		return
 	}
-	f, e := sessionruntime.NewControlledInventoryPipeFixture(source)
+	fixture := sessionruntime.NewControlledInventoryPipeFixture
+	if shape != "" {
+		fixture = func(path string) (*sessionruntime.ControlledInventoryPipeFixture, error) {
+			return sessionruntime.NewControlledInventoryReferenceShapeFixture(path, shape)
+		}
+	}
+	f, e := fixture(source)
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer f.Close(context.Background())
 	if mode == "first" {
-		cfg, e := ResumableAdmissionConfigV1(scopejob.Config{Workspace: source, Roots: []string{"."}, Profile: "gopls", Language: "go", Budget: scopejob.DefaultBudget()}, ownedTestConfig())
+		constructor := ResumableAdmissionConfigV1
+		admission := ownedTestConfig()
+		if connected {
+			constructor = ConnectedAdmissionConfigV1
+			admission.Policy.ReviewMode = cat.ReviewModeSameThreadV3 // deterministic plumbing, never a fabricated subagent judgment
+		}
+		if references {
+			constructor = ReferenceAdmissionConfigV1
+			if externalActors {
+				admission.Policy.ReviewMode = ""
+			} // no authored-independence claim; external evidence must establish it
+		}
+		cfg, e := constructor(scopejob.Config{Workspace: source, Roots: []string{"."}, Profile: "gopls", Language: "go", Budget: scopejob.DefaultBudget()}, admission)
 		if e != nil {
 			t.Fatal("config", e)
 		}
@@ -98,31 +130,31 @@ func TestInventoryResumeProcess(t *testing.T) {
 		}
 		run = st.RunID
 	}
-	shape, _, shapeErr := s.head(run)
+	headShape, _, shapeErr := s.head(run)
 	if shapeErr != nil {
 		t.Fatal(shapeErr)
 	}
 	if mode == "first" {
-		bad := shape
-		bad.Input = shape.State
+		bad := headShape
+		bad.Input = headShape.State
 		if ownedHeadValid(bad) {
 			t.Fatal("UNEXPECTED_INITIAL_FIELDS")
 		}
-		bad = shape
+		bad = headShape
 		bad.OutputBytes = 1
 		if ownedHeadValid(bad) {
 			t.Fatal("UNEXPECTED_INITIAL_FIELDS")
 		}
 	} else {
-		terminal := shape
-		terminal.Native, terminal.Selected = &shape.Checkpoint.Native, &shape.Checkpoint.Selected
+		terminal := headShape
+		terminal.Native, terminal.Selected = &headShape.Checkpoint.Native, &headShape.Checkpoint.Selected
 		terminal.Checkpoint = nil
 		terminal.Phase, terminal.Status = "Admitted", "PARTIAL"
 		if ownedHeadValid(terminal) {
 			t.Fatal("MISSING_TERMINAL_CHECKPOINT")
 		}
 		for _, change := range []func(*durableInventoryHead){func(h *durableInventoryHead) { h.Checkpoint = nil }, func(h *durableInventoryHead) { h.Used-- }, func(h *durableInventoryHead) { h.Work-- }, func(h *durableInventoryHead) { h.Sequence = 0 }, func(h *durableInventoryHead) { h.Schema = is.InventorySelectedHeadVersionV1 }, func(h *durableInventoryHead) { h.Input = h.Checkpoint.Evidence }} {
-			bad := shape
+			bad := headShape
 			change(&bad)
 			if ownedHeadValid(bad) {
 				t.Fatal("INVALID_CHECKPOINT_SHAPE")
@@ -237,8 +269,28 @@ func TestInventoryResumeProcess(t *testing.T) {
 		if e != nil {
 			return e
 		}
-		if len(refs) != 1 || refs[0].URI == queryURI {
+		wantRefs := 1
+		switch shape {
+		case "duplicate":
+			wantRefs = 2
+		case "overflow":
+			wantRefs = 9
+		case "empty", "null":
+			wantRefs = 0
+		}
+		if len(refs) != wantRefs || len(refs) > 0 && refs[0].URI == queryURI {
 			return errors.New("missing genuine cross-file R")
+		}
+		if connected {
+			wantTarget := "/query-17.go"
+			if ordinal == 1 {
+				wantTarget = "/query-01.go"
+			}
+			if len(refs) > 0 && !strings.HasSuffix(refs[0].URI, wantTarget) {
+				return errors.New("missing actual cross-batch R target")
+			}
+			observed, _ := json.Marshal(refs)
+			t.Logf("ORIGINAL_CROSS_BATCH_R ordinal=%d query=%s targets=%s", ordinal, queryURI, observed)
 		}
 		return nil
 	})
@@ -264,7 +316,16 @@ func TestInventoryResumeProcess(t *testing.T) {
 		t.Fatal(e)
 	}
 	config := inventorySelectedConfigTest(t, run, batch.DenominatorDigest)
-	if mode == "fail" {
+	if shape == "duplicate" || shape == "overflow" || shape == "empty" || shape == "null" {
+		if _, e = s.ContinueSelectedAdmissionV1(ctx, run, st.Head, d, index, config); e == nil {
+			t.Fatal("REFUSING_REFERENCE_SHAPE_ADMITTED", shape)
+		}
+		st, e = s.JobStatus(ctx, run)
+		if e != nil || st.Status != "PARTIAL_UNCERTAIN" || st.Admissions != 0 {
+			t.Fatal("REFERENCE_SHAPE_FAILURE_NOT_SPENT", st, e)
+		}
+		t.Log("REFERENCE_SHAPE_REFUSED " + shape)
+	} else if mode == "fail" {
 		_, e = s.continueSelectedAdmissionV1(ctx, run, st.Head, d, index, config, func(stage string) error {
 			if stage == "before-source" {
 				return errors.New("controlled second-batch source failure")
@@ -326,8 +387,10 @@ func TestInventoryResumeProcess(t *testing.T) {
 			t.Fatal("DUPLICATE_ADMISSION")
 		}
 	}
-	if _, e = s.Seal(ctx, run, st.Head); e == nil {
-		t.Fatal("SEAL_AVAILABLE")
+	if !connected || ordinal == 0 || mode == "fail" {
+		if _, e = s.Seal(ctx, run, st.Head); e == nil {
+			t.Fatal("SEAL_AVAILABLE")
+		}
 	}
 	if starts.Load() != 1 || count != want {
 		t.Fatal("GENUINE_ACQUISITION_COUNTS", starts.Load(), count)

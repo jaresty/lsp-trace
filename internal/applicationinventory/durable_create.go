@@ -33,6 +33,14 @@ const ownedCreateMinimum uint64 = 32*(ownedBootstrapMaxBytes+16384) + 32768
 // 32768 covers fixed IDs, descriptors and scalar bookkeeping. All multiplication
 // is range-checked before use; no future admission or semantic work is included.
 func ownedCreationReserve(c OwnedInventoryConfig) uint64 {
+	if c.Schema == is.InventoryReferenceConfigVersionV1 {
+		c.Schema = is.InventoryConnectedConfigVersionV1
+		return ownedCreationReserve(c) + 2*cat.InventoryReferenceRetentionV1 + cat.InventoryReferenceSealExtraV1 + cat.InventoryReferenceSemanticExtraV1
+	}
+	if c.Schema == is.InventoryConnectedConfigVersionV1 {
+		c.Schema = is.InventoryResumeConfigVersionV1
+		return ownedCreationReserve(c) + cat.InventoryConnectedSealBytesV1 + cat.InventoryConnectedDeliveryBytesV1
+	}
 	if c.Schema == is.InventoryResumeConfigVersionV1 {
 		return enumerationFixed + scopejob.BatchBytes + 2*(cat.InventoryNativeControlBytesV2+is.InventorySelectedControlForHeadV1(is.InventoryResumeHeadVersionV1))
 	}
@@ -59,7 +67,10 @@ func ownedCreationQuote(configBytes int) (uint64, error) {
 	return ownedCreateMinimum + 8*n, nil
 }
 func inventoryHeadLimit(h durableInventoryHead) int {
-	if (h.Schema == ownedHeadVersion || h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || h.Schema == is.InventoryResumeHeadVersionV1) && h.Phase == "Creating" {
+	if is.InventoryConnectedHead(h.Schema) && h.Phase == "Sealing" {
+		return ownedBootstrapMaxBytes
+	}
+	if (h.Schema == ownedHeadVersion || h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || is.InventoryResumableHeadV1(h.Schema)) && h.Phase == "Creating" {
 		return ownedBootstrapMaxBytes
 	}
 	return 16384
@@ -68,7 +79,7 @@ func ownedConfigReference(raw []byte) publication.StoredObject {
 	return publication.StoredObject{ID: cat.NativeDigestV3(raw)[7:], Bytes: len(raw)}
 }
 func ownedCreationValid(h durableInventoryHead) bool {
-	if (h.Schema != ownedHeadVersion && h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && h.Schema != is.InventoryResumeHeadVersionV1) || (h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || h.Schema == is.InventoryResumeHeadVersionV1) != (h.Creation != nil && h.Creation.Config.NativeProfile != nil) || (h.Schema == is.InventorySelectedHeadVersionV1 || h.Schema == is.InventoryResumeHeadVersionV1) != (h.Creation != nil && h.Creation.Config.SelectedProfile != nil) || h.Phase != "Creating" || h.Status != "CLAIMED" || h.Creation == nil || h.Creation.Model != ownedCreateModel || !validDurableID(h.RunID) || !ownedConfigValid(h.Creation.Config) || h.Issued <= 0 || h.Deadline <= h.Issued || h.Deadline-h.Issued > int64(h.Creation.Config.OperationWindow) {
+	if (h.Schema != ownedHeadVersion && h.Schema != is.InventoryNativeHeadVersionV1 && h.Schema != is.InventorySelectedHeadVersionV1 && !is.InventoryResumableHeadV1(h.Schema)) || (h.Schema == is.InventoryNativeHeadVersionV1 || h.Schema == is.InventorySelectedHeadVersionV1 || is.InventoryResumableHeadV1(h.Schema)) != (h.Creation != nil && h.Creation.Config.NativeProfile != nil) || (h.Schema == is.InventorySelectedHeadVersionV1 || is.InventoryResumableHeadV1(h.Schema)) != (h.Creation != nil && h.Creation.Config.SelectedProfile != nil) || h.Phase != "Creating" || h.Status != "CLAIMED" || h.Creation == nil || h.Creation.Model != ownedCreateModel || !validDurableID(h.RunID) || !ownedConfigValid(h.Creation.Config) || h.Issued <= 0 || h.Deadline <= h.Issued || h.Deadline-h.Issued > int64(h.Creation.Config.OperationWindow) {
 		return false
 	}
 	raw, e := json.Marshal(h.Creation.Config)
@@ -140,6 +151,12 @@ func (s DurableStore) createOwned(ctx context.Context, c OwnedInventoryConfig, r
 	}
 	if c.Schema == is.InventoryResumeConfigVersionV1 {
 		schema = is.InventoryResumeHeadVersionV1
+	}
+	if c.Schema == is.InventoryConnectedConfigVersionV1 {
+		schema = is.InventoryConnectedHeadVersionV1
+	}
+	if c.Schema == is.InventoryReferenceConfigVersionV1 {
+		schema = is.InventoryReferenceHeadVersionV1
 	}
 	h := durableInventoryHead{Schema: schema, RunID: run, TaskID: run, Phase: "Creating", Status: "CLAIMED", State: ownedConfigReference(raw), Issued: time.Now().UnixNano(), Deadline: deadline.UnixNano(), Used: quote, Work: quote * 32, Packets: 1, Limit: c.BudgetBytes, Creation: &ownedCreationIntent{Model: ownedCreateModel, Config: c}}
 	fail := func(err error) (InventoryJobStatus, error) {

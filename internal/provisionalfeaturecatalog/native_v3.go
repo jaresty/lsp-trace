@@ -27,6 +27,10 @@ type NativeSelectedRowV3 struct {
 	Seed                       uint64
 	Intent                     tp.PrivateSourceIntent
 }
+
+// Immutable admission-chain provenance, not source authority.
+type NativeInventoryAdmissionV1 struct{ RunID, LeadID, AdmissionSHA256, EvidenceSHA256, WitnessSHA256 string }
+
 type SelectedEvidenceV3 struct {
 	ID, HandoffID, CheckpointID, OriginalInputID, Interpreter, Origin, Execution string
 	Selected                                                                     NativeSelectedRowV3
@@ -34,6 +38,8 @@ type SelectedEvidenceV3 struct {
 	Request                                                                      describerequest.Record
 	Record                                                                       json.RawMessage
 	RawAdapterDigest                                                             string
+	OriginalReferences                                                           json.RawMessage             `json:",omitempty"`
+	InventoryAdmission                                                           *NativeInventoryAdmissionV1 `json:",omitempty"`
 }
 
 // censuscontinuation already imports this package. The interface avoids a
@@ -192,7 +198,10 @@ func buildNativeWithSealV3(ctx context.Context, budget NativeBudgetV3, actor str
 func nativeSealQuoteV3(w NativeCatalogWireV3) uint64 {
 	var n uint64 = 16384
 	for _, e := range w.Evidence {
-		n += uint64(len(e.Unit.Body)+len(e.Request.Envelope.Prompt)+len(e.Record))*24 + 32768
+		n += uint64(len(e.Unit.Body)+len(e.Request.Envelope.Prompt)+len(e.Record)+len(e.OriginalReferences))*24 + 32768
+		if e.InventoryAdmission != nil {
+			n += 24 * 1024
+		}
 	}
 	for _, g := range w.Groups {
 		n += uint64(len(g.ID)+len(g.Label)+len(g.Reason))*12 + uint64(len(g.Members))*1024

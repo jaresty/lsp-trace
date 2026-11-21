@@ -40,6 +40,7 @@ type ControlledInventoryPipeFixture struct {
 	started          [2]bool
 	stopping, closed bool
 	closeErr         error
+	referenceShape   string
 }
 
 type controlledInventoryDocument struct {
@@ -48,8 +49,9 @@ type controlledInventoryDocument struct {
 }
 
 type controlledInventoryProtocol struct {
-	documents [17]controlledInventoryDocument
-	opened    map[string]bool // private to the sole protocol goroutine
+	documents      [17]controlledInventoryDocument
+	opened         map[string]bool // private to the sole protocol goroutine
+	referenceShape string
 }
 
 // NewControlledInventoryPipeFixture accepts only an empty, canonical, private
@@ -127,6 +129,21 @@ func NewControlledInventoryPipeFixture(path string) (*ControlledInventoryPipeFix
 	return f, nil
 }
 
+// Closed provider-response variations: duplicates are reported twice, overflow
+// reports nine identical locations, empty/null report no locations. None changes
+// source literals or manufactures an admitted witness.
+func NewControlledInventoryReferenceShapeFixture(path, shape string) (*ControlledInventoryPipeFixture, error) {
+	if shape != "duplicate" && shape != "overflow" && shape != "empty" && shape != "null" {
+		return nil, errors.New("closed reference shape required")
+	}
+	f, e := NewControlledInventoryPipeFixture(path)
+	if e != nil {
+		return nil, e
+	}
+	f.referenceShape = shape
+	return f, nil
+}
+
 // Construction returns detached metadata and a one-shot factory. These ceilings
 // retain the existing discovery enclosure; they are declarations, NOT authority
 // or a complete end-to-end resource profile. A funded owner must reserve first.
@@ -158,7 +175,7 @@ func (f *ControlledInventoryPipeFixture) Construction(ordinal int, deadline time
 		f.started[ordinal] = true
 		inR, inW := io.Pipe()
 		outR, outW := io.Pipe()
-		child := &controlledDescribeChild{input: inW, serverInput: inR, output: outR, serverOutput: outW, done: make(chan struct{}), closing: make(chan struct{}), inventory: &controlledInventoryProtocol{documents: f.documents, opened: make(map[string]bool, 16)}}
+		child := &controlledDescribeChild{input: inW, serverInput: inR, output: outR, serverOutput: outW, done: make(chan struct{}), closing: make(chan struct{}), inventory: &controlledInventoryProtocol{documents: f.documents, opened: make(map[string]bool, 16), referenceShape: f.referenceShape}}
 		f.children[ordinal] = child
 		go child.serve()
 		return &controlledDescribeStarter{child: child, root: f.path}, nil
@@ -197,7 +214,22 @@ func (p *controlledInventoryProtocol) response(msg lspwire.Message) (string, err
 			if d.reference == "" {
 				return "[]", nil
 			}
-			return `[{"uri":` + strconv.Quote(d.reference) + `,"range":{"start":{"line":2,"character":12},"end":{"line":2,"character":19}}}]`, nil
+			item := `{"uri":` + strconv.Quote(d.reference) + `,"range":{"start":{"line":2,"character":12},"end":{"line":2,"character":19}}}`
+			switch p.referenceShape {
+			case "empty":
+				return "[]", nil
+			case "null":
+				return "null", nil
+			case "duplicate":
+				return "[" + item + "," + item + "]", nil
+			case "overflow":
+				raw := "[" + item
+				for i := 1; i < 9; i++ {
+					raw += "," + item
+				}
+				return raw + "]", nil
+			}
+			return "[" + item + "]", nil
 		default:
 			return "", errors.New("R-only fixture; method unrequested")
 		}

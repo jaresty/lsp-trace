@@ -31,6 +31,7 @@ type PrivateSelectedResultV2 struct{ state *selectedNativeResultV2 }
 type selectedNativeResultV2 struct {
 	durableIssued atomic.Bool // one owner-issued durable task, including failed/uncertain issuance
 	accounting    inv.CompletedSelectedAccountingV1
+	original      inv.PrivateProducerOriginals
 	selected      PrivateSelectedEndpointV2
 	unit          tp.PrivateSourceUnit
 	request       describerequest.Record
@@ -324,7 +325,7 @@ func prepareSelectedRoleCriterionV3(ctx context.Context, op inv.PrivateSelectedS
 	if found != 1 {
 		return result, ErrPrivateSelectedRowV2
 	}
-	candidate = &selectedNativeResultV2{selected: row, unit: unit, request: record, admission: admission, metadata: meta, sources: *resumed.PrivateSources}
+	candidate = &selectedNativeResultV2{original: original, selected: row, unit: unit, request: record, admission: admission, metadata: meta, sources: *resumed.PrivateSources}
 	return result, nil
 }
 
