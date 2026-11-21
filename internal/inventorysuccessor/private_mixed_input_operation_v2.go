@@ -21,6 +21,7 @@ var ErrPrivateMixedInputUnavailableV2 = errors.New("private mixed input requeste
 var ErrPrivateMixedInputEmptyV2 = errors.New("private mixed input observed empty; no grouping input")
 
 type PrivateMixedInputRequestV2 struct {
+	retained                                                                  *privateRetainedMixedInputV1 // issued only from a completed discovery owner
 	Manager                                                                   *sessionruntime.Manager
 	Root                                                                      *publication.Root
 	Start                                                                     sessionruntime.StartRequest
@@ -42,7 +43,7 @@ type privateMixedInputOperationV2 struct {
 
 func privateMixedPlanV2(q PrivateMixedInputRequestV2) (sessionruntime.PrivateProviderWindowPlan, bool) {
 	var p sessionruntime.PrivateProviderWindowPlan
-	if q.Manager == nil || q.Root == nil || len(q.Kinds) == 0 || len(q.Kinds) > 3 || q.Start.Deadline.IsZero() {
+	if (q.Manager == nil && q.retained == nil) || (q.retained != nil && !q.retained.matches(q)) || q.Root == nil || len(q.Kinds) == 0 || len(q.Kinds) > 3 || q.Start.Deadline.IsZero() {
 		return p, false
 	}
 	for _, s := range []string{q.URI, q.OccurrenceID, q.Revision, q.Privacy, q.OccurrencePolicy, q.CompositionPolicy} {
@@ -112,7 +113,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveMixedInputV2(ctx context.Context, at
 		return PrivateMixedInputOperationV2{}, privatePrepareFailureAtV1(stage, ErrPrivateMixedInputV2, cause)
 	}
 	plan, ok := privateMixedPlanV2(q)
-	if o == nil || ctx == nil || ctx.Err() != nil || !ok || !hashV2(attempt) {
+	if o == nil || ctx == nil || ctx.Err() != nil || !ok || !hashV2(attempt) || q.retained != nil {
 		if ctx != nil {
 			cause = ctx.Err()
 		}
@@ -228,6 +229,9 @@ func (r *privatePrepareCallbackObservationV1) freeze(native sessionruntime.Priva
 // The only successful return is AFTER original-lease return, window worker join,
 // and confirmed Observe. Failures retain PENDING/uncertain cumulative accounting.
 func ExecuteMixedInputV2(ctx context.Context, op PrivateMixedInputOperationV2, q PrivateMixedInputRequestV2) (_ PrivateManagedGroupingInput, failure error) {
+	if q.retained != nil {
+		return executeRetainedMixedInputV1(ctx, op, q)
+	}
 	// Early refusals do not consult an unvalidated context for task metadata.
 	inventorytracediag.Event(context.Background(), inventorytracediag.Replay)
 	stage := privatePrepareReplayV1

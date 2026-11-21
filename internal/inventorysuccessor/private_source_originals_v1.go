@@ -57,10 +57,11 @@ func (o PrivateProducerOriginals) Same(other PrivateProducerOriginals) bool {
 
 // SourceOriginalsV1 is the only mint entry. sourceConfirmed is set only after
 // successful lease return, Finish Completed/workers=0 and confirmed kernel
-// Observe in completeFixed. All public diagnostics must still match the private
+// Observe in completeFixed. The retained path instead requires its opaque
+// joined-acquisition/M-readback completion token. All public diagnostics must still match the private
 // producer originals. Lower Manager consumption cannot enter this barrier.
 func (in PrivateManagedGroupingInput) SourceOriginalsV1() (PrivateProducerOriginals, error) {
-	if !in.sourceConfirmed || len(in.inputOriginal) == 0 || len(in.inputOriginal) > 1<<20 || in.Input.ByteLength() != len(in.inputOriginal) || len(in.originals) > 8 || len(in.Predecessors) != len(in.originals) || len(in.sourceQueryOriginal) == 0 || len(in.sourceQueryOriginal) > 1<<20 || in.Input.ID() != in.sourceInputOriginal.ID() || len(in.Ledger) != len(in.ledgerOriginal) || len(in.Dispositions) != len(in.dispositionsOriginal) {
+	if (!in.sourceConfirmed && !in.retainedCompletion.valid(in)) || len(in.inputOriginal) == 0 || len(in.inputOriginal) > 1<<20 || in.Input.ByteLength() != len(in.inputOriginal) || len(in.originals) > 8 || len(in.Predecessors) != len(in.originals) || len(in.sourceQueryOriginal) == 0 || len(in.sourceQueryOriginal) > 1<<20 || in.Input.ID() != in.sourceInputOriginal.ID() || len(in.Ledger) != len(in.ledgerOriginal) || len(in.Dispositions) != len(in.dispositionsOriginal) {
 		return PrivateProducerOriginals{}, ErrPrivateManagedGrouping
 	}
 	for i, p := range in.originals {

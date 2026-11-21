@@ -10,6 +10,18 @@ Invocation: `/skill:private-host-streaming-application ABSOLUTE_APPLICATION_REQU
 
 Read [application contract](references/contract.md) and the existing [closed cohort response contract](../private-host-reviewed-cohort/references/contract.md) completely. This is an ordinary HOST-tool recipe, not an SDK, extension, service, model API, or new Agent runtime. Code review, parent retest, independent review and a fresh explicit caller application grant precede live use. Do not activate anything while performing controlled development tests.
 
+## Application-inventory V3 caller-agent branch
+
+For schema `private-host-application-inventory-request.v3`, read
+[caller-agent V3](references/caller-agent-v3.md) first. Use available ordinary
+subagents; otherwise use the MAIN THREAD with explicit `SAME_THREAD` assurance
+bound before execution and a separate sequential Reviewer exchange. This is not
+an inference backend or a claim of isolated review. Missing process ownership is
+an unsupported transport capability, not a reason to demand model credentials.
+The deterministic adapter is implemented; normal-folder automatic controller
+activation remains unwired. Do not claim this recipe alone delivers that route.
+The distinct-role requirements below remain unchanged for older protocol schemas.
+
 ## Legacy eager parent workflow (unchanged default)
 
 The order below is retained for compatibility, not a promise that discovery fits the shared startup pool. The activation-gated alternative is an explicit new opt-in contract below; it was not the previously recommended choreography.

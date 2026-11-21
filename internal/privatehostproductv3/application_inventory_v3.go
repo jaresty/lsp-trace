@@ -24,9 +24,10 @@ type InventoryOptionsV3 struct {
 	MaxNativeAttempts                int
 	NativeRetainedUpper, BudgetBytes uint64
 	HostWindowMS                     int
-	Targets                          []InventoryTargetV3      `json:",omitempty"`
-	NativeOwners                     []InventoryNativeOwnerV3 `json:",omitempty"`
-	ReviewMode                       cat.ReviewModeV3         `json:",omitempty"`
+	Targets                          []InventoryTargetV3        `json:",omitempty"`
+	NativeOwners                     []InventoryNativeOwnerV3   `json:",omitempty"`
+	ReviewMode                       cat.ReviewModeV3           `json:",omitempty"`
+	SourceIdentity                   *InventorySourceIdentityV3 `json:",omitempty"`
 }
 type InventoryRequestV3 struct {
 	Schema         string
@@ -51,7 +52,7 @@ func DecodeInventoryRequestV3(raw []byte) (InventoryRequestV3, error) {
 	// legacy absent-field grammar remains byte-for-byte compatible. This also
 	// rejects case-insensitive aliases accepted by encoding/json, null/empty
 	// owner fields, alternate base64 and aliases of nested descriptor fields.
-	if inventoryOwnersPresentV3(raw) && !bytes.Equal(raw, mustJSON(q)) {
+	if (inventoryOwnersPresentV3(raw) || q.Inventory.SourceIdentity != nil) && !bytes.Equal(raw, mustJSON(q)) {
 		return InventoryRequestV3{}, ErrInvalid
 	}
 	return q, nil
@@ -61,7 +62,7 @@ func ValidateInventoryRequestV3(q InventoryRequestV3) error {
 	if !inventoryOwnerShapeV3(o.NativeOwners) || !o.ReviewMode.Valid() {
 		return ErrInvalid
 	}
-	if c.Schema != "private-host-application-config.v3" || c.Profile != InventoryProfileV3 || c.RevisionAssertion != InventorySourceRevisionV3 || o.SourceRevision != InventorySourceRevisionV3 || validateApplication(c, time.Now()) != nil || c.Store == c.SourceRoot || pathRelatedInventoryV3(c.Store, c.SourceRoot) || c.UnitPolicySHA256 != hash(mustJSON(o)) || c.ProducerConfigSHA256 != c.UnitPolicySHA256 || c.SelectionRuleSHA256 != hash(mustJSON(o.Manifest)) {
+	if c.Schema != "private-host-application-config.v3" || c.Profile != InventoryProfileV3 || !inventoryRequestSourceIdentityV3(q) || validateApplication(c, time.Now()) != nil || c.Store == c.SourceRoot || pathRelatedInventoryV3(c.Store, c.SourceRoot) || c.UnitPolicySHA256 != hash(mustJSON(o)) || c.ProducerConfigSHA256 != c.UnitPolicySHA256 || c.SelectionRuleSHA256 != hash(mustJSON(o.Manifest)) {
 		return ErrInvalid
 	}
 	if min(len(o.Manifest.Leads), o.MaxNativeAttempts)+2 > 16 || o.MaxNativeAttempts < 0 || o.MaxNativeAttempts > 100 || o.NativeRetainedUpper == 0 || o.NativeRetainedUpper > 64<<20 || o.BudgetBytes > 64<<20 || o.HostWindowMS < 1 || o.HostWindowMS > 30000 || o.Manifest.Scope == "" || len(o.Manifest.Scope) > 4096 || o.Manifest.Provenance == "" || len(o.Manifest.Provenance) > 4096 || len(o.Manifest.Leads) > 10000 || len(o.Manifest.UntouchedGaps) > 10000 {
@@ -104,6 +105,7 @@ func (o InventoryOptionsV3) Detached() InventoryOptionsV3 {
 	o.Manifest.Leads = append([]ai.Lead(nil), o.Manifest.Leads...)
 	o.Manifest.UntouchedGaps = append([]string(nil), o.Manifest.UntouchedGaps...)
 	o.Targets = append([]InventoryTargetV3(nil), o.Targets...)
+	o.SourceIdentity = inventorySourceIdentityCopyV3(o.SourceIdentity)
 	if len(o.NativeOwners) != 0 {
 		// Closed data-only declarations; own every nested slice before deferral.
 		var detached []InventoryNativeOwnerV3
@@ -121,5 +123,5 @@ func (o InventoryOptionsV3) Detached() InventoryOptionsV3 {
 }
 func (o InventoryOptionsV3) RunRequest(ctx context.Context, inputs InventoryNativeInputsV3, sourceRoot, destination, interpreter, reviewer string, transport *InventoryTransportV3) ai.Request {
 	o = o.Detached()
-	return ai.Request{Manifest: o.Manifest, ReviewMode: o.ReviewMode, Preparer: inputs.Preparer(sourceRoot, o.SourceRevision, o.Targets...), DescribeHost: transport.Exchange("Describe"), GroupDecision: transport.Exchange("GroupDecision"), Reviewer: transport.Exchange("Reviewer"), Interpreter: interpreter, ReviewerIdentity: reviewer, Pins: o.Pins, Destination: destination, MaxNativeAttempts: o.MaxNativeAttempts, NativeRetainedUpper: o.NativeRetainedUpper, BudgetBytes: o.BudgetBytes, HostWindow: time.Duration(o.HostWindowMS) * time.Millisecond, ResponseLimits: dw.SuppliedResponseLimits{MaxAdapterBytes: 64 << 10, MaxSemanticBytes: 16 << 10}}
+	return ai.Request{Manifest: o.Manifest, ReviewMode: o.ReviewMode, Preparer: inputs.PreparerWithIdentityV3(sourceRoot, o.SourceRevision, o.SourceIdentity, o.Targets...), DescribeHost: transport.Exchange("Describe"), GroupDecision: transport.Exchange("GroupDecision"), Reviewer: transport.Exchange("Reviewer"), Interpreter: interpreter, ReviewerIdentity: reviewer, Pins: o.Pins, Destination: destination, MaxNativeAttempts: o.MaxNativeAttempts, NativeRetainedUpper: o.NativeRetainedUpper, BudgetBytes: o.BudgetBytes, HostWindow: time.Duration(o.HostWindowMS) * time.Millisecond, ResponseLimits: dw.SuppliedResponseLimits{MaxAdapterBytes: 64 << 10, MaxSemanticBytes: 16 << 10}}
 }

@@ -114,17 +114,9 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	if err != nil {
 		return out, fmt.Errorf("enumerate source files: %w", err)
 	}
-	files = append([]SourceFile(nil), files...)
-	for i := range files {
-		if err := validateSourceFile(files[i], a.Workspace); err != nil {
-			return out, fmt.Errorf("source file %d: %w", i, err)
-		}
-	}
-	sort.Slice(files, func(i, j int) bool { return sourceFileKey(files[i]) < sourceFileKey(files[j]) })
-	for i := 1; i < len(files); i++ {
-		if platformPathEqual(runtimeGOOS(), files[i-1].Path, files[i].Path) {
-			return out, errors.New("duplicate canonical source-file identity")
-		}
+	files, err = canonicalDiscoveryFiles(a.Workspace, files)
+	if err != nil {
+		return out, err
 	}
 
 	out.Accounting.FileDenominator = len(files)
@@ -436,6 +428,82 @@ func appendFile(out *Discovery, ordinal int, identity string, disposition census
 	out.FileLedger.Entries = append(out.FileLedger.Entries, captureset.LedgerEntry{Ordinal: ordinal, Identity: identity, Disposition: ledgerDisposition})
 }
 
+// SelectedSourceFiles returns metadata candidates for bounded acquisition planning,
+// not execution authority. Keep the original files for discovery's denominator:
+// exclusions and unavailable/unsupported dispositions must not disappear. Selection
+// shares discovery's canonical validation and exact exclusion-first matcher.
+func SelectedSourceFiles(workspace string, files []SourceFile, filters Filters) ([]SourceFile, error) {
+	selection, err := PrepareSourceSelection(workspace, filters)
+	if err != nil {
+		return nil, err
+	}
+	canonical, err := canonicalDiscoveryFiles(workspace, files)
+	if err != nil {
+		return nil, err
+	}
+	selected := make([]SourceFile, 0, len(canonical))
+	for _, file := range canonical {
+		if selection.selected(file) {
+			selected = append(selected, file)
+		}
+	}
+	return selected, nil
+}
+
+// PreparedSourceSelection owns an immutable filter snapshot. It is metadata
+// selection, never acquisition authority; Select still validates every identity.
+// The zero value is invalid. Collection ordering/deduplication belongs to
+// SelectedSourceFiles, not to this single-file operation.
+type PreparedSourceSelection struct {
+	workspace          string
+	includes, excludes []string
+}
+
+func PrepareSourceSelection(workspace string, filters Filters) (*PreparedSourceSelection, error) {
+	includes := append([]string(nil), filters.Includes...)
+	excludes := append([]string(nil), filters.Excludes...)
+	if err := discoveryfilter.ValidatePatterns(includes, excludes); err != nil {
+		return nil, err
+	}
+	if workspace == "" || !filepath.IsAbs(workspace) || filepath.Clean(workspace) != workspace {
+		return nil, errors.New("canonical absolute workspace required")
+	}
+	return &PreparedSourceSelection{workspace: workspace, includes: includes, excludes: excludes}, nil
+}
+
+func (s *PreparedSourceSelection) Select(file SourceFile) (bool, error) {
+	if s == nil || s.workspace == "" {
+		return false, errors.New("canonical absolute workspace required")
+	}
+	if err := validateSourceFile(file, s.workspace); err != nil {
+		return false, fmt.Errorf("source file 0: %w", err)
+	}
+	return s.selected(file), nil
+}
+
+func (s *PreparedSourceSelection) selected(file SourceFile) bool {
+	return file.Disposition == "" && selectPath(s.includes, s.excludes, file.Path)
+}
+
+func canonicalDiscoveryFiles(workspace string, files []SourceFile) ([]SourceFile, error) {
+	if workspace == "" || !filepath.IsAbs(workspace) || filepath.Clean(workspace) != workspace {
+		return nil, errors.New("canonical absolute workspace required")
+	}
+	files = append([]SourceFile(nil), files...)
+	for i := range files {
+		if err := validateSourceFile(files[i], workspace); err != nil {
+			return nil, fmt.Errorf("source file %d: %w", i, err)
+		}
+	}
+	sort.Slice(files, func(i, j int) bool { return sourceFileKey(files[i]) < sourceFileKey(files[j]) })
+	for i := 1; i < len(files); i++ {
+		if platformPathEqual(runtimeGOOS(), files[i-1].Path, files[i].Path) {
+			return nil, errors.New("duplicate canonical source-file identity")
+		}
+	}
+	return files, nil
+}
+
 func validateSourceFile(f SourceFile, workspace string) error {
 	if !validSourceRelativePath(f.Path) {
 		return errors.New("canonical workspace-relative slash path required")
@@ -739,6 +807,13 @@ func EnumerateWorkspaceContext(ctx context.Context, workspace string, roots []st
 		return nil, err
 	}
 	return workspaceSourceFiles(workspace, records, language), nil
+}
+
+// PreparedWorkspaceFiles adapts a caller's already verified traversal without
+// re-enumeration. These remain metadata; discovery must still validate identities,
+// apply filters, and supply each document through its owned runtime.
+func PreparedWorkspaceFiles(workspace string, records []source.Record) []SourceFile {
+	return workspaceSourceFiles(workspace, records, source.LanguageID)
 }
 
 func workspaceSourceFiles(workspace string, records []source.Record, language func(string) string) []SourceFile {

@@ -31,7 +31,7 @@ func applicationInventoryValidTerminalV3(raw []byte) bool {
 	var t applicationInventoryTerminalRecordV3
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
-	if d.Decode(&t) != nil || d.Decode(new(any)) != io.EOF || t.Schema != "private-application-inventory-terminal.v3" || !validApplicationDigest(t.ApplicationSHA256) || !validApplicationDigest(t.RunID) || t.SourceRevision != product.InventorySourceRevisionV3 || t.Authority != 0 || t.Accepted || t.Feature != "UNRESOLVED" || t.Consumer != "UNRESOLVED" || t.Completeness != "UNKNOWN" || t.Absence != "PROHIBITED" || t.SourceLeads != t.Dispositions || t.UntouchedGaps < 0 || t.LastSequences[0] > 16 || t.LastSequences[1] > 16 {
+	if d.Decode(&t) != nil || d.Decode(new(any)) != io.EOF || t.Schema != "private-application-inventory-terminal.v3" || !validApplicationDigest(t.ApplicationSHA256) || !validApplicationDigest(t.RunID) || !product.InventorySourceRevisionValidV3(t.SourceRevision) || t.Authority != 0 || t.Accepted || t.Feature != "UNRESOLVED" || t.Consumer != "UNRESOLVED" || t.Completeness != "UNKNOWN" || t.Absence != "PROHIBITED" || t.SourceLeads != t.Dispositions || t.UntouchedGaps < 0 || t.LastSequences[0] > 16 || t.LastSequences[1] > 16 {
 		return false
 	}
 	switch t.Status {

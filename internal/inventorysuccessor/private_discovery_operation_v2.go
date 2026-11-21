@@ -74,6 +74,11 @@ type privateDiscoveryOperationV2 struct {
 	binding                  PrivateDiscoveryBindingV2
 	attempt, head            string
 	used, finished, executed bool
+	completed                bool
+	controllerClaimed        bool
+	nativeClaimed            [128]bool
+	selectedClaimed          [256]bool
+	construction             sessionruntime.PrivateDiscoveryConstruction
 	observation              sessionruntime.PrivateDiscoveryObservation
 	executionErr             error
 	diagnosticAnchor         time.Time
@@ -170,7 +175,9 @@ func PrivateDiscoveryConstructionIdentityV2(c sessionruntime.PrivateDiscoveryCon
 		Process                                any
 		Providers                              []string
 		StartDeadline                          time.Time
-	}{c.Start.Profile.Workspace().String(), c.Start.Profile.SessionKey().String(), c.Start.LanguageID, c.Start.BootstrapAlias, c.Start.Process, c.Start.RelationProviders, c.Start.Deadline})
+		CaptureOwnedMethods                    bool                                 `json:",omitempty"`
+		CaptureCallDirections                  sessionruntime.PrivateCallDirections `json:",omitempty"`
+	}{c.Start.Profile.Workspace().String(), c.Start.Profile.SessionKey().String(), c.Start.LanguageID, c.Start.BootstrapAlias, c.Start.Process, c.Start.RelationProviders, c.Start.Deadline, c.CaptureOwnedMethods, c.CaptureCallDirections})
 	if e != nil || len(r) > 4<<20 {
 		return "", ""
 	}
@@ -252,6 +259,9 @@ func (op PrivateDiscoveryOperationV2) Execute(ctx context.Context, c sessionrunt
 		s.mu.Unlock()
 		return ErrPrivateDiscoveryOperationV2
 	}
+	s.mu.Lock()
+	s.construction = c // frozen request metadata; retained paths never start it again
+	s.mu.Unlock()
 	// Capture permission/configuration is diagnostic-only, not native identity.
 	// Freeze it and install this operation's own nonrenewable metadata subaccount;
 	// never trust a caller-supplied funding callback on the native route.
@@ -366,6 +376,38 @@ func (op PrivateDiscoveryOperationV2) ResponseFacts() sessionruntime.PrivateDisc
 	return op.state.observation.ResponseFacts
 }
 
+// SuppliedDocuments exposes only data from a successfully closed discovery
+// lifetime after Complete has verified its accounting head. It is not a grant,
+// native result, execution authorization or caller-identity authentication.
+func (op PrivateDiscoveryOperationV2) SuppliedDocuments() sessionruntime.PrivateDiscoverySuppliedDocuments {
+	if op.state == nil {
+		return sessionruntime.PrivateDiscoverySuppliedDocuments{}
+	}
+	s := op.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.completed || s.executionErr != nil || s.observation.Failed || !s.observation.CleanupJoined {
+		return sessionruntime.PrivateDiscoverySuppliedDocuments{}
+	}
+	return s.observation.SuppliedDocuments
+}
+
+// OwnedMethods releases runtime originals only after this operation's successful
+// accounting readback. It is not admission, a reconstructed DTO, or permission
+// to reacquire. Zero/failed/incomplete operations cannot export the object.
+func (op PrivateDiscoveryOperationV2) OwnedMethods() sessionruntime.PrivateDiscoveryOwnedMethods {
+	if op.state == nil {
+		return sessionruntime.PrivateDiscoveryOwnedMethods{}
+	}
+	s := op.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.completed || s.executionErr != nil || s.observation.Failed || !s.observation.CleanupJoined {
+		return sessionruntime.PrivateDiscoveryOwnedMethods{}
+	}
+	return s.observation.OwnedMethods
+}
+
 // Complete performs the original kernel observation after the caller's bounded
 // receipt/index publication and readback. It cannot fabricate cleanup: only the
 // concrete runner installs the private observation. Copies share this barrier.
@@ -402,5 +444,11 @@ func (op PrivateDiscoveryOperationV2) Complete(ctx context.Context) error {
 	if disposition != "OBSERVED" {
 		return ErrPrivateDiscoveryOperationV2
 	}
+	readback, e := o.k.reopen(ctx, o.job, o.limits)
+	if e != nil || readback.Identity != h.Identity || readback.Disposition != "OBSERVED" || readback.Attempt != s.attempt || readback.Charged != h.Charged {
+		o.uncertain = true
+		return ErrPrivateDiscoveryOperationV2
+	}
+	s.completed = true
 	return nil
 }

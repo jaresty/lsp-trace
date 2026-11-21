@@ -14,6 +14,7 @@ import (
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/programccompose"
 	"lsp-trace/internal/source"
+	"lsp-trace/sessionruntime"
 )
 
 // censusCoreDependencies is a package-main-only test seam. Production callers
@@ -31,6 +32,8 @@ type censusCoreDependencies struct {
 }
 
 type censusCoreConfig struct {
+	folderPreparation *censusFolderPreparation
+	folderStarter     func() (sessionruntime.Starter, error)
 	// Private inventory only: each subsequent frozen origin needs a new original owner.
 	privateFreshRunner func() (initializedAcquisitionRunnerConfig, error)
 	runner             initializedAcquisitionRunnerConfig

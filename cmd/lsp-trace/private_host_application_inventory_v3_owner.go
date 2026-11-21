@@ -37,7 +37,7 @@ type applicationInventoryOwnerRouteV3 struct {
 
 func applicationInventoryOwnerRoute(q product.InventoryRequestV3, a *product.ApplicationJournal, runID string, inputs product.InventoryNativeInputsV3) applicationInventoryOwnerRouteV3 {
 	if inputs != nil {
-		return applicationInventoryOwnerRouteV3{preparer: inputs.Preparer(q.Configuration.SourceRoot, q.Inventory.SourceRevision, q.Inventory.Targets...)}
+		return applicationInventoryOwnerRouteV3{preparer: inputs.PreparerWithIdentityV3(q.Configuration.SourceRoot, q.Inventory.SourceRevision, q.Inventory.SourceIdentity, q.Inventory.Targets...)}
 	}
 	q.Inventory = q.Inventory.Detached()
 	return applicationInventoryOwnerRouteV3{production: true, preparer: applicationInventoryOwnerPreparerV3(q, applicationInventoryOwnerStagesV3{
@@ -113,7 +113,7 @@ func applicationInventoryOwnerPreparerV3(q product.InventoryRequestV3, stages ap
 		if e == nil {
 			// This is the existing fixed target/owner admission and M -> P -> S operator,
 			// NOT the R-only legacy Run and NOT a callback that can invent native output.
-			p := (product.InventoryNativeInputsV3{l.ID: owned.input}).Preparer(q.Configuration.SourceRoot, q.Inventory.SourceRevision, target)
+			p := (product.InventoryNativeInputsV3{l.ID: owned.input}).PreparerWithIdentityV3(q.Configuration.SourceRoot, q.Inventory.SourceRevision, q.Inventory.SourceIdentity, target)
 			result, e = p(nativeCtx, l)
 		}
 		return finishApplicationInventoryOwnerV3(nativeCtx, d.Deadline, result, e, owned)

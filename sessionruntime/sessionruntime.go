@@ -1427,15 +1427,21 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	}
 	var discoverySlots *privateDiscoverySlots
 	if dc, ok := child.(*privateDiscoveryChild); ok {
-		// Discovery has no owned-frame capture contract. Refuse rather than
-		// visiting unrelated ordinary capture/clone branches.
-		if captureCap != 0 || private != nil || req.directionalV5 != nil || req.callHierarchyLayer1GenericAttempt != nil {
+		// The only additional capture path is the actual runtime-created
+		// directional companion. Ordinary/manual capture remains refused.
+		directional := req.directionalV5 != nil && dc.window.ownedDirectionalRequest(parent, m, req) && transaction != nil && transaction.directionalV5 == req.directionalV5 && private == nil
+		if captureCap != 0 || private != nil || req.directionalV5 != nil && !directional || req.callHierarchyLayer1GenericAttempt != nil {
 			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 		}
-		var err error
-		discoverySlots, err = dc.window.consumerSlots()
-		if err != nil {
-			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		if !directional {
+			var err error
+			discoverySlots, err = dc.window.consumerSlots()
+			if err != nil {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+			}
+		} else {
+			wire.MaxHeaderBytes = min(wire.MaxHeaderBytes, int64(dc.window.limits.HeaderBytes))
+			wire.MaxBodyBytes = min(wire.MaxBodyBytes, int64(dc.window.limits.FrameBytes))
 		}
 	}
 	reads := make(chan readResult, 1)
@@ -1483,7 +1489,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		}
 		result.privateProviderMessages.admitted()
 		go func() {
-			if dc, ok := child.(*privateDiscoveryChild); ok {
+			if dc, ok := child.(*privateDiscoveryChild); ok && req.directionalV5 == nil {
 				f, err := dc.window.frameRecord(dc, key.ID)
 				if f == nil {
 					reads <- readResult{err: err}
@@ -1513,7 +1519,16 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				return
 			}
 			if req.directionalV5 != nil {
-				msg, frame, raw, err := reader.ReadDirectionalReserved(maxBytes, req.directionalV5.lease)
+				bound := maxBytes
+				if dc, ok := child.(*privateDiscoveryChild); ok {
+					var admitted bool
+					bound, admitted = dc.window.quoteDirectionalFrame(dc, maxBytes)
+					if !admitted {
+						reads <- readResult{err: ErrPrivateDiscovery}
+						return
+					}
+				}
+				msg, frame, raw, err := reader.ReadDirectionalReserved(bound, req.directionalV5.lease)
 				read := readResult{message: msg, frame: frame, raw: raw, bodyBytes: int64(len(raw)), retained: raw != nil, err: err}
 				if err == nil && msg.Kind() != lspwire.KindNotification && msg.Kind() != lspwire.KindRequest {
 					if responseID, parseErr := strconv.ParseUint(string(msg.ID), 10, 64); parseErr == nil && responseID == key.ID {

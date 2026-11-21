@@ -1,0 +1,178 @@
+{
+  "$comment": "Generated from internal/capacitydiagnostic/shape.go; do not edit. Structural schema only. Full contract requires composed schema.ValidateFor or censusresult.DecodeCapacityDiagnostic: reject duplicate decoded keys/trailing JSON and enforce available=limit-spent, protected\u003eavailable, deficit=protected-available. Preparation effects precede refusal; no durable head is published. No retry or acquisition permission.",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-operation-diagnostic.v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "not": {
+        "required": [
+          "metrics"
+        ]
+      },
+      "properties": {
+        "reason": {
+          "const": "CAPACITY_INVALID_QUOTE"
+        }
+      }
+    },
+    {
+      "properties": {
+        "metrics": {
+          "properties": {
+            "limit": {
+              "maximum": 67108864,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "protected": {
+              "maximum": 67108864,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "unit": {
+              "const": "bytes"
+            }
+          }
+        },
+        "reason": {
+          "const": "CAPACITY_BYTES"
+        }
+      },
+      "required": [
+        "metrics"
+      ]
+    },
+    {
+      "properties": {
+        "metrics": {
+          "properties": {
+            "limit": {
+              "const": 4294967296
+            },
+            "protected": {
+              "maximum": 2147483648,
+              "minimum": 1,
+              "multipleOf": 32,
+              "type": "integer"
+            },
+            "unit": {
+              "const": "work_units"
+            }
+          }
+        },
+        "reason": {
+          "const": "CAPACITY_WORK"
+        }
+      },
+      "required": [
+        "metrics"
+      ]
+    },
+    {
+      "properties": {
+        "metrics": {
+          "properties": {
+            "limit": {
+              "const": 64
+            },
+            "protected": {
+              "maximum": 423,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "spent": {
+              "const": 0
+            },
+            "unit": {
+              "const": "packets"
+            }
+          }
+        },
+        "reason": {
+          "const": "CAPACITY_PACKETS"
+        }
+      },
+      "required": [
+        "metrics"
+      ]
+    }
+  ],
+  "properties": {
+    "action": {
+      "const": "STOP"
+    },
+    "metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "maximum": 4294967296,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "deficit": {
+          "maximum": 2147483648,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "limit": {
+          "maximum": 4294967296,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "protected": {
+          "maximum": 2147483648,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "spent": {
+          "maximum": 4294967296,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "enum": [
+            "bytes",
+            "work_units",
+            "packets"
+          ]
+        }
+      },
+      "required": [
+        "unit",
+        "spent",
+        "protected",
+        "limit",
+        "available",
+        "deficit"
+      ],
+      "type": "object"
+    },
+    "operation": {
+      "const": "start"
+    },
+    "reason": {
+      "enum": [
+        "CAPACITY_INVALID_QUOTE",
+        "CAPACITY_BYTES",
+        "CAPACITY_WORK",
+        "CAPACITY_PACKETS"
+      ]
+    },
+    "retry": {
+      "const": false
+    },
+    "schema_version": {
+      "const": "lsp-trace.census-operation-diagnostic.v3"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "reason",
+    "action",
+    "retry"
+  ],
+  "title": "Closed Start capacity refusal (not an MCP envelope)",
+  "type": "object"
+}

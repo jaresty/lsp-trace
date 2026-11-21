@@ -92,13 +92,9 @@ func TestCensusFolderRunNativeTransfer(t *testing.T) {
 		if code != 1 || out.Len() != 0 {
 			t.Fatalf("ASSERT_FOLDER_HANDOFF_FAILURE: code=%d out=%q err=%q", code, out.String(), errout.String())
 		}
-		if machine {
-			var diagnostic censusCLIDiagnostic
-			if err := json.Unmarshal(errout.Bytes(), &diagnostic); err != nil || diagnostic.Stage != censusStageCommitted {
-				t.Fatalf("ASSERT_FOLDER_MACHINE_HANDOFF_FAILURE: %s %v", errout.Bytes(), err)
-			}
-		} else if !strings.Contains(errout.String(), "native census catalog handoff unavailable") {
-			t.Fatalf("ASSERT_FOLDER_HANDOFF_FAILURE: err=%q", errout.String())
+		diagnostic := checkOperationBytes(t, errout.Bytes())
+		if diagnostic.Operation != "start" || diagnostic.Action != "STOP" || diagnostic.Retry {
+			t.Fatalf("ASSERT_FOLDER_STRUCTURED_HANDOFF_FAILURE: %s", errout.Bytes())
 		}
 	}
 	if calls != 2 {
@@ -260,7 +256,7 @@ func TestCensusFolderHelpHonest(t *testing.T) {
 	if code := runCensusWithDependencies([]string{"--help"}, &out, &errout, censusRunnerDependencies{}); code != 0 {
 		t.Fatal(code)
 	}
-	for _, text := range []string{"census [FOLDER]", "Legacy explicit acquisition", "semantic inventory handoff is currently unavailable", "Failed runs are retained"} {
+	for _, text := range []string{"census [FOLDER]", "Legacy explicit acquisition", "returns a durable task", "Failed runs are retained"} {
 		if !strings.Contains(out.String(), text) {
 			t.Fatalf("ASSERT_FOLDER_HELP: missing %q", text)
 		}
@@ -382,7 +378,10 @@ func TestCensusFolderDefaultAncestrySafety(t *testing.T) {
 }
 
 func TestCensusFolderFailureLocator(t *testing.T) {
-	for _, failure := range []string{"profile", "lookup", "starter", "manager", "native"} {
+	// The explicitly connected compatibility route retains its legacy locator.
+	// Normal durable diagnostics deliberately disclose no filesystem paths.
+	t.Setenv("LSP_TRACE_CALLER_FD", "3")
+	for _, failure := range []string{"profile", "lookup", "starter", "execution", "native"} {
 		for _, machine := range []bool{false, true} {
 			name := failure + "/human"
 			if machine {
@@ -413,14 +412,17 @@ func TestCensusFolderFailureLocator(t *testing.T) {
 					}
 					return sessionruntime.ManagedStarter{}, nil
 				}
-				deps.newManager = func(sessionruntime.Config) (*sessionruntime.Manager, error) {
-					if failure == "manager" {
-						return nil, injected
+				deps.runNativeCatalog = func(o censusCLIOptions, cfg censusCoreConfig, _ io.Writer, errout io.Writer) int {
+					// Locator-only harness: normal runtime construction moved into
+					// the paid acquisition lane, not deps.newManager in the runner.
+					if failure == "starter" {
+						_, err := cfg.folderStarter()
+						return writeCensusFailure(errout, censusStageAcquisition, o.Machine, err)
 					}
-					return nil, nil
-				}
-				deps.runNativeCatalog = func(o censusCLIOptions, _ censusCoreConfig, _ io.Writer, errout io.Writer) int {
-					return writeCensusFailure(errout, censusStageCommitted, o.Machine, errNativeCatalogAggregateUnavailable)
+					if failure == "execution" {
+						return writeCensusFailure(errout, censusStageAcquisition, o.Machine, injected)
+					}
+					return writeCensusFailure(errout, censusStageAssembly, o.Machine, errNativeCatalogAggregateUnavailable)
 				}
 				args := []string{workspace, "--server", "fake"}
 				if failure == "profile" {
@@ -446,7 +448,9 @@ func TestCensusFolderFailureLocator(t *testing.T) {
 					}
 					stage := censusStageConfig
 					if failure == "native" {
-						stage = censusStageCommitted
+						stage = censusStageAssembly
+					} else if failure == "starter" || failure == "execution" {
+						stage = censusStageAcquisition
 					}
 					want, _ := buildCensusCLIDiagnostic(stage, nil)
 					detail := got.Detail

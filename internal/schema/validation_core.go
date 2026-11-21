@@ -6,6 +6,7 @@ import (
 
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 
+	"lsp-trace/internal/capacitydiagnostic"
 	"lsp-trace/internal/graph"
 )
 
@@ -70,6 +71,8 @@ func ValidateSemantics(data []byte, structural StructuralResult) error {
 	trimmed := bytes.TrimSpace(data)
 	var err error
 	switch {
+	case structural.Family == FamilyCensusCapacityDiagnostic:
+		_, err = capacitydiagnostic.DecodeCapacityDiagnostic(data)
 	case structural.Family == FamilyBoundedRanking:
 		return fmt.Errorf("bounded ranking requires composed boundedranking.ValidateFor semantic validation")
 	case structural.Family == FamilyBoundedMetrics:

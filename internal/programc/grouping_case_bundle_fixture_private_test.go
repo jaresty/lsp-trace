@@ -18,9 +18,18 @@ import (
 // Controlled serialized fixtures, NOT authentic provider execution receipts.
 func bundleFixtureInput(t *testing.T, kinds []programcadmission.RelationKind, rich ...bool) (rg.AdmittedInput, []rg.PredecessorRecord) {
 	t.Helper()
+	return bundleFixtureInputWithCallSplit(t, kinds, false, false, rich...)
+}
+
+func bundleFixtureInputWithCallSplit(t *testing.T, kinds []programcadmission.RelationKind, split, crossFile bool, rich ...bool) (rg.AdmittedInput, []rg.PredecessorRecord) {
+	t.Helper()
 	node := func(name string, line uint32) graph.Node {
 		r := graph.Range{Start: graph.Position{Line: line}, End: graph.Position{Line: line, Character: 1}}
-		return graph.NewNode(graph.Item{Name: name, Kind: 12, URI: "file:///controlled/fixture", Range: r, SelectionRange: r})
+		uri := "file:///controlled/fixture"
+		if crossFile && name == "b" {
+			uri = "file:///controlled/other.go"
+		}
+		return graph.NewNode(graph.Item{Name: name, Kind: 12, URI: uri, Range: r, SelectionRange: r})
 	}
 	a, b := node("a", 0), node("b", 1)
 	inactive := node("inactive-definition-endpoint", 2)
@@ -46,7 +55,11 @@ func bundleFixtureInput(t *testing.T, kinds []programcadmission.RelationKind, ri
 			return programccompose.Input{Bytes: raw, Identity: id, SHA256: fmt.Sprintf("sha256:%x", h), ByteLength: len(raw), ExactMetadata: programccompose.ExactMetadata{WorkspaceIdentity: "controlled-workspace", RevisionCustody: "CALLER_ASSERTED", PositionEncoding: "utf-16", AcquisitionSemantics: "managed-lsp-v1", PrivacyPolicy: "controlled-private"}}
 		}
 		edges := []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{End: graph.Position{Character: 1}}}}, {CallerNodeID: b.ID, CalleeNodeID: a.ID, CallSites: []graph.Range{{Start: graph.Position{Line: 1}, End: graph.Position{Line: 1, Character: 1}}}}}
-		composite, e := programccompose.Compose([]programccompose.Input{capture([]graph.Node{a, b}, edges, "calls"), capture(nil, nil, "empty")})
+		inputs := []programccompose.Input{capture([]graph.Node{a, b}, edges, "calls"), capture(nil, nil, "empty")}
+		if split {
+			inputs = []programccompose.Input{capture([]graph.Node{a, b}, edges[:1], "calls"), capture([]graph.Node{a, b}, edges[1:], "other-calls")}
+		}
+		composite, e := programccompose.Compose(inputs)
 		if e != nil {
 			t.Fatal(e)
 		}

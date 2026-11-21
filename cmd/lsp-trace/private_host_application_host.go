@@ -173,6 +173,18 @@ func applicationTicket(a *product.ApplicationJournal, root string, maxUnits int,
 	if maxUnits < 0 {
 		maxUnits = 0
 	}
+	quote := applicationCoordinatorQuote(maxUnits, unitCalls)
+	id := pilot.Digest([]byte(fmt.Sprintf("%s/coordinator/%d", a.Head().ApplicationSHA256, a.Head().Sequence)))
+	if _, e := a.ReserveOperation(id, "coordinator_host_envelope", quote, time.Now()); e != nil {
+		return "", e
+	}
+	if e := applicationPrepareFinalize(a, root, id); e != nil {
+		return "", e
+	}
+	return a.PutRecord(applicationRunTicket{ApplicationSHA256: a.Head().ApplicationSHA256, CursorSHA256: a.Head().CursorSHA256, WaitReservationSHA256: id, Sequence: a.Head().Sequence, StartGlobal: a.Head().Reserved.Calls})
+}
+
+func applicationCoordinatorQuote(maxUnits, unitCalls int) product.ApplicationBounds {
 	waits := uint64(maxUnits*unitCalls + 2)
 	// The existing metadata/work envelope includes the publication protocol:
 	// per create-only target <=1 intent directory, <=1 stage/final inode, <=1
@@ -180,14 +192,7 @@ func applicationTicket(a *product.ApplicationJournal, root string, maxUnits int,
 	// target. Admission adds <=4 fixed stats/read, never an enumeration.
 	// Finalize partitions 128 records/slot from this SAME root-wide envelope.
 	metadata := uint64(64<<20) + waits*(80<<20)
-	id := pilot.Digest([]byte(fmt.Sprintf("%s/coordinator/%d", a.Head().ApplicationSHA256, a.Head().Sequence)))
-	if _, e := a.ReserveOperation(id, "coordinator_host_envelope", product.ApplicationBounds{ReadHashBytes: metadata, WriteBytes: 16 << 20, Records: 16384 + waits*16384, ParserBytes: metadata, Work: 1 << 20, ActiveNS: uint64(10 * time.Second)}, time.Now()); e != nil {
-		return "", e
-	}
-	if e := applicationPrepareFinalize(a, root, id); e != nil {
-		return "", e
-	}
-	return a.PutRecord(applicationRunTicket{ApplicationSHA256: a.Head().ApplicationSHA256, CursorSHA256: a.Head().CursorSHA256, WaitReservationSHA256: id, Sequence: a.Head().Sequence, StartGlobal: a.Head().Reserved.Calls})
+	return product.ApplicationBounds{ReadHashBytes: metadata, WriteBytes: 16 << 20, Records: 16384 + waits*16384, ParserBytes: metadata, Work: 1 << 20, ActiveNS: uint64(10 * time.Second)}
 }
 
 func applicationWaitUnitPath(root, ticket string, n int) string {

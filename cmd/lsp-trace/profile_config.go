@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,10 +12,12 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"lsp-trace/internal/scopejob"
 )
 
 type profileFile struct {
-	Profiles map[string]serverProfile `toml:"profiles"`
+	Profiles         map[string]serverProfile `toml:"profiles"`
+	FileAssociations map[string]string        `toml:"file_associations"`
 }
 
 type serverProfile struct {
@@ -37,8 +41,11 @@ type resolvedProfile struct {
 	Args           []string
 	Environment    []string
 	LanguageID     string
+	LanguageIDs    []string
 	SecretEnvNames map[string]struct{}
 }
+
+var errProfileNotFound = errors.New("profile not found")
 
 var exactEnvironmentReference = regexp.MustCompile(`^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$`)
 var environmentName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -47,6 +54,18 @@ func loadRequestedProfile(workspace string, flags profileFlags) (resolvedProfile
 	if flags.Name == "" {
 		return resolvedProfile{}, nil
 	}
+	profile, err := loadProfileDeclaration(workspace, flags)
+	if err != nil {
+		return resolvedProfile{}, err
+	}
+	return resolveProfileEnvironment(flags.Name, profile)
+}
+
+// Candidate selection consumes declarations without requiring provider secrets.
+func loadProfileDeclaration(workspace string, flags profileFlags) (serverProfile, error) {
+	return loadProfileDeclarationLimit(workspace, flags, 0)
+}
+func loadProfileDeclarationLimit(workspace string, flags profileFlags, limit int64) (serverProfile, error) {
 	var paths []string
 	if flags.ConfigPath != "" {
 		paths = []string{flags.ConfigPath}
@@ -59,9 +78,9 @@ func loadRequestedProfile(workspace string, flags profileFlags) (resolvedProfile
 	var merged serverProfile
 	found := false
 	for _, path := range paths {
-		file, exists, err := decodeProfileFile(path, flags.ConfigPath != "")
+		file, exists, err := decodeProfileFileLimit(path, flags.ConfigPath != "", limit)
 		if err != nil {
-			return resolvedProfile{}, err
+			return serverProfile{}, err
 		}
 		if !exists {
 			continue
@@ -74,9 +93,9 @@ func loadRequestedProfile(workspace string, flags profileFlags) (resolvedProfile
 		mergeServerProfile(&merged, profile)
 	}
 	if !found {
-		return resolvedProfile{}, fmt.Errorf("profile %q not found", flags.Name)
+		return serverProfile{}, fmt.Errorf("%w: %q", errProfileNotFound, flags.Name)
 	}
-	return resolveProfileEnvironment(flags.Name, merged)
+	return merged, nil
 }
 
 func userProfileConfigPath() (string, error) {
@@ -91,8 +110,29 @@ func userProfileConfigPath() (string, error) {
 }
 
 func decodeProfileFile(path string, required bool) (profileFile, bool, error) {
+	return decodeProfileFileLimit(path, required, 0)
+}
+func decodeProfileFileLimit(path string, required bool, limit int64) (profileFile, bool, error) {
 	var file profileFile
-	data, err := os.ReadFile(path)
+	var data []byte
+	var err error
+	if limit == 0 {
+		data, err = os.ReadFile(path)
+	} else {
+		info, statErr := os.Stat(path)
+		if statErr == nil && (!info.Mode().IsRegular() || info.Size() > limit) {
+			return file, false, fmt.Errorf("config must be a regular file of at most %d bytes", limit)
+		}
+		var f *os.File
+		f, err = os.Open(path)
+		if err == nil {
+			data, err = io.ReadAll(io.LimitReader(f, limit+1))
+			err = errors.Join(err, f.Close())
+			if int64(len(data)) > limit {
+				err = fmt.Errorf("config exceeds %d bytes", limit)
+			}
+		}
+	}
 	if err != nil {
 		if os.IsNotExist(err) && !required {
 			return file, false, nil
@@ -110,6 +150,9 @@ func decodeProfileFile(path string, required bool) (profileFile, bool, error) {
 		}
 		sort.Strings(keys)
 		return file, false, fmt.Errorf("unknown config field(s) in %q: %s", path, strings.Join(keys, ", "))
+	}
+	if _, err := scopejob.FreezeSelection([]string{"go"}, file.FileAssociations); err != nil {
+		return file, false, fmt.Errorf("invalid file_associations in %q: %w", path, err)
 	}
 	return file, true, nil
 }
@@ -138,7 +181,12 @@ func resolveProfileEnvironment(name string, profile serverProfile) (resolvedProf
 		resolved.Args = append([]string(nil), (*profile.Args)...)
 	}
 	if profile.LanguageIDs != nil && len(*profile.LanguageIDs) > 0 {
-		resolved.LanguageID = (*profile.LanguageIDs)[0]
+		policy, err := scopejob.FreezeSelection(*profile.LanguageIDs, nil)
+		if err != nil {
+			return resolvedProfile{}, fmt.Errorf("profile %q has invalid language_ids: %w", name, err)
+		}
+		resolved.LanguageID = policy.DefaultLanguage
+		resolved.LanguageIDs = append([]string(nil), policy.LanguageIDs...)
 	}
 	if profile.Environment == nil {
 		return resolved, nil

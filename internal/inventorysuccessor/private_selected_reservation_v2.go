@@ -104,7 +104,7 @@ func (o *PrivateManagedInputOwnerV2) ReserveSelectedMixedInputV2(ctx context.Con
 		return PrivateMixedInputOperationV2{}, ErrPrivateSelectedV2
 	}
 	now := time.Now()
-	m, err := privateMixedChargeV2(now, q.Start.Deadline, s.envelope.Bounds())
+	m, err := privateSelectedMixedQuoteV1(q, now, s.envelope)
 	if err != nil || !m.within(s.stages[0]) {
 		return PrivateMixedInputOperationV2{}, ErrPrivateSelectedBoundsV2
 	}

@@ -74,9 +74,9 @@ func censusCallerHostStable(c censusInventoryBridgeConfig) (censusCallerHostSett
 	// and UnitPolicySHA256 seals Inventory (including original deadlines and new
 	// owner identities). They are execution seals, not reusable policy. The
 	// product decoder still checks both seals on every executable request.
-	policy := censusCallerHostPick(configuration, "Schema", "Profile", "SourceRoot", "RevisionAssertion", "ProducerExecutableSHA256")
+	policy := censusCallerHostPick(configuration, "Schema", "Profile", "SourceRoot", "ProducerExecutableSHA256")
 	policy["GrantPolicy"] = censusCallerHostPick(censusCallerHostMap(configuration, "Grant"), "Ceiling", "BootstrapAttempts", "BootstrapEach")
-	ip := censusCallerHostPick(inventory, "SourceRevision", "MaxNativeAttempts", "NativeRetainedUpper", "BudgetBytes", "HostWindowMS", "ReviewMode")
+	ip := censusCallerHostPick(inventory, "MaxNativeAttempts", "NativeRetainedUpper", "BudgetBytes", "HostWindowMS", "ReviewMode")
 	ip["Pins"] = censusCallerHostPick(censusCallerHostMap(inventory, "Pins"), "grammar_sha256", "model_sha256", "worker_sha256")
 	owners, ok := inventory["NativeOwners"].([]any)
 	if !ok || len(owners) != 1 {
@@ -86,7 +86,7 @@ func censusCallerHostStable(c censusInventoryBridgeConfig) (censusCallerHostSett
 	if !ok {
 		return s, errCensusInventoryPrivate
 	}
-	op := censusCallerHostPick(owner, "Verification", "Profile", "LanguageID", "Provider", "ProcessPath", "ProcessArgs", "Revision", "Privacy", "OccurrencePolicy", "CompositionPolicy", "Kinds", "SourceLimits", "ExpectedSourceAuthorization", "Seed")
+	op := censusCallerHostPick(owner, "Verification", "Profile", "LanguageID", "Provider", "ProcessPath", "ProcessArgs", "Privacy", "OccurrencePolicy", "CompositionPolicy", "Kinds", "SourceLimits", "ExpectedSourceAuthorization", "Seed")
 	op["Contract"] = censusCallerHostPick(censusCallerHostMap(owner, "Contract"), "CaptureLimits", "DescribeDeadlineMS", "PacketMaxResponseBytes", "PacketResolveLimits", "PacketSourcePolicy", "ProgramCSeed", "ResponseVersion", "RetryPolicy", "SchemaVersions")
 	ip["NativeOwnerPolicy"] = op
 	s.RequestPolicy = map[string]any{"Schema": q["Schema"], "Configuration": policy, "Inventory": ip}

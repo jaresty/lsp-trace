@@ -67,10 +67,25 @@ func constructNativeCallsPrivateV2(ctx context.Context, m *sessionruntime.Manage
 	if err != nil {
 		return out, err
 	}
-	// Fixed synchronous work stays inside the caller's existing active lease.
-	// The runtime executes no caller-supplied function and the lease owns the
-	// protocol exclusion until this function and its enclosing callback return.
-	err = func() error {
+	out, err = constructNativeCallsFromOwnedViewPrivateV2(ctx, q, v, retain)
+	if err != nil {
+		return PrivateNativeCallsResultV2{}, err
+	}
+	if err := m.CheckTakenDirectionalEvidencePrivateV2(ctx, h); err != nil {
+		return PrivateNativeCallsResultV2{}, err
+	}
+	return out, nil
+}
+
+// Shared constructor body. Only the live owner above and the separately funded
+// retained-original transfer may call it; no public DTO constructor is exposed.
+// Both paths retain the identical two-direction reconstruction/proof validators.
+func constructNativeCallsFromOwnedViewPrivateV2(ctx context.Context, q PrivateNativeCallsRequestV2, v sessionruntime.PrivateDirectionalEvidenceViewV2, retain bool) (PrivateNativeCallsResultV2, error) {
+	var out PrivateNativeCallsResultV2
+	if ctx == nil || ctx.Err() != nil || len(q.Revision) == 0 || len(q.Revision) > 4096 || len(q.Privacy) == 0 || len(q.Privacy) > 4096 || q.Session != v.Session || !q.Directional.Deadline.Equal(v.Request.Deadline) {
+		return out, ErrPrivateNativeConstructorV2
+	}
+	err := func() error {
 		out.Observations = v.Requests
 		out.ParentSupply = v.Supply
 		if _, ok := privateNativeEncodedSizeV2(uint64(len(v.Supply.Content))+uint64(len(v.Supply.Params)), 8, 65536); !ok {
@@ -187,9 +202,6 @@ func constructNativeCallsPrivateV2(ctx context.Context, m *sessionruntime.Manage
 		return err
 	}()
 	if err != nil {
-		return PrivateNativeCallsResultV2{}, err
-	}
-	if err := m.CheckTakenDirectionalEvidencePrivateV2(ctx, h); err != nil {
 		return PrivateNativeCallsResultV2{}, err
 	}
 	return out, nil

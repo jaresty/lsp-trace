@@ -1,6 +1,7 @@
 package publication
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -14,7 +15,21 @@ import (
 // opened by this read. It borrows root, never reopens its pathname, and does not
 // close root's file or directory handle. Digest/expected-byte checks remain the
 // caller's responsibility: selector bytes alone are not trusted hash authority.
-func ReadVerifiedBoundFileChecked(root *Root, selector string, limit int64) (raw []byte, err error) {
+func ReadVerifiedBoundFileChecked(root *Root, selector string, limit int64) ([]byte, error) {
+	return ReadVerifiedBoundFileCheckedContext(context.Background(), root, selector, limit)
+}
+
+// ReadVerifiedBoundFileCheckedContext additionally checks cancellation before
+// acquisition, between stream reads, and after owned cleanup. It cannot preempt
+// a blocked OS syscall.
+// All owned handles are still released, including after cancellation.
+func ReadVerifiedBoundFileCheckedContext(ctx context.Context, root *Root, selector string, limit int64) (raw []byte, err error) {
+	if ctx == nil {
+		return nil, ErrBoundFilePolicy
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
 	if root == nil || root.handle == nil || limit < 1 || limit == 1<<63-1 {
 		return nil, errors.Join(ErrBoundFilePolicy, errors.New("private root and finite positive bound required"))
 	}
@@ -39,11 +54,14 @@ func ReadVerifiedBoundFileChecked(root *Root, selector string, limit int64) (raw
 	handles := &boundFileReadHandles{}
 	defer func() {
 		if handles != nil {
-			handles.finish(&raw, &err)
+			handles.finishContext(ctx, &raw, &err)
 		}
 	}()
 	current := root.file
 	for _, part := range parts[:len(parts)-1] {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		// This existing primitive is O_DIRECTORY|O_NOFOLLOW on supported
 		// systems. It does not acquire or reopen the borrowed root pathname.
 		child, e := openObservedDirectory(current, part)
@@ -70,12 +88,28 @@ func ReadVerifiedBoundFileChecked(root *Root, selector string, limit int64) (raw
 	}
 	owned := handles
 	handles = nil // transfer all newly owned handles, not the borrowed root
-	return owned.read(root.info, before, limit)
+	return owned.readContext(ctx, root.info, before, limit)
 }
 
 // Only this private IO boundary is substitutable by in-package fault tests.
 // Production supplies only the actual descriptor values opened above;
 // there is no global hook, exported cleanup assertion, or caller callback.
+type contextBoundReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r contextBoundReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := r.r.Read(p)
+	if e := r.ctx.Err(); e != nil {
+		return n, e
+	}
+	return n, err
+}
+
 type boundFileReadData interface {
 	io.ReadCloser
 	Stat() (os.FileInfo, error)
@@ -103,8 +137,25 @@ func (h *boundFileReadHandles) finish(raw *[]byte, err *error) {
 	}
 }
 
-func (h *boundFileReadHandles) read(rootInfo, before os.FileInfo, limit int64) (raw []byte, err error) {
-	defer h.finish(&raw, &err)
+// Cleanup belongs to the operation: a Close may itself observe cancellation.
+// Join only after every owned handle is released, retaining earlier causes.
+func (h *boundFileReadHandles) finishContext(ctx context.Context, raw *[]byte, err *error) {
+	h.finish(raw, err)
+	if e := ctx.Err(); e != nil {
+		*raw = nil
+		*err = errors.Join(*err, e)
+	}
+}
+
+func (h *boundFileReadHandles) read(rootInfo, before os.FileInfo, limit int64) ([]byte, error) {
+	return h.readContext(context.Background(), rootInfo, before, limit)
+}
+
+func (h *boundFileReadHandles) readContext(ctx context.Context, rootInfo, before os.FileInfo, limit int64) (raw []byte, err error) {
+	defer h.finishContext(ctx, &raw, &err)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if h.data == nil || limit < 1 || limit == 1<<63-1 || !checkedBoundFileMetadata(rootInfo, before) {
 		return nil, ErrBoundFilePolicy
 	}
@@ -115,7 +166,7 @@ func (h *boundFileReadHandles) read(rootInfo, before os.FileInfo, limit int64) (
 	if err != nil || !os.SameFile(before, opened) {
 		return nil, errors.Join(ErrBoundFilePolicy, err)
 	}
-	raw, err = io.ReadAll(io.LimitReader(h.data, limit+1))
+	raw, err = io.ReadAll(io.LimitReader(contextBoundReader{ctx, h.data}, limit+1))
 	if err != nil {
 		return nil, err
 	}

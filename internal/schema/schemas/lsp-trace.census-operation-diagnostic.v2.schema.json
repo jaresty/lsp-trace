@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-operation-diagnostic.v2.schema.json",
+  "title": "Closed unsupported stored inventory version refusal (not an MCP envelope)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "reason", "action", "retry"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.census-operation-diagnostic.v2"},
+    "operation": {"enum": ["task", "read", "submit", "result"]},
+    "reason": {"const": "UNSUPPORTED_STORED_VERSION"},
+    "action": {"const": "STOP"},
+    "retry": {"const": false}
+  }
+}

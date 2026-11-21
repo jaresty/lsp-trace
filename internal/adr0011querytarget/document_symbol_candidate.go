@@ -305,8 +305,35 @@ func SelectDocumentSymbolCandidateV1(q Query, raw []byte) (Candidate, error) {
 	return selectDocumentSymbolCandidateV1(q, raw, nil)
 }
 
+// OccurrenceCandidateVersionV1 identifies a containing declaration, NOT a
+// declaration selected by the query point or the returned definition target.
+const OccurrenceCandidateVersionV1 = "lsp-trace.private.adr0011-containing-symbol.v1"
+
+// SelectOccurrenceContainerV1 selects a unique strict minimum display range.
+// All symbol kinds are eligible: containment does not establish a call/function.
+// Original query coordinates and provider ranges are never rewritten.
+func SelectOccurrenceContainerV1(q Query, raw []byte) (Candidate, error) {
+	if ValidateDocumentSymbolResultV1(raw) != nil {
+		return Candidate{}, ErrUnresolved
+	}
+	return selectSymbolCandidateV1(q, raw, nil, true)
+}
+
+// DefinitionQueryNodeV1 keeps an occurrence distinct from its containing symbol.
+// The historical declaration-selected representation remains unchanged.
+func DefinitionQueryNodeV1(q Query, c Candidate) string {
+	if c.Version == OccurrenceCandidateVersionV1 {
+		return hash("lsp-trace:adr0011:definition-query-occurrence:v1", q)
+	}
+	return c.SymbolID
+}
+
 // observe is a package-private test seam for actual finalization operations.
 func selectDocumentSymbolCandidateV1(q Query, raw []byte, observe func(string)) (Candidate, error) {
+	return selectSymbolCandidateV1(q, raw, observe, false)
+}
+
+func selectSymbolCandidateV1(q Query, raw []byte, observe func(string), occurrence bool) (Candidate, error) {
 	if q.OccurrenceID == "" || q.URI == "" || (q.Encoding != "utf-8" && q.Encoding != "utf-16" && q.Encoding != "utf-32") || q.DocumentVersion == "" || !validSHA256(q.SourceDigest) || q.SessionID == "" || q.Generation == 0 ||
 		len(raw) == 0 || len(raw) > maxResultBytes || !boundedJSONTokens(raw) || strictjson.RejectDuplicates(raw) != nil || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return Candidate{}, ErrUnresolved
@@ -347,12 +374,23 @@ func selectDocumentSymbolCandidateV1(q Query, raw []byte, observe func(string)) 
 			parent := display
 			stack = append(stack, entry{s: child, depth: e.depth + 1, parent: &parent})
 		}
-		if !within(selection, Position{q.Line, q.Character}) {
+		matchRange := selection
+		if occurrence {
+			matchRange = display
+		}
+		if !within(matchRange, Position{q.Line, q.Character}) {
 			continue
 		}
 		matches = append(matches, Candidate{SymbolName: e.s.Name, SymbolKind: e.s.Kind, DisplayRange: display, SelectionRange: selection})
 	}
-	index, _ := mostSpecificV1(matches)
+	comparison := matches
+	if occurrence {
+		comparison = append([]Candidate(nil), matches...)
+		for i := range comparison {
+			comparison[i].SelectionRange = comparison[i].DisplayRange
+		}
+	}
+	index, _ := mostSpecificV1(comparison)
 	if index < 0 {
 		return Candidate{}, ErrUnresolved
 	}
@@ -373,6 +411,9 @@ func selectDocumentSymbolCandidateV1(q Query, raw []byte, observe func(string)) 
 		Display, Selection                                                    Range
 	}{q.URI, q.SessionID, q.Encoding, q.DocumentVersion, q.SourceDigest, c.DocumentSymbolResultSHA256, q.Generation, selected.SymbolName, selected.SymbolKind, selected.DisplayRange, selected.SelectionRange}
 	c.SymbolID = hash("lsp-trace:adr0011:unadmitted-document-symbol-identity:v1", identity)
+	if occurrence {
+		c.Version = OccurrenceCandidateVersionV1
+	}
 	c.ID = hash("lsp-trace:adr0011:unadmitted-query-target-candidate:v1", c)
 	return c, nil
 }

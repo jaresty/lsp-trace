@@ -306,7 +306,7 @@ func NewPrivateSelectedPreparationPlanV2(o *PrivateManagedInputOwnerV2, q Privat
 		return PrivateSelectedPreparationPlanV2{}, ErrPrivateSelectedV2
 	}
 	c.Mode = mode
-	if o == nil || q.Manager == nil || !ok || !mok || q.Timing != nil || !selectedConfigValidV2(c) {
+	if o == nil || (q.Manager == nil && q.retained == nil) || !ok || !mok || q.Timing != nil || !selectedConfigValidV2(c) {
 		return PrivateSelectedPreparationPlanV2{}, ErrPrivateSelectedV2
 	}
 	var contractErr error
@@ -325,12 +325,16 @@ func NewPrivateSelectedPreparationPlanV2(o *PrivateManagedInputOwnerV2, q Privat
 			}
 		}
 	}
-	envelope, err := q.Manager.PrivateProviderWindowEnvelope(q.Start, plan)
+	var envelope sessionruntime.PrivateProviderWindowEnvelope
+	var err error
+	if q.retained == nil {
+		envelope, err = q.Manager.PrivateProviderWindowEnvelope(q.Start, plan)
+	}
 	if err != nil {
 		return PrivateSelectedPreparationPlanV2{}, err
 	}
 	now := time.Now()
-	m, err := privateMixedChargeV2(now, q.Start.Deadline, envelope.Bounds())
+	m, err := privateSelectedMixedQuoteV1(q, now, envelope)
 	if err != nil {
 		return PrivateSelectedPreparationPlanV2{}, err
 	}
@@ -536,8 +540,22 @@ func selectedPreparedLiveV2(s *preparedSelectedV2) bool {
 }
 
 type PrivateSelectedSourceOperationV2 struct{ state *selectedSourceOperationV2 }
+
+// CompletedSelectedAccountingV1 is data-only provenance, never funding/admission.
+// The fourteen counters retain the established currency order documented below.
+type CompletedSelectedAccountingV1 struct {
+	Head, Job, Authorization, Disposition, Event                              string
+	Attempts                                                                  [3]string
+	Windows                                                                   uint64
+	Charged                                                                   [14]uint64 // logical, read/hash, write, records, parser, provider requests/messages, work, active ns, calls, request/response/wire/output bytes
+	URI, Revision, Privacy, OccurrenceID, OccurrencePolicy, CompositionPolicy string
+	Line, Character                                                           uint32
+	NativeDeadline                                                            int64
+}
+
 type selectedSourceOperationV2 struct {
 	mu                    sync.Mutex
+	completed             CompletedSelectedAccountingV1
 	used, begun, finished bool
 	prepared              *preparedSelectedV2
 	head                  string
@@ -678,5 +696,20 @@ func (op PrivateSelectedSourceOperationV2) Finish(ctx context.Context, workError
 		o.uncertain = true
 		return ErrPrivateSelectedV2
 	}
+	c := checked.Charged
+	q := p.request
+	s.completed = CompletedSelectedAccountingV1{Head: checked.Identity, Job: checked.Job.Identity, Authorization: checked.Authorization, Disposition: checked.Disposition, Event: checked.Event, Attempts: p.config.Attempts, Windows: checked.Windows, Charged: [14]uint64{c.LogicalBytes, c.ReadHashBytes, c.WriteBytes, c.Records, c.ParserBytes, c.ProviderRequests, c.ProviderMessages, c.Work, c.ActiveNS, c.Calls, c.RequestBytes, c.ResponseBytes, c.WireBytes, c.OutputBytes}, URI: q.URI, Revision: q.Revision, Privacy: q.Privacy, OccurrenceID: q.OccurrenceID, OccurrencePolicy: q.OccurrencePolicy, CompositionPolicy: q.CompositionPolicy, Line: q.Line, Character: q.Character, NativeDeadline: q.Start.Deadline.UnixNano()}
 	return nil
+}
+
+// CompletedAccountingV1 copies only the successful Finish/readback observation.
+// It neither reopens native state nor validates caller-supplied records.
+func (op PrivateSelectedSourceOperationV2) CompletedAccountingV1() (CompletedSelectedAccountingV1, bool) {
+	if op.state == nil {
+		return CompletedSelectedAccountingV1{}, false
+	}
+	s := op.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.completed, s.completed.Head != ""
 }

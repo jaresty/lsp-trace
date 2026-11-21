@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-operation-diagnostic.v1.schema.json",
+  "title": "CLI census operation diagnostic (not an MCP envelope)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "reason", "action", "retry"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.census-operation-diagnostic.v1"},
+    "operation": {"enum": ["start", "task", "read", "submit", "result", "unknown"]},
+    "reason": {"enum": ["STORE_ROOT_MISSING", "STORE_PATH_INVALID", "STORE_ALIAS_REFUSED", "STORE_PERMISSIONS", "STORE_SOURCE_OVERLAP", "STORE_IO", "CONFIG_UNCLASSIFIED", "INVALID_OPERATION", "RUN_UNAVAILABLE", "OPERATION_UNCONFIRMED"]},
+    "action": {"enum": ["CORRECT_CONFIG", "OBSERVE_CURRENT_TASK", "STOP"]},
+    "retry": {"const": false},
+    "recovery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_id", "store_context"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "store_context": {"const": "SAME_SELECTION"}
+      }
+    }
+  },
+  "oneOf": [
+    {"properties": {"operation": {"enum": ["start", "task", "read", "submit", "result"]}, "reason": {"enum": ["STORE_ROOT_MISSING", "STORE_PATH_INVALID", "STORE_ALIAS_REFUSED", "STORE_PERMISSIONS", "STORE_SOURCE_OVERLAP", "STORE_IO", "CONFIG_UNCLASSIFIED"]}, "action": {"const": "CORRECT_CONFIG"}}, "not": {"required": ["recovery"]}},
+    {"properties": {"reason": {"const": "INVALID_OPERATION"}, "action": {"const": "STOP"}}, "not": {"required": ["recovery"]}},
+    {"properties": {"operation": {"enum": ["start", "task", "read", "submit", "result"]}, "reason": {"const": "RUN_UNAVAILABLE"}, "action": {"const": "STOP"}}, "not": {"required": ["recovery"]}},
+    {"properties": {"operation": {"enum": ["task", "read", "submit", "result"]}, "reason": {"const": "OPERATION_UNCONFIRMED"}, "action": {"const": "OBSERVE_CURRENT_TASK"}}, "required": ["recovery"]}
+  ]
+}

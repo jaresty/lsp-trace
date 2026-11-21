@@ -39,6 +39,7 @@ const (
 	FamilyTechnicalCommunityRegister  = "technical-community-register"
 	FamilyPassageVerification         = "passage-verification"
 	FamilyVCSSymbolChurn              = "vcs-symbol-churn-sidecar"
+	FamilyCensusCapacityDiagnostic    = "census-capacity-diagnostic"
 	FamilyCensusFeatureCatalog        = "census-feature-catalog-result"
 	FamilyCensusRequestReceipt        = "census-request-receipt"
 	FamilyCensusDiscoveryDiagnostic   = "census-discovery-diagnostic"
@@ -75,6 +76,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyTechnicalCommunityRegister:  {"v1": "lsp-trace.technical-community-register.v1"},
 	FamilyPassageVerification:         {"v1": "lsp-trace.passage-verification.v1"},
 	FamilyVCSSymbolChurn:              {"v2": "lsp-trace.vcs-symbol-churn-sidecar.v2", "v3": "lsp-trace.vcs-symbol-churn-sidecar.v3"},
+	FamilyCensusCapacityDiagnostic:    {"v3": "lsp-trace.census-operation-diagnostic.v3"},
 	FamilyCensusFeatureCatalog:        {"v2": "lsp-trace.census-feature-catalog-result.v2"},
 	FamilyCensusRequestReceipt:        {"v1": "lsp-trace.census-request-receipt.v1", "v2": "lsp-trace.census-request-receipt.v2"},
 	FamilyCensusDiscoveryDiagnostic:   {"v2": "lsp-trace.census-discovery-diagnostic.v2"},
@@ -109,6 +111,7 @@ var versionFields = map[string]string{
 	FamilyTechnicalCommunityRegister:  "schema_version",
 	FamilyPassageVerification:         "schema_version",
 	FamilyVCSSymbolChurn:              "schema_version",
+	FamilyCensusCapacityDiagnostic:    "schema_version",
 	FamilyCensusFeatureCatalog:        "schema_version",
 	FamilyCensusRequestReceipt:        "schema_version",
 	FamilyCensusDiscoveryDiagnostic:   "schema_version",

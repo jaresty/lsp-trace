@@ -119,6 +119,26 @@ jobs:
           if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi
           if [ "$tee_status" -ne 0 ]; then exit "$tee_status"; fi
           exit "$summary_status"
+      - name: Check controlled inventory source identity
+        if: matrix.shard.id == 'linux-1' || matrix.shard.id == 'darwin-1'
+        run: go test -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusFreshIdentityCaptureV3$' -count=1 -timeout=2m
+      - name: Check Go-only normal-folder caller
+        if: matrix.shard.id == 'darwin-1'
+        run: go test -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusFolder(GoHost|HostNeutralBuild|AdmissionRequest|CrossFileInventory)$' -count=1 -timeout=2m
+      - name: Check durable inventory and legacy Describe across process exit
+        if: matrix.shard.id == 'darwin-1'
+        env:
+          GOPROXY: 'off'
+          GOSUMDB: 'off'
+          GOTOOLCHAIN: local
+          GOTELEMETRY: 'off'
+        run: |
+          go test -race ./internal/inventorysuccessor -run '^TestDurableDescribe(ProcessBoundary|CompetingProcesses|KilledClaim)$' -count=1 -timeout=2m
+          go test -race ./internal/inventorysuccessor/sourcecontinuation -run '^TestDurableMutationDeadline$' -count=1 -timeout=1m
+          go test -race ./cmd/lsp-trace -run '^TestCensusDurable(HeldOpenInput|InputComplete|InputDeadlineNotification)$' -count=1 -timeout=1m
+          go test -race -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusDurableNormalFolderProcesses$' -count=1 -timeout=3m
+          go test -race ./internal/publication -run '^TestTimedCompletion(KilledWriter|RejectsLateProof)$' -count=1 -timeout=1m
+          go test -race -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusDefaultDurableInventoryProcesses$' -count=1 -timeout=3m
       - name: Upload shard timing
         if: always()
         uses: actions/upload-artifact@v4

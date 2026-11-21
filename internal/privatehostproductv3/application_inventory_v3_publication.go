@@ -90,7 +90,7 @@ func VerifyInventoryPublicationV3(p InventoryPublicationV3, q InventoryRequestV3
 	if p.ApplicationSHA256 != binding.ApplicationSHA256 || p.RequestSHA256 != q.ApprovalSHA256 || p.LedgerID != inventoryLedgerIDV3(binding) || p.Directory != filepath.Join(q.Configuration.Store, "inventory-result-"+p.RunID[7:]) || check() != nil {
 		return ErrInvalid
 	}
-	if p.Schema != "private-application-inventory-publication-ref.v3" || !digestValue(p.ApplicationSHA256) || !digestValue(p.RunID) || p.SourceRevision != InventorySourceRevisionV3 || !digestValue(p.ManifestSHA256) || p.Authority != 0 || p.Accepted || p.Feature != "UNRESOLVED" || p.Consumer != "UNRESOLVED" || p.Completeness != "UNKNOWN" || p.Absence != "PROHIBITED" || privateDir(p.Directory) != nil {
+	if p.Schema != "private-application-inventory-publication-ref.v3" || !digestValue(p.ApplicationSHA256) || !digestValue(p.RunID) || p.SourceRevision != q.Inventory.SourceRevision || !digestValue(p.ManifestSHA256) || p.Authority != 0 || p.Accepted || p.Feature != "UNRESOLVED" || p.Consumer != "UNRESOLVED" || p.Completeness != "UNKNOWN" || p.Absence != "PROHIBITED" || privateDir(p.Directory) != nil {
 		return ErrInvalid
 	}
 	root, e := os.OpenRoot(p.Directory)
@@ -136,7 +136,7 @@ func VerifyInventoryPublicationV3(p InventoryPublicationV3, q InventoryRequestV3
 	if !inventoryReportManifestV3(report, q.Inventory.Manifest) {
 		return fmt.Errorf("inventory manifest: %w", ErrInvalid)
 	}
-	if e = inventoryCatalogReportV3(catalogs, report, binding); e != nil {
+	if e = inventoryCatalogReportV3(catalogs, report, binding, q.Inventory.SourceIdentity); e != nil {
 		return fmt.Errorf("inventory catalog report: %w", e)
 	}
 	if check() != nil {
@@ -277,7 +277,7 @@ func inventoryDispositionStatusV3(s string) bool {
 }
 
 // This verifies exported relationships, not opaque custody or native execution.
-func inventoryCatalogReportV3(cs [3]cat.NativeCatalogWireV3, r ai.Report, b InventoryBindingV3) error {
+func inventoryCatalogReportV3(cs [3]cat.NativeCatalogWireV3, r ai.Report, b InventoryBindingV3, identities ...*InventorySourceIdentityV3) error {
 	for i, c := range cs {
 		actor := b.Ready[0].LaunchID
 		if i == 2 {
@@ -304,7 +304,7 @@ func inventoryCatalogReportV3(cs [3]cat.NativeCatalogWireV3, r ai.Report, b Inve
 	leadEvidence := map[string]string{}
 	eligible := map[string]bool{}
 	for i, e := range cs[0].Evidence {
-		if e.ID == "" || (i > 0 && cs[0].Evidence[i-1].ID >= e.ID) || e.Interpreter != b.Ready[0].LaunchID || e.Origin != dw.SuppliedTerminalResponseOnly || e.Execution != dw.NoProcessOrHostExecutionVerified || !inventoryEvidenceRevisionV3(e, b.SourceRevision) {
+		if e.ID == "" || (i > 0 && cs[0].Evidence[i-1].ID >= e.ID) || e.Interpreter != b.Ready[0].LaunchID || e.Origin != dw.SuppliedTerminalResponseOnly || e.Execution != dw.NoProcessOrHostExecutionVerified || !inventoryEvidenceRevisionV3(e, b.SourceRevision, identities...) {
 			return ErrInvalid
 		}
 		record, err := dw.ParseResponseRecordV2(e.Record)

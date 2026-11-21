@@ -210,6 +210,7 @@ type controlledDescribeChild struct {
 	done              chan struct{}
 	closing           chan struct{}
 	uri               string
+	inventory         *controlledInventoryProtocol
 	stopOnce          sync.Once
 	stopErr, serveErr error
 	failCloseReport   bool
@@ -236,7 +237,9 @@ func (c *controlledDescribeChild) Close() managedprocess.ResourceObservation {
 }
 func (c *controlledDescribeChild) Teardown(context.Context) managedprocess.TeardownObservation {
 	c.Close()
-	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
+	// Close joined the sole protocol goroutine and closed every pipe endpoint.
+	// This fixed backend creates no OS process; it is not an OS process census.
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}, Census: managedprocess.GroupCensusObservation{Limit: 1, Bounded: true, Evidence: "controlled io.Pipe joined; no OS process created"}}
 }
 func (c *controlledDescribeChild) serve() {
 	defer close(c.done)
@@ -246,7 +249,11 @@ func (c *controlledDescribeChild) serve() {
 	limits.MaxBodyBytes = 32 << 10
 	reader := lspwire.NewReader(c.serverInput, limits)
 	writer := lspwire.NewWriter(c.serverOutput, limits)
-	for frames := 0; frames < 32; frames++ {
+	frameLimit := 32
+	if c.inventory != nil {
+		frameLimit = 128 // fixed 16-document constructor, not caller-selected scripts
+	}
+	for frames := 0; frames < frameLimit; frames++ {
 		msg, err := reader.Read()
 		if err != nil {
 			select {
@@ -267,7 +274,13 @@ func (c *controlledDescribeChild) serve() {
 			case "initialized", "$/cancelRequest":
 			case "textDocument/didOpen":
 				var p struct{ TextDocument struct{ URI, Text string } }
-				if json.Unmarshal(msg.Params, &p) != nil || p.TextDocument.URI != c.uri || p.TextDocument.Text != controlledDescribeDocument {
+				valid := json.Unmarshal(msg.Params, &p) == nil
+				if c.inventory != nil {
+					valid = valid && c.inventory.supply(p.TextDocument.URI, p.TextDocument.Text)
+				} else {
+					valid = valid && p.TextDocument.URI == c.uri && p.TextDocument.Text == controlledDescribeDocument
+				}
+				if !valid {
 					c.serveErr = errors.New("fixed document mismatch")
 					return
 				}
@@ -293,10 +306,18 @@ func (c *controlledDescribeChild) serve() {
 			return
 		}
 		if strings.HasPrefix(msg.Method, "textDocument/") {
-			var p struct{ TextDocument struct{ URI string } }
-			if json.Unmarshal(msg.Params, &p) != nil || p.TextDocument.URI != c.uri {
-				c.serveErr = errors.New("fixed query URI mismatch")
-				return
+			if c.inventory != nil {
+				result, err = c.inventory.response(msg)
+				if err != nil {
+					c.serveErr = err
+					return
+				}
+			} else {
+				var p struct{ TextDocument struct{ URI string } }
+				if json.Unmarshal(msg.Params, &p) != nil || p.TextDocument.URI != c.uri {
+					c.serveErr = errors.New("fixed query URI mismatch")
+					return
+				}
 			}
 		}
 		if err = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(result)}); err != nil {

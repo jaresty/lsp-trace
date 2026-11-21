@@ -60,6 +60,7 @@ func OpenPrivateManagedInputOwnerV2(ctx context.Context, root *publication.Root,
 // Handoff is zero for ACQUIRE, exact opaque runtime custody for ISSUE/REPLAY.
 // Policy/revision strings are declarations, not attestations. Kinds preserve order.
 type PrivateManagedInputBindingV2 struct {
+	retained                                                                *privateRetainedMixedInputV1
 	Manager                                                                 *sessionruntime.Manager
 	Root                                                                    *publication.Root
 	Session                                                                 sessionruntime.SessionLeaseRequest
@@ -443,6 +444,7 @@ type PrivateManagedGroupingInput struct {
 	sourceQueryOriginal  []byte
 	sourceInputOriginal  referencegrouping.AdmittedInput
 	sourceConfirmed      bool
+	retainedCompletion   *privateRetainedCompletionV1
 }
 type privateGroupingPublication struct {
 	selector, digest string
@@ -570,9 +572,26 @@ func IssuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 
 // Only the already consumed Acquire/Issue operation can reach this continuation.
 func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Manager, h sessionruntime.PrivateGroupingOwnedHandoff, q PrivateManagedGroupingRequest) (PrivateManagedGroupingInput, error) {
+	return issuePrivateManagedGroupingOwnedV1(ctx, m, h, q, nil)
+}
+
+// Both producer paths use this exact builder, publication and replay sequence.
+// The optional detached token is private completed-acquisition custody, not DTOs.
+func issuePrivateManagedGroupingOwnedV1(ctx context.Context, m *sessionruntime.Manager, h sessionruntime.PrivateGroupingOwnedHandoff, q PrivateManagedGroupingRequest, detached *privateRetainedMixedInputV1) (PrivateManagedGroupingInput, error) {
 	defer inventorytracediag.Begin(ctx, inventorytracediag.Issue).End()
 	var out PrivateManagedGroupingInput
-	err := m.ConsumePrivateGroupingOwned(ctx, h, func(v sessionruntime.PrivateGroupingOwnedView) error {
+	var detachedEvidence sessionruntime.PrivateGroupingSourceEvidence
+	consume := func(f func(sessionruntime.PrivateGroupingOwnedView) error) error {
+		return m.ConsumePrivateGroupingOwned(ctx, h, f)
+	}
+	if detached != nil {
+		consume = func(f func(sessionruntime.PrivateGroupingOwnedView) error) error {
+			var err error
+			detachedEvidence, err = detached.owned.ConsumeDiscoveryGroupingOwned(ctx, detached.index, q.OccurrenceID, q.Revision, q.Privacy, f)
+			return err
+		}
+	}
+	err := consume(func(v sessionruntime.PrivateGroupingOwnedView) error {
 		if !q.Deadline.Equal(v.Deadline) {
 			inventorytracediag.Event(ctx, inventorytracediag.OwnedDeadlineRefused)
 			return ErrPrivateManagedGrouping
@@ -582,12 +601,15 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 			return ErrPrivateManagedGrouping
 		}
 		// Re-select from the exact owned result before any publication or admission.
-		target, err := adr0011querytarget.SelectDocumentSymbolCandidateV1(v.Query, v.Symbol.Result)
+		target, err := sessionruntime.ReselectPrivateGroupingTargetV1(v)
 		if err != nil || target != v.Target || v.Symbol.Source == nil || v.Query.SourceDigest != v.Symbol.Source.SHA256 || v.Query.SourceDigest != privateGroupingDigest(v.Source) {
 			inventorytracediag.Event(ctx, inventorytracediag.OwnedTargetRefused)
 			return ErrPrivateManagedGrouping
 		}
-		if err := q.Operation.bindOwnedFixed(h, v.Query.SourceDigest); err != nil {
+		if detached != nil && detached.native != nil && !detached.owned.MatchesGroupingNativeV1(detached.native.index, v) {
+			return fmt.Errorf("%w: retained native association", ErrPrivateManagedGrouping)
+		}
+		if err := bindGroupingProducerSourceV1(q.Operation, h, detached, v.Query.SourceDigest); err != nil {
 			inventorytracediag.Event(ctx, inventorytracediag.BindOwnedRefused)
 			return err
 		}
@@ -667,7 +689,11 @@ func issuePrivateManagedGroupingInput(ctx context.Context, m *sessionruntime.Man
 	// Keep the token private until the enclosing producer confirms completion.
 	// Taking reuses the existing original lease; no source acquisition or query.
 	if len(out.ledgerOriginal) != 0 {
-		out.sourceEvidence, err = m.TakePrivateGroupingSourceEvidence(ctx, h)
+		if detached != nil {
+			out.sourceEvidence = detachedEvidence
+		} else {
+			out.sourceEvidence, err = m.TakePrivateGroupingSourceEvidence(ctx, h)
+		}
 		if err != nil {
 			inventorytracediag.Event(ctx, inventorytracediag.TakeEvidenceRefused)
 			return PrivateManagedGroupingInput{}, errors.Join(ErrPrivateManagedGrouping, err)
@@ -895,7 +921,7 @@ func privateGroupingBuild(v sessionruntime.PrivateGroupingOwnedView, q PrivateMa
 			endpoint := privateGroupingDigest(endpointRaw)
 			from, to := endpoint, v.Target.SymbolID
 			if kind == programcadmission.TypedResolvesToDefinition {
-				from, to = v.Target.SymbolID, endpoint
+				from, to = adr0011querytarget.DefinitionQueryNodeV1(v.Query, v.Target), endpoint
 			}
 			identity := privateGroupingDigest([]byte(fmt.Sprintf("private-owned-grouping\x00%s\x00%d\x00%d\x00%s\x00%d", pair.SessionID, pair.Generation, pair.Key.ID, pair.Method, item.Ordinal)))
 			o := programcadmission.MethodOccurrenceEvidence{Identity: identity, From: from, To: to, Kind: kind, Ordinal: item.Ordinal, SourceRole: sr, TargetRole: tr, Method: pair.Method, QuerySelector: "methods/query.json", QueryDigest: privateGroupingDigest(query), QueryLength: len(query), EvidenceSelector: "methods/evidence.json", EvidenceDigest: privateGroupingDigest(pair.Result), EvidenceLength: len(pair.Result), Provider: envelope.Provider, ProviderVersion: envelope.ProviderVersion, SessionID: envelope.SessionID, Generation: envelope.Generation, Revision: envelope.Revision, Custody: envelope.Custody, PositionEncoding: envelope.PositionEncoding}

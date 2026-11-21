@@ -235,7 +235,7 @@ func sameScope(a, b sessionruntime.PrivateGroupingOwnedView) bool {
 }
 func exactSourceView(v sessionruntime.PrivateGroupingOwnedView) bool {
 	q := v.Query
-	target, err := qt.SelectDocumentSymbolCandidateV1(q, v.Symbol.Result)
+	target, err := sessionruntime.ReselectPrivateGroupingTargetV1(v)
 	return err == nil && target == v.Target && v.Symbol.Method == "textDocument/documentSymbol" && v.Symbol.SessionID == q.SessionID && v.Symbol.Generation == q.Generation && v.Symbol.Source != nil && v.Symbol.Source.URI == q.URI && fmt.Sprint(v.Symbol.Source.Version) == q.DocumentVersion && v.Symbol.Source.SHA256 == q.SourceDigest && v.Supply.Classification == "LSP_SUPPLIED" && v.Supply.SessionID == q.SessionID && v.Supply.Generation == q.Generation && v.Supply.URI == q.URI && fmt.Sprint(v.Supply.DocumentVersion) == q.DocumentVersion && bytes.Equal(v.Source, v.Supply.Content) && privateSourceDigest(v.Source) == q.SourceDigest && v.Metadata.PositionEncoding == q.Encoding
 }
 
@@ -449,7 +449,7 @@ func CalculatePrivateEndpointSource(intent PrivateSourceIntent, original Candida
 				endpoint := privateSourceDigest(append(endpointRaw, '\n'))
 				rawFrom, rawTo := endpoint, v.Target.SymbolID
 				if e.Kind == "RESOLVES_TO_DEFINITION" {
-					rawFrom, rawTo = v.Target.SymbolID, endpoint
+					rawFrom, rawTo = qt.DefinitionQueryNodeV1(v.Query, v.Target), endpoint
 				}
 				if contribution.From != rawFrom || contribution.To != rawTo || item.Ordinal != e.Ordinal || pair.SessionID != v.Query.SessionID || pair.Generation != v.Query.Generation || pair.Source == nil || pair.Source.URI != v.Query.URI || pair.Source.SHA256 != v.Query.SourceDigest {
 					return gap("RAW_ENDPOINT_OR_LOCAL_ORDINAL_MISMATCH")
@@ -497,6 +497,11 @@ func CalculatePrivateEndpointSource(intent PrivateSourceIntent, original Candida
 		q := sv.Query
 		q.Line, q.Character = point.Line, point.Character
 		symbol, er := qt.SelectDocumentSymbolCandidateV1(q, sv.Symbol.Result)
+		if e.Kind == "RESOLVES_TO_DEFINITION" && e.Role == "QUERY_OCCURRENCE" && sv.Query == v.Query && sv.Target.Version == qt.OccurrenceCandidateVersionV1 {
+			// The full source unit belongs to the containing declaration; the
+			// contribution endpoint remains the distinct original query occurrence.
+			symbol, er = sessionruntime.ReselectPrivateGroupingTargetV1(sv)
+		}
 		if er != nil || exactSelection != nil && symbol.SelectionRange != *exactSelection || exactDisplay != nil && symbol.DisplayRange != *exactDisplay {
 			continue
 		}

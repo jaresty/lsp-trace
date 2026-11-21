@@ -20,6 +20,7 @@ import (
 	"lsp-trace/internal/v5sourcesnapshotv3"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -28,7 +29,53 @@ import (
 // fixture. Its authorization and semantic responses are synthetic test data,
 // not live grants, provider/model calls or evidence of context independence.
 func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
-	const assertion = "ASSERT_REVIEW_NONEMPTY_CONTROLLER"
+	publication, request := censusNonemptyIdentityControllerV3(t, "", false)
+	// Use the actual controller publication above, not a canned publication.
+	// This witnesses readback rejection, not atomic filesystem publication or
+	// normal-folder continuation (which has its own still-failing guard).
+	path := filepath.Join(publication.Directory, "report.json")
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal("ASSERT_PUBLICATION_READBACK: setup", err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0600); err != nil {
+		t.Fatal("ASSERT_PUBLICATION_READBACK: perturbation", err)
+	}
+	// Restore even if the rejection assertion fails. Never leave the fixture's
+	// publication corrupted for its other cleanup/finalization assertions.
+	t.Cleanup(func() {
+		if err := os.WriteFile(path, original, 0600); err != nil {
+			t.Error("ASSERT_PUBLICATION_READBACK: cleanup restore", err)
+		}
+	})
+	if err := product.VerifyInventoryPublicationV3(publication, request); err == nil {
+		t.Fatal("ASSERT_PUBLICATION_READBACK: FAIL accepted corrupted report")
+	}
+	t.Log("ASSERT_PUBLICATION_READBACK: rejected corrupted report")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal("ASSERT_PUBLICATION_READBACK: restore", err)
+	}
+	if err := product.VerifyInventoryPublicationV3(publication, request); err != nil {
+		t.Fatal("ASSERT_PUBLICATION_READBACK: FAIL rejected restored report", err)
+	}
+	t.Log("ASSERT_PUBLICATION_READBACK: PASS exact restored publication")
+}
+func TestCensusFreshIdentityCaptureV3(t *testing.T) {
+	for _, kind := range []string{"CLEAN_GIT", "DIRTY_GIT", "NON_GIT"} {
+		t.Run(kind, func(t *testing.T) { censusNonemptyIdentityControllerV3(t, kind, false) })
+	}
+	t.Run("stale-captured-digest", func(t *testing.T) { censusNonemptyIdentityControllerV3(t, "DIRTY_GIT", true) })
+}
+func censusNonemptyIdentityControllerV3(t *testing.T, sourceKind string, stale bool) (product.InventoryPublicationV3, product.InventoryRequestV3) {
+	t.Helper()
+	assertion := "ASSERT_REVIEW_NONEMPTY_CONTROLLER"
+	if sourceKind != "" {
+		assertion = "ASSERT_FRESH_IDENTITY_CAPTURE"
+	}
+	descriptions, calls := 1, 3
+	if stale {
+		descriptions, calls = 0, 2
+	}
 	c, root, owner, fixture := prepareCLIFixture(t)
 	t.Cleanup(func() {
 		if err := root.Close(); err != nil {
@@ -42,6 +89,23 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 		t.Fatal("SETUP_REQUEST", err)
 	}
 	q.Configuration.SourceRoot = c.Workspace
+	if sourceKind != "" {
+		document, err := os.ReadFile(strings.TrimPrefix(fixture.URI(), "file://"))
+		if err != nil {
+			t.Fatal("SETUP_DOCUMENT_IDENTITY", err)
+		}
+		expected := cat.NativeDigestV3(document)
+		if stale {
+			expected = cat.NativeDigestV3([]byte("stale approved bytes"))
+		}
+		identity := product.InventorySourceIdentityV3{Schema: "inventory-source-identity.v1", SourceRoot: c.Workspace, Kind: sourceKind, DeclaredRevision: "controlled working document", Claim: "CALLER_ASSERTED_NOT_AUTHENTICATED", Completeness: "CALLER_DECLARED_COMPLETE_NOT_FILESYSTEM_VERIFIED", Documents: []product.InventorySourceDocumentV3{{URI: fixture.URI(), SourceDigest: expected}}}
+		if sourceKind != "NON_GIT" {
+			identity.GitHead = strings.Repeat("a", 40)
+		}
+		q.Inventory.SourceIdentity = &identity
+		q.Inventory.SourceRevision = product.InventorySourceIdentityRevisionV3(identity)
+		q.Configuration.RevisionAssertion = q.Inventory.SourceRevision
+	}
 	q.Inventory.ReviewMode = cat.ReviewModeSameThreadV3
 	lead := ai.Lead{ID: "pipe-query", Provenance: "controlled pipe reference; not repository enumeration"}
 	q.Inventory.Manifest = ai.Manifest{Scope: "same-thread-one-pipe-reference", Provenance: "controlled one-lead manifest", Leads: []ai.Lead{lead}, UntouchedGaps: []string{"all other application source remains unexamined"}}
@@ -53,7 +117,7 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 		t.Fatal("SETUP_CONTRACT", err)
 	}
 	native := product.InventoryNativeInputV3{Lead: lead, Owner: owner,
-		Capture:       inv.PrivateMixedInputRequestV2{Manager: fixture.Manager(), Root: root, Start: fixture.StartRequest(c.Persist.Deadline), URI: fixture.URI(), OccurrenceID: "controlled-query", Revision: product.InventorySourceRevisionV3, Privacy: "private-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 5, Kinds: []pa.RelationKind{pa.TypedReferencesSymbol}},
+		Capture:       inv.PrivateMixedInputRequestV2{Manager: fixture.Manager(), Root: root, Start: fixture.StartRequest(c.Persist.Deadline), URI: fixture.URI(), OccurrenceID: "controlled-query", Revision: q.Inventory.SourceRevision, Privacy: "private-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 5, Kinds: []pa.RelationKind{pa.TypedReferencesSymbol}},
 		Configuration: inv.PrivateSelectedConfigurationV2{RunID: "nonempty-fixture", SeedNamespace: "nonempty-fixture-seed", Lineage: "nonempty-fixture-lineage", Mode: "R", Seed: 7, Attempts: [3]string{prepareCLIHash("nonempty-M"), prepareCLIHash("nonempty-P"), prepareCLIHash("nonempty-S")}, Contract: contract, ContractInput: input, SourceLimits: targetpacket.PrivateSourceLimits{MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20, MaxWork: 10000, MaxObjects: 1000}},
 		Role:          sc.PrivateSelectedRoleV3{Kind: "REFERENCES_SYMBOL", Role: "REFERENCED_SYMBOL"},
 	}
@@ -99,7 +163,11 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 	})
 	var proposedRevision string
 	cursor := map[string]uint64{}
-	for _, operation := range []string{"Describe", "GroupDecision", "Reviewer"} {
+	operations := []string{"Describe", "GroupDecision", "Reviewer"}
+	if stale {
+		operations = operations[1:]
+	}
+	for _, operation := range operations {
 		role := "interpreter"
 		if operation == "Reviewer" {
 			role = "reviewer"
@@ -110,7 +178,7 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 			t.Fatal(assertion, "FAIL exchange", operation, code, diagnostic, string(eventBytes))
 		}
 		frame, err := product.ReadInventoryBundleV3(*event.Bundle)
-		if err != nil || frame.Operation != operation || frame.Role != role || frame.LaunchID != actor {
+		if err != nil || frame.Operation != operation || frame.Role != role || frame.LaunchID != actor || frame.SourceRevision != q.Inventory.SourceRevision {
 			t.Fatal(assertion, "FAIL operation binding", operation, frame.Operation, frame.Role, frame.LaunchID, err, string(frame.Payload))
 		}
 		cursor[role] = event.GlobalSequence
@@ -123,23 +191,30 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 			payload = dw.EncodeAdapterResultV2(`{"verdict":"COMPLETE","target_role":"holds a fixture reference","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"references Query","consumer_relative":false},"boundary_contribution":"fixture-local reference","limitations":["controlled fixture; no application completeness"]}`)
 		} else {
 			var catalog cat.NativeCatalogWireV3
-			if err := cat.DecodeNativeV3(frame.Payload, &catalog); err != nil || len(catalog.Evidence) != 1 || catalog.ReviewMode != cat.ReviewModeSameThreadV3 {
+			if err := cat.DecodeNativeV3(frame.Payload, &catalog); err != nil || len(catalog.Evidence) != descriptions || catalog.ReviewMode != cat.ReviewModeSameThreadV3 {
 				t.Fatal(assertion, "FAIL bound description", operation, err)
 			}
-			group := cat.NativeGroupV3{ID: "fixture-reference", Label: "fixture reference", Reason: "controlled proposal", Members: []string{catalog.Evidence[0].ID}}
-			affected := []string{}
-			if operation == "Reviewer" {
-				if len(catalog.Groups) != 1 || catalog.Predecessor != proposedRevision || catalog.Actor != actor {
-					t.Fatal(assertion, "FAIL reviewer did not receive proposal")
+			if stale {
+				if fixture.Manager().Census().Workers != 0 || !fixture.CloseSnapshot().PipeJoined {
+					t.Fatal(assertion, "FAIL native preparation/cleanup not observed")
 				}
-				group = catalog.Groups[0]
-				group.Label = "sequentially reviewed fixture reference"
-				group.Reason = "separate review exchange; not independent context"
-				affected = []string{group.ID}
+				payload, _ = json.Marshal(cat.NativeDecisionV3{Predecessor: catalog.Revision, Actor: actor, Reason: "unresolved stale source expectation", Affected: []string{}, Groups: []cat.NativeGroupV3{}})
 			} else {
-				proposedRevision = catalog.Revision
+				group := cat.NativeGroupV3{ID: "fixture-reference", Label: "fixture reference", Reason: "controlled proposal", Members: []string{catalog.Evidence[0].ID}}
+				affected := []string{}
+				if operation == "Reviewer" {
+					if len(catalog.Groups) != 1 || catalog.Predecessor != proposedRevision || catalog.Actor != actor {
+						t.Fatal(assertion, "FAIL reviewer did not receive proposal")
+					}
+					group = catalog.Groups[0]
+					group.Label = "sequentially reviewed fixture reference"
+					group.Reason = "separate review exchange; not independent context"
+					affected = []string{group.ID}
+				} else {
+					proposedRevision = catalog.Revision
+				}
+				payload, _ = json.Marshal(cat.NativeDecisionV3{Predecessor: catalog.Revision, Actor: actor, Reason: "scripted sequential review; not authenticated", Affected: affected, Groups: []cat.NativeGroupV3{group}})
 			}
-			payload, _ = json.Marshal(cat.NativeDecisionV3{Predecessor: catalog.Revision, Actor: actor, Reason: "scripted sequential review; not authenticated", Affected: affected, Groups: []cat.NativeGroupV3{group}})
 		}
 		code, _, diagnostic = inventoryTestEntry([]string{"respond", path, setup.RunID, role, fmt.Sprint(event.GlobalSequence)}, payload)
 		if code != 0 {
@@ -149,11 +224,15 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 	result := <-done
 	done <- result
 	var terminal applicationInventoryTerminalRecordV3
-	if result.code != 0 || json.Unmarshal(result.raw, &terminal) != nil || terminal.Status != "PROVISIONAL" || terminal.InventoryHead == "" || terminal.Calls != 3 || terminal.Authority != 0 || terminal.Accepted || terminal.Completeness != "UNKNOWN" {
+	expectedCode, expectedStatus := 0, "PROVISIONAL"
+	if stale {
+		expectedCode, expectedStatus = 1, "PROVISIONAL_WITH_PREPARATION_REFUSALS"
+	}
+	if result.code != expectedCode || json.Unmarshal(result.raw, &terminal) != nil || terminal.Status != expectedStatus || terminal.InventoryHead == "" || terminal.Calls != uint64(calls) || terminal.Authority != 0 || terminal.Accepted || terminal.Completeness != "UNKNOWN" {
 		t.Fatal(assertion, "FAIL terminal", result.code, result.err, string(result.raw))
 	}
 	var publication product.InventoryPublicationV3
-	if err := product.ReadApplicationRecord(q.Configuration.Store, terminal.InventoryHead, &publication); err != nil || product.VerifyInventoryPublicationV3(publication, q) != nil || publication.Leads != 1 || publication.Dispositions != 1 || publication.SuccessfulDescriptions != 1 || publication.UntouchedGaps != 1 {
+	if err := product.ReadApplicationRecord(q.Configuration.Store, terminal.InventoryHead, &publication); err != nil || product.VerifyInventoryPublicationV3(publication, q) != nil || publication.Leads != 1 || publication.Dispositions != 1 || publication.SuccessfulDescriptions != descriptions || publication.UntouchedGaps != 1 {
 		t.Fatal(assertion, "FAIL publication reopen", err)
 	}
 	read := func(name string, value any) {
@@ -167,8 +246,15 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 	read("report.json", &report)
 	var corrected cat.NativeCatalogWireV3
 	read("catalog-corrected.json", &corrected)
-	if !report.Published || report.ReviewMode != cat.ReviewModeSameThreadV3 || report.SuccessfulDescriptions != 1 || report.WithMembership != 1 || report.WithoutMembership != 0 || len(report.Census) != 1 || len(report.Dispositions) != 1 || report.Dispositions[0].LeadID != lead.ID || report.Stages["review"].Successful != 1 || corrected.ReviewMode != cat.ReviewModeSameThreadV3 || corrected.ReviewIdentity != "NOT_AUTHENTICATED" || len(corrected.Evidence) != 1 || len(corrected.Groups) != 1 || len(corrected.Groups[0].Members) != 1 || corrected.Groups[0].Members[0] != corrected.Evidence[0].ID || corrected.Groups[0].Label != "sequentially reviewed fixture reference" || corrected.Authority != 0 || corrected.Accepted || corrected.Completeness != "UNKNOWN" {
+	if !report.Published || report.ReviewMode != cat.ReviewModeSameThreadV3 || report.SuccessfulDescriptions != descriptions || report.WithMembership != descriptions || report.WithoutMembership != 0 || len(report.Census) != 1 || len(report.Dispositions) != 1 || report.Dispositions[0].LeadID != lead.ID || report.Stages["review"].Successful != 1 || corrected.ReviewMode != cat.ReviewModeSameThreadV3 || corrected.ReviewIdentity != "NOT_AUTHENTICATED" || len(corrected.Evidence) != descriptions || len(corrected.Groups) != descriptions || corrected.Authority != 0 || corrected.Accepted || corrected.Completeness != "UNKNOWN" {
 		t.Fatal(assertion, "FAIL conservation or review", report, corrected)
+	}
+	if stale {
+		if report.Dispositions[0].Status != "PREPARATION_FAILED" {
+			t.Fatal(assertion, "FAIL stale source not unresolved", report.Dispositions)
+		}
+	} else if len(corrected.Groups[0].Members) != 1 || corrected.Groups[0].Members[0] != corrected.Evidence[0].ID || corrected.Groups[0].Label != "sequentially reviewed fixture reference" {
+		t.Fatal(assertion, "FAIL reviewed membership")
 	}
 	// The return helper needs only these legacy configuration/mode fields; the
 	// actual finalizer independently decodes the full target-bound request on disk.
@@ -188,4 +274,5 @@ func TestCensusReviewModeNonemptyControllerV3(t *testing.T) {
 		t.Fatal(assertion, "FAIL post-finalization reopen")
 	}
 	t.Log(assertion + ": PASS")
+	return publication, q
 }

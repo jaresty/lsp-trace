@@ -26,6 +26,22 @@ func NewCallerBudgetV3(deadline time.Time, bytes uint64) (*CallerBudgetV3, error
 	}
 	return &CallerBudgetV3{deadline: deadline, limit: bytes}, nil
 }
+
+// NewReservedCallerBudgetV3 spends only a slice already reserved by the durable
+// run's CAS ledger. Previously spent bytes and semantic windows are not reset.
+// This is logical accounting, never a native grant or imported capability.
+func NewReservedCallerBudgetV3(deadline time.Time, allowance, previouslySpent uint64, semantic time.Duration) (*CallerBudgetV3, error) {
+	if allowance == 0 || previouslySpent > 64<<20 || allowance > (64<<20)-previouslySpent || semantic < 0 || semantic > 120*time.Second {
+		return nil, ErrCallerBudgetV3
+	}
+	b, err := NewCallerBudgetV3(deadline, previouslySpent+allowance)
+	if err != nil {
+		return nil, err
+	}
+	b.spent, b.semantic = previouslySpent, semantic
+	return b, nil
+}
+
 func (b *CallerBudgetV3) Reserve(ctx context.Context, bytes uint64) error {
 	if b == nil || ctx == nil {
 		return ErrCallerBudgetV3

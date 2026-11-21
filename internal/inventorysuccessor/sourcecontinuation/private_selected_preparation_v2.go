@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	cc "lsp-trace/internal/censuscontinuation"
@@ -28,12 +29,14 @@ type PrivateSelectedEndpointV2 struct {
 
 type PrivateSelectedResultV2 struct{ state *selectedNativeResultV2 }
 type selectedNativeResultV2 struct {
-	selected  PrivateSelectedEndpointV2
-	unit      tp.PrivateSourceUnit
-	request   describerequest.Record
-	admission inv.PrivateSourceAdmission
-	metadata  cc.PrivateAllModeResult
-	sources   PrivateAllModeSourcesResult
+	durableIssued atomic.Bool // one owner-issued durable task, including failed/uncertain issuance
+	accounting    inv.CompletedSelectedAccountingV1
+	selected      PrivateSelectedEndpointV2
+	unit          tp.PrivateSourceUnit
+	request       describerequest.Record
+	admission     inv.PrivateSourceAdmission
+	metadata      cc.PrivateAllModeResult
+	sources       PrivateAllModeSourcesResult
 }
 
 func (r PrivateSelectedResultV2) Available() bool { return r.state != nil }
@@ -254,6 +257,12 @@ func prepareSelectedRoleCriterionV3(ctx context.Context, op inv.PrivateSelectedS
 		}
 		err = op.Finish(execution, err)
 		if err == nil && candidate != nil && execution.Err() == nil && ctx.Err() == nil && time.Now().Before(original.Deadline()) {
+			var complete bool
+			candidate.accounting, complete = op.CompletedAccountingV1()
+			if !complete {
+				err = inv.ErrPrivateSelectedV2
+				return
+			}
 			result = PrivateSelectedResultV2{candidate}
 		} else {
 			result = PrivateSelectedResultV2{}
@@ -315,7 +324,7 @@ func prepareSelectedRoleCriterionV3(ctx context.Context, op inv.PrivateSelectedS
 	if found != 1 {
 		return result, ErrPrivateSelectedRowV2
 	}
-	candidate = &selectedNativeResultV2{row, unit, record, admission, meta, *resumed.PrivateSources}
+	candidate = &selectedNativeResultV2{selected: row, unit: unit, request: record, admission: admission, metadata: meta, sources: *resumed.PrivateSources}
 	return result, nil
 }
 

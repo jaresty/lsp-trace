@@ -62,12 +62,14 @@ func runCensusNativeCatalog(options censusCLIOptions, cfg censusCoreConfig, stdo
 	return runCensusNativeCatalogWithDependencies(options, cfg, stdout, stderr, productionCensusNativeCatalogDependencies())
 }
 
-func runCensusNativeCatalogWithDependencies(options censusCLIOptions, cfg censusCoreConfig, _ io.Writer, stderr io.Writer, deps censusNativeCatalogDependencies) int {
-	// Normal inventory has no connected caller-host route yet. Do not spend
-	// native work only to discover the unavailable semantic handoff afterward.
-	// Explicit legacy acquisition remains separate from this inventory entry.
+func runCensusNativeCatalogWithDependencies(options censusCLIOptions, cfg censusCoreConfig, stdout io.Writer, stderr io.Writer, deps censusNativeCatalogDependencies) int {
 	if options.FolderInvocation {
-		return writeCensusFailure(stderr, censusStageConfig, options.Machine, errCensusCallerHostUnavailable)
+		// Invocation-consented acquisition has its own fresh bound admission.
+		// Missing preparation is not permission to re-enumerate or start work.
+		if cfg.folderPreparation == nil || cfg.folderStarter == nil {
+			return writeCensusFailure(stderr, censusStageConfig, options.Machine, errCensusCallerHostUnavailable)
+		}
+		return runCensusFolderAcquisition(options, cfg, stderr, stdout)
 	}
 	fail := func(stage censusFailureStage, err error) int {
 		cfg.controlFlow.cause(censuscontrolflow.CoreFailed, censusControlFlowPhase(stage))

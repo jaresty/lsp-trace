@@ -55,10 +55,31 @@ func liveSelectedV3(ctx context.Context, d time.Time) bool {
 }
 func smallSelectedV3(s string) bool { return len(s) > 0 && len(s) <= 256 }
 
+// selectedMetadataUpperV3 sizes only scalar collection headers before walking
+// owned metadata. Each of the <=64 handoff entries has a fixed set of scalar
+// identity/length comparisons (64KiB base); 1024 per variable entry covers the
+// fixed scalar-field length sums. Payload bytes are not scanned or cloned here.
+// Payload/escaping/proof multipliers remain in sourceResponseRetainedUpper.
+func selectedMetadataUpperV3(r PrivateSelectedResultV2) uint64 {
+	if r.state == nil || r.state.sources.Expected.state == nil {
+		return 64 << 20
+	}
+	s := r.state
+	e := s.sources.Expected.state
+	n := uint64(65536)
+	for _, count := range []int{len(s.sources.Outcomes), len(s.sources.Units), len(s.sources.Requests), len(s.metadata.Intents), len(e.request.Originals), len(e.request.Objects), len(e.request.Definitions), len(e.admissions)} {
+		if count > 1000 {
+			return 64 << 20
+		}
+		n += uint64(count) * 1024
+	}
+	return n
+}
+
 // CallerRetentionUpperV3 is charged length-only metadata, not admission, native
 // credit, or source acquisition. It accounts existing state held across the tail.
 func (r PrivateSelectedResultV2) CallerRetentionUpperV3(ctx context.Context, b *CallerBudgetV3) (uint64, error) {
-	if r.state == nil || b.Reserve(ctx, 1<<20) != nil {
+	if r.state == nil || b.Reserve(ctx, selectedMetadataUpperV3(r)) != nil {
 		return 0, ErrSelectedConsumerV3
 	}
 	s := r.state
@@ -78,7 +99,7 @@ func (r PrivateSelectedResultV2) CallerRetentionUpperV3(ctx context.Context, b *
 
 func PrepareSelectedDescribeV3(ctx context.Context, r PrivateSelectedResultV2, b CallerDescribeBindingV3) (SelectedDescribeV3, error) {
 	bad := func() (SelectedDescribeV3, error) { return SelectedDescribeV3{}, ErrSelectedConsumerV3 }
-	if !liveSelectedV3(ctx, b.Deadline) || time.Until(b.Deadline) > 30*time.Second || !smallSelectedV3(b.AttemptID) || !smallSelectedV3(b.Interpreter) || !b.Limits.Valid() || b.Budget.Reserve(ctx, 1<<20) != nil || r.state == nil {
+	if !liveSelectedV3(ctx, b.Deadline) || time.Until(b.Deadline) > 30*time.Second || !smallSelectedV3(b.AttemptID) || !smallSelectedV3(b.Interpreter) || !b.Limits.Valid() || b.Budget.Reserve(ctx, selectedMetadataUpperV3(r)) != nil || r.state == nil {
 		return bad()
 	}
 	s := r.state

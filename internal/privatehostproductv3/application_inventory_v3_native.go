@@ -78,6 +78,14 @@ func InventoryNativeDeadlineValidV3(ctx context.Context, deadline time.Time) boo
 }
 
 func (inputs InventoryNativeInputsV3) Preparer(sourceRoot, revision string, targets ...InventoryTargetV3) ai.NativePreparer {
+	return inputs.PreparerWithIdentityV3(sourceRoot, revision, nil, targets...)
+}
+
+// PreparerWithIdentityV3 binds expectations to the same existing paid native operator.
+// The declaration never constructs an owner or authorizes acquisition.
+func (inputs InventoryNativeInputsV3) PreparerWithIdentityV3(sourceRoot, revision string, identity *InventorySourceIdentityV3, targets ...InventoryTargetV3) ai.NativePreparer {
+	identity = inventorySourceIdentityCopyV3(identity)
+	identityValid := inventoryRequestSourceIdentityV3(InventoryRequestV3{Configuration: ApplicationConfig{SourceRoot: sourceRoot, RevisionAssertion: revision}, Inventory: InventoryOptionsV3{SourceRevision: revision, SourceIdentity: identity}})
 	// Copy descriptors, not owners. Nothing constructs, opens, renews or funds one.
 	expected := make(map[string]InventoryTargetV3, len(targets))
 	for _, t := range targets {
@@ -90,7 +98,7 @@ func (inputs InventoryNativeInputsV3) Preparer(sourceRoot, revision string, targ
 	}
 	return func(ctx context.Context, l ai.Lead) (ai.NativeResult, error) {
 		v, ok := owned[l.ID]
-		if !ok || v.Owner == nil || v.Lead != l || ctx == nil || ctx.Err() != nil || revision != InventorySourceRevisionV3 || v.Capture.Revision != revision || !v.Role.Valid() || v.Capture.Start.Profile.Workspace().String() != sourceRoot || v.Capture.Start.Deadline.IsZero() || !time.Now().Before(v.Capture.Start.Deadline) || time.Until(v.Capture.Start.Deadline) > 15*time.Second {
+		if !ok || v.Owner == nil || v.Lead != l || ctx == nil || ctx.Err() != nil || !identityValid || v.Capture.Revision != revision || !v.Role.Valid() || v.Capture.Start.Profile.Workspace().String() != sourceRoot || v.Capture.Start.Deadline.IsZero() || !time.Now().Before(v.Capture.Start.Deadline) || time.Until(v.Capture.Start.Deadline) > 15*time.Second {
 			return ai.NativeResult{}, ErrInvalid
 		}
 		target, admitted := expected[l.ID]
@@ -113,6 +121,12 @@ func (inputs InventoryNativeInputsV3) Preparer(sourceRoot, revision string, targ
 		selected, e := so.PrepareSelectedRoleV3(ctx, v.Owner, v.Capture, v.Configuration, v.Role)
 		if e != nil {
 			return ai.NativeResult{}, e
+		}
+		if identity != nil {
+			_, unit, _, available := selected.Selected()
+			if !available || !inventorySourceUnitMatchesV3(identity, revision, unit) {
+				return ai.NativeResult{}, ErrInvalid
+			}
 		}
 		return ai.NativeResult{Selected: selected, Status: "SELECTED"}, nil
 	}

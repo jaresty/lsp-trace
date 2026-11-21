@@ -38,12 +38,17 @@ type Report struct {
 	Stages                                                                       map[string]Stage
 	SuccessfulDescriptions, WithMembership, WithoutMembership                    int
 	CallerBytes                                                                  uint64
-	SemanticReservedNS                                                           int64
-	CallbackContainment                                                          string
-	CallerAccounting                                                             string
-	CatalogRevision                                                              string
-	Published                                                                    bool
-	ReviewMode                                                                   cat.ReviewModeV3 `json:",omitempty"`
+	// Durable ledger snapshots include conservative reservations, including unused
+	// claimed slices. They are not refunded by a later failure or process exit.
+	PublicationRunReservedBytes uint64 `json:",omitempty"`
+	PublicationRunWork          uint64 `json:",omitempty"`
+	PublicationRunPackets       uint64 `json:",omitempty"`
+	SemanticReservedNS          int64
+	CallbackContainment         string
+	CallerAccounting            string
+	CatalogRevision             string
+	Published                   bool
+	ReviewMode                  cat.ReviewModeV3 `json:",omitempty"`
 }
 type NativeResult struct {
 	Selected sc.PrivateSelectedResultV2
@@ -119,10 +124,7 @@ func exchangeV3(ctx context.Context, b *sc.CallerBudgetV3, fn ByteExchange, in [
 	return raw, nil
 }
 func Run(ctx context.Context, q Request) (out Report, err error) {
-	out = Report{Version: "lsp-trace.application-inventory.v3", Status: "PROVISIONAL", Feature: "UNRESOLVED", Consumer: "UNRESOLVED", Completeness: "UNKNOWN", Absence: "PROHIBITED", CallbackContainment: "COOPERATIVE_NOT_OS_PHYSICAL", Stages: map[string]Stage{}}
-	for _, name := range []string{"census", "native_preparation", "describe", "group_decision", "review", "catalog", "publication"} {
-		out.Stages[name] = Stage{}
-	}
+	out = initialInventoryReport()
 	if ctx == nil || ctx.Err() != nil || !q.ReviewMode.Valid() {
 		return out, ErrInventoryV3
 	}
@@ -149,54 +151,13 @@ func Run(ctx context.Context, q Request) (out Report, err error) {
 			err = errors.Join(err, ctx.Err())
 		}
 	}()
-	// Reserve all admitted lead storage, validation and eventual report copies before
-	// snapshot; counts/lengths are bounded before loops. Duplicates reject admission.
-	var n uint64 = 32768 + uint64(len(q.Manifest.Leads))*1024 + uint64(len(q.Manifest.UntouchedGaps))*128
-	for _, l := range q.Manifest.Leads {
-		if len(l.ID) == 0 || len(l.ID) > 256 || len(l.Provenance) > 4096 {
-			return out, ErrInventoryV3
-		}
-		n += uint64(len(l.ID)+len(l.Provenance)) * 12
+	var n uint64
+	out, n, e = admitInventoryManifest(ctx, q, budget, out)
+	if e != nil {
+		return out, e
 	}
-	for _, g := range q.Manifest.UntouchedGaps {
-		if len(g) > 4096 {
-			return out, ErrInventoryV3
-		}
-		n += uint64(len(g)) * 12
-	}
-	if budget.Reserve(ctx, n) != nil {
-		return out, ErrInventoryV3
-	}
-	manifest := q.Manifest
-	manifest.Leads = append([]Lead(nil), manifest.Leads...)
-	manifest.UntouchedGaps = append([]string(nil), manifest.UntouchedGaps...)
-	seen := map[string]bool{}
-	for _, l := range manifest.Leads {
-		if seen[l.ID] {
-			return out, ErrInventoryV3
-		}
-		seen[l.ID] = true
-	}
-	out.Scope = manifest.Scope
-	out.Provenance = manifest.Provenance
-	out.UntouchedGaps = manifest.UntouchedGaps
-	out.Census = manifest.Leads // existing pre-reserved immutable admission snapshot
-	for _, l := range manifest.Leads {
-		out.Dispositions = append(out.Dispositions, Disposition{l.ID, "UNTOUCHED", "NOT_ATTEMPTED"})
-	}
-	stage := func(name string, ok bool) {
-		s := out.Stages[name]
-		s.Requested++
-		if ok {
-			s.Successful++
-		} else {
-			s.Failed++
-		}
-		out.Stages[name] = s
-	}
-	for range manifest.Leads {
-		stage("census", true)
-	}
+	manifest := Manifest{Scope: out.Scope, Provenance: out.Provenance, Leads: out.Census, UntouchedGaps: out.UntouchedGaps}
+	stage := func(name string, ok bool) { recordInventoryStage(&out, name, ok) }
 	if q.Preparer == nil || q.MaxNativeAttempts == 0 {
 		return out, ErrInventoryV3
 	}
@@ -282,11 +243,8 @@ func Run(ctx context.Context, q Request) (out Report, err error) {
 			out.Dispositions[i] = Disposition{l.ID, "DESCRIBE_FAILED", "STRICT_HOST_OR_BINDER_REFUSED"}
 			continue
 		}
-		stage("describe", true)
 		descriptions = append(descriptions, bound)
-		out.SuccessfulDescriptions++
-		out.WithoutMembership++ // remains unmatched on any later stage refusal
-		out.Dispositions[i] = Disposition{l.ID, "DESCRIBED_UNMATCHED", "NO_SEMANTIC_MEMBERSHIP"}
+		recordInventoryDescription(&out, i)
 	}
 	// Exhausted/cancelled paths keep all unvisited lead dispositions; they cannot
 	// report delivery success. Stage conservation remains explicit on every path.
@@ -314,7 +272,7 @@ func Run(ctx context.Context, q Request) (out Report, err error) {
 		stage("group_decision", false)
 		return out, e
 	}
-	proposed, e := cat.ApplyNativeDecisionV3(ctx, base, groups, false)
+	proposed, e := applyInventoryDecision(ctx, budget, base, groups, false, q.Interpreter)
 	stage("group_decision", e == nil)
 	stage("catalog", e == nil)
 	if e != nil {
@@ -333,102 +291,16 @@ func Run(ctx context.Context, q Request) (out Report, err error) {
 		stage("review", false)
 		return out, e
 	}
-	if budget.Reserve(ctx, uint64(len(reviewedRaw))*8+4096) != nil {
-		stage("review", false)
-		return out, ErrInventoryV3
-	}
-	var decision cat.NativeDecisionV3
-	if cat.DecodeNativeV3(reviewedRaw, &decision) != nil || decision.Actor != q.ReviewerIdentity {
-		stage("review", false)
-		return out, ErrInventoryV3
-	}
-	corrected, e := cat.ApplyNativeDecisionV3(ctx, proposed, reviewedRaw, true)
+	// Shared transition owns the single charged decode and exact reviewer check.
+	corrected, e := applyInventoryDecision(ctx, budget, proposed, reviewedRaw, true, q.ReviewerIdentity)
 	stage("review", e == nil)
 	stage("catalog", e == nil)
 	if e != nil {
 		return out, e
 	}
-	// Stage a charged reconciliation; no corrected report state escapes until
-	// every fallible read and per-lead/count check below has succeeded.
-	withMembership, withoutMembership := corrected.MembershipCounts()
-	revision := corrected.Revision()
-	if budget.Reserve(ctx, uint64(len(out.Dispositions))*192+uint64(len(descriptions))*1024+8192) != nil {
-		return out, ErrInventoryV3
-	}
-	reconciled := append([]Disposition(nil), out.Dispositions...)
-	finalRaw, e := corrected.Bytes(ctx)
+	out, finalRaw, e := reconcileInventory(ctx, budget, out, descriptions, corrected)
 	if e != nil {
 		return out, e
 	}
-	var final cat.NativeCatalogWireV3
-	if budget.Reserve(ctx, uint64(len(finalRaw))*8+4096) != nil || cat.DecodeNativeV3(finalRaw, &final) != nil {
-		return out, ErrInventoryV3
-	}
-	membership := map[string]bool{}
-	for _, g := range final.Groups {
-		for _, id := range g.Members {
-			membership[id] = true
-		}
-	}
-	// Description order follows processing, evidence order is deterministic by ID.
-	j := 0
-	for i := range reconciled {
-		if reconciled[i].Status == "DESCRIBED_UNMATCHED" {
-			if j >= len(descriptions) {
-				return out, ErrInventoryV3
-			}
-			ev, e := descriptions[j].Evidence(ctx)
-			if e != nil {
-				return out, e
-			}
-			j++
-			if membership[ev.ID] {
-				reconciled[i].Status = "DESCRIBED_WITH_MEMBERSHIP"
-				reconciled[i].Reason = "SUPPLIED_SEMANTIC_PROPOSAL_REVIEWED_UNAUTHENTICATED"
-			}
-		}
-	}
-	if len(reconciled) != len(out.Census) || j != len(descriptions) {
-		return out, ErrInventoryV3
-	}
-	matched, unmatched := 0, 0
-	for i, d := range reconciled {
-		if d.LeadID != out.Census[i].ID {
-			return out, ErrInventoryV3
-		}
-		switch d.Status {
-		case "DESCRIBED_WITH_MEMBERSHIP":
-			matched++
-		case "DESCRIBED_UNMATCHED":
-			unmatched++
-		}
-	}
-	if matched != withMembership || unmatched != withoutMembership || matched+unmatched != out.SuccessfulDescriptions {
-		return out, ErrInventoryV3
-	}
-	// One report-state commit; there is no intervening fallible operation.
-	out.WithMembership, out.WithoutMembership, out.CatalogRevision, out.Dispositions = withMembership, withoutMembership, revision, reconciled
-	// Reserve reporting, all publication bytes, write and readback before effects.
-	if budget.Reserve(ctx, n+uint64(len(finalRaw))*2+32768) != nil {
-		return out, ErrInventoryV3
-	}
-	out.CallerAccounting = "PRE_PUBLICATION_SNAPSHOT_FINAL_IN_MANIFEST"
-	out.Published = true
-	stage("publication", true)
-	callerBytes, semanticReserved := budget.Usage()
-	out.CallerBytes, out.SemanticReservedNS = callerBytes, int64(semanticReserved)
-	report, e := json.Marshal(out)
-	if e != nil {
-		out.Published = false
-		out.Stages["publication"] = Stage{Requested: 1, Failed: 1}
-		return out, e
-	}
-	_, e = PublishV3(ctx, q.Destination, []ArtifactV3{{"catalog-base.json", baseRaw}, {"catalog-proposed.json", proposedRaw}, {"catalog-corrected.json", finalRaw}, {"report.json", report}}, budget)
-	if e != nil {
-		out.Published = false
-		out.Stages["publication"] = Stage{Requested: 1, Failed: 1}
-		return out, e
-	}
-	out.Published = true
-	return out, nil
+	return publishInventory(ctx, q, budget, out, n, baseRaw, proposedRaw, finalRaw)
 }

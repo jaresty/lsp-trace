@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"lsp-trace/acquisitionops"
@@ -33,9 +32,9 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const censusInvocationUsage = "lsp-trace census [FOLDER] [--machine] [scope/limit flags] (caller-hosted inventory entry; semantic handoff unavailable)\n  Legacy explicit acquisition: " + censusLegacyInvocationUsage
+const censusInvocationUsage = "lsp-trace census [FOLDER] (structured durable inventory tasks)"
 const censusLegacyInvocationUsage = "lsp-trace census (((--workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--catalog --catalog-config HOST_JSON] [--stop-after describe-requests] [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--batch-targets N] [--timeout DURATION] [--request-timeout DURATION]) | (--workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine)) | (--resume SELECTOR --catalog-config HOST_JSON --publication-root ABSOLUTE_PATH [--workspace PATH] [--stop-after describe-requests])) [--machine]"
-const censusUsage = "usage: lsp-trace census [FOLDER] [--machine] [--server COMMAND | --profile NAME [--config PATH]] [--publication-root ABSOLUTE_PATH] [scope/limit flags]\nNormal inventory entry: FOLDER defaults to the current directory. Automatic Go/gopls selection requires root go.mod or go.work and no competing root language marker. Explicit server/profile selection is supported.\nRuns use fresh private storage under the OS per-user configuration/application-support directory (lsp-trace/census), or beneath --publication-root; storage must be outside the workspace. Failed runs are retained.\nCaller-hosted semantic inventory handoff is currently unavailable. Normal folder entry fails before native catalog acquisition/assembly, never reports inventory success, and requires no provider credentials. Explicit --workspace acquisition remains a separate legacy mode.\nLegacy explicit acquisition (selected with --workspace; without --catalog it does not imply inventory):\n       " + censusLegacyInvocationUsage + "\n       lsp-trace census --catalog --caller-host --catalog-config ABSOLUTE_PATH --machine\n       Add --save-caller-host-settings ABSOLUTE_PATH to export non-expiring settings without execution.\n       With saved settings, supply --caller-host-attempt-config ABSOLUTE_PATH for separately admitted fresh execution state.\nCaller-HOST catalog: connected bridge configuration owns source, publication root, authorization and lifecycle action; ordinary acquisition flags are rejected. Resume through the configuration's frozen RunID and lifecycle action, not legacy --resume.\n       lsp-trace census --machine --private-inventory-qualified-prepare-config ABSOLUTE_PATH\nQualified preparation only: strict caller-declared complete universe, original bindings and explicit selection; private bounded artifacts; no provider startup or execution admission."
+const censusUsage = "usage: lsp-trace census [FOLDER] [scope/limit flags]\nNormal inventory entry: FOLDER defaults to the current directory. Automatic Go/gopls selection requires root go.mod or go.work and no competing root language marker.\nReturns structured JSON and structured diagnostics by default; --machine is a compatibility alias, not a workflow switch.\nRuns use fresh private storage under the OS per-user configuration/application-support directory (lsp-trace/census), or --publication-root ABSOLUTE_PRIVATE_DIRECTORY. Storage must be outside the workspace and is preflighted before provider effects. Failed runs are retained.\nNormal folder entry prepares bounded original evidence and returns a durable task, not a completed inventory. Follow its Contract.Operations to read evidence and submit judgments; no model/runtime selection or credentials are required. Explicit store selection must be repeated on follow-up commands; returned operation arrays include it.\nThe normal durable application timeout defaults to 180s, fixed before preparation; explicit --timeout overrides and legacy defaults are preserved.\nDescribe, grouping and separate review judgments come from the caller. Verified publication stays Authority 0, Accepted false, completeness UNKNOWN. Darwin native lifecycle only; see docs/census-durable-inventory.md.\nLegacy explicit acquisition and connected/private routes remain compatibility-only; see docs/census-durable-inventory.md for formatting and selection exceptions.\nGated metadata-only candidate: census [FOLDER] --scope-job-candidate [--scope-job-budget BUDGET_JSON]. This does not replace the normal inventory route or start acquisition. The inventory owner funds enumeration with no overall expiry, <=30s operations and the bounded 64MiB profile. ReadyForAcquisition is not a completed inventory; acquisition remains unavailable. Reopen with census job-status RUN_ID [--publication-root PATH]; historical scope IDs remain read-only. See docs/incremental-inventory-first-slice.md."
 
 type censusRunnerDependencies struct {
 	resolveFolder            func(censusCLIOptions) (censusCLIOptions, error)
@@ -96,13 +95,38 @@ func runCensus(args []string, stdout, stderr io.Writer) int {
 }
 
 func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps censusRunnerDependencies) int {
+	if len(args) > 0 && args[0] == "job-status" {
+		return runCensusScopeJobStatus(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "durable" {
+		return runCensusDurable(args[1:], os.Stdin, stdout, stderr)
+	}
 	options, err := parseCensusCLIOptions(append([]string{"census"}, args...))
 	if err != nil {
-		return writeCensusFailure(stderr, censusStageSyntax, options.Machine, err)
+		return writeCensusFailure(stderr, censusStageSyntax, true, err)
 	}
 	if options.Help {
 		fmt.Fprintln(stdout, censusUsage)
 		return 0
+	}
+	if options.ScopeJobCandidate {
+		return runCensusScopeJob(options, stdout, stderr)
+	}
+	options.DurableInventory = options.FolderInvocation && !options.DurableDescribe && os.Getenv("LSP_TRACE_CALLER_FD") == ""
+	if options.DurableInventory {
+		// Select the normal durable default before any store or source preparation.
+		// Shared receipt defaults, connected routes and explicit overrides stay intact.
+		if !options.TimeoutExplicit {
+			options.Timeout = 180 * time.Second
+		}
+		stderr = censusOperationDiagnosticWriter{Writer: stderr}
+		options.durableDeadline = time.Now().Add(min(options.Timeout, 180*time.Second))
+	}
+	if options.DurableDescribe {
+		options.durableDeadline = time.Now().Add(min(options.Timeout, 180*time.Second))
+		if err := preflightCensusDurableDescribe(options); err != nil {
+			return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
+		}
 	}
 	if options.CallerHost {
 		// Use the existing connected partition/target lifecycle, including its
@@ -123,7 +147,9 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		return runCensusCatalogResume(options, stdout, stderr, deps)
 	}
 
+	var folderPreparation *censusFolderPreparation
 	if options.FolderInvocation {
+		preparationDeadline := time.Now().Add(min(options.Timeout, 15*time.Second))
 		resolve := deps.resolveFolder
 		if resolve == nil {
 			resolve = resolveCensusFolderInvocation
@@ -133,6 +159,12 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 			return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
 		}
 		stderr = censusFolderDiagnosticWriter{Writer: stderr, runPath: options.PublicationRoot}
+		// Local observation does not depend on a provider executable, a
+		// credential-bearing profile, or a connected execution grant.
+		folderPreparation, err = prepareCensusFolder(options, preparationDeadline)
+		if err != nil {
+			return writeCensusFailure(stderr, censusStageDiscovery, options.Machine, err)
+		}
 	}
 	profile, err := loadRequestedProfile(options.Workspace, profileFlags{Name: options.Profile, ConfigPath: options.ConfigPath})
 	if err != nil {
@@ -205,18 +237,6 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	if err != nil {
 		return writeCensusFailure(stderr, censusStageConfig, options.Machine, errors.New("invalid census configuration"))
 	}
-	starter, err := deps.newStarter()
-	if err != nil {
-		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
-	}
-	manager, err := deps.newManager(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 128, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 128, MaxObservations: 64}, Starter: starter})
-	if err != nil {
-		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
-	}
-	shutdown := deps.shutdownManager
-	if shutdown == nil {
-		shutdown = func(manager *sessionruntime.Manager) error { return manager.Shutdown(context.Background()) }
-	}
 	maxEvidenceBytes, maxPathWork := 4<<20, 100000
 	maxResponseBytes, maxMessages := 4<<20, 64
 	timeoutMS, requestTimeoutMS := int(options.Timeout.Milliseconds()), int(options.RequestTimeout.Milliseconds())
@@ -228,7 +248,26 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	if controlFlow != nil {
 		controlFlowObserver = newCensusControlFlowObserver()
 	}
-	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, providerProbe: providerProbe, privateEnumerationProjection: options.PrivateEnumerationProjection, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic, controlFlow: controlFlowObserver}
+	cfg := censusCoreConfig{runner: initializedAcquisitionRunnerConfig{providerProbe: providerProbe, privateEnumerationProjection: options.PrivateEnumerationProjection, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true, diagnostic: diagnostic, controlFlow: controlFlowObserver}
+	if options.FolderInvocation {
+		// The normal route constructs its only runtime inside a fresh funded
+		// enclosure. Metadata preparation never authorizes provider effects.
+		cfg.folderPreparation, cfg.folderStarter = folderPreparation, deps.newStarter
+		return deps.runNativeCatalog(options, cfg, stdout, stderr)
+	}
+	starter, err := deps.newStarter()
+	if err != nil {
+		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
+	}
+	manager, err := deps.newManager(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 128, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 128, MaxObservations: 64}, Starter: starter})
+	if err != nil {
+		return writeCensusFailure(stderr, censusStageConfig, options.Machine, err)
+	}
+	cfg.runner.manager = manager
+	shutdown := deps.shutdownManager
+	if shutdown == nil {
+		shutdown = func(manager *sessionruntime.Manager) error { return manager.Shutdown(context.Background()) }
+	}
 	code := 0
 	if options.PrivateInventoryConfigPath != "" {
 		// Only the private route may construct a subsequent original owner. Each
@@ -322,6 +361,15 @@ func resolveCensusFolderInvocation(o censusCLIOptions) (censusCLIOptions, error)
 		o.Server = "gopls"
 	}
 	base := o.PublicationRoot
+	if o.DurableInventory {
+		o.durablePublicRoot = base
+		var storeBase string
+		o.durableStorePath, storeBase, err = preflightCensusInventoryStore(workspace, base)
+		if err != nil {
+			return o, censusStoreIOError(err)
+		}
+		base = storeBase
+	}
 	if base == "" {
 		base, err = os.UserConfigDir()
 		if err != nil || !filepath.IsAbs(base) {
@@ -373,7 +421,7 @@ func resolveCensusFolderInvocation(o censusCLIOptions) (censusCLIOptions, error)
 // directory is chmodded; each new component is created through a pinned parent.
 func censusDefaultConfigDirectory(base, workspace string) (string, error) {
 	if !filepath.IsAbs(base) || filepath.Clean(base) != base {
-		return "", errors.New("invalid config base")
+		return "", censusStoreError(censusresult.StorePathInvalid, nil)
 	}
 	ancestor := base
 	var missing []string
@@ -397,8 +445,8 @@ func censusDefaultConfigDirectory(base, workspace string) (string, error) {
 	for i := len(missing) - 1; i >= 0; i-- {
 		resolved = filepath.Join(resolved, missing[i])
 	}
-	if censusPathWithin(workspace, resolved) || censusPathWithin(filepath.Join(resolved, "lsp-trace", "census"), workspace) {
-		return "", errors.New("config store overlaps source")
+	if workspace != "" && (censusPathWithin(workspace, resolved) || censusPathWithin(filepath.Join(resolved, "lsp-trace", "census"), workspace)) {
+		return "", censusStoreError(censusresult.StoreSourceOverlap, nil)
 	}
 	handle, err := os.OpenRoot(ancestor)
 	if err != nil {
@@ -410,9 +458,8 @@ func censusDefaultConfigDirectory(base, workspace string) (string, error) {
 		if e != nil {
 			return e
 		}
-		owner, ok := info.Sys().(*syscall.Stat_t)
-		if !info.IsDir() || info.Mode().Perm()&0022 != 0 || !ok || owner.Uid != uint32(os.Geteuid()) {
-			return errors.New("unsafe config ancestor ownership or permissions")
+		if !censusConfigAncestorSafe(info) {
+			return censusStoreError(censusresult.StorePermissions, nil)
 		}
 		return nil
 	}
@@ -591,10 +638,27 @@ func writeCensusFailure(stderr io.Writer, stage censusFailureStage, machine bool
 	if folder, ok := stderr.(censusFolderDiagnosticWriter); ok {
 		locator = "Retained census run directory: " + folder.runPath + "; locator only, not resume permission or completed inventory"
 	}
+	baseWriter := stderr
+	if folder, ok := baseWriter.(censusFolderDiagnosticWriter); ok {
+		baseWriter = folder.Writer
+	}
+	if _, ok := baseWriter.(censusOperationDiagnosticWriter); ok {
+		if writeCensusCapacityFailure(stderr, err) {
+			return 1
+		}
+		reason := censusresult.RunUnavailable
+		if stage == censusStageConfig {
+			reason = censusConfigReason(err)
+		}
+		return writeCensusOperationFailure(stderr, "start", reason, "")
+	}
 	if machine {
 		diagnostic, _ := buildCensusCLIDiagnostic(stage, nil)
-		if errors.Is(err, errCensusCallerHostUnavailable) {
+		if errors.Is(err, errCensusCallerHostUnavailable) || errors.Is(err, errNativeCatalogBoundReached) {
 			detail := errCensusCallerHostUnavailable.Error()
+			if errors.Is(err, errNativeCatalogBoundReached) {
+				detail = errNativeCatalogBoundReached.Error()
+			}
 			if locator != "" {
 				detail += "\n" + locator
 			}

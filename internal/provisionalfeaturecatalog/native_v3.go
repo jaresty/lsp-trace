@@ -157,6 +157,10 @@ func DecodeNativeV3(raw []byte, v any) error {
 	return nil
 }
 func BuildNativeV3(ctx context.Context, budget NativeBudgetV3, actor string, descriptions []NativeBoundDescriptionV3, reviewModes ...ReviewModeV3) (NativeCatalogV3, error) {
+	return buildNativeWithSealV3(ctx, budget, actor, descriptions, sealNativeV3, reviewModes...)
+}
+
+func buildNativeWithSealV3(ctx context.Context, budget NativeBudgetV3, actor string, descriptions []NativeBoundDescriptionV3, seal nativeSealerV3, reviewModes ...ReviewModeV3) (NativeCatalogV3, error) {
 	var mode ReviewModeV3
 	if len(reviewModes) == 1 {
 		mode = reviewModes[0]
@@ -183,11 +187,9 @@ func BuildNativeV3(ctx context.Context, budget NativeBudgetV3, actor string, des
 	}
 	sort.Slice(w.Evidence, func(i, j int) bool { return w.Evidence[i].ID < w.Evidence[j].ID })
 	w.WithoutMembership = len(w.Evidence)
-	return sealNativeV3(ctx, budget, w, actor, false)
+	return seal(ctx, budget, w, actor, false)
 }
-func sealNativeV3(ctx context.Context, b NativeBudgetV3, w NativeCatalogWireV3, actor string, corrected bool) (NativeCatalogV3, error) {
-	// Reserve escaping, identity encoding, retained canonical and return copy before
-	// marshal. Each version retains original V2 bytes; no legacy packet synthesis.
+func nativeSealQuoteV3(w NativeCatalogWireV3) uint64 {
 	var n uint64 = 16384
 	for _, e := range w.Evidence {
 		n += uint64(len(e.Unit.Body)+len(e.Request.Envelope.Prompt)+len(e.Record))*24 + 32768
@@ -195,7 +197,12 @@ func sealNativeV3(ctx context.Context, b NativeBudgetV3, w NativeCatalogWireV3, 
 	for _, g := range w.Groups {
 		n += uint64(len(g.ID)+len(g.Label)+len(g.Reason))*12 + uint64(len(g.Members))*1024
 	}
-	if b.Reserve(ctx, n) != nil {
+	return n
+}
+func sealNativeV3(ctx context.Context, b NativeBudgetV3, w NativeCatalogWireV3, actor string, corrected bool) (NativeCatalogV3, error) {
+	// Reserve escaping, identity encoding, retained canonical and return copy before
+	// marshal. Each version retains original V2 bytes; no legacy packet synthesis.
+	if b.Reserve(ctx, nativeSealQuoteV3(w)) != nil {
 		return NativeCatalogV3{}, ErrNativeCatalogV3
 	}
 	w.Revision = ""
@@ -232,6 +239,14 @@ func (c NativeCatalogV3) MembershipCounts() (int, int) {
 // ApplyNativeDecisionV3 replaces a proposal's group view, not its evidence. Every
 // member is an eligible opaque-bound description. Text search never calls this.
 func ApplyNativeDecisionV3(ctx context.Context, c NativeCatalogV3, raw []byte, review bool) (NativeCatalogV3, error) {
+	return applyNativeDecisionWithSeal(ctx, c, raw, review, sealNativeV3)
+}
+
+// The sealing seam is package-private: callers cannot choose a constructor for
+// a publicly minted capability. All transitions share the guards and mutex below.
+type nativeSealerV3 func(context.Context, NativeBudgetV3, NativeCatalogWireV3, string, bool) (NativeCatalogV3, error)
+
+func applyNativeDecisionWithSeal(ctx context.Context, c NativeCatalogV3, raw []byte, review bool, seal nativeSealerV3) (NativeCatalogV3, error) {
 	if c.state == nil || len(raw) > 8<<20 || c.state.budget.Reserve(ctx, uint64(len(raw))*16+16384) != nil {
 		return NativeCatalogV3{}, ErrNativeCatalogV3
 	}
@@ -313,7 +328,7 @@ func ApplyNativeDecisionV3(ctx context.Context, c NativeCatalogV3, raw []byte, r
 	w.WithMembership = len(members)
 	w.WithoutMembership = len(eligible) - len(members)
 	sort.Slice(w.Groups, func(i, j int) bool { return w.Groups[i].ID < w.Groups[j].ID })
-	result, e := sealNativeV3(ctx, s.budget, w, s.interpreter, review)
+	result, e := seal(ctx, s.budget, w, s.interpreter, review)
 	if e == nil {
 		s.successor = true
 	}

@@ -239,7 +239,9 @@ func TestApplicationInventoryV3ControllerBindingsAndBounds(t *testing.T) {
 		case "grammar":
 			g.Pins.GrammarSHA256 = "bad"
 		case "source":
-			g.SourceRevision = "changed"
+			// Syntax parsing cannot choose an application's source revision.
+			// Wait/Submit bind valid revisions to the admitted request.
+			g.SourceRevision = "inventory-source.v1/sha256:invalid"
 		case "sequence":
 			g.Sequence = 17
 		case "operation":

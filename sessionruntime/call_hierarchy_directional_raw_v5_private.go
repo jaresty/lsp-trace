@@ -99,6 +99,9 @@ func (c *privateDirectionalCallV5) cancelBeforeCompletion() bool {
 }
 
 type DirectionalCallHierarchyRequestPrivate struct {
+	// Zero preserves the historical two-direction transaction. Nonzero values
+	// select only the requested directions; an omitted direction is unavailable.
+	Directions                         PrivateCallDirections
 	SessionID, URI, LanguageID, Symbol string
 	Generation                         uint64
 	Line, Character                    *uint32
@@ -417,8 +420,8 @@ func (m *Manager) ExecuteCallHierarchyDirectionsPrivate(ctx context.Context, req
 		})
 		return observed.result, observed.err
 	}
-	if ctx == nil {
-		return result, errors.New("nil context")
+	if ctx == nil || req.Directions & ^(PrivateCallsIncoming|PrivateCallsOutgoing) != 0 {
+		return result, errors.New("invalid directional context or selection")
 	}
 	if err := ctx.Err(); err != nil {
 		return result, err
@@ -447,50 +450,54 @@ func (m *Manager) ExecuteCallHierarchyDirectionsPrivate(ctx context.Context, req
 		return result, err
 	}
 	_ = item // One semantic identity is validated against the selected token.
-	result.IncomingWire, result.IncomingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/incomingCalls", selected, &result.Incoming)
-	if err != nil {
-		var directionalFailure directionalCallFailurePrivate
-		if errors.As(err, &directionalFailure) {
-			result.Failure = directionalFailure.failure
-			result.FailurePostEffect = directionalFailure.postEffect
-			result.SessionPoisoned = directionalFailure.poisoned
-			result.RequestEffectObservedPrivate = directionalFailure.requestEffectObserved
-			result.TerminalPoisonObservedPrivate = directionalFailure.terminalPoisonObserved
-			result.RequestWriteCompletedPrivate = directionalFailure.requestCompleted
-			result.TerminalLifecyclePrivate = directionalFailure.lifecycle
+	if req.Directions == 0 || req.Directions&PrivateCallsIncoming != 0 {
+		result.IncomingWire, result.IncomingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/incomingCalls", selected, &result.Incoming)
+		if err != nil {
+			var directionalFailure directionalCallFailurePrivate
+			if errors.As(err, &directionalFailure) {
+				result.Failure = directionalFailure.failure
+				result.FailurePostEffect = directionalFailure.postEffect
+				result.SessionPoisoned = directionalFailure.poisoned
+				result.RequestEffectObservedPrivate = directionalFailure.requestEffectObserved
+				result.TerminalPoisonObservedPrivate = directionalFailure.terminalPoisonObserved
+				result.RequestWriteCompletedPrivate = directionalFailure.requestCompleted
+				result.TerminalLifecyclePrivate = directionalFailure.lifecycle
+			}
+			if errors.Is(err, context.Canceled) {
+				result.CancellationPhasePrivate = "BEFORE_INCOMING_EFFECT"
+			}
+			return result, err
 		}
-		if errors.Is(err, context.Canceled) {
-			result.CancellationPhasePrivate = "BEFORE_INCOMING_EFFECT"
-		}
-		return result, err
+		result.IncomingEffectCompletedPrivate = true
+		result.RequestEffectObservedPrivate = true
+		result.RequestWriteCompletedPrivate = true
 	}
-	result.IncomingEffectCompletedPrivate = true
-	result.RequestEffectObservedPrivate = true
-	result.RequestWriteCompletedPrivate = true
 	if err := ctx.Err(); err != nil {
 		result.CancellationPhasePrivate = "AFTER_INCOMING_BEFORE_OUTGOING_EFFECT"
 		return result, err
 	}
-	result.OutgoingWire, result.OutgoingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/outgoingCalls", selected, &result.Outgoing)
-	if err != nil {
-		var directionalFailure directionalCallFailurePrivate
-		if errors.As(err, &directionalFailure) {
-			result.Failure = directionalFailure.failure
-			result.FailurePostEffect = directionalFailure.postEffect
-			result.SessionPoisoned = directionalFailure.poisoned
-			result.RequestEffectObservedPrivate = directionalFailure.requestEffectObserved
-			result.TerminalPoisonObservedPrivate = directionalFailure.terminalPoisonObserved
-			result.RequestWriteCompletedPrivate = directionalFailure.requestCompleted
-			result.TerminalLifecyclePrivate = directionalFailure.lifecycle
+	if req.Directions == 0 || req.Directions&PrivateCallsOutgoing != 0 {
+		result.OutgoingWire, result.OutgoingNull, err = m.executeDirectionalCallPrivate(ctx, req, reservation, "callHierarchy/outgoingCalls", selected, &result.Outgoing)
+		if err != nil {
+			var directionalFailure directionalCallFailurePrivate
+			if errors.As(err, &directionalFailure) {
+				result.Failure = directionalFailure.failure
+				result.FailurePostEffect = directionalFailure.postEffect
+				result.SessionPoisoned = directionalFailure.poisoned
+				result.RequestEffectObservedPrivate = directionalFailure.requestEffectObserved
+				result.TerminalPoisonObservedPrivate = directionalFailure.terminalPoisonObserved
+				result.RequestWriteCompletedPrivate = directionalFailure.requestCompleted
+				result.TerminalLifecyclePrivate = directionalFailure.lifecycle
+			}
+			if errors.Is(err, context.Canceled) && result.RequestEffectObservedPrivate {
+				result.CancellationPhasePrivate = "AFTER_OUTGOING_REQUEST_EFFECT"
+			}
+			return result, err
 		}
-		if errors.Is(err, context.Canceled) && result.RequestEffectObservedPrivate {
-			result.CancellationPhasePrivate = "AFTER_OUTGOING_REQUEST_EFFECT"
-		}
-		return result, err
+		result.OutgoingEffectCompletedPrivate = true
+		result.RequestEffectObservedPrivate = true
+		result.RequestWriteCompletedPrivate = true
 	}
-	result.OutgoingEffectCompletedPrivate = true
-	result.RequestEffectObservedPrivate = true
-	result.RequestWriteCompletedPrivate = true
 	return result, nil
 }
 
@@ -512,6 +519,18 @@ func (m *Manager) RoundTripDirectionalPrivate(ctx context.Context, req RoundTrip
 	r, ok := directionalraw.FromContext(ctx)
 	if !ok || r.IdentityPrivate() == "" || !directionalraw.Allowed(req.Method) || req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
 		return RoundTripResult{Failure: session.ToolNotImplemented}, directionalraw.Lease{}
+	}
+	// This entry does not pass through ordinary RoundTrip. Preserve the SAME
+	// discovery request debit and residual caps before entering its transaction.
+	if d := privateDiscoveryFrom(ctx); d != nil {
+		deadline, _ := d.ctx.Deadline()
+		if d.manager != m || !d.ownedDirectionalRequest(ctx, m, req) || !req.Deadline.Equal(deadline) || !d.quoteRequest(len(req.Params)) {
+			return RoundTripResult{Failure: session.ResourceExhausted}, directionalraw.Lease{}
+		}
+		d.mu.Lock()
+		req.MaxBytes = min(req.MaxBytes, int64(d.remaining.ResponseBytes))
+		req.MaxMessages = min(req.MaxMessages, int(d.remaining.Messages))
+		d.mu.Unlock()
 	}
 	req.directionalV5 = &privateDirectionalCallV5{execution: &privateDirectionalV5{reservation: r}}
 	// Ordinary RoundTrip is deliberately not changed. The shared transaction owns

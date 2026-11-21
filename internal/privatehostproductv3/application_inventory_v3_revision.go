@@ -18,7 +18,17 @@ func inventoryDescribeRevisionV3(r dr.Record) bool {
 }
 
 // Readback checks exported relationships, not opaque native custody.
-func inventoryEvidenceRevisionV3(e cat.SelectedEvidenceV3, revision string) bool {
+func inventoryEvidenceRevisionV3(e cat.SelectedEvidenceV3, revision string, identities ...*InventorySourceIdentityV3) bool {
+	var identity *InventorySourceIdentityV3
+	if len(identities) > 1 {
+		return false
+	}
+	if len(identities) == 1 {
+		identity = identities[0]
+	}
+	if !inventorySourceUnitMatchesV3(identity, revision, e.Unit) {
+		return false
+	}
 	if e.Unit.Version == "" && e.Request.Lineage.ConsumerResolution != dr.PrivateSourceOnly {
 		return e.Request.Envelope.SourceRevision == revision
 	}

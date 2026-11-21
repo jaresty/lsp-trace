@@ -58,6 +58,9 @@ func (m *Manager) CaptureDirectionalEvidencePrivateV2(ctx context.Context, s Ses
 	if m == nil || ctx == nil || m.CheckActiveSessionLeasePrivateV2(ctx, s) != "" || q.SessionID != s.SessionID || q.Generation != s.Generation || q.Symbol != "" || q.Line == nil || q.Character == nil || q.MaxBytes < 1 || q.MaxBytes > PrivateDirectionalEvidenceMaxBytesV2 || q.MaxMessages < 1 || q.MaxMessages > 32 || q.Deadline.IsZero() || !time.Now().Before(q.Deadline) || len(q.URI) > 4096 {
 		return PrivateDirectionalEvidenceV2{}, ErrPrivateDirectionalEvidenceV2
 	}
+	if w := privateDiscoveryFrom(ctx); w != nil && !w.beginOwnedDirectional(ctx, q) {
+		return PrivateDirectionalEvidenceV2{}, ErrPrivateDirectionalEvidenceV2
+	}
 	meta, f := m.Metadata(s.SessionID, s.Generation)
 	if f != "" || !meta.CallHierarchySupport || len(meta.PositionEncoding) > 32 || len(meta.ServerCommand) > 4096 || len(meta.ProviderName) > 4096 || len(meta.ProviderVersion) > 4096 || len(s.SessionID) > 4096 || len(s.Workspace) > 4096 || len(q.LanguageID) > 4096 {
 		return PrivateDirectionalEvidenceV2{}, ErrPrivateDirectionalEvidenceV2
@@ -93,7 +96,14 @@ func (m *Manager) CaptureDirectionalEvidencePrivateV2(ctx context.Context, s Ses
 	q.Line, q.Character = &line, &character
 	c := &privateDirectionalEvidenceV2{manager: m, token: token, view: PrivateDirectionalEvidenceViewV2{Session: s, Request: q, Metadata: meta, Process: spec, StartedAt: time.Now()}}
 	_, err := m.ExecuteCallHierarchyDirectionsPrivate(context.WithValue(ctx, privateDirectionalEvidenceKeyV2{}, c), q)
-	if err != nil || c.failure != nil || len(c.view.Requests) != 3 || m.CheckActiveSessionLeasePrivateV2(ctx, s) != "" {
+	count := 1
+	if q.Directions == 0 || q.Directions&PrivateCallsIncoming != 0 {
+		count++
+	}
+	if q.Directions == 0 || q.Directions&PrivateCallsOutgoing != 0 {
+		count++
+	}
+	if err != nil || c.failure != nil || len(c.view.Requests) != count || m.CheckActiveSessionLeasePrivateV2(ctx, s) != "" {
 		return PrivateDirectionalEvidenceV2{}, errors.Join(ErrPrivateDirectionalEvidenceV2, err, c.failure)
 	}
 	c.valid = true

@@ -1,0 +1,7 @@
+# Local folder preparation
+
+The normal Darwin `census [folder]` entry authorizes a fresh private metadata preparation in the existing command-owned run directory. It does not authorize a language-server request, reuse of a historical run, or inventory publication. The existing unavailable caller-host outcome remains in place. Preparation itself needs no provider, credentials, or user-managed cursor.
+
+The preparation adapter quotes a fixed-size positive-count directory batch (eight entries, plus the directory record) and bounds its schedule by the 64 MiB cumulative logical-byte ceiling, the 2^32 work ceiling, and the original command deadline (further capped at 15 seconds). It adds the quoted counters using the kernel's checked arithmetic before creating the fresh READY accounting state. Reaching the schedule boundary without exhausting the traversal fails closed rather than emitting a partial result.
+
+One in-process cursor owns directory offsets. It opens directories relative to the bounded root, prunes configured directory paths, and does not descend into symlink entries. A batch does not touch the cursor until its PENDING head is independently reopened. Only independently verified OBSERVED transitions release the batch to the preparation owner. An unverified transition terminates the command's traversal, closes the cursor, and retains the accounting state without a retry, refund, or rescan. The retained run locator is not a resume selector or evidence of completed inventory.

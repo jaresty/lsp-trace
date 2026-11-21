@@ -59,6 +59,8 @@ func marshalCensusCLIDiagnostic(d censusCLIDiagnostic) ([]byte, error) {
 
 type censusCLIOptions struct {
 	FolderInvocation                                                           bool // Normal inventory entry; runtime resolution owns all IO.
+	ScopeJobCandidate                                                          bool
+	ScopeJobBudgetPath                                                         string
 	Sources, Includes, Excludes, PrunedDirectories                             []string
 	Workspace, Server, Profile, ConfigPath, CatalogConfigPath, PublicationRoot string
 	PrivateAcquisitionDiagnosticPath, PrivateControlFlowDiagnosticPath         string
@@ -71,9 +73,14 @@ type censusCLIOptions struct {
 	ServerArgs                                                                 []string
 	DownDepth, UpDepth, MaxNodes, MaxBatchTargets                              int
 	Timeout, RequestTimeout                                                    time.Duration
+	TimeoutExplicit                                                            bool // syntax presence, not comparison with the shared default
 	Resume, StopAfter                                                          string
 	Machine, Help, Catalog, PrivateEnumerationProjection, EnumerationPreflight bool
 	CallerHost                                                                 bool
+	DurableInventory                                                           bool // default normal-folder continuation; legacy routes remain explicit
+	DurableDescribe                                                            bool
+	durableStorePath, durablePublicRoot                                        string
+	durableDeadline                                                            time.Time // invocation wall bound, never renewed by preparation
 	CallerHostAttemptConfigPath, SaveCallerHostSettingsPath                    string
 }
 type censusStringFlags []string
@@ -125,6 +132,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.IntVar(&o.MaxBatchTargets, "batch-targets", o.MaxBatchTargets, "maximum census targets per acquisition batch (1..63)")
 	fs.DurationVar(&o.Timeout, "timeout", o.Timeout, "")
 	fs.DurationVar(&o.RequestTimeout, "request-timeout", o.RequestTimeout, "")
+	fs.BoolVar(&o.ScopeJobCandidate, "scope-job-candidate", false, "metadata-only repository scope candidate; no acquisition")
+	fs.StringVar(&o.ScopeJobBudgetPath, "scope-job-budget", "", "optional finite scope-job budget JSON")
+	fs.BoolVar(&o.DurableDescribe, "durable-describe", false, "") // hidden legacy one-item milestone
 	fs.BoolVar(&o.Machine, "machine", false, "emit machine-readable JSON")
 	fs.BoolVar(&o.EnumerationPreflight, "enumeration-preflight", false, "enumerate bounded source paths without starting a language server")
 	fs.BoolVar(&o.PrivateEnumerationProjection, "private-enumeration-projection", false, "")
@@ -193,6 +203,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	}
 	legacy := false
 	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "timeout" {
+			o.TimeoutExplicit = true
+		}
 		if f.Name == "workspace" || f.Name == "catalog" || f.Name == "catalog-config" || f.Name == "caller-host" || f.Name == "caller-host-attempt-config" || f.Name == "save-caller-host-settings" || f.Name == "resume" || f.Name == "stop-after" || f.Name == "enumeration-preflight" || strings.HasPrefix(f.Name, "private-") {
 			legacy = true
 		}
@@ -201,7 +214,11 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 		return o, errors.New("folder invocation rejects legacy/private controls and accepts one folder")
 	}
 	o.FolderInvocation = !legacy && !o.Help
+	if o.DurableDescribe && !o.FolderInvocation {
+		return o, errors.New("durable Describe requires normal folder invocation")
+	}
 	if o.FolderInvocation {
+		o.Machine = true // Structured normal protocol; --machine is compatibility syntax only.
 		o.Workspace = "."
 		if fs.NArg() == 1 {
 			o.Workspace = fs.Arg(0)
@@ -212,6 +229,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 		o.Catalog = true
 	} else if o.Catalog && !censusFlagPresent(clean, "batch-targets") {
 		o.MaxBatchTargets = 16
+	}
+	if err := validateCensusScopeJobSyntax(o, clean); err != nil {
+		return o, err
 	}
 	if err := validateCensusCLIOptions(o, clean); err != nil {
 		return o, err

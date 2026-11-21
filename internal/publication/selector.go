@@ -29,6 +29,10 @@ const (
 
 var ErrOperationTerminal = errors.New("operation already terminal")
 
+// Narrow attribution: identity, closed-handle and IO failures are not privacy failures.
+var ErrRootPrivacy = errors.New("publication root must be a private owner-only directory")
+var ErrRootOwner = errors.New("publication root must be owned by the current effective user")
+
 type Root struct {
 	path   string
 	file   *os.File
@@ -119,7 +123,7 @@ func (r *Root) ValidatePrivate() error {
 		return errors.New("publication root descriptor identity changed")
 	}
 	if !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
-		return errors.New("publication root must be a private owner-only directory")
+		return ErrRootPrivacy
 	}
 	return validateRootOwner(info)
 }

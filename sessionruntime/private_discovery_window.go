@@ -1,8 +1,9 @@
 package sessionruntime
 
-// Private discovery is a separate, target-free resource enclosure. The limits
-// below are declarations, not funding or native evidence. Its only output is
-// neutral census metadata; none of these values can construct native custody.
+// Private discovery is a separate bounded resource enclosure. Limits are
+// declarations, not funding. Opted-in original method/directional custody is
+// retained during actual requests; neither metadata nor originals confer native
+// admission, grouping authority, or inventory completeness.
 import (
 	"context"
 	"encoding/json"
@@ -35,6 +36,9 @@ func (l PrivateDiscoveryLimits) Valid() bool {
 }
 
 type PrivateDiscoveryConstruction struct {
+	// Bound into the execution fingerprint; retention spends the existing pools.
+	CaptureOwnedMethods   bool
+	CaptureCallDirections PrivateCallDirections
 	// This factory is invoked only inside the already reserved operation. It
 	// constructs a process starter, never target/native authority.
 	NewStarter func() (Starter, error)
@@ -54,13 +58,18 @@ type PrivateDiscoveryConstruction struct {
 }
 type PrivateDiscoveryMember struct{ Path, URI, LanguageID string }
 type PrivateDiscoveryObservation struct {
-	CleanupJoined bool
-	Failed        bool
-	ResponseFacts PrivateDiscoveryResponseFacts
+	OwnedMethods      PrivateDiscoveryOwnedMethods
+	CleanupJoined     bool
+	Failed            bool
+	ResponseFacts     PrivateDiscoveryResponseFacts
+	SuppliedDocuments PrivateDiscoverySuppliedDocuments
 }
 
 type privateDiscoveryContextKey struct{}
 type privateDiscoveryWindow struct {
+	ownedMethods      *privateDiscoveryOwnedMethods
+	ownedReleased     bool
+	ownedCallFailed   bool
 	mu                sync.Mutex
 	ctx               context.Context
 	limits, remaining PrivateDiscoveryLimits
@@ -335,6 +344,9 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 	if !c.Fingerprints.Valid() || !c.DiagnosticAnchor.IsZero() && (c.DiagnosticAnchor == c.DiagnosticAnchor.Round(0) || c.DiagnosticAnchor.After(now) || !c.Deadline.After(c.DiagnosticAnchor) || c.Deadline.Sub(c.DiagnosticAnchor) > 15*time.Second) {
 		return observation, ErrPrivateDiscovery
 	}
+	if c.CaptureCallDirections & ^(PrivateCallsIncoming|PrivateCallsOutgoing) != 0 || c.CaptureCallDirections != 0 && !c.CaptureOwnedMethods {
+		return observation, ErrPrivateDiscovery
+	}
 	if parent == nil || consume == nil || c.NewStarter == nil || !c.Limits.Valid() || len(c.Members) == 0 || len(c.Members) > 16 || c.Deadline.IsZero() || !now.Before(c.Deadline) || c.Deadline.Sub(now) > 15*time.Second || c.Start.SeedBinding != nil || len(c.Start.Profile.Workspace().String()) > 4096 {
 		return observation, ErrPrivateDiscovery
 	}
@@ -348,6 +360,7 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 	w := &privateDiscoveryWindow{ctx: ctx, limits: c.Limits, remaining: c.Limits, expectedSpec: c.Start.Process}
 	ctx = context.WithValue(ctx, privateDiscoveryContextKey{}, w)
 	w.ctx = ctx
+	var suppliedDocuments PrivateDiscoverySuppliedDocuments
 	defer func() {
 		if w.capture != nil && !w.capture.close(ctx) {
 			observation.CleanupJoined = false
@@ -363,6 +376,10 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 			err = w.refusalErrorFrom(err, PrivateDiscoveryUnknownStage, true)
 		}
 		observation.ResponseFacts = w.responseFactsSnapshot()
+		if err != nil || observation.Failed || !observation.CleanupJoined {
+			observation.SuppliedDocuments = PrivateDiscoverySuppliedDocuments{}
+			observation.OwnedMethods = PrivateDiscoveryOwnedMethods{}
+		}
 		if err != nil {
 			err = w.refusalErrorFrom(err, PrivateDiscoveryUnknownStage, false)
 		}
@@ -370,7 +387,7 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 	effectiveDeadline, _ := ctx.Deadline()
 	w.diagnosticAnchor, w.diagnosticDeadline = c.DiagnosticAnchor, effectiveDeadline
 	// Fixed Manager/supervisor bookkeeping is reserved before either constructor.
-	if !w.work(4<<20) || !w.spend(&w.remaining.RetainedBytes, 4<<20) || !w.prepayBackend() || !w.prepayResponseFacts() {
+	if !w.work(4<<20) || !w.spend(&w.remaining.RetainedBytes, 4<<20) || !w.prepayBackend() || !w.prepayResponseFacts() || !w.prepaySuppliedDocuments() || !w.prepayOwnedMethods(c.CaptureOwnedMethods, c.CaptureCallDirections) {
 		return observation, ErrPrivateDiscovery
 	}
 	w.responseFacts.Context.Fingerprints = c.Fingerprints
@@ -389,11 +406,14 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 	defer func() {
 		joined := m.Shutdown(ctx) == nil && ctx.Err() == nil && m.Census().Workers == 0
 		w.mu.Lock()
-		failed := w.failed
+		failed := w.failed || w.ownedCallFailed
 		child := w.child
 		w.mu.Unlock()
 		joined = joined && (child == nil || child.cleanupJoined())
-		observation = PrivateDiscoveryObservation{CleanupJoined: joined, Failed: err != nil || failed || !joined}
+		observation = PrivateDiscoveryObservation{CleanupJoined: joined, Failed: err != nil || failed || !joined, SuppliedDocuments: suppliedDocuments}
+		if !observation.Failed {
+			observation.OwnedMethods = w.takeOwnedMethods()
+		}
 		if observation.Failed {
 			fallback := PrivateDiscoveryUnknownStage
 			if err == nil && !joined {
@@ -415,8 +435,12 @@ func RunPrivateDiscovery(parent context.Context, c PrivateDiscoveryConstruction,
 	if failure != "" {
 		return observation, ErrPrivateDiscovery
 	}
+	w.bindOwnedContext(metadata, started.SessionID, started.Generation, c.Start.Profile.Workspace().String())
 	surface := &PrivateDiscoverySession{client: privateDiscoveryClient{m: m, w: w, id: started.SessionID, generation: started.Generation, deadline: effectiveDeadline, metadata: metadata}, members: append([]PrivateDiscoveryMember(nil), c.Members...), supplied: make(map[string]bool)}
 	err = surface.finalize(consume(ctx, surface))
+	if err == nil {
+		suppliedDocuments = surface.suppliedDocumentsSnapshot()
+	}
 	stop := m.Stop(ctx, started.SessionID, "private-discovery")
 	if stop.Failure != "" {
 		err = w.refusalErrorFrom(err, PrivateDiscoveryUnknownStage, false)
@@ -484,6 +508,7 @@ func (s *PrivateDiscoverySession) Supply(ctx context.Context, uri, language stri
 	// Reuse the exact hash already computed by PrepareDocument AFTER its bounded
 	// source read and successful supply. No new read, hash pass or URI export.
 	s.captureSuppliedDigestLocked(uri, r)
+	s.client.w.ownSupply(r.Supply)
 	s.supplied[uri] = true
 	return nil
 }
@@ -496,6 +521,9 @@ func (s *PrivateDiscoverySession) DocumentSymbols(ctx context.Context, p lsp.Doc
 func (s *PrivateDiscoverySession) PrepareCallHierarchy(ctx context.Context, p lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
 	if !s.admitURI(p.TextDocument.URI, "", true) {
 		return nil, ErrPrivateDiscovery
+	}
+	if s.client.w.ownedMethods != nil && s.client.w.ownedMethods.directions != 0 {
+		return s.prepareOwnedCalls(ctx, p)
 	}
 	return s.client.PrepareCallHierarchy(s.diagnosticContext(ctx, p.TextDocument.URI), p)
 }
@@ -529,14 +557,26 @@ func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, 
 			}
 		}()
 	}
-	// Both closed parameter types have bounded URI/position values. The census
-	// adapter already bounds retained symbol strings; quote the maximal JSON form.
+	// Closed parameter types have bounded URI/position values. Relation items
+	// are explicitly bounded before serialization; no arbitrary payload is exposed.
 	var uri string
 	switch value := p.(type) {
 	case lsp.DocumentSymbolParams:
 		uri = value.TextDocument.URI
 	case lsp.PrepareCallHierarchyParams:
 		uri = value.TextDocument.URI
+	case privateDiscoveryRelationPosition:
+		uri = value.TextDocument.URI
+	case lsp.CallHierarchyOutgoingCallsParams:
+		if !boundedPrivateDiscoveryItem(value.Item) {
+			return ErrPrivateDiscovery
+		}
+		uri = value.Item.URI
+	case lsp.CallHierarchyIncomingCallsParams:
+		if !boundedPrivateDiscoveryItem(value.Item) {
+			return ErrPrivateDiscovery
+		}
+		uri = value.Item.URI
 	default:
 		return ErrPrivateDiscovery
 	}
@@ -558,12 +598,22 @@ func (c privateDiscoveryClient) call(ctx context.Context, method string, p any, 
 		return ErrPrivateDiscovery
 	}
 	ctx = privatePositionContext(ctx, p)
-	r := c.m.RoundTrip(ctx, RoundTripRequest{SessionID: c.id, Generation: c.generation, Method: method, Params: raw, Deadline: c.deadline, MaxBytes: int64(b), MaxMessages: int(n)})
+	req := RoundTripRequest{SessionID: c.id, Generation: c.generation, Method: method, Params: raw, Deadline: c.deadline, MaxBytes: int64(b), MaxMessages: int(n)}
+	if c.w.ownedMethods != nil {
+		req.MaxMessages = min(req.MaxMessages, 64)
+	}
+	if !c.w.quoteOwnedMethod(&req, uri) {
+		return ErrPrivateDiscovery
+	}
+	r := c.m.RoundTrip(ctx, req)
 	record = int(r.privateDiscoveryRecord) - 1
 	if r.Failure != session.Failure("") || r.ServerError != nil {
 		if method == "textDocument/prepareCallHierarchy" {
 			return privateDiscoveryPrepareRPCCodeFailure(r.Failure, r.ServerError)
 		}
+		return ErrPrivateDiscovery
+	}
+	if !c.w.retainOwnedMethod(req, r) {
 		return ErrPrivateDiscovery
 	}
 	if !c.w.work(64*uint64(len(r.Result))) || !c.w.spend(&c.w.remaining.RetainedBytes, 64*uint64(len(r.Result))) {

@@ -38,7 +38,7 @@ func inventoryRoleV3(op string) string {
 }
 func parseInventoryFrameV3(raw []byte) (InventoryFrameV3, error) {
 	var f InventoryFrameV3
-	if len(raw) > 1<<20 || cat.DecodeNativeV3(raw, &f) != nil || f.Protocol != InventoryProtocolV3 || inventoryRoleV3(f.Operation) == "" || f.Role != inventoryRoleV3(f.Operation) || f.Sequence < 1 || f.Sequence > 16 || f.SourceRevision != InventorySourceRevisionV3 || f.LaunchID == "" || len(f.LaunchID) > 256 || f.PromptSHA256 != hash([]byte(InventoryRolePromptV3(f.Role))) || f.DeadlineUnixNano <= 0 || len(f.Payload) == 0 || !json.Valid(f.Payload) || !digestValue(f.ConfigSHA256) || !digestValue(f.Grant) || !digestValue(f.ApplicationSHA256) || !digestValue(f.RunID) || !digestValue(f.Pins.WorkerSHA256) || !digestValue(f.Pins.ModelSHA256) || !digestValue(f.Pins.GrammarSHA256) {
+	if len(raw) > 1<<20 || cat.DecodeNativeV3(raw, &f) != nil || f.Protocol != InventoryProtocolV3 || inventoryRoleV3(f.Operation) == "" || f.Role != inventoryRoleV3(f.Operation) || f.Sequence < 1 || f.Sequence > 16 || !inventoryRevisionValidV3(f.SourceRevision) || f.LaunchID == "" || len(f.LaunchID) > 256 || f.PromptSHA256 != hash([]byte(InventoryRolePromptV3(f.Role))) || f.DeadlineUnixNano <= 0 || len(f.Payload) == 0 || !json.Valid(f.Payload) || !digestValue(f.ConfigSHA256) || !digestValue(f.Grant) || !digestValue(f.ApplicationSHA256) || !digestValue(f.RunID) || !digestValue(f.Pins.WorkerSHA256) || !digestValue(f.Pins.ModelSHA256) || !digestValue(f.Pins.GrammarSHA256) {
 		return f, ErrInvalid
 	}
 	prompt, e := inventoryPayloadV3(f.Operation, f.Payload)
@@ -258,7 +258,7 @@ func inventoryAllowanceV3(b InventoryBindingV3) ApplicationBounds {
 }
 func (a *ApplicationJournal) admitInventoryV3(b InventoryBindingV3) error {
 	j := a.implementation
-	if j.config.Schema != "private-host-application-config.v3" || b.ApplicationSHA256 != j.head.ApplicationSHA256 || b.Grant != ApplicationGrantDigest(j.config.Grant) || b.SourceRevision != InventorySourceRevisionV3 {
+	if j.config.Schema != "private-host-application-config.v3" || b.ApplicationSHA256 != j.head.ApplicationSHA256 || b.Grant != ApplicationGrantDigest(j.config.Grant) || b.SourceRevision != j.config.RevisionAssertion || !inventoryRevisionValidV3(b.SourceRevision) {
 		return ErrInvalid
 	}
 	now := time.Now()
@@ -485,7 +485,7 @@ func WaitInventoryV3(ctx context.Context, path, role string, after uint64, q Inv
 				return CohortWait{}, ErrInvalid
 			}
 			f, e := readInventoryBundleRootV3(b, s)
-			if e != nil || f.ConfigSHA256 != q.ApprovalSHA256 || f.ApplicationSHA256 != ApplicationConfigDigest(q.Configuration) || f.Grant != ApplicationGrantDigest(q.Configuration.Grant) || !inventoryPinsV3(f.Pins, q.Inventory.Pins) || f.RunID != runID {
+			if e != nil || f.SourceRevision != q.Inventory.SourceRevision || f.ConfigSHA256 != q.ApprovalSHA256 || f.ApplicationSHA256 != ApplicationConfigDigest(q.Configuration) || f.Grant != ApplicationGrantDigest(q.Configuration.Grant) || !inventoryPinsV3(f.Pins, q.Inventory.Pins) || f.RunID != runID {
 				return CohortWait{}, ErrInvalid
 			}
 			ready, readyErr := inventoryReadReadyV3(s)
@@ -522,7 +522,7 @@ func SubmitInventoryV3(path, role string, seq uint64, payload []byte, q Inventor
 		return ErrInvalid
 	}
 	f, e := readInventoryBundleRootV3(b, s)
-	if e != nil || f.Role != role || b.Directory != path || f.RunID != runID || f.ConfigSHA256 != q.ApprovalSHA256 || f.Grant != ApplicationGrantDigest(q.Configuration.Grant) || !inventoryPinsV3(f.Pins, q.Inventory.Pins) {
+	if e != nil || f.SourceRevision != q.Inventory.SourceRevision || f.Role != role || b.Directory != path || f.RunID != runID || f.ConfigSHA256 != q.ApprovalSHA256 || f.Grant != ApplicationGrantDigest(q.Configuration.Grant) || !inventoryPinsV3(f.Pins, q.Inventory.Pins) {
 		return ErrInvalid
 	}
 	ready, e := inventoryReadReadyV3(s)

@@ -26,6 +26,10 @@ func isApplicationInventoryV3(raw []byte) bool {
 // Typed inputs are invocation-local. A nil embedding map selects the production
 // lazy owner route after readiness; declarations never serialize native custody.
 func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Reader, out, errout io.Writer, inputs product.InventoryNativeInputsV3, startup *applicationStartupNotifier, setupPermit ...*censusInventorySetupPermit) int {
+	return runApplicationInventoryControllerContextV3(context.Background(), args, raw, stdin, out, errout, inputs, startup, setupPermit...)
+}
+
+func runApplicationInventoryControllerContextV3(parent context.Context, args []string, raw []byte, stdin io.Reader, out, errout io.Writer, inputs product.InventoryNativeInputsV3, startup *applicationStartupNotifier, setupPermit ...*censusInventorySetupPermit) int {
 	fail := func(s string) int { fmt.Fprintln(errout, "private application inventory V3:", s); return 1 }
 	q, e := product.DecodeInventoryRequestV3(raw)
 	if e != nil {
@@ -112,7 +116,7 @@ func runApplicationInventoryControllerV3(args []string, raw []byte, stdin io.Rea
 	failed := func(reason string) int {
 		return applicationInventoryTerminalV3(a, q, runID, ai.Report{}, "FAILED_INVENTORY_UNKNOWN", 1, out, errout, fmt.Errorf("%s", reason))
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	deadline := time.Unix(0, q.Configuration.Grant.ExpiresUnixNano)
 	if d := time.Now().Add(120 * time.Second); d.Before(deadline) {

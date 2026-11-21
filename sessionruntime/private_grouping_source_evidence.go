@@ -8,9 +8,23 @@ import (
 // PrivateGroupingSourceEvidence retains original producer observations, not a
 // borrowed view. It establishes neither provider authentication, feature identity,
 // source-universe completeness, nor permission to invoke a semantic worker.
-// Only TakePrivateGroupingSourceEvidence can issue a nonzero value.
-// It can outlive the lease as historical evidence; taking it cannot.
-type PrivateGroupingSourceEvidence struct{ capture *privateGroupingCapture }
+// Live custody is issued by TakePrivateGroupingSourceEvidence. Detached
+// discovery custody is issued only by ConsumeDiscoveryGroupingOwned from the
+// runtime's retained originals, never from a borrowed view or reconstructed lease.
+type PrivateGroupingSourceEvidence struct {
+	capture   *privateGroupingCapture
+	discovery *privateDiscoveryGroupingOriginal
+}
+
+func (e PrivateGroupingSourceEvidence) originalView() (PrivateGroupingOwnedView, bool) {
+	if e.capture != nil && e.discovery == nil {
+		return e.capture.view, true
+	}
+	if e.capture == nil && e.discovery != nil {
+		return e.discovery.view, true
+	}
+	return PrivateGroupingOwnedView{}, false
+}
 
 // TakePrivateGroupingSourceEvidence is a one-time, pointer-only detachment of
 // existing retained observations. It does not capture, clone, publish or invoke
@@ -53,18 +67,20 @@ func (m *Manager) TakePrivateGroupingSourceEvidence(ctx context.Context, h Priva
 // EncodedBound is metadata-only: it neither copies nor hashes retained payloads.
 // A positive result describes this closed private encoding, not resource funding.
 func (e PrivateGroupingSourceEvidence) EncodedBound() (uint64, bool) {
-	if e.capture == nil {
+	v, ok := e.originalView()
+	if !ok {
 		return 0, false
 	}
-	return PrivateGroupingQueryEncodedBound(e.capture.view)
+	return PrivateGroupingQueryEncodedBound(v)
 }
 
 // SourceByteLength is bounded scalar metadata, not a source issuance DTO.
 func (e PrivateGroupingSourceEvidence) SourceByteLength() int {
-	if e.capture == nil {
+	v, ok := e.originalView()
+	if !ok {
 		return 0
 	}
-	return len(e.capture.view.Source)
+	return len(v.Source)
 }
 
 // Snapshot returns defensive copies ONLY after a finite caller ceiling has been
@@ -76,14 +92,15 @@ func (e PrivateGroupingSourceEvidence) Snapshot(maxEncodedBytes uint64) (Private
 	if !ok || maxEncodedBytes == 0 || maxEncodedBytes > PrivateGroupingQueryMaxBytes || bound > maxEncodedBytes {
 		return PrivateGroupingOwnedView{}, ErrPrivateGroupingOwned
 	}
-	v := e.capture.view
+	original, _ := e.originalView()
+	v := original
 	v.Source = append([]byte(nil), v.Source...)
 	v.Supply.Content = append([]byte(nil), v.Supply.Content...)
 	v.Supply.Params = append([]byte(nil), v.Supply.Params...)
 	v.Symbol = clonePrivateGroupingPair(v.Symbol)
 	v.Unavailable = append([]string(nil), v.Unavailable...)
-	v.Methods = make([]OwnedMethodPair, len(e.capture.view.Methods))
-	for i, pair := range e.capture.view.Methods {
+	v.Methods = make([]OwnedMethodPair, len(original.Methods))
+	for i, pair := range original.Methods {
 		v.Methods[i] = clonePrivateGroupingPair(pair)
 	}
 	return v, nil
