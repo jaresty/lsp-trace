@@ -38,7 +38,7 @@ func resumeConfigValidV1(c OwnedInventoryConfig) bool {
 	return selectedInventoryConfigValidV1(c)
 }
 func resumeHeadValidV1(h durableInventoryHead) bool {
-	if (h.Schema != is.InventoryResumeHeadVersionV1 && h.Schema != is.InventoryReferenceHeadVersionV1) || h.Limit != h.acquisitionLimit() || h.Used > h.Limit || h.Work != h.Used*32 {
+	if (h.Schema != is.InventoryResumeHeadVersionV1 && !is.InventoryReferenceHead(h.Schema)) || h.Limit != h.acquisitionLimit() || h.Used > h.Limit || h.Work != h.Used*32 {
 		return false
 	}
 	if h.Phase == "Creating" {
@@ -99,7 +99,7 @@ func resumeHeadValidV1(h durableInventoryHead) bool {
 			return false
 		}
 		h.Used -= cat.InventoryCheckpointBytesV1
-		if h.Schema == is.InventoryReferenceHeadVersionV1 {
+		if is.InventoryReferenceHead(h.Schema) {
 			if h.Used < cat.InventoryReferenceRetentionV1 {
 				return false
 			}

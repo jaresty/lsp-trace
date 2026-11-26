@@ -19,7 +19,7 @@ const InventorySelectedHeadVersionV1 = "lsp-trace.durable-inventory-head.v6"
 const InventorySelectedConfigVersionV1 = "lsp-trace.inventory-owned-config.v4"
 
 func inventoryParentLimitV1(schema string) uint64 {
-	if schema == InventoryReferenceHeadVersionV1 {
+	if InventoryReferenceHead(schema) {
 		return cat.InventoryReferenceLimitV1
 	}
 	if schema == InventoryConnectedHeadVersionV1 {
@@ -34,6 +34,9 @@ func inventoryParentLimitV1(schema string) uint64 {
 	return 64 << 20
 }
 func inventoryNativeConfigVersionMatchesV1(head, config string, p *InventorySelectedProfileV1) bool {
+	if head == InventorySemanticHeadVersionV1 {
+		return config == InventorySemanticConfigVersionV1 && p != nil && p.Valid()
+	}
 	if head == InventoryReferenceHeadVersionV1 {
 		return config == InventoryReferenceConfigVersionV1 && p != nil && p.Valid()
 	}

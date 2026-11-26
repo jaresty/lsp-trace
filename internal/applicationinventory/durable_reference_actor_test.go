@@ -70,13 +70,21 @@ func referenceActorWrite(t *testing.T, path string, v any) {
 }
 
 // Explicit controlled test driver, not CLI/product dispatch or a new controller.
-// prepare leaves only a clean acquired V9 job (no semantic lease issued).
+// prepare leaves only a clean acquired v9 or explicitly selected v10 job
+// (no semantic lease issued). The semantic marker selects 10m/four stages.
 // execute starts existing Seal exactly once and accepts separately supplied
 // input-exact replies under the actual returned deadlines. It never authors one.
 func TestInventoryReferenceActorExchange(t *testing.T) {
 	n := len(os.Args)
-	if n < 4 || os.Args[n-3] != "inventory-reference-actors-v1" {
+	if n < 4 || (os.Args[n-3] != "inventory-reference-actors-v1" && os.Args[n-3] != "inventory-semantic-actors-v1") {
 		t.Skip("explicit controlled actor exchange only")
+	}
+	semantic := os.Args[n-3] == "inventory-semantic-actors-v1"
+	prefix, headSchema, preparedSchema := "", is.InventoryReferenceHeadVersionV1, "controlled-reference-offline-inputs.v1"
+	if semantic {
+		prefix = "semantic-"
+		headSchema = is.InventorySemanticHeadVersionV1
+		preparedSchema = "controlled-semantic-offline-inputs.v1"
 	}
 	action, dir := os.Args[n-2], os.Args[n-1]
 	temp, e := filepath.EvalSymlinks(os.TempDir())
@@ -103,11 +111,11 @@ func TestInventoryReferenceActorExchange(t *testing.T) {
 				t.Fatal(e)
 			}
 		}
-		first, _ := runResumeProcess(t, store, "", "references-actors-first")
+		first, _ := runResumeProcess(t, store, "", prefix+"references-actors-first")
 		if wait := time.Until(time.Unix(0, first.Deadline)); wait > 0 {
 			time.Sleep(wait + time.Millisecond)
 		}
-		second, _ := runResumeProcess(t, store, first.Status.RunID, "references-actors-success")
+		second, _ := runResumeProcess(t, store, first.Status.RunID, prefix+"references-actors-success")
 		root, e := publication.OpenRoot(store)
 		if e != nil {
 			t.Fatal(e)
@@ -115,10 +123,10 @@ func TestInventoryReferenceActorExchange(t *testing.T) {
 		defer root.Close()
 		s := DurableStore{Root: root, Directory: store}
 		h, _, e := s.head(second.Status.RunID)
-		if e != nil || h.Schema != is.InventoryReferenceHeadVersionV1 || h.Phase != "Admitted" || h.Sequence != 2 || h.Status != "PARTIAL" {
-			t.Fatal("clean acquired V9 required", e)
+		if e != nil || h.Schema != headSchema || h.Phase != "Admitted" || h.Sequence != 2 || h.Status != "PARTIAL" {
+			t.Fatal("clean acquired matching-version job required", e)
 		}
-		prepared := referencePreparedExchange{Schema: "controlled-reference-offline-inputs.v1", RunID: h.RunID, Inputs: make([]referencePreparedInput, 2)}
+		prepared := referencePreparedExchange{Schema: preparedSchema, RunID: h.RunID, Inputs: make([]referencePreparedInput, 2)}
 		ref := h.Input
 		for i := 1; i >= 0; i-- {
 			raw, e := publication.ReadObject(root, "inventory-admission-", ref)
@@ -149,7 +157,7 @@ func TestInventoryReferenceActorExchange(t *testing.T) {
 	}
 	raw, e := referenceActorRead(filepath.Join(dir, "prepared.json"), 128<<10)
 	var prepared referencePreparedExchange
-	if e != nil || cat.DecodeNativeV3(raw, &prepared) != nil || prepared.Schema != "controlled-reference-offline-inputs.v1" || len(prepared.Inputs) != 2 {
+	if e != nil || cat.DecodeNativeV3(raw, &prepared) != nil || prepared.Schema != preparedSchema || len(prepared.Inputs) != 2 {
 		t.Fatal("prepared exchange", e)
 	}
 	root, e := publication.OpenRoot(store)
@@ -160,8 +168,8 @@ func TestInventoryReferenceActorExchange(t *testing.T) {
 	s := DurableStore{Root: root, Directory: store}
 	ctx := context.Background()
 	h, old, e := s.head(prepared.RunID)
-	if e != nil || h.Schema != is.InventoryReferenceHeadVersionV1 || h.Phase != "Admitted" || h.Status != "PARTIAL" || h.Sequence != 2 {
-		t.Fatal("execute requires original clean acquired V9; no task renewal", e)
+	if e != nil || h.Schema != headSchema || h.Phase != "Admitted" || h.Status != "PARTIAL" || h.Sequence != 2 {
+		t.Fatal("execute requires original clean acquired matching-version job; no task renewal", e)
 	}
 	if h.Checkpoint == nil || prepared.Inputs[0].Admission != h.Checkpoint.Admission || prepared.Inputs[1].Admission != h.Input {
 		t.Fatal("offline admission binding changed")
@@ -225,6 +233,13 @@ func TestInventoryReferenceActorExchange(t *testing.T) {
 		t.Fatal(e)
 	}
 	checkReferenceResult(t, report)
+	if semantic {
+		if report.SemanticReservedNS != int64(40*time.Minute) {
+			t.Fatal("FINAL_SEMANTIC_RESERVATION", report.SemanticReservedNS)
+		}
+		raw, _ := json.Marshal(report)
+		t.Log("SEMANTIC_REPORT_JSON " + string(raw))
+	}
 	referenceActorWrite(t, filepath.Join(dir, "result.json"), report)
 	if e = root.Close(); e != nil {
 		t.Fatal(e)
@@ -238,7 +253,9 @@ func referenceReplyMatches(r referenceActorReply, t DurableTask, digest string) 
 
 // Only the transport/control route is exercised. These replies are explicitly
 // deterministic fixture replies, not independent semantic judgments.
-func TestInventoryReferenceActorDriver(t *testing.T) {
+func TestInventoryReferenceActorDriver(t *testing.T) { referenceActorDriver(t, false) }
+func TestInventorySemanticActorDriver(t *testing.T)  { referenceActorDriver(t, true) }
+func referenceActorDriver(t *testing.T, semantic bool) {
 	dir, e := os.MkdirTemp("", "lsp-reference-actors-")
 	if e != nil {
 		t.Fatal(e)
@@ -255,6 +272,9 @@ func TestInventoryReferenceActorDriver(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	args := []string{"-test.run=^TestInventoryReferenceActorExchange$", "-test.v", "inventory-reference-actors-v1", "prepare", dir}
+	if semantic {
+		args[2] = "inventory-semantic-actors-v1"
+	}
 	raw, e := exec.CommandContext(ctx, exe, args...).CombinedOutput()
 	t.Log("ACTOR_DRIVER_PREPARE " + string(raw))
 	if e != nil {
@@ -300,6 +320,11 @@ func TestInventoryReferenceActorDriver(t *testing.T) {
 				t.Fatal("ACTOR_PACKET_BYTES_CHANGED")
 			}
 			task := packet.Task
+			if semantic {
+				checkSemanticTask(t, task, 10*time.Minute)
+			} else if task.SemanticPolicy != nil || task.SemanticReservedNS > int64(120*time.Second) {
+				t.Fatal("HISTORICAL_POLICY_CHANGED")
+			}
 			var answer []byte
 			if task.Phase == "Describe" {
 				answer = dw.EncodeAdapterResultV2(`{"verdict":"COMPLETE","target_role":"controlled fixture query","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"controlled source-visible operation","consumer_relative":false},"boundary_contribution":"retained query-side reference observation","limitations":["mechanical route test; no independent judgment"]}`)

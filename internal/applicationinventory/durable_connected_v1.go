@@ -76,12 +76,15 @@ func connectedAcquisitionValid(h durableInventoryHead) bool {
 		return false
 	}
 	h.Limit = h.acquisitionLimit()
-	if h.Schema != is.InventoryReferenceHeadVersionV1 {
+	if !is.InventoryReferenceHead(h.Schema) {
 		h.Schema = is.InventoryResumeHeadVersionV1
 	}
 	return resumeHeadValidV1(h)
 }
 func connectedSemanticValid(h durableInventoryHead) bool {
+	if h.Schema == is.InventorySemanticHeadVersionV1 && !h.semanticTimingValid() {
+		return false
+	}
 	if h.Native != nil || h.Selected != nil || h.Checkpoint != nil || h.Packets < 9+uint64(h.CompletionCursor) || len(h.Completion.Inputs) != 2 || len(h.Completion.Payloads) != 2 {
 		return false
 	}
@@ -108,7 +111,13 @@ func (h durableInventoryHead) independentTaskLeases() bool {
 	return h.Schema == ownedHeadVersion || is.InventoryConnectedHead(h.Schema)
 }
 func (h durableInventoryHead) sliceBudget(deadline time.Time, amount, prior uint64, semantic time.Duration) (*cat.CallerBudgetV3, error) {
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if h.Schema == is.InventorySemanticHeadVersionV1 && !ownedPhase(h) {
+		if h.SemanticPolicy == nil {
+			return nil, ErrDurableInventory
+		}
+		return cat.NewInventorySemanticBudgetV1(deadline, amount, prior, semantic, *h.SemanticPolicy)
+	}
+	if is.InventoryReferenceHead(h.Schema) {
 		return cat.NewInventoryReferenceBudgetV1(deadline, amount, prior, semantic)
 	}
 	if h.Schema == is.InventoryConnectedHeadVersionV1 {
@@ -184,7 +193,7 @@ func (s DurableStore) verifyConnectedAdmissions(ctx context.Context, h durableIn
 			return bad()
 		}
 		gaps = append(gaps, "ADMISSION_SHA256:"+last.ID+";EVIDENCE_SHA256:"+a.Evidence.ID)
-		if h.Schema == is.InventoryReferenceHeadVersionV1 {
+		if is.InventoryReferenceHead(h.Schema) {
 			w, e := is.ValidateInventoryReferenceEvidenceV1(raw, h.RunID, a.LeadID)
 			if e != nil {
 				return bad()

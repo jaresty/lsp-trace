@@ -4,6 +4,7 @@ package applicationinventory
 
 import (
 	dw "lsp-trace/internal/describeworker"
+	is "lsp-trace/internal/inventorysuccessor"
 	"lsp-trace/internal/publication"
 )
 
@@ -213,7 +214,7 @@ func (h durableInventoryHead) completionValid() bool {
 	}
 	spent, valid := capacitySum(h.Completion.Stages[:h.CompletionCursor]...)
 	floor, validFloor := capacitySum(h.Completion.PreparationUsed, spent, h.DeliverySpent)
-	if h.Schema == "lsp-trace.durable-inventory-head.v8" || h.Schema == "lsp-trace.durable-inventory-head.v9" {
+	if is.InventoryConnectedHead(h.Schema) {
 		validFloor = h.Completion.PreparationUsed <= h.runLimit() && spent <= h.runLimit()-h.Completion.PreparationUsed && h.DeliverySpent <= h.runLimit()-h.Completion.PreparationUsed-spent
 		if validFloor {
 			floor = h.Completion.PreparationUsed + spent + h.DeliverySpent

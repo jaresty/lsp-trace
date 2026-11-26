@@ -30,6 +30,7 @@ const ownedSealCost uint64 = 2 << 20
 // provisional admitted-evidence byte ceiling, not a physical directory quota
 // (orphans and semantic objects are excluded). It cannot enlarge logical work.
 type OwnedInventoryConfig struct {
+	SemanticPolicy                                        *cat.InventorySemanticPolicyV1 `json:",omitempty"`
 	Schema                                                string
 	Scope, Provenance, Interpreter                        string
 	Policy                                                sc.DurableDescribePolicyV1
@@ -112,6 +113,12 @@ func validInventoryDeadlines(h durableInventoryHead) bool {
 	return h.RunDeadline > h.Issued && h.RunDeadline-h.Issued <= int64(180*time.Second) && h.Deadline <= h.RunDeadline && h.AcceptanceDeadline <= h.RunDeadline
 }
 func ownedConfigValid(c OwnedInventoryConfig) bool {
+	if c.Schema == is.InventorySemanticConfigVersionV1 {
+		return semanticConfigValid(c)
+	}
+	if c.SemanticPolicy != nil {
+		return false
+	}
 	if c.Schema == is.InventoryReferenceConfigVersionV1 {
 		return referenceConfigValid(c)
 	}
@@ -167,6 +174,9 @@ func ownedConfigValid(c OwnedInventoryConfig) bool {
 	return true // Encoded-length quote and funding are validated before effects.
 }
 func ownedHeadValid(h durableInventoryHead) bool {
+	if h.SemanticPolicy != nil || h.TaskIssuedNS != 0 {
+		return false
+	}
 	if is.InventoryConnectedHead(h.Schema) {
 		return connectedAcquisitionValid(h)
 	}
@@ -356,7 +366,7 @@ func (s DurableStore) Admit(ctx context.Context, op AdmissionReservation, r sc.P
 		if h.Selected == nil || h.Selected.Outcome != "OBSERVED" || !r.InventoryAccountingMatchesV1(h.Selected.Accounting) || time.Now().UnixNano() >= h.Selected.Deadline {
 			return InventoryJobStatus{}, ErrDurableInventory
 		}
-		if h.Schema == is.InventoryReferenceHeadVersionV1 {
+		if is.InventoryReferenceHead(h.Schema) {
 			b, e = cat.NewInventoryReferenceBudgetV1(time.Unix(0, h.Deadline), o.config.AdmissionBytes, h.Used-o.config.AdmissionBytes, 0)
 		} else if is.InventoryResumableHeadV1(h.Schema) {
 			b, e = cat.NewInventoryAdmissionBudgetV5(time.Unix(0, h.Deadline), o.config.AdmissionBytes, h.Used-o.config.AdmissionBytes)
@@ -379,7 +389,7 @@ func (s DurableStore) Admit(ctx context.Context, op AdmissionReservation, r sc.P
 	pins.PromptSHA256 = "sha256:" + q.Envelope.InputSHA256
 	lead := fmt.Sprintf("%s-%06d", h.RunID, o.binding.Index)
 	retain := sc.RetainInventoryEvidence
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		retain = sc.RetainInventoryReferenceEvidenceV1
 	}
 	ref, payload, e := retain(ctx, s.Root, h.RunID, lead, r, sc.CallerDescribeBindingV3{AttemptID: lead, Interpreter: o.config.Interpreter, Pins: pins, Deadline: time.Unix(0, h.Deadline), Limits: o.config.ResponseLimits, Budget: b})
@@ -501,7 +511,7 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 	leads := make([]Lead, count)
 	refs := make([]publication.StoredObject, count)
 	var admissionRefs []publication.StoredObject
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		admissionRefs = make([]publication.StoredObject, count)
 	}
 	payloads := make([]uint64, count)
@@ -564,6 +574,10 @@ func (s DurableStore) Seal(ctx context.Context, run, expectedHead string) (Durab
 	h.Prompt = ""
 	h.OutputBytes = 0
 	h.Window = int64(c.TaskWindow)
+	if c.SemanticPolicy != nil {
+		p := *c.SemanticPolicy
+		h.SemanticPolicy = &p
+	}
 	if b.Reserve(ctx, durablePlanningQuote(count)) != nil {
 		return bad(ErrDurableInventory)
 	}

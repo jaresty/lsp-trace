@@ -21,7 +21,7 @@ const InventoryReferenceHeadVersionV1 = "lsp-trace.durable-inventory-head.v9"
 const InventoryReferenceConfigVersionV1 = "lsp-trace.inventory-owned-config.v7"
 
 func InventoryConnectedHead(schema string) bool {
-	return schema == InventoryConnectedHeadVersionV1 || schema == InventoryReferenceHeadVersionV1
+	return schema == InventoryConnectedHeadVersionV1 || InventoryReferenceHead(schema)
 }
 func NewInventoryReferenceProfileV1() InventoryResumeProfileV1 {
 	p := NewInventoryConnectedProfileV1()

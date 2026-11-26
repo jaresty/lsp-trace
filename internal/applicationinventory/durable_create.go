@@ -33,6 +33,10 @@ const ownedCreateMinimum uint64 = 32*(ownedBootstrapMaxBytes+16384) + 32768
 // 32768 covers fixed IDs, descriptors and scalar bookkeeping. All multiplication
 // is range-checked before use; no future admission or semantic work is included.
 func ownedCreationReserve(c OwnedInventoryConfig) uint64 {
+	if c.Schema == is.InventorySemanticConfigVersionV1 {
+		c.Schema = is.InventoryReferenceConfigVersionV1
+		return ownedCreationReserve(c)
+	}
 	if c.Schema == is.InventoryReferenceConfigVersionV1 {
 		c.Schema = is.InventoryConnectedConfigVersionV1
 		return ownedCreationReserve(c) + 2*cat.InventoryReferenceRetentionV1 + cat.InventoryReferenceSealExtraV1 + cat.InventoryReferenceSemanticExtraV1
@@ -157,6 +161,9 @@ func (s DurableStore) createOwned(ctx context.Context, c OwnedInventoryConfig, r
 	}
 	if c.Schema == is.InventoryReferenceConfigVersionV1 {
 		schema = is.InventoryReferenceHeadVersionV1
+	}
+	if c.Schema == is.InventorySemanticConfigVersionV1 {
+		schema = is.InventorySemanticHeadVersionV1
 	}
 	h := durableInventoryHead{Schema: schema, RunID: run, TaskID: run, Phase: "Creating", Status: "CLAIMED", State: ownedConfigReference(raw), Issued: time.Now().UnixNano(), Deadline: deadline.UnixNano(), Used: quote, Work: quote * 32, Packets: 1, Limit: c.BudgetBytes, Creation: &ownedCreationIntent{Model: ownedCreateModel, Config: c}}
 	fail := func(err error) (InventoryJobStatus, error) {

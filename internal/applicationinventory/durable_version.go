@@ -47,6 +47,14 @@ func decodeVersionedInventoryHead(raw []byte, out *durableInventoryHead) error {
 	if json.Unmarshal(fields["Schema"], &version) != nil {
 		return ErrDurableInventory
 	}
+	if version != is.InventorySemanticHeadVersionV1 {
+		if _, ok := fields["SemanticPolicy"]; ok {
+			return ErrDurableInventory
+		}
+		if _, ok := fields["TaskIssuedNS"]; ok {
+			return ErrDurableInventory
+		}
+	}
 	if _, present := fields["Native"]; present && version != is.InventoryNativeHeadVersionV1 && version != is.InventorySelectedHeadVersionV1 && !is.InventoryResumableHeadV1(version) {
 		return ErrDurableInventory
 	}
@@ -80,7 +88,7 @@ func decodeVersionedInventoryHead(raw []byte, out *durableInventoryHead) error {
 			return ErrDurableInventory
 		}
 		return ErrUnsupportedStoredVersion
-	case ownedHeadVersion, is.InventoryNativeHeadVersionV1, is.InventorySelectedHeadVersionV1, is.InventoryResumeHeadVersionV1, is.InventoryConnectedHeadVersionV1, is.InventoryReferenceHeadVersionV1:
+	case ownedHeadVersion, is.InventoryNativeHeadVersionV1, is.InventorySelectedHeadVersionV1, is.InventoryResumeHeadVersionV1, is.InventoryConnectedHeadVersionV1, is.InventoryReferenceHeadVersionV1, is.InventorySemanticHeadVersionV1:
 		var h durableInventoryHead
 		if strictInventory(raw, &h) != nil || (!ownedPhase(h) && h.Completion.Version != durableQuoteVersion) {
 			return ErrDurableInventory

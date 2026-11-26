@@ -38,6 +38,9 @@ func NewInventoryResumeProfileV1() InventoryResumeProfileV1 {
 }
 func (p InventoryResumeProfileV1) Valid() bool { return p == NewInventoryResumeProfileV1() }
 func inventoryResumeProfileMatchesV1(schema string, p *InventoryResumeProfileV1) bool {
+	if schema == InventorySemanticHeadVersionV1 {
+		return p != nil && *p == NewInventorySemanticProfileV1()
+	}
 	if schema == InventoryReferenceHeadVersionV1 {
 		return p != nil && *p == NewInventoryReferenceProfileV1()
 	}
@@ -76,7 +79,7 @@ func InventoryNativeControlForHeadV1(schema string) uint64 {
 }
 func InventorySelectedControlForHeadV1(schema string) uint64 {
 	n := cat.InventorySelectedControlBytesV1 + cat.InventoryAdmissionBytesV4
-	if schema == InventoryReferenceHeadVersionV1 {
+	if InventoryReferenceHead(schema) {
 		n += cat.InventoryReferenceRetentionV1
 	}
 	if InventoryResumableHeadV1(schema) {
@@ -94,7 +97,7 @@ func VerifyInventoryCheckpointV1(ctx context.Context, root *publication.Root, ru
 	return verifyInventoryCheckpoint(ctx, root, run, c, false)
 }
 func VerifyInventoryCheckpointForHeadV1(ctx context.Context, root *publication.Root, schema, run string, c InventoryCheckpointV1) error {
-	return verifyInventoryCheckpoint(ctx, root, run, c, schema == InventoryReferenceHeadVersionV1)
+	return verifyInventoryCheckpoint(ctx, root, run, c, InventoryReferenceHead(schema))
 }
 func verifyInventoryCheckpoint(ctx context.Context, root *publication.Root, run string, c InventoryCheckpointV1, references bool) error {
 	admissionSchema, evidenceSchema := "lsp-trace.inventory-admission.v2", "lsp-trace.inventory-evidence.v1"

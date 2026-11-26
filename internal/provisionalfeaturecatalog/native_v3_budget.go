@@ -18,6 +18,7 @@ type CallerBudgetV3 struct {
 	limit, spent uint64
 	semantic     time.Duration
 	exhausted    bool
+	dataOnly     bool
 }
 
 func NewCallerBudgetV3(deadline time.Time, bytes uint64) (*CallerBudgetV3, error) {
@@ -61,7 +62,7 @@ func (b *CallerBudgetV3) Exchange(ctx context.Context, window time.Duration) (co
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.exhausted || ctx.Err() != nil || window <= 0 || window > 30*time.Second || window > 120*time.Second-b.semantic || !time.Now().Before(b.deadline) {
+	if b.dataOnly || b.exhausted || ctx.Err() != nil || window <= 0 || window > 30*time.Second || window > 120*time.Second-b.semantic || !time.Now().Before(b.deadline) {
 		b.exhausted = true
 		return nil, nil, ErrCallerBudgetV3
 	}

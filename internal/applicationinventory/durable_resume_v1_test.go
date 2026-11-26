@@ -40,6 +40,10 @@ func TestInventoryResumeProcess(t *testing.T) {
 		t.Skip("explicit pipe-only child")
 	}
 	dir, run, mode := os.Args[n-3], os.Args[n-2], os.Args[n-1]
+	semantic := strings.HasPrefix(mode, "semantic-")
+	mode = strings.TrimPrefix(mode, "semantic-")
+	short := semantic && strings.HasPrefix(mode, "short-")
+	mode = strings.TrimPrefix(mode, "short-")
 	references := strings.HasPrefix(mode, "references-")
 	mode = strings.TrimPrefix(mode, "references-")
 	connected := references || strings.HasPrefix(mode, "connected-")
@@ -115,6 +119,19 @@ func TestInventoryResumeProcess(t *testing.T) {
 			if externalActors {
 				admission.Policy.ReviewMode = ""
 			} // no authored-independence claim; external evidence must establish it
+		}
+		if semantic {
+			constructor = func(e scopejob.Config, a OwnedInventoryConfig) (OwnedInventoryConfig, error) {
+				window := 10 * time.Minute
+				if short {
+					window = time.Second
+				}
+				p, err := cat.NewInventorySemanticPolicyV1(window)
+				if err != nil {
+					return OwnedInventoryConfig{}, err
+				}
+				return SemanticAdmissionConfigV1(e, a, p)
+			}
 		}
 		cfg, e := constructor(scopejob.Config{Workspace: source, Roots: []string{"."}, Profile: "gopls", Language: "go", Budget: scopejob.DefaultBudget()}, admission)
 		if e != nil {

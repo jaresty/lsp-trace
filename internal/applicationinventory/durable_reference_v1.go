@@ -36,37 +36,37 @@ func referenceConfigValid(c OwnedInventoryConfig) bool {
 	return connectedConfigValid(c)
 }
 func (h durableInventoryHead) connectedLimit() uint64 {
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		return cat.InventoryReferenceLimitV1
 	}
 	return cat.InventoryConnectedLimitV1
 }
 func (h durableInventoryHead) acquisitionLimit() uint64 {
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		return cat.InventoryReferenceAcquisitionV1
 	}
 	return cat.InventoryResumeLimitV1
 }
 func (h durableInventoryHead) connectedSealBytes() uint64 {
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		return cat.InventoryReferenceSealV1
 	}
 	return cat.InventoryConnectedSealBytesV1
 }
 func (h durableInventoryHead) manifestLimit() uint64 {
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		return cat.InventoryReferenceManifestV1
 	}
 	return cat.InventoryConnectedManifestV1
 }
 func (h durableInventoryHead) admissionSchema() string {
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		return "lsp-trace.inventory-admission.v3"
 	}
 	return "lsp-trace.inventory-admission.v2"
 }
 func (h durableInventoryHead) evidenceSchema() string {
-	if h.Schema == is.InventoryReferenceHeadVersionV1 {
+	if is.InventoryReferenceHead(h.Schema) {
 		return "lsp-trace.inventory-evidence.v2"
 	}
 	return "lsp-trace.inventory-evidence.v1"
@@ -75,7 +75,7 @@ func (h durableInventoryHead) evidenceSchema() string {
 // Called on each newly derived plan, never a persisted/spent plan. Existing
 // submitPlan preserves all spent stages and the current stage without refunds.
 func (h durableInventoryHead) referenceCompletion(p *durableCompletionPlan) {
-	if h.Schema != is.InventoryReferenceHeadVersionV1 || len(p.Stages) != 5 {
+	if !is.InventoryReferenceHead(h.Schema) || len(p.Stages) != 5 {
 		return
 	}
 	p.Stages[0] += cat.InventoryReferenceDescribeV1
