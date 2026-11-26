@@ -153,7 +153,16 @@ func inventoryFixturePrivate(t *testing.T) (string, string, string, []string) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	base, e := os.MkdirTemp(filepath.Join(home, ".local/state/lsp-trace-evidence"), "census-cli-owned-")
+	// Normal fixtures never depend on or create a personal runtime/evidence root.
+	// Explicit historical qualification retains its original opt-in location.
+	parent := filepath.Join(home, ".local/state/lsp-trace-evidence")
+	if os.Getenv("LSP_TRACE_RETAIN_CENSUS_TEST_EVIDENCE") != "1" {
+		parent, e = filepath.EvalSymlinks(home)
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	base, e := os.MkdirTemp(parent, "census-cli-owned-")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -161,6 +170,9 @@ func inventoryFixturePrivate(t *testing.T) (string, string, string, []string) {
 	// tests clean their own namespaces; historical attempts are never overwritten.
 	if os.Getenv("LSP_TRACE_RETAIN_CENSUS_TEST_EVIDENCE") != "1" {
 		t.Cleanup(func() { os.RemoveAll(base) })
+		if e = pilot.ValidateDurableRoot(base); e != nil {
+			t.Fatal("fixture root not admitted", e)
+		}
 	}
 	source, root := filepath.Join(base, "source"), filepath.Join(base, "publication")
 	for _, p := range []string{source, root} {

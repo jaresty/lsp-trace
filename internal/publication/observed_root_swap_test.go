@@ -13,14 +13,14 @@ func TestObservedRootAncestorSwapClosesAllOwnedHandles(t *testing.T) {
 	for _, privateTmp := range []bool{false, true} {
 		name := "other-private-root"
 		if privateTmp {
-			name = "alias-to-private-tmp"
+			name = "alias-to-owned-temp"
 		}
 		t.Run(name, func(t *testing.T) {
 			path, id, raw := observedRootFixture(t)
 			other, _, _ := observedRootFixture(t)
 			targetAncestor := filepath.Dir(other)
 			if privateTmp {
-				base, e := os.MkdirTemp("/private/tmp", "lsp-trace-root-swap-test-")
+				base, e := os.MkdirTemp(t.TempDir(), "lsp-trace-root-swap-test-")
 				if e != nil {
 					t.Fatal(e)
 				}

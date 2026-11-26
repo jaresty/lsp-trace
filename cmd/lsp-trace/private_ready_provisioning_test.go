@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"io"
@@ -360,27 +361,42 @@ func TestReadyProvisioningStaticBindings(t *testing.T) {
 	if closePos == 0 || writePos <= closePos {
 		t.Fatal("ASSERT_READY_OWNED_CLOSE_BINDING")
 	}
-	dispatch := parse("private_host_application.go", "runPrivateHostApplication")
-	early, ok := dispatch.Body.List[0].(*ast.IfStmt)
-	if !ok {
-		t.Fatal("ASSERT_READY_EARLY_DISPATCH_BINDING")
-	}
-	var condition, call bool
-	ast.Inspect(early.Cond, func(n ast.Node) bool {
-		if s, ok := n.(*ast.BasicLit); ok && s.Value == strconv.Quote("initialize-ready") {
-			condition = true
+	render := func(n ast.Node) string {
+		var b bytes.Buffer
+		if err := format.Node(&b, token.NewFileSet(), n); err != nil {
+			t.Fatal(err)
 		}
-		return true
-	})
-	ast.Inspect(early.Body, func(n ast.Node) bool {
-		if c, ok := n.(*ast.CallExpr); ok {
-			if id, ok := c.Fun.(*ast.Ident); ok && id.Name == "runPrivateReadyProvisioning" {
-				call = true
+		return b.String()
+	}
+	returns := func(body *ast.BlockStmt, target string, args []string) bool {
+		if body == nil || len(body.List) != 1 {
+			return false
+		}
+		r, ok := body.List[0].(*ast.ReturnStmt)
+		if !ok || len(r.Results) != 1 {
+			return false
+		}
+		c, ok := r.Results[0].(*ast.CallExpr)
+		if !ok || render(c.Fun) != target || len(c.Args) != len(args) || c.Ellipsis.IsValid() {
+			return false
+		}
+		for i, arg := range c.Args {
+			if render(arg) != args[i] {
+				return false
 			}
 		}
 		return true
-	})
-	if !condition || !call {
+	}
+	wrapper := parse("private_host_application.go", "runPrivateHostApplication")
+	if !returns(wrapper.Body, "runPrivateHostApplicationWithInventoryInputsV3", []string{"args", "stdin", "stdout", "stderr", "nil"}) {
+		t.Fatal("ASSERT_READY_WRAPPER_FORWARDING")
+	}
+	dispatch := parse("private_host_application.go", "runPrivateHostApplicationWithInventoryInputsV3")
+	if dispatch.Body == nil || len(dispatch.Body.List) == 0 {
+		t.Fatal("ASSERT_READY_EARLY_DISPATCH_BINDING")
+	}
+	early, ok := dispatch.Body.List[0].(*ast.IfStmt)
+	if !ok || early.Init != nil || early.Else != nil || render(early.Cond) != `len(args) > 0 && args[0] == "initialize-ready"` || !returns(early.Body, "runPrivateReadyProvisioning", []string{"args", "stdin", "stdout", "stderr"}) {
 		t.Fatal("ASSERT_READY_EARLY_DISPATCH_BINDING")
 	}
 	t.Log("ASSERT_READY_OWNED_CLOSE_BINDING PASS; ASSERT_READY_EARLY_DISPATCH_BINDING PASS; AST source witnesses only")

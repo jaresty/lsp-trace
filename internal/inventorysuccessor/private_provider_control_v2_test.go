@@ -13,10 +13,33 @@ import (
 
 func providerControlFixtureV2(t *testing.T, change ...func(*authorizationV2)) (*PrivateManagedInputOwnerV2, describeworker.FilePin, uint64) {
 	t.Helper()
-	dir, e := filepath.EvalSymlinks(t.TempDir())
+	home, e := os.UserHomeDir()
 	if e != nil {
 		t.Fatal(e)
 	}
+	home, e = filepath.EvalSymlinks(home)
+	if e != nil {
+		t.Fatal(e)
+	}
+	// Use the real ancestor/owner/ACL admission before creating any fixture.
+	// Never chmod a shared temp parent or fall back to an inadmissible path.
+	var scratch [4096]byte
+	parent, _, e := openProtectedLocalDirectoryV1(home, &scratch, nil)
+	if e != nil {
+		t.Fatal("protected provider fixture HOME unavailable", e)
+	}
+	if e = parent.Close(); e != nil {
+		t.Fatal(e)
+	}
+	dir, e := os.MkdirTemp(home, ".fixed-provider-control-test-")
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		if e := os.RemoveAll(dir); e != nil {
+			t.Error(e)
+		}
+	})
 	p := filepath.Join(dir, "provider")
 	b := []byte("tiny controlled provider; never executed\n")
 	if e := os.WriteFile(p, b, 0700); e != nil {
@@ -68,7 +91,21 @@ func TestFixedProviderControlConnectedV2(t *testing.T) {
 	if _, e = o.verifyProviderControlV2(context.Background(), hashLabelV2("control-attempt"), time.Now().Add(time.Second), p, n); e == nil {
 		t.Fatal("ASSERT_CONTROL_REPLAY")
 	}
-	t.Log("ASSERT_CONTROL_FUNDED_COMPLETION PASS; ASSERT_CONTROL_SEPARATE_OBSERVED PASS")
+	// Counterfactual uses only this fixture's directory, never global /tmp.
+	// The same real provider opener must reject an otherwise identical chain
+	// when one test-owned ancestor becomes group/world writable.
+	if e = os.Chmod(filepath.Dir(p.Path), 0777); e != nil {
+		t.Fatal(e)
+	}
+	ioOwner := &providerControlIOV2{ctx: context.Background(), left: 129 * 8}
+	f, openErr := ioOwner.open(p.Path)
+	if f != nil {
+		_ = f.Close()
+	}
+	if openErr == nil || f != nil || ioOwner.closeCredits != 0 {
+		t.Fatal("ASSERT_CONTROL_WRITABLE_ANCESTOR_REFUSED", openErr, ioOwner.closeCredits)
+	}
+	t.Log("ASSERT_CONTROL_FUNDED_COMPLETION PASS; ASSERT_CONTROL_SEPARATE_OBSERVED PASS; ASSERT_CONTROL_WRITABLE_ANCESTOR_REFUSED PASS")
 }
 
 func TestFixedProviderControlRefusalsV2(t *testing.T) {

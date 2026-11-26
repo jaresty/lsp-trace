@@ -114,7 +114,7 @@ func authorityCallViolations(root string) ([]string, error) {
 			if rel == "internal/censuslineagepilot/scope_producer_private_v2.go" && selector.Sel.Name == "MintSeedAuthority" {
 				for _, decl := range file.Decls {
 					fn, ok := decl.(*ast.FuncDecl)
-					if ok && fn.Name.Name == "DiscoverScopePrivateV2" && fn.Recv == nil && fn.Body != nil && call.Pos() >= fn.Body.Pos() && call.End() <= fn.Body.End() {
+					if ok && fn.Name.Name == "discoverScopeOutcomePrivateV2" && fn.Recv == nil && fn.Body != nil && call.Pos() >= fn.Body.Pos() && call.End() <= fn.Body.End() {
 						return true
 					}
 				}
@@ -156,6 +156,18 @@ func TestAuthorityScanSealedCensusV2OwnerOnly(t *testing.T) {
 	violations, err := authorityCallViolations(root)
 	if err != nil || len(violations) != 0 {
 		t.Fatalf("ASSERT_V2_CLOSED_MINT_OWNER: %v %v", violations, err)
+	}
+	// The old wrapper, a foreign function, and a same-named method must not
+	// acquire the narrow exception just because they live in the producer file.
+	for _, owner := range []string{"func DiscoverScopePrivateV2(", "func forbiddenOwnerCopy(", "func (x fakeOwner) discoverScopeOutcomePrivateV2("} {
+		changed := strings.Replace(string(raw), "func discoverScopeOutcomePrivateV2(", owner, 1)
+		if err = os.WriteFile(target, []byte(changed), 0600); err != nil {
+			t.Fatal(err)
+		}
+		violations, err = authorityCallViolations(root)
+		if err != nil || len(violations) != 1 || violations[0] != rel+" calls MintSeedAuthority" {
+			t.Fatalf("ASSERT_V2_EXACT_MINT_OWNER: %s %v %v", owner, violations, err)
+		}
 	}
 	raw = append(raw, []byte("\nfunc forbiddenOwnerCopy() { acquisitionauthority.MintSeedAuthority() }\n")...)
 	if err = os.WriteFile(target, raw, 0600); err != nil {

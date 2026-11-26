@@ -26,7 +26,7 @@ func TestPreflightRejectsAncestorSwapBeforeAcquisition(t *testing.T) {
 	for _, privateTmp := range []bool{false, true} {
 		name := "other-private-root"
 		if privateTmp {
-			name = "alias-to-private-tmp"
+			name = "alias-to-owned-temp"
 		}
 		t.Run(name, func(t *testing.T) {
 			req, sb, pb := preflightFixture(t)
@@ -38,7 +38,7 @@ func TestPreflightRejectsAncestorSwapBeforeAcquisition(t *testing.T) {
 			}
 			targetBase, err := os.MkdirTemp(outer, "destination-")
 			if privateTmp {
-				targetBase, err = os.MkdirTemp("/private/tmp", "lsp-trace-acquisition-test-")
+				targetBase, err = os.MkdirTemp(t.TempDir(), "lsp-trace-acquisition-test-")
 			}
 			if err != nil {
 				t.Fatal(err)

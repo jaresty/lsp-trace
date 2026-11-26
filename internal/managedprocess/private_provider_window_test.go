@@ -87,10 +87,18 @@ type privateWindowReadProbe struct{ maximum int }
 
 func (p *privateWindowReadProbe) Read(b []byte) (int, error) { p.maximum = len(b); return 0, io.EOF }
 func TestPrivateProviderWindowStderrDeliveryNotRetention(t *testing.T) {
-	b := &privateProviderWindow{deadline: time.Now().Add(time.Second), stderr: 3}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b := &privateProviderWindow{ctx: ctx, deadline: time.Now().Add(time.Second), stderr: 3}
 	var delivered bytes.Buffer
 	err := b.copyStderr(io.NopCloser(strings.NewReader("abcdef")), &delivered)
 	if err == nil || delivered.String() != "abc" {
 		t.Fatalf("ASSERT_WINDOW_STDERR_DELIVERY_PREBOUND: %q err=%v", delivered.String(), err)
+	}
+	cancel()
+	cancelled := &privateProviderWindow{ctx: ctx, deadline: time.Now().Add(time.Second), stderr: 3}
+	probe := &privateWindowReadProbe{}
+	if n, err := cancelled.readStderr(probe, make([]byte, 3)); n != 0 || err != ErrPrivateProviderWindow || probe.maximum != 0 {
+		t.Fatal("ASSERT_WINDOW_CANCELLED_BEFORE_READ", n, err, probe.maximum)
 	}
 }
