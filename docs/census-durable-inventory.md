@@ -419,6 +419,13 @@ success; admission, budgets and response sizes are unchanged. See
 No arm was renewed and no budget was tuned. These controlled source sizes do not
 establish general capacity, real model quality or arbitrary production scale.
 
+Prepared-document no-follow reads select the same descriptor-walking implementation
+on Darwin and Linux. This is preparation-reader parity only: it does not qualify
+Linux native folder lifecycle or protected capture-directory admission. Other
+platforms retain the unsupported preparation reader. Native Linux verification
+of this parity change remains pending CI; cross-compilation alone is not evidence
+of Linux runtime behavior.
+
 Linux retains publication/CAS and durable continuation implementations and passes
 an amd64 cross-build. Linux native folder lifecycle explicitly refuses; no Linux
 runtime qualification was performed. Windows ownership/publication/native lifecycle
