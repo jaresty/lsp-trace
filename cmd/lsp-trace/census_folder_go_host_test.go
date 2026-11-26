@@ -59,7 +59,11 @@ func TestCensusFolderGoHost(t *testing.T) {
 			cmd := exec.CommandContext(ctx, exe, "-test.run=^TestCensusFolderManagedHostProcess$", "-test.v")
 			// No PATH-discovered Pi, node, python, provider binary or credentials exists
 			// in this environment. Native provider transport is explicitly the fixture.
-			cmd.Env = []string{"PATH=/nonexistent-census-host-bin", "HOME=" + t.TempDir(), "TMPDIR=" + os.TempDir(), "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local", "GOTELEMETRY=off", "LSP_TRACE_CALLER_FD=3", "CENSUS_MANAGED_PROCESS_FIXTURE=1"}
+			home := t.TempDir()
+			if mode == "missing" {
+				home = censusF11ProtectedHome(t)
+			}
+			cmd.Env = []string{"PATH=/nonexistent-census-host-bin", "HOME=" + home, "TMPDIR=" + os.TempDir(), "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local", "GOTELEMETRY=off", "LSP_TRACE_CALLER_FD=3", "CENSUS_MANAGED_PROCESS_FIXTURE=1"}
 			negative := mode != "same-thread" && mode != "subagents" && mode != "delayed"
 			if negative {
 				cmd.Env = append(cmd.Env, "CENSUS_MANAGED_PROCESS_REFUSAL="+mode)
@@ -94,7 +98,11 @@ func TestCensusFolderGoHost(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ASSERT_GO_ONLY_HOST: %s: %v\n%s\ncaller: %v", mode, err, output.String(), result.err)
 			}
-			if negative {
+			if mode == "missing" {
+				if !strings.Contains(output.String(), "ASSERT_OWNER_START_NO_ACQUISITION: PASS") {
+					t.Fatal("ordinary owner-start contract missing", output.String())
+				}
+			} else if negative {
 				if !strings.Contains(output.String(), "ASSERT_GO_MANAGED_REFUSAL: PASS") {
 					t.Fatal(output.String())
 				}

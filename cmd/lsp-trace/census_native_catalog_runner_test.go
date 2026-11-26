@@ -388,7 +388,12 @@ func TestCensusNativeCatalogStopsOnceForEveryAssemblyTerminal(t *testing.T) {
 						stage = censusStageAcquisition
 					}
 					var expected bytes.Buffer
-					expectedCode := writeCensusFailure(&expected, stage, true, errors.New("private"))
+					expectedError := errors.New("private")
+					if tc.stop == censussourcedriver.StopBoundReached {
+						// The closed bound category intentionally retains its actionable detail.
+						expectedError = errNativeCatalogBoundReached
+					}
+					expectedCode := writeCensusFailure(&expected, stage, true, expectedError)
 					if code != expectedCode || stdout.Len() != 0 || stderr.String() != expected.String() {
 						t.Fatalf("ASSERT_NATIVE_STOP_EXACT_TERMINAL stop=%s code=%d/%d stdout=%q stderr=%q/%q", tc.stop, code, expectedCode, stdout.String(), stderr.String(), expected.String())
 					}

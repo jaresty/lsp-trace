@@ -357,7 +357,9 @@ func TestCensusPrivateInventoryGrammarAndCompatibility(t *testing.T) {
 	}
 	var out, err bytes.Buffer
 	code := runCensus([]string{"--help"}, &out, &err)
-	assertInventoryPrivate(t, "ASSERT_CENSUS_ORDINARY_HELP_UNCHANGED", code == 0 && pilot.Digest(out.Bytes()) == "sha256:44387a924c8393ea56c0bdd0305b0b0bb4990cf8d989dbabaeb300aefd04275e" && !strings.Contains(out.String(), "private-inventory"))
+	// Public help is intentionally owner-default now; this is a display contract,
+	// not a source-qualified provenance pin to regenerate.
+	assertInventoryPrivate(t, "ASSERT_CENSUS_ORDINARY_HELP_CONTRACT", code == 0 && err.Len() == 0 && out.String() == censusUsage+"\n" && strings.Contains(out.String(), "does not return a completed inventory") && strings.Contains(out.String(), "--storage-bytes BYTES") && strings.Contains(out.String(), censusLegacyInvocationUsage) && !strings.Contains(out.String(), "private-inventory"))
 	c := inventoryConfigPrivate()
 	c.Profile = "CALLS_ONLY_FROZEN_CENSUS_V1"
 	_, _, config, _ := inventoryFixturePrivate(t)

@@ -34,14 +34,17 @@ func TestCensusFolderManagedHostProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	refusal := os.Getenv("CENSUS_MANAGED_PROCESS_REFUSAL")
+	if refusal == "missing" {
+		// Ordinary no-FD entry starts a metadata-only owner job, not the
+		// historical caller controller and not a completed feature inventory.
+		assertCensusOwnerStartNoAcquisition(t, workspace, store, 2)
+		return
+	}
 	wire := newFolderInventoryWire(t, workspace)
 	deps := productionCensusRunnerDependencies()
 	deps.lookPath = func(string) (string, error) { return "/controlled/checkout-provider", nil }
 	deps.newStarter = func() (sessionruntime.Starter, error) { return terminalStarter{child: wire}, nil }
-	refusal := os.Getenv("CENSUS_MANAGED_PROCESS_REFUSAL")
-	if refusal == "missing" {
-		t.Setenv(censusCallerFDEnv, "")
-	}
 	var out, diag bytes.Buffer
 	args := []string{workspace, "--publication-root", store, "--machine"}
 	if refusal == "withheld" {
@@ -51,9 +54,6 @@ func TestCensusFolderManagedHostProcess(t *testing.T) {
 	if refusal != "" {
 		if code == 0 || out.Len() != 0 || !bytes.Contains(diag.Bytes(), []byte("ASSEMBLY_FAILED")) {
 			t.Fatal("refusal leaked success", code, out.String(), diag.String())
-		}
-		if refusal == "missing" && !bytes.Contains(diag.Bytes(), []byte("CALLER_AGENT_UNAVAILABLE")) {
-			t.Fatal("missing host was not actionable", diag.String())
 		}
 		paths, _ := filepath.Glob(filepath.Join(store, "run-*", "application", "terminal-*.json"))
 		for _, path := range paths {

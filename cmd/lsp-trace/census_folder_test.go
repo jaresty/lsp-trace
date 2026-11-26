@@ -16,13 +16,13 @@ import (
 
 func TestCensusFolderParsePure(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "not-created")
-	for _, args := range [][]string{{"census"}, {"census", missing}, {"census", missing, "--machine", "--source", "src", "--max-nodes", "12"}, {"census", "--machine", missing}} {
+	for _, args := range [][]string{{"census"}, {"census", missing}, {"census", missing, "--machine", "--source", "src", "--max-nodes", "12"}, {"census", "--machine", missing}, {"census", missing, "--storage-bytes", "2147483648"}} {
 		o, err := parseCensusCLIOptions(args)
 		if err != nil {
 			t.Errorf("ASSERT_FOLDER_PARSE: args=%v err=%v", args, err)
 			continue
 		}
-		if !o.Catalog || o.CatalogConfigPath != "" {
+		if !o.FolderInvocation || !o.Catalog || o.CatalogConfigPath != "" {
 			t.Errorf("ASSERT_FOLDER_NATIVE_MODE: %+v", o)
 		}
 	}
@@ -31,7 +31,8 @@ func TestCensusFolderParsePure(t *testing.T) {
 	}
 }
 
-// This checks real filesystem normalization and runner transfer, not inventory delivery.
+// Folder normalization remains independent coverage. The injected native-catalog
+// transfer below uses the documented explicit legacy route, not ordinary owner start.
 func TestCensusFolderRunNativeTransfer(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -48,7 +49,16 @@ func TestCensusFolderRunNativeTransfer(t *testing.T) {
 		t.Fatal(err)
 	}
 	canonical, _ := filepath.EvalSymlinks(workspace)
+	config := filepath.Join(home, "profiles.toml")
+	if err := os.WriteFile(config, []byte("[profiles.test]\ncommand = \"gopls\"\nlanguage_ids = [\"go\"]\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	hostConfig := filepath.Join(home, "unused-host.json") // Parser identity; injected catalog seam never opens it.
 	deps := productionCensusRunnerDependencies()
+	deps.runOwnedInventory = func(censusCLIOptions, io.Writer, io.Writer) int {
+		t.Fatal("explicit legacy route selected owner default")
+		return 1
+	}
 	deps.newStarter = func() (sessionruntime.Starter, error) { return sessionruntime.ManagedStarter{}, nil }
 	deps.lookPath = func(command string) (string, error) {
 		if command != "gopls" {
@@ -56,7 +66,7 @@ func TestCensusFolderRunNativeTransfer(t *testing.T) {
 		}
 		return "/bin/echo", nil
 	}
-	deps.newManager = func(sessionruntime.Config) (*sessionruntime.Manager, error) { return nil, nil }
+	deps.newManager = sessionruntime.New
 	deps.runCore = func(censusCLIOptions, censusCoreConfig, censusCoreDependencies) censusPublicationOutcome {
 		t.Fatal("ordinary acquisition selected")
 		return censusPublicationOutcome{}
@@ -65,7 +75,7 @@ func TestCensusFolderRunNativeTransfer(t *testing.T) {
 	roots := map[string]bool{}
 	deps.runNativeCatalog = func(o censusCLIOptions, cfg censusCoreConfig, out, errout io.Writer) int {
 		calls++
-		if o.Workspace != canonical || !o.Catalog || o.CatalogConfigPath != "" || !reflect.DeepEqual(o.Sources, []string{"src"}) || o.MaxBatchTargets != 3 || o.MaxNodes != 12 || cfg.runner.start.LanguageID != "go" || *cfg.limits.MaxNodes != 12 {
+		if o.Workspace != canonical || o.FolderInvocation || !o.Catalog || o.CatalogConfigPath != hostConfig || !reflect.DeepEqual(o.Sources, []string{"src"}) || o.MaxBatchTargets != 3 || o.MaxNodes != 12 || cfg.runner.start.LanguageID != "go" || *cfg.limits.MaxNodes != 12 {
 			t.Fatalf("ASSERT_FOLDER_TRANSFER: %+v language=%s", o, cfg.runner.start.LanguageID)
 		}
 		root, err := publication.OpenRoot(o.PublicationRoot)
@@ -80,11 +90,19 @@ func TestCensusFolderRunNativeTransfer(t *testing.T) {
 			t.Fatalf("ASSERT_FOLDER_FRESH_OUTSIDE_SOURCE: %s", o.PublicationRoot)
 		}
 		roots[o.PublicationRoot] = true
-		return writeCensusFailure(errout, censusStageCommitted, o.Machine, errNativeCatalogAggregateUnavailable)
+		return writeCensusFailure(errout, censusStageAssembly, o.Machine, errNativeCatalogAggregateUnavailable)
 	}
 	for _, machine := range []bool{false, true} {
 		var out, errout bytes.Buffer
-		args := []string{alias, "--source", "src", "--batch-targets", "3", "--max-nodes", "12"}
+		normal, err := parseCensusCLIOptions([]string{"census", alias, "--source", "src"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		normal, err = resolveCensusFolderInvocation(normal)
+		if err != nil || normal.Workspace != canonical {
+			t.Fatalf("ASSERT_FOLDER_NORMALIZATION: %+v %v", normal, err)
+		}
+		args := []string{"--workspace", normal.Workspace, "--profile", "test", "--config", config, "--publication-root", normal.PublicationRoot, "--catalog", "--catalog-config", hostConfig, "--source", "src", "--batch-targets", "3", "--max-nodes", "12"}
 		if machine {
 			args = append(args, "--machine")
 		}
@@ -92,9 +110,13 @@ func TestCensusFolderRunNativeTransfer(t *testing.T) {
 		if code != 1 || out.Len() != 0 {
 			t.Fatalf("ASSERT_FOLDER_HANDOFF_FAILURE: code=%d out=%q err=%q", code, out.String(), errout.String())
 		}
-		diagnostic := checkOperationBytes(t, errout.Bytes())
-		if diagnostic.Operation != "start" || diagnostic.Action != "STOP" || diagnostic.Retry {
-			t.Fatalf("ASSERT_FOLDER_STRUCTURED_HANDOFF_FAILURE: %s", errout.Bytes())
+		if machine {
+			var diagnostic censusCLIDiagnostic
+			if err := json.Unmarshal(errout.Bytes(), &diagnostic); err != nil || diagnostic.SchemaVersion != "lsp-trace.census-diagnostic.v1" || diagnostic.Status != "FAILED" || diagnostic.Stage != censusStageAssembly || diagnostic.Code != censusCodeAssemblyFailed || !diagnostic.Retry {
+				t.Fatalf("ASSERT_LEGACY_STRUCTURED_HANDOFF_FAILURE: %s", errout.Bytes())
+			}
+		} else if errout.String() != errNativeCatalogAggregateUnavailable.Error()+"\n" {
+			t.Fatalf("ASSERT_LEGACY_HUMAN_HANDOFF_FAILURE: %s", errout.Bytes())
 		}
 	}
 	if calls != 2 {
@@ -256,7 +278,7 @@ func TestCensusFolderHelpHonest(t *testing.T) {
 	if code := runCensusWithDependencies([]string{"--help"}, &out, &errout, censusRunnerDependencies{}); code != 0 {
 		t.Fatal(code)
 	}
-	for _, text := range []string{"census [FOLDER]", "Legacy explicit acquisition", "returns a durable task", "Failed runs are retained"} {
+	for _, text := range []string{"census [FOLDER]", "Legacy explicit compatibility grammar:", "returns exact public Operations", "does not return a completed inventory", "--storage-bytes BYTES", "--store is the actual owned durable store", "PROVISIONAL, Authority 0, Accepted false, completeness UNKNOWN"} {
 		if !strings.Contains(out.String(), text) {
 			t.Fatalf("ASSERT_FOLDER_HELP: missing %q", text)
 		}

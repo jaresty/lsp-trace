@@ -74,7 +74,11 @@ func TestCensusEnumerationPreflightHasZeroRuntimeDependencies(t *testing.T) {
 func TestCensusPublicUsageMatchesPruneAndPreflightParserGrammar(t *testing.T) {
 	const grammar = "[--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...]"
 	const preflight = "(--workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine)"
-	for name, usage := range map[string]string{"command": censusUsage, "top-level": usageText} {
+	// The top-level summary advertises entry, not the full legacy grammar.
+	if strings.Count(usageText, censusInvocationUsage) != 1 {
+		t.Fatal("ASSERT_CENSUS_TOP_LEVEL_ORDINARY_ENTRY")
+	}
+	for name, usage := range map[string]string{"command": censusUsage, "legacy": censusLegacyInvocationUsage} {
 		if !strings.Contains(usage, grammar) || !strings.Contains(usage, preflight) {
 			t.Fatalf("ASSERT_CENSUS_PUBLIC_USAGE_PARITY_%s: %s", name, usage)
 		}

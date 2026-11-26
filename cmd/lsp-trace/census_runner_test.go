@@ -71,7 +71,7 @@ func TestRunCensusHelpGrammarIsValidatedWithoutSideEffects(t *testing.T) {
 }
 
 func TestCensusHelpSurfacesHaveExactSupportedFlagParity(t *testing.T) {
-	want := []string{"--batch-targets", "--catalog", "--catalog-config", "--config", "--down-depth", "--enumeration-preflight", "--exclude", "--include", "--machine", "--max-nodes", "--profile", "--prune-dir", "--publication-root", "--request-timeout", "--resume", "--server", "--server-arg", "--source", "--stop-after", "--timeout", "--up-depth", "--workspace"}
+	want := []string{"--batch-targets", "--catalog", "--catalog-config", "--config", "--down-depth", "--enumeration-preflight", "--exclude", "--include", "--interpreter", "--machine", "--max-nodes", "--profile", "--prune-dir", "--publication-root", "--request-timeout", "--resume", "--reviewer", "--scope-job-budget", "--scope-job-candidate", "--semantic-window", "--server", "--server-arg", "--source", "--stop-after", "--storage-bytes", "--store", "--timeout", "--up-depth", "--workspace"}
 	flags := func(text string) []string {
 		t.Helper()
 		seen := map[string]bool{}
@@ -92,8 +92,10 @@ func TestCensusHelpSurfacesHaveExactSupportedFlagParity(t *testing.T) {
 	if got := flags(censusUsage); !reflect.DeepEqual(got, want) {
 		t.Fatalf("ASSERT_CENSUS_COMMAND_HELP_SUPPORTED_FLAGS got=%v want=%v", got, want)
 	}
-	if got := flags(usageText[strings.Index(usageText, "lsp-trace census "):strings.Index(usageText, "\n  lsp-trace slice")]); !reflect.DeepEqual(got, want) {
-		t.Fatalf("ASSERT_CENSUS_TOP_LEVEL_HELP_SUPPORTED_FLAGS got=%v want=%v", got, want)
+	// Top-level usage intentionally advertises the ordinary entry; census --help
+	// owns the detailed ordinary, follow-up and explicit legacy grammars.
+	if got := strings.TrimSpace(usageText[strings.Index(usageText, "lsp-trace census "):strings.Index(usageText, "\n  lsp-trace slice")]); got != censusInvocationUsage {
+		t.Fatalf("ASSERT_CENSUS_TOP_LEVEL_ENTRY got=%q want=%q", got, censusInvocationUsage)
 	}
 }
 
@@ -155,7 +157,7 @@ func TestCensusExecutableHelpAndMalformedMachine(t *testing.T) {
 		wantStdout bool
 	}{
 		{"help", []string{"census", "--help"}, 0, true},
-		{"machine-malformed", []string{"census", "--machine", "positional"}, 1, false},
+		{"machine-malformed", []string{"census", "--machine", "--not-a-census-option"}, 1, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := exec.Command(cli, tc.args...)
@@ -181,7 +183,7 @@ func TestCensusExecutableHelpAndMalformedMachine(t *testing.T) {
 				t.Fatalf("ASSERT_CENSUS_PROCESS_CLOSED stdout=%q stderr=%q", stdout.String(), stderr.String())
 			}
 			var diagnostic censusCLIDiagnostic
-			if err := json.Unmarshal(stderr.Bytes(), &diagnostic); err != nil || diagnostic.Stage != censusStageSyntax {
+			if err := json.Unmarshal(stderr.Bytes(), &diagnostic); err != nil || diagnostic.SchemaVersion != "lsp-trace.census-diagnostic.v1" || diagnostic.Status != "FAILED" || diagnostic.Stage != censusStageSyntax || diagnostic.Code != censusCodeInvalidSyntax || !diagnostic.Retry {
 				t.Fatalf("ASSERT_CENSUS_PROCESS_MACHINE_JSON diagnostic=%+v err=%v", diagnostic, err)
 			}
 		})

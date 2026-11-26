@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -19,6 +20,7 @@ import (
 
 func TestCensusOperationConfigReasons(t *testing.T) {
 	t.Setenv("LSP_TRACE_CALLER_FD", "")
+	t.Setenv(censusDurableCallerEnv, "")
 	t.Setenv(censusDurableStoreEnv, "")
 	base, e := filepath.EvalSymlinks(t.TempDir())
 	if e != nil {
@@ -89,9 +91,29 @@ func TestCensusOperationConfigReasons(t *testing.T) {
 			deps.lookPath = func(string) (string, error) { calls++; return "", errors.New("provider must not be reached") }
 			diagnostic.Reset()
 			var out bytes.Buffer
-			code := runCensusWithDependencies([]string{workspace, "--server", "gopls", "--publication-root", tc.path}, &out, &diagnostic, deps)
+			// ID-only observations use the actual --store route on both platforms.
+			// Source overlap belongs to start, not a task operation with no source operand.
+			if tc.reason == censusresult.StoreSourceOverlap {
+				if err := os.WriteFile(filepath.Join(workspace, "go.mod"), []byte("module example.test/overlap\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				code := runCensusWithDependencies([]string{workspace, "--publication-root", tc.path}, &out, &diagnostic, deps)
+				var expected bytes.Buffer
+				var expectedError error
+				if runtime.GOOS != "darwin" {
+					// The production ordinary owner remains unsupported here. This
+					// asserts that boundary, not Linux owner/store-overlap qualification.
+					expectedError = errCensusCallerHostUnavailable
+				}
+				writeCensusFailure(&expected, censusStageConfig, true, expectedError)
+				if code != 1 || calls != 0 || out.Len() != 0 || !bytes.Equal(diagnostic.Bytes(), expected.Bytes()) {
+					t.Fatalf("owner overlap/platform preflight: code=%d calls=%d diagnostic=%s", code, calls, diagnostic.Bytes())
+				}
+				return
+			}
+			code := runCensusWithDependencies([]string{"durable", "task", strings.Repeat("a", 64), "--store", tc.path}, &out, &diagnostic, deps)
 			got := checkOperationBytes(t, diagnostic.Bytes())
-			if code != 1 || calls != 0 || out.Len() != 0 || got.Reason != tc.reason {
+			if code != 1 || calls != 0 || out.Len() != 0 || got.Operation != "task" || got.Action != "CORRECT_CONFIG" || got.Retry || got.Reason != tc.reason {
 				t.Fatalf("CLI preflight calls=%d code=%d diagnostic=%+v", calls, code, got)
 			}
 		})
@@ -109,11 +131,11 @@ func TestCensusOperationActualCLIConfigPreflight(t *testing.T) {
 	deps := productionCensusRunnerDependencies()
 	deps.lookPath = func(string) (string, error) { calls++; return "", errors.New("unexpected provider") }
 	var out, diagnostic bytes.Buffer
-	if runCensusWithDependencies([]string{workspace, "--server", "gopls", "--publication-root", missing}, &out, &diagnostic, deps) != 1 {
+	if runCensusWithDependencies([]string{"durable", "task", strings.Repeat("a", 64), "--publication-root", missing}, &out, &diagnostic, deps) != 1 {
 		t.Fatal("expected refusal")
 	}
 	d := checkOperationBytes(t, diagnostic.Bytes())
-	if calls != 0 || out.Len() != 0 || d.Reason != censusresult.StoreRootMissing {
+	if calls != 0 || out.Len() != 0 || d.Operation != "task" || d.Action != "CORRECT_CONFIG" || d.Retry || d.Reason != censusresult.StoreRootMissing {
 		t.Fatalf("preflight: calls=%d diagnostic=%+v", calls, d)
 	}
 	diagnostic.Reset()
