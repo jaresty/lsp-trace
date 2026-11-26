@@ -50,7 +50,7 @@ func CompareAndReplaceBoundFile(ctx context.Context, root *Root, selector string
 
 // readExisting is an invocation-local observation seam; production always reads
 // through the held publication root while owning its existing CAS lock.
-func compareAndReplaceBoundFile(ctx context.Context, root *Root, selector string, predecessor BoundFilePredecessor, raw []byte, verify func([]byte) error, readExisting func(string, int64) ([]byte, error)) (*CompareAndReplaceReceipt, error) {
+func compareAndReplaceBoundFile(ctx context.Context, root *Root, selector string, predecessor BoundFilePredecessor, raw []byte, verify func([]byte) error, readExisting func(string, int64) ([]byte, error)) (result *CompareAndReplaceReceipt, returnErr error) {
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		return nil, errors.New("bound file CAS unsupported platform")
 	}
@@ -93,6 +93,9 @@ func compareAndReplaceBoundFile(ctx context.Context, root *Root, selector string
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := retainStorageRetirement(ctx, root, uint64(len(existing))); err != nil {
+		return nil, err
+	}
 	temp := selector + fmt.Sprintf(".%d.tmp", time.Now().UnixNano())
 	receipt, err := PublishBoundFile(root, temp, raw, verify)
 	if err != nil {
@@ -101,6 +104,40 @@ func compareAndReplaceBoundFile(ctx context.Context, root *Root, selector string
 	if err := ctx.Err(); err != nil {
 		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: false, Outcome: CASOutcomeNotCommitted}, err
 	}
+	// Serialize namespace reduction with quota scans too: a scanner must not
+	// mistake a concurrently renamed owned temporary for an unknown IO failure.
+	namespace, err := ReserveStorage(ctx, root, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if qe := namespace.Complete(returnErr == nil); qe != nil {
+			returnErr = errors.Join(returnErr, qe)
+		}
+	}()
+	// Final predecessor validation belongs to the same storage critical section
+	// as rename. The earlier CAS-lock observation does not exclude cooperating
+	// RemovePrivateFile/PublishBoundFile writers. Never use the scheduling seam
+	// here: reread actual current bytes through the bounded pinned-root reader.
+	// BEGIN FINAL_STORAGE_PREDECESSOR_CHECK
+	current, currentErr := root.ReadSelectorWithAbsence(selector, int64(readLimit))
+	matches := currentErr == nil && !predecessor.Absent && predecessor.Selector == selector &&
+		predecessor.ByteLength == uint64(len(current)) && predecessor.Digest == DigestForTest(current) && bytes.Equal(current, existing)
+	if predecessor.Absent {
+		matches = errors.Is(currentErr, os.ErrNotExist)
+	}
+	if err := ctx.Err(); err != nil {
+		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Outcome: CASOutcomeNotCommitted}, err
+	}
+	if !matches {
+		// Keep both the published temporary and the conservative retirement
+		// reservation. No cleanup/refund or post-rename callback is authorized.
+		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Outcome: CASOutcomeNotCommitted}, ErrStalePredecessor
+	}
+	// The public predecessor is content-addressed, not inode-addressed. An
+	// intervening equal-content inode is safe: its verified actual length is
+	// exactly the retirement amount already reserved by this invocation.
+	// END FINAL_STORAGE_PREDECESSOR_CHECK
 	renameCommitted, directoryStatus, err := renameBoundFileSibling(root, temp, selector)
 	if err != nil && !renameCommitted {
 		return nil, err

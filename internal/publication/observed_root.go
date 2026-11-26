@@ -139,7 +139,7 @@ func openObservedRoot(ctx context.Context, path string, ops observedRootOps) (ou
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	root := &Root{path: path, file: current, handle: handle, info: info}
+	root := &Root{path: path, file: current, handle: handle, info: info, storageExpected: storageNamespaceExpected(path)}
 	if err = root.ValidatePrivate(); err != nil {
 		return nil, err
 	}

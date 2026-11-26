@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"golang.org/x/sys/unix"
+	"lsp-trace/internal/publication"
 )
 
 // This unexported method can be implemented only inside this package. Its sole
@@ -44,6 +45,9 @@ func (s *privateSourceRPreparationStateV1) prepareLocalStageV1() error {
 		return e
 	}
 	parentPath := filepath.Dir(c.Config.Worker.Path)
+	if e := publication.RefuseUnaccountedStorage(parentPath); e != nil {
+		return e
+	}
 	ns := &localStageNamespaceV1{parentPath: parentPath, name: ".source-worker-" + s.request.Attempt[7:]}
 	parent, parentInfo, e := openProtectedLocalDirectoryV1(parentPath, &ns.aclScratch, c.io)
 	if e != nil {

@@ -1,4 +1,4 @@
-package seedformat
+package seedformat_test
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"lsp-trace/acquisitionops"
+	. "lsp-trace/internal/seedformat"
 )
 
 func ptr[T any](v T) *T { return &v }

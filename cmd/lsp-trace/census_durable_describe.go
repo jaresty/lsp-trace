@@ -23,8 +23,6 @@ import (
 	"lsp-trace/internal/publication"
 )
 
-const censusDurableCallerEnv = "LSP_TRACE_CENSUS_CALLER"
-
 // Store is local application configuration, never a path from a task/answer.
 // Require an existing private directory; setup/provisioning is explicit.
 func openCensusDurableStore() (*publication.Root, error) {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"lsp-trace/internal/publication"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +52,7 @@ func publishV3(ctx context.Context, destination string, artifacts []ArtifactV3, 
 	var total uint64 = 16384
 	seen := map[string]bool{"manifest.json": true}
 	for _, a := range artifacts {
-		if len(a.Name) == 0 || len(a.Name) > 128 || strings.ContainsAny(a.Name, "/\\") || a.Name == "." || a.Name == ".." || seen[a.Name] || len(a.Bytes) == 0 || len(a.Bytes) > 8<<20 {
+		if len(a.Name) == 0 || len(a.Name) > 128 || strings.ContainsAny(a.Name, "/\\") || a.Name == "." || a.Name == ".." || publication.StorageReservedSelector(a.Name) || seen[a.Name] || len(a.Bytes) == 0 || len(a.Bytes) > 8<<20 {
 			return result, ErrInventoryV3
 		}
 		seen[a.Name] = true
@@ -69,6 +70,27 @@ func publishV3(ctx context.Context, destination string, artifacts []ArtifactV3, 
 	if e != nil || resolved != parent {
 		return result, ErrInventoryV3
 	}
+	// Reserve all final artifact/manifest lengths before mkdir or any write.
+	qr, e := publication.OpenRoot(parent)
+	if e != nil {
+		return result, e
+	}
+	quota, e := publication.ReserveStorage(ctx, qr, total)
+	e = errors.Join(e, qr.Close())
+	if e != nil {
+		if quota != nil {
+			e = errors.Join(e, quota.Complete(false))
+		}
+		return PublicationManifestV3{}, e
+	}
+	defer func() {
+		if qe := quota.Complete(err == nil); qe != nil {
+			err = errors.Join(err, qe)
+		}
+		if err != nil {
+			result = PublicationManifestV3{}
+		}
+	}()
 	// Snapshot mutable byte collections before external effects.
 	owned := make([]ArtifactV3, len(artifacts))
 	for i, a := range artifacts {
@@ -143,6 +165,9 @@ func publishV3(ctx context.Context, destination string, artifacts []ArtifactV3, 
 		e = errors.Join(e, f.Close())
 		if e != nil || !bytes.Equal(raw, data) {
 			return errors.Join(e, ErrInventoryV3)
+		}
+		if e := quota.ObserveAnonymous(nil); e != nil {
+			return e
 		}
 		return check("verified:" + name)
 	}

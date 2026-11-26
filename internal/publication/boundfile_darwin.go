@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error, trace BoundFileTrace) (bool, string, string, error) {
+func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error, trace BoundFileTrace, quota *StorageReservation) (bool, string, string, error) {
 	parentFD, name, err := boundParentFD(root, selector)
 	if err != nil {
 		return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, err
@@ -51,6 +51,9 @@ func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte)
 		emitBoundFileTrace(trace, "WRITE_FSYNC", "FAILED", false)
 		return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errors.Join(err, closeBoundSource(f))
 	}
+	if e := quota.ObserveAnonymous(f); e != nil {
+		return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errors.Join(e, closeBoundSource(f))
+	}
 	emitBoundFileTrace(trace, "WRITE_FSYNC", "COMPLETE", true)
 	if testHookBoundFileAfterTempBeforeInstall != nil {
 		if err := testHookBoundFileAfterTempBeforeInstall(); err != nil {
@@ -70,7 +73,8 @@ func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte)
 	}
 	committed = true
 	emitBoundFileTrace(trace, "HARDLINK", "INSTALLED", true)
-	directoryStatus := postcommitDirectorySyncStatus(true, syncBoundDirectory(parentFD))
+	observationErr := quota.ObserveAnonymous(f)
+	directoryStatus := postcommitDirectorySyncStatus(true, errors.Join(observationErr, syncBoundDirectory(parentFD)))
 	sourceCloseErr := closeBoundSource(f)
 	rootCloseErr := closeBoundRootFD(parentFD)
 	closeStatus := postcommitCloseStatus(true, errors.Join(sourceCloseErr, rootCloseErr))

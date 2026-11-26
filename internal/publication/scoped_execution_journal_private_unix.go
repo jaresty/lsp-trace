@@ -87,6 +87,15 @@ func compareScopedExecutionPrivate(ctx context.Context, j *ScopedExecutionJourna
 	}
 	expected := bytes.Clone(raw)
 	root := j.root.observed.root
+	quota, err := ReserveStorage(ctx, root, uint64(len(raw))*2)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if qe := quota.Complete(err == nil && receipt != nil && receipt.CloseStatus == CloseComplete); qe != nil {
+			err = errors.Join(err, qe)
+		}
+	}()
 	fd, err := unix.Dup(int(root.file.Fd()))
 	if err != nil {
 		return nil, err
@@ -127,6 +136,9 @@ func compareScopedExecutionPrivate(ctx context.Context, j *ScopedExecutionJourna
 	if err = writeAll(source, expected); err != nil {
 		return nil, err
 	}
+	if err = quota.ObserveAnonymous(source); err != nil {
+		return nil, err
+	}
 	if err = ops.syncFile(source); err != nil {
 		return nil, err
 	}
@@ -157,7 +169,7 @@ func compareScopedExecutionPrivate(ctx context.Context, j *ScopedExecutionJourna
 		FinalSelector: j.selector, Digest: DigestForTest(expected), ByteLength: uint64(len(expected)),
 		Mechanism: BoundFileMechanism, NamespaceAtomic: true, CloseStatus: CloseNotAttempted,
 	}}
-	syncErr := ops.syncDir(fd)
+	syncErr := errors.Join(quota.ObserveAnonymous(source), ops.syncDir(fd))
 	receipt.DirectorySyncStatus = postcommitDirectorySyncStatus(true, syncErr)
 	receipt.CrashDurability = receipt.DirectorySyncStatus
 	// This is verification only, never retry/recovery. Preserve both sync and read

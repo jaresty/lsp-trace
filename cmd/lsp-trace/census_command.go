@@ -58,6 +58,7 @@ func marshalCensusCLIDiagnostic(d censusCLIDiagnostic) ([]byte, error) {
 }
 
 type censusCLIOptions struct {
+	StorageBytes                                                               uint64
 	OwnedLegacyControls, SemanticFlagsExplicit                                 bool
 	InventoryInterpreter, InventoryReviewer                                    string
 	SemanticWindow                                                             time.Duration
@@ -106,6 +107,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.StringVar(&o.InventoryInterpreter, "interpreter", "interpreter", "declared semantic interpreter identity (not authentication)")
 	fs.StringVar(&o.InventoryReviewer, "reviewer", "reviewer", "distinct declared semantic reviewer identity (not authentication)")
 	fs.DurationVar(&o.SemanticWindow, "semantic-window", 10*time.Minute, "new-job finite response lease; four stages, no overall expiry")
+	fs.Uint64Var(&o.StorageBytes, "storage-bytes", publication.DefaultStorageBytes, "new shared-store content-length capacity; immutable; not allocated filesystem blocks")
 	fs.Var(&src, "source", "workspace-relative source root")
 	fs.Var(&inc, "include", "include pattern")
 	fs.Var(&exc, "exclude", "exclude pattern")
@@ -212,7 +214,7 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 		switch f.Name {
 		case "down-depth", "up-depth", "max-nodes", "batch-targets", "timeout", "request-timeout", "catalog", "catalog-config", "stop-after":
 			o.OwnedLegacyControls = true
-		case "interpreter", "reviewer", "semantic-window":
+		case "interpreter", "reviewer", "semantic-window", "storage-bytes":
 			o.SemanticFlagsExplicit = true
 		}
 		if f.Name == "timeout" {
@@ -283,11 +285,14 @@ func censusMachineFlagCount(args []string) int {
 }
 
 func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
-	for _, name := range []string{"interpreter", "reviewer", "semantic-window"} {
+	for _, name := range []string{"interpreter", "reviewer", "semantic-window", "storage-bytes"} {
 		count := censusNamedFlagCount(args, name)
 		if count > 1 || count > 0 && !o.FolderInvocation && !o.Help {
 			return errors.New("semantic policy flags require a fresh ordinary folder invocation")
 		}
+	}
+	if !o.Help && censusNamedFlagCount(args, "storage-bytes") > 0 && (o.ScopeJobCandidate || o.DurableDescribe) {
+		return errors.New("storage policy requires a new ordinary owner job")
 	}
 	callerHostCount := 0
 	for i := 0; i < len(args); i++ {

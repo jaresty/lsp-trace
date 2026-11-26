@@ -176,6 +176,9 @@ def validate(data):
         install = step_by_name(job, "Install pinned gopls") or {}
         if install.get("if") != "matrix.shard.needs_gopls" or install.get("run") != "go install golang.org/x/tools/gopls@v0.23.0":
             fail(errors, f"{name}: gopls step mismatch")
+    elixir = jobs.get("elixir-companion", {})
+    if elixir.get("runs-on") != "ubuntu-22.04":
+        fail(errors, "elixir-companion: pinned OTP 25.3.2.7 requires ubuntu-22.04")
     quality = jobs.get("quality", {})
     syntax = step_by_name(quality, "Check Python syntax") or {}
     expected_syntax = "python3 -m py_compile " + " ".join(PARENT_PYTHON_FILES + NEW_PYTHON_FILES)

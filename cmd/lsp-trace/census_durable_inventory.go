@@ -117,6 +117,12 @@ func openSelectedCensusStore(workspace, explicit string) (root *publication.Root
 		_ = root.Close()
 		return nil, "", e
 	}
+	quotaCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, e = publication.ReadStorageStatus(quotaCtx, root); e != nil {
+		_ = root.Close()
+		return nil, "", e
+	}
 	return root, path, nil
 }
 func preflightCensusInventoryStore(workspace, explicit string) (string, string, error) {

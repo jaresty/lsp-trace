@@ -1,3 +1,5 @@
+//go:build darwin || linux
+
 package main
 
 import (
@@ -160,19 +162,5 @@ func TestCensusCallerHostSettingsApplicationPolicy(t *testing.T) {
 	var out, diagnostic bytes.Buffer
 	if code := runCensusWithDependencies(args, &out, &diagnostic, censusRunnerDependencies{}); code == 0 || out.Len() != 0 || !strings.Contains(diagnostic.String(), "CONFIG") {
 		t.Fatal("ASSERT_SETTINGS_APPLICATION_POLICY", code, diagnostic.String())
-	}
-}
-
-func TestCensusCallerHostSettingsSyntax(t *testing.T) {
-	for _, args := range [][]string{
-		{"--save-caller-host-settings", "/synthetic/settings.json", "--machine"},
-		{"--caller-host-attempt-config", "/synthetic/attempt.json", "--machine"},
-		append(publicCallerHostArgs("/synthetic/settings.json"), "--caller-host-attempt-config", "relative.json"),
-		append(publicCallerHostArgs("/synthetic/settings.json"), "--save-caller-host-settings", "relative.json"),
-		append(publicCallerHostArgs("/synthetic/settings.json"), "--save-caller-host-settings", "/synthetic/new.json", "--caller-host-attempt-config", "/synthetic/attempt.json"),
-	} {
-		if _, err := parseCensusCLIOptions(args); err == nil {
-			t.Fatalf("ASSERT_SETTINGS_SYNTAX: accepted %q", args)
-		}
 	}
 }

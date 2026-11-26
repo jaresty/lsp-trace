@@ -11,7 +11,7 @@ var errExactFDUnsupported = errors.New("exact-fd publication primitive unsupport
 
 func validPublishedMetadata(rootInfo, finalInfo os.FileInfo) bool { return false }
 
-func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error, trace BoundFileTrace) (bool, string, string, error) {
+func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error, trace BoundFileTrace, quota *StorageReservation) (bool, string, string, error) {
 	if testHookBoundFileAfterTempBeforeInstall != nil {
 		if err := testHookBoundFileAfterTempBeforeInstall(); err != nil {
 			emitBoundFileTrace(trace, "HARDLINK", "INJECTED_BEFORE_INSTALL", false)

@@ -31,6 +31,12 @@ class TopologyTest(unittest.TestCase):
     def test_repository_workflow(self):
         self.check(WORKFLOW.read_text())
 
+    def test_elixir_runner_must_support_pinned_otp(self):
+        for runner in ("ubuntu-latest", "ubuntu-26.04"):
+            with self.subTest(runner=runner):
+                text = WORKFLOW.read_text().replace("runs-on: ubuntu-22.04", f"runs-on: {runner}")
+                self.check(text, ["elixir-companion: pinned OTP 25.3.2.7 requires ubuntu-22.04"])
+
     def test_sequential_pipestatus_capture_is_rejected(self):
         text = self.mutate_shard_run(
             '          statuses=("${PIPESTATUS[@]}")\n'

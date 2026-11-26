@@ -42,7 +42,7 @@ func (r *Root) OpenPrivateChild(name string, fresh bool) (out *Root, err error) 
 	if err != nil {
 		return nil, errors.Join(err, f.Close())
 	}
-	out = &Root{path: filepath.Join(r.path, name), file: f, handle: child, info: before}
+	out = &Root{path: filepath.Join(r.path, name), file: f, handle: child, info: before, storageExpected: r.storageExpected}
 	info, statErr := child.Stat(".")
 	if statErr != nil || !os.SameFile(before, info) {
 		err = errors.Join(ErrBoundFilePolicy, statErr)

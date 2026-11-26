@@ -167,6 +167,10 @@ func TestRepair90BridgeSnapshotHandoff(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	diagnostic, e := parser.ParseFile(fs, "census_inventory_discovery_diagnostic.go", nil, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
 	var assemblyEnd token.Pos
 	var handoff, writer bool
 	for _, decl := range bridge.Decls {
@@ -174,7 +178,8 @@ func TestRepair90BridgeSnapshotHandoff(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if fn.Name.Name == "runCensusInventoryBridgePrivate" {
+		// The private entrypoint delegates to this shared decoded-config runner.
+		if fn.Name.Name == "runCensusInventoryBridgeConfig" {
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
 				c, ok := n.(*ast.CallExpr)
 				if !ok {
@@ -201,11 +206,26 @@ func TestRepair90BridgeSnapshotHandoff(t *testing.T) {
 				recv, ok := sel.X.(*ast.Ident)
 				errSel, errOK := c.Args[2].(*ast.SelectorExpr)
 				stopSel, stopOK := c.Args[3].(*ast.SelectorExpr)
-				handoff = ok && recv.Name == "op" && assemblyEnd != 0 && c.Pos() > assemblyEnd && errOK && stopOK && errSel.Sel.Name == "Err" && stopSel.Sel.Name == "Stop"
+				if !errOK || !stopOK {
+					return true
+				}
+				errResult, errResultOK := errSel.X.(*ast.Ident)
+				stopResult, stopResultOK := stopSel.X.(*ast.Ident)
+				handoff = ok && recv.Name == "op" && assemblyEnd != 0 && c.Pos() > assemblyEnd && errSel.Sel.Name == "Err" && stopSel.Sel.Name == "Stop" && errResultOK && errResult.Name == "result" && stopResultOK && stopResult.Name == "result"
 				return true
 			})
 		}
+	}
+	// The writer is platform-neutral; inspect its declaration in its own file.
+	for _, decl := range diagnostic.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
 		if fn.Name.Name == "writeCensusInventoryDiscoveryFailure" {
+			if fn.Type.Params == nil || len(fn.Type.Params.List) == 0 {
+				continue
+			}
 			last := fn.Type.Params.List[len(fn.Type.Params.List)-1]
 			_, variadic := last.Type.(*ast.Ellipsis)
 			if !variadic || len(last.Names) != 1 {

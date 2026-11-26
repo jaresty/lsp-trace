@@ -34,10 +34,11 @@ var ErrRootPrivacy = errors.New("publication root must be a private owner-only d
 var ErrRootOwner = errors.New("publication root must be owned by the current effective user")
 
 type Root struct {
-	path   string
-	file   *os.File
-	handle *os.Root
-	info   os.FileInfo
+	storageExpected bool
+	path            string
+	file            *os.File
+	handle          *os.Root
+	info            os.FileInfo
 }
 
 // OpenRoot opens one cleaned absolute owner-only directory as a process-lifetime
@@ -80,7 +81,7 @@ func OpenRoot(path string) (*Root, error) {
 		}
 		return nil, errors.New("publication root identity changed")
 	}
-	return &Root{path: path, file: file, handle: handle, info: info}, nil
+	return &Root{path: path, file: file, handle: handle, info: info, storageExpected: storageNamespaceExpected(path)}, nil
 }
 
 func (r *Root) Close() error {
@@ -520,7 +521,19 @@ func createTemporarySibling(parent *os.Root) (*os.File, string, error) {
 	return nil, "", errors.New("temporary sibling collision limit reached")
 }
 
-func (p *Publisher) Publish(req Request) Result {
+func (p *Publisher) Publish(req Request) (result Result) {
+	if StorageReservedSelector(req.Selector) {
+		return failure("storage", CodePublicationFailed, true, false, ErrStorageIntegrity)
+	}
+	quota, err := reserveRootStorage(req.Root, uint64(len(req.Bytes))*2)
+	if err != nil {
+		return failure("storage", CodePublicationFailed, true, false, err)
+	}
+	defer func() {
+		if e := quota.Complete(result.Receipt != nil && result.Failure == nil); e != nil {
+			result = failure("storage", CodePublicationFailed, false, result.Receipt != nil, e)
+		}
+	}()
 	tracePublication(req, "ENTER", "START", true)
 	target, err := safeTarget(req.Root, req.Selector)
 	if err != nil {
@@ -605,7 +618,7 @@ func (p *Publisher) Publish(req Request) Result {
 	}
 	tracePublication(req, "REREAD_EQUAL", "EQUAL", true)
 	sum := sha256.Sum256(persisted)
-	result := Result{Receipt: &Receipt{
+	result = Result{Receipt: &Receipt{
 		Digest: "sha256:" + hex.EncodeToString(sum[:]), ByteLength: uint64(len(persisted)),
 		ArtifactSchemaID: req.ArtifactSchemaID, PublicationMechanism: PublicationMechanism,
 	}}

@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/managedprocess"
 	product "lsp-trace/internal/privatehostproductv3"
 	cat "lsp-trace/internal/provisionalfeaturecatalog"
+	"lsp-trace/internal/publication"
 	"lsp-trace/internal/retainedprojection"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/scopejob"
@@ -31,11 +32,14 @@ import (
 	"time"
 )
 
-// This command adapter has no second ledger/controller. All effects and exact
+// This command adapter has no second execution ledger/controller. Storage
+// reservations are independent of execution authority. All effects and exact
 // transitions belong to the existing inventory owner. The constructor callback
 // is process-local dependency injection, never a caller DTO or exported handle.
 type censusInventoryConstruction func(ai.InventoryNativeBatchV1, time.Time) (sessionruntime.PrivateDiscoveryConstruction, error)
 type censusOwnerView struct {
+	StoragePolicy                                                string
+	Storage                                                      *publication.StorageStatus `json:",omitempty"`
 	Schema, Store, RunID, Head, TaskID, Phase, Status, JobExpiry string
 	Used, Limit, Packets                                         uint64
 	Admissions                                                   int
@@ -44,7 +48,7 @@ type censusOwnerView struct {
 	Operations                                                   map[string][]string
 }
 
-const censusOwnerQualification = "BOUNDED_17_MEMBER_16_PLUS_1_PROFILE; two query-side R admissions only; exactly one Function/Method in each batch's first sorted member; revision labels are not fresh Git attestation; D and CALLS not acquired here; all other feature meaning and provider/whole-repository completeness UNKNOWN; nested Enumeration flags describe the metadata-only layer, not command availability; no physical quota; actor labels are not authenticated independence"
+const censusOwnerQualification = "BOUNDED_17_MEMBER_16_PLUS_1_PROFILE; two query-side R admissions only; exactly one Function/Method in each batch's first sorted member; revision labels are not fresh Git attestation; D and CALLS not acquired here; all other feature meaning and provider/whole-repository completeness UNKNOWN; nested Enumeration flags describe the metadata-only layer, not command availability; storage quota when present is owned-store file-content lengths plus live-copy reservations, not allocated blocks or machine resources; operation eligibility is not a capacity grant; actor labels are not authenticated independence"
 
 func censusOwnerStatus(s ai.DurableStore, ctx context.Context, run string) (censusOwnerView, error) {
 	st, e := s.JobStatus(ctx, run)
@@ -52,6 +56,14 @@ func censusOwnerStatus(s ai.DurableStore, ctx context.Context, run string) (cens
 		return censusOwnerView{}, e
 	}
 	v := censusOwnerView{Schema: "lsp-trace.census-owner.v1", Store: s.Directory, RunID: st.RunID, Head: st.Head, TaskID: st.TaskID, Phase: st.Phase, Status: st.Status, JobExpiry: st.JobExpiry, Used: st.Used, Limit: st.Limit, Packets: st.Packets, Admissions: st.Admissions, Enumeration: st.Enumeration, Capability: "UNSUPPORTED_SCOPE_OR_PROFILE", Qualification: censusOwnerQualification, Operations: map[string][]string{"status": censusOwnerArgv(s.Directory, "status", run)}}
+	v.StoragePolicy = "HISTORICAL_NO_STORAGE_QUOTA"
+	v.Storage, e = publication.ReadStorageStatus(ctx, s.Root)
+	if v.Storage != nil {
+		v.StoragePolicy = "OWNED_STORE_CONTENT_LENGTH_V1"
+	}
+	if e != nil {
+		return censusOwnerView{}, e
+	}
 	if st.Status == "PARTIAL_UNCERTAIN" {
 		v.Capability = "SPENT_OR_IN_PROGRESS_NO_REPLAY"
 		return v, nil
@@ -77,6 +89,9 @@ func censusOwnerStatus(s ai.DurableStore, ctx context.Context, run string) (cens
 }
 func runCensusOwnerStart(o censusCLIOptions, out, diagnostic io.Writer) int {
 	fail := func(e error) int { return writeCensusFailure(diagnostic, censusStageConfig, true, e) }
+	if o.StorageBytes < 128<<10 || o.StorageBytes > 1<<50 {
+		return fail(publication.ErrStorageIntegrity)
+	}
 	if o.OwnedLegacyControls {
 		return fail(errors.New("bounded owner uses frozen limits and external semantic tasks; legacy acquisition/catalog controls require explicit --workspace route"))
 	}
@@ -125,11 +140,11 @@ func runCensusOwnerStart(o censusCLIOptions, out, diagnostic io.Writer) int {
 		}
 	}
 	config.EnumerationRequireGoRoot = o.Profile == "" && o.Server == ""
-	dir, _, e := preflightCensusInventoryStore(workspace, o.PublicationRoot)
+	dir, _, e := preflightCensusQuotaStore(workspace, o.PublicationRoot)
 	if e != nil {
 		return fail(e)
 	}
-	root, _, e := openSelectedCensusStore(workspace, dir)
+	root, e := publication.OpenRoot(dir)
 	if e != nil {
 		return fail(e)
 	}
@@ -137,6 +152,9 @@ func runCensusOwnerStart(o censusCLIOptions, out, diagnostic io.Writer) int {
 	s := ai.DurableStore{Root: root, Directory: dir}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if e = publication.ConfigureStorage(ctx, root, o.StorageBytes); e != nil {
+		return fail(e)
+	}
 	st, e := s.Create(ctx, config)
 	if st.RunID != "" {
 		_ = json.NewEncoder(diagnostic).Encode(struct {
@@ -168,7 +186,11 @@ func runCensusOwnerOperationWithFactory(args []string, input io.Reader, out, dia
 		return runCensusDurable(args, input, out, diagnostic)
 	}
 	fail := func(e error) int {
-		_ = json.NewEncoder(diagnostic).Encode(struct{ Schema, Status, Reason string }{"lsp-trace.census-owner-refusal.v1", "REFUSED_OR_UNCERTAIN", "Configuration, custody, integrity, lease or accounting refused/unconfirmed. Observe the previously returned status/current-task operation; no replay, reset or automatic retry."})
+		status := "REFUSED_OR_UNCERTAIN"
+		if errors.Is(e, publication.ErrStorageCapacity) {
+			status = "STORAGE_CAPACITY_REFUSED_OR_UNCERTAIN"
+		}
+		_ = json.NewEncoder(diagnostic).Encode(struct{ Schema, Status, Reason string }{"lsp-trace.census-owner-refusal.v1", status, "Configuration, custody, integrity, lease or accounting refused/unconfirmed. Observe the previously returned status/current-task operation and Storage accounting; exhaustion may preserve an accepted prefix or leave an attempt spent. No replay, reset, capacity extension or automatic retry."})
 		return 1
 	}
 	// Closed public grammar. No caller manifest, executable, capability or source

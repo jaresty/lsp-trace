@@ -122,7 +122,7 @@ func PublishBoundFile(root *Root, selector string, raw []byte, verify func([]byt
 }
 
 func PublishBoundFileWithTrace(root *Root, selector string, raw []byte, verify func([]byte) error, trace BoundFileTrace) (receipt *BoundFileReceipt, returnErr error) {
-	if root == nil || raw == nil || verify == nil {
+	if root == nil || raw == nil || verify == nil || StorageReservedSelector(selector) {
 		emitBoundFileTrace(trace, "OPEN_VALIDATE", "INVALID_REQUEST", false)
 		return nil, errors.New("invalid bound file request")
 	}
@@ -130,6 +130,15 @@ func PublishBoundFileWithTrace(root *Root, selector string, raw []byte, verify f
 		emitBoundFileTrace(trace, "OPEN_VALIDATE", "PRIVATE_INVALID", false)
 		return nil, err
 	}
+	quota, quotaErr := reserveRootStorage(root, uint64(len(raw))*2)
+	if quotaErr != nil {
+		return nil, quotaErr
+	}
+	defer func() {
+		if qe := quota.Complete(returnErr == nil && receipt != nil && receipt.CloseStatus == CloseComplete && receipt.DirectorySyncStatus == DirectorySyncComplete && receipt.VerificationStatus == "VERIFIED"); qe != nil {
+			returnErr = errors.Join(returnErr, qe)
+		}
+	}()
 	emitBoundFileTrace(trace, "OPEN_VALIDATE", "PRIVATE_VALID", true)
 	t, err := capabilityTarget(root, selector)
 	if err != nil {
@@ -171,7 +180,7 @@ func PublishBoundFileWithTrace(root *Root, selector string, raw []byte, verify f
 		emitBoundFileTrace(trace, "TEMP", "UNSUPPORTED", false)
 		return nil, errExactFDUnsupported
 	}
-	published, directoryStatus, closeStatus, err := publishExactFD(root, selector, raw, verify, trace)
+	published, directoryStatus, closeStatus, err := publishExactFD(root, selector, raw, verify, trace, quota)
 	if err != nil {
 		return nil, err
 	}
