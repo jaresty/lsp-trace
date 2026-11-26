@@ -58,6 +58,9 @@ func marshalCensusCLIDiagnostic(d censusCLIDiagnostic) ([]byte, error) {
 }
 
 type censusCLIOptions struct {
+	OwnedLegacyControls, SemanticFlagsExplicit                                 bool
+	InventoryInterpreter, InventoryReviewer                                    string
+	SemanticWindow                                                             time.Duration
 	FolderInvocation                                                           bool // Normal inventory entry; runtime resolution owns all IO.
 	ScopeJobCandidate                                                          bool
 	ScopeJobBudgetPath                                                         string
@@ -100,6 +103,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs := flag.NewFlagSet("census", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var src, inc, exc, prune, serverArgs censusStringFlags
+	fs.StringVar(&o.InventoryInterpreter, "interpreter", "interpreter", "declared semantic interpreter identity (not authentication)")
+	fs.StringVar(&o.InventoryReviewer, "reviewer", "reviewer", "distinct declared semantic reviewer identity (not authentication)")
+	fs.DurationVar(&o.SemanticWindow, "semantic-window", 10*time.Minute, "new-job finite response lease; four stages, no overall expiry")
 	fs.Var(&src, "source", "workspace-relative source root")
 	fs.Var(&inc, "include", "include pattern")
 	fs.Var(&exc, "exclude", "exclude pattern")
@@ -203,6 +209,12 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	}
 	legacy := false
 	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "down-depth", "up-depth", "max-nodes", "batch-targets", "timeout", "request-timeout", "catalog", "catalog-config", "stop-after":
+			o.OwnedLegacyControls = true
+		case "interpreter", "reviewer", "semantic-window":
+			o.SemanticFlagsExplicit = true
+		}
 		if f.Name == "timeout" {
 			o.TimeoutExplicit = true
 		}
@@ -271,6 +283,12 @@ func censusMachineFlagCount(args []string) int {
 }
 
 func validateCensusCLIOptions(o censusCLIOptions, args []string) error {
+	for _, name := range []string{"interpreter", "reviewer", "semantic-window"} {
+		count := censusNamedFlagCount(args, name)
+		if count > 1 || count > 0 && !o.FolderInvocation && !o.Help {
+			return errors.New("semantic policy flags require a fresh ordinary folder invocation")
+		}
+	}
 	callerHostCount := 0
 	for i := 0; i < len(args); i++ {
 		arg := args[i]

@@ -32,11 +32,13 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const censusInvocationUsage = "lsp-trace census [FOLDER] (structured durable inventory tasks)"
+const censusInvocationUsage = "lsp-trace census [FOLDER] (bounded consolidated-owner operations)"
 const censusLegacyInvocationUsage = "lsp-trace census (((--workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--catalog --catalog-config HOST_JSON] [--stop-after describe-requests] [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--batch-targets N] [--timeout DURATION] [--request-timeout DURATION]) | (--workspace PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--prune-dir DIR...] --enumeration-preflight --machine)) | (--resume SELECTOR --catalog-config HOST_JSON --publication-root ABSOLUTE_PATH [--workspace PATH] [--stop-after describe-requests])) [--machine]"
-const censusUsage = "usage: lsp-trace census [FOLDER] [scope/limit flags]\nNormal inventory entry: FOLDER defaults to the current directory. Automatic Go/gopls selection requires root go.mod or go.work and no competing root language marker.\nReturns structured JSON and structured diagnostics by default; --machine is a compatibility alias, not a workflow switch.\nRuns use fresh private storage under the OS per-user configuration/application-support directory (lsp-trace/census), or --publication-root ABSOLUTE_PRIVATE_DIRECTORY. Storage must be outside the workspace and is preflighted before provider effects. Failed runs are retained.\nNormal folder entry prepares bounded original evidence and returns a durable task, not a completed inventory. Follow its Contract.Operations to read evidence and submit judgments; no model/runtime selection or credentials are required. Explicit store selection must be repeated on follow-up commands; returned operation arrays include it.\nThe normal durable application timeout defaults to 180s, fixed before preparation; explicit --timeout overrides and legacy defaults are preserved.\nDescribe, grouping and separate review judgments come from the caller. Verified publication stays Authority 0, Accepted false, completeness UNKNOWN. Darwin native lifecycle only; see docs/census-durable-inventory.md.\nLegacy explicit acquisition and connected/private routes remain compatibility-only; see docs/census-durable-inventory.md for formatting and selection exceptions.\nGated metadata-only candidate: census [FOLDER] --scope-job-candidate [--scope-job-budget BUDGET_JSON]. This does not replace the normal inventory route or start acquisition. The inventory owner funds enumeration with no overall expiry, <=30s operations and the bounded 64MiB profile. ReadyForAcquisition is not a completed inventory; acquisition remains unavailable. Reopen with census job-status RUN_ID [--publication-root PATH]; historical scope IDs remain read-only. See docs/incremental-inventory-first-slice.md."
+const censusUsage = "usage: lsp-trace census [FOLDER] [--publication-root ABSOLUTE_PRIVATE_PARENT] [--interpreter ID] [--reviewer DISTINCT_ID] [--semantic-window DURATION] [scope flags]\nNormal entry creates/enumerates one consolidated-owner job and returns exact public Operations; it does not return a completed inventory. Default eligibility requires an unambiguous root Go project; project file associations and unknown/excluded counts remain visible.\nCurrent acquisition capability: exactly 17 eligible Go/gopls members in one closed enumeration segment, 16+1 bounded native batches and two query-side original-R admissions. Other scopes/profiles return honest unsupported/partial capability without silently narrowing population. Real-provider/general repository qualification is not implied.\nReturned argv carries actual --store identity, run and exact head/task IDs. Follow acquire (one process owns native through admission), clean READY pause, second acquire, seal, task/read/submit/result. No private capability or hidden workflow script is required. Existing --publication-root follow-up semantics remain a parent directory; --store is the actual owned durable store.\nNew jobs default to 10m/task, four stages and 40m cumulative reserved response windows, no overall expiry. Native/source windows remain <=15s; no renewal or replay. InputSHA256 and task Contract define exact input paging, role/actor, lease and stdin response encoding. Examples are syntax, not judgments. Publication stays PROVISIONAL, Authority 0, Accepted false, completeness UNKNOWN.\n--source --include --exclude --prune-dir retain scope meaning; --machine is a compatibility alias. Legacy native limit/depth/timeout overrides are not silently applied to this frozen profile. Explicit caller-HOST, --workspace and one-item compatibility routes remain separate. Darwin native command lane. See docs/census-owned-command.md.\nGated --scope-job-candidate [--scope-job-budget BUDGET_JSON] remains a separate metadata-only compatibility path.\nLegacy explicit compatibility grammar:\n" + censusLegacyInvocationUsage
 
 type censusRunnerDependencies struct {
+	runOwnedInventory        func(censusCLIOptions, io.Writer, io.Writer) int
+	runOwnedOperation        func([]string, io.Reader, io.Writer, io.Writer) int
 	resolveFolder            func(censusCLIOptions) (censusCLIOptions, error)
 	openRoot                 func(string) (*publication.Root, error)
 	lookPath                 func(string) (string, error)
@@ -59,10 +61,12 @@ type censusRunnerDependencies struct {
 
 func productionCensusRunnerDependencies() censusRunnerDependencies {
 	return censusRunnerDependencies{
-		resolveFolder: resolveCensusFolderInvocation,
-		openRoot:      publication.OpenRoot,
-		lookPath:      exec.LookPath,
-		abs:           filepath.Abs,
+		runOwnedInventory: runCensusOwnerStart,
+		runOwnedOperation: runCensusOwnerOperation,
+		resolveFolder:     resolveCensusFolderInvocation,
+		openRoot:          publication.OpenRoot,
+		lookPath:          exec.LookPath,
+		abs:               filepath.Abs,
 		newManager: func(cfg sessionruntime.Config) (*sessionruntime.Manager, error) {
 			return sessionruntime.New(cfg)
 		},
@@ -99,6 +103,9 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		return runCensusScopeJobStatus(args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "durable" {
+		if deps.runOwnedOperation != nil {
+			return deps.runOwnedOperation(args[1:], os.Stdin, stdout, stderr)
+		}
 		return runCensusDurable(args[1:], os.Stdin, stdout, stderr)
 	}
 	options, err := parseCensusCLIOptions(append([]string{"census"}, args...))
@@ -113,6 +120,12 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 		return runCensusScopeJob(options, stdout, stderr)
 	}
 	options.DurableInventory = options.FolderInvocation && !options.DurableDescribe && os.Getenv("LSP_TRACE_CALLER_FD") == ""
+	if options.SemanticFlagsExplicit && (!options.DurableInventory || os.Getenv(censusDurableCallerEnv) != "") {
+		return writeCensusFailure(stderr, censusStageSyntax, options.Machine, errors.New("semantic policy flags require a new ordinary owner job"))
+	}
+	if options.DurableInventory && deps.runOwnedInventory != nil && os.Getenv(censusDurableCallerEnv) == "" {
+		return deps.runOwnedInventory(options, stdout, stderr)
+	}
 	if options.DurableInventory {
 		// Select the normal durable default before any store or source preparation.
 		// Shared receipt defaults, connected routes and explicit overrides stay intact.

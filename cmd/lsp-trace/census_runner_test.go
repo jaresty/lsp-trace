@@ -27,6 +27,7 @@ func TestRunCensusHelpGrammarIsValidatedWithoutSideEffects(t *testing.T) {
 	}{
 		{name: "long", args: []string{"--help"}, wantHelp: true},
 		{name: "short", args: []string{"-h"}, wantHelp: true},
+		{name: "new-owner-policy-help", args: []string{"--interpreter", "a", "--reviewer", "b", "--semantic-window", "10m", "--help"}, wantHelp: true},
 		{name: "leading-machine-long", args: []string{"--machine", "--help"}, wantHelp: true, machine: true},
 		{name: "leading-machine-short", args: []string{"--machine", "-h"}, wantHelp: true, machine: true},
 		{name: "help-after-valid-option", args: []string{"--workspace", "ignored", "--help"}, wantHelp: true},

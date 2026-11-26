@@ -21,7 +21,9 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-func TestCensusDefaultDurableInventoryProcesses(t *testing.T) {
+// Historical v2 producer fixture plus public stored-task command compatibility.
+// New ordinary entry/operations are exercised by TestCensusOwnedPublicCaller.
+func TestCensusHistoricalDurableInventoryProcesses(t *testing.T) {
 	for _, mode := range []string{"same-thread", "distinct-declared", "publication-root"} {
 		t.Run(mode, func(t *testing.T) { runCensusDefaultDurableInventoryProcesses(t, mode) })
 	}
@@ -422,9 +424,10 @@ func TestCensusDefaultDurableInventoryChild(t *testing.T) {
 		scaleFixtureSource(t, workspace)
 		wire := newFolderInventoryWire(t, workspace)
 		deps := productionCensusRunnerDependencies()
+		deps.runOwnedInventory = nil // explicitly retain the historical v2 producer in this fixture, not current ordinary entry
 		deps.lookPath = func(string) (string, error) { return "/controlled/checkout-provider", nil }
 		deps.newStarter = func() (sessionruntime.Starter, error) { return terminalStarter{child: wire}, nil }
-		args := []string{workspace} // Actual no-flag default; --machine must not enable the workflow.
+		args := []string{workspace} // Historical producer setup only; public follow-up operations remain current.
 		if os.Getenv("DURABLE_INVENTORY_MODE") == "publication-root" {
 			args = append(args, "--publication-root", filepath.Join(home, "store"))
 			t.Setenv(censusDurableStoreEnv, filepath.Join(home, "missing-compat-store"))

@@ -64,6 +64,7 @@ type durableInventoryHead struct {
 	Closure                                              *connectedClosureV1          `json:",omitempty"`
 }
 type DurableTask struct {
+	InputSHA256                                                                             string                         `json:",omitempty"`
 	SemanticPolicy                                                                          *cat.InventorySemanticPolicyV1 `json:",omitempty"`
 	TaskIssuedNS                                                                            int64                          `json:",omitempty"`
 	Contract                                                                                TaskContract
@@ -558,6 +559,7 @@ func (s DurableStore) Task(ctx context.Context, run, task string) (DurableTask, 
 	if h.Schema == is.InventorySemanticHeadVersionV1 {
 		p := *h.SemanticPolicy
 		t.SemanticPolicy = &p
+		t.InputSHA256 = "sha256:" + h.Input.ID
 		t.TaskIssuedNS = h.TaskIssuedNS
 	}
 	t.Contract = taskContract(t)

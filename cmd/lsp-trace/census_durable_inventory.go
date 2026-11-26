@@ -20,6 +20,34 @@ import (
 
 const censusDurableStoreEnv = "LSP_TRACE_CENSUS_STORE"
 
+func censusOwnerArgv(store, op, run string, tail ...string) []string {
+	a := append([]string{"lsp-trace", "census", "durable", op, run}, tail...)
+	return append(a, "--store", store)
+}
+func censusOwnerTask(t ai.DurableTask, store string) ai.DurableTask {
+	if t.Schema != "lsp-trace.durable-inventory-task.v3" && !(t.Schema == "lsp-trace.durable-inventory-task.v2" && len(t.Contract.Operations) == 0) {
+		for name, argv := range t.Contract.Operations {
+			t.Contract.Operations[name] = append(argv, "--store", store)
+		}
+		return t
+	}
+	t.Contract.Operations = map[string][]string{"task": censusOwnerArgv(store, "task", t.RunID), "current_task": censusOwnerArgv(store, "task", t.RunID), "exact_task": censusOwnerArgv(store, "task", t.RunID, t.TaskID), "status": censusOwnerArgv(store, "status", t.RunID)}
+	if t.Status == "PENDING" {
+		offset := t.RequiredInputNextOffset
+		if len(t.Artifacts) > 0 && offset >= t.Artifacts[0].Bytes {
+			offset = 0
+		} // optional separately charged reread, never a refund
+		t.Contract.Operations["read"] = censusOwnerArgv(store, "read", t.RunID, t.TaskID, "input", strconv.Itoa(offset), "32768")
+		t.Contract.Operations["submit"] = censusOwnerArgv(store, "submit", t.RunID, t.TaskID, t.Role)
+	}
+	if t.Status == "PUBLISHED" {
+		t.Contract.Operations["result"] = censusOwnerArgv(store, "result", t.RunID, t.TaskID)
+		t.Contract.Operations["read"] = censusOwnerArgv(store, "read", t.RunID, t.TaskID, "input", "0", "32768")
+	}
+	t.Contract.Rules = strings.ReplaceAll(t.Contract.Rules, "API-only connected profile: call DurableStore.Task, Read, Submit and Result with this RunID and current TaskID. No CLI operation is activated.", "CLI connected profile: execute the returned argv arrays, not shell strings. --store is the exact canonical owned store, not a parent directory. For subsequent pages replace only offset with offset plus decoded Data byte length; validate the complete raw input against InputSHA256 when supplied (new v10 tasks). Submit answer bytes on stdin and close stdin. Status is observation, not replay permission.")
+	return t
+}
+
 func censusTaskStoreContext(task ai.DurableTask, explicit string) ai.DurableTask {
 	if explicit != "" {
 		for name, argv := range task.Contract.Operations {
@@ -146,11 +174,22 @@ func runCensusDurable(args []string, input io.Reader, out, diagnostic io.Writer)
 		return writeCensusOperationFailure(diagnostic, operation, reason, trustedRun)
 	}
 	// A single explicit store option, repeated on ID-only calls; never import a manifest.
-	explicit := ""
+	explicit, direct := "", ""
 	var positional []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--machine" {
+			continue
+		}
+		if arg == "--store" {
+			if direct != "" || i+1 >= len(args) {
+				return fail(ai.ErrDurableInventory)
+			}
+			i++
+			direct = args[i]
+			if direct == "" {
+				return fail(ai.ErrDurableInventory)
+			}
 			continue
 		}
 		if arg == "--publication-root" || strings.HasPrefix(arg, "--publication-root=") {
@@ -185,7 +224,10 @@ func runCensusDurable(args []string, input io.Reader, out, diagnostic io.Writer)
 		return fail(errors.New("usage: census durable task RUN_ID [TASK_ID] | read|submit|result RUN_ID TASK_ID ..."))
 	}
 	stage = censusStageConfig
-	selected := ""
+	selected := direct
+	if direct != "" && explicit != "" {
+		return fail(ai.ErrDurableInventory)
+	}
 	if explicit != "" {
 		// Validate the public parent too; do not silently canonicalize aliases or '..'.
 		parent, _, e := openSelectedCensusStore("", explicit)
@@ -205,7 +247,7 @@ func runCensusDurable(args []string, input io.Reader, out, diagnostic io.Writer)
 	// a corrupt inventory record as a legacy fallback.
 	if len(args[1]) == 64 {
 		_, probe := root.ReadSelectorWithAbsence("inventory-run-"+args[1]+".json", 16384)
-		if errors.Is(probe, os.ErrNotExist) && explicit == "" && os.Getenv(censusDurableStoreEnv) != "" {
+		if errors.Is(probe, os.ErrNotExist) && explicit == "" && direct == "" && os.Getenv(censusDurableStoreEnv) != "" {
 			_ = root.Close()
 			return runCensusDurableDescribe(args, input, out, diagnostic)
 		}
@@ -279,6 +321,9 @@ func runCensusDurable(args []string, input io.Reader, out, diagnostic io.Writer)
 	}
 	if task, ok := result.(ai.DurableTask); ok {
 		result = censusTaskStoreContext(task, explicit)
+		if direct != "" {
+			result = censusOwnerTask(task, dir)
+		}
 	}
 	if e = json.NewEncoder(out).Encode(result); e != nil {
 		return fail(e)
