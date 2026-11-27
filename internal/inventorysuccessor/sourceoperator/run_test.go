@@ -198,6 +198,50 @@ func TestSourceOperatorNativeAggregate(t *testing.T) {
 	t.Log("ASSERT_NATIVE_PEAK_FORMULA: PASS; ASSERT_NATIVE_EXACT_FIT: PASS; ASSERT_NATIVE_RETAINED_ONE_OVER: PASS; ASSERT_NATIVE_PEAK_ONE_OVER: PASS; ASSERT_NATIVE_CHECKED_OVERFLOW: PASS")
 }
 
+// Fixed scalars make the 8-MiB boundary independent of checkout/path metadata.
+func TestSourceOperatorNativeAggregateEightMiBBoundary(t *testing.T) {
+	const limit uint64 = 8 << 20
+	const supplied, delivery, semantic, gaps uint64 = 200, 300, 400, 500
+	// Independent expansion, not a peak returned by the production helper.
+	const overhead = 10*(supplied+delivery) + 168*semantic + 8*gaps + 204800
+	const upstream = limit - overhead
+	if nativeMaxBytes != limit {
+		t.Fatal("ASSERT_NATIVE_EIGHT_MIB_UNCHANGED", nativeMaxBytes)
+	}
+	wire, peak, err := nativeAggregateUpper(upstream, supplied, delivery, semantic, gaps, limit)
+	if err != nil || peak != limit || wire != 20480+supplied+delivery+19*semantic+gaps {
+		t.Fatal("ASSERT_NATIVE_EIGHT_MIB_EXACT_FIT", wire, peak, err)
+	}
+	if _, _, err = nativeAggregateUpper(upstream+1, supplied, delivery, semantic, gaps, limit); !errors.Is(err, ErrNativeAggregate) {
+		t.Fatal("ASSERT_NATIVE_EIGHT_MIB_ONE_OVER", err)
+	}
+	t.Log("ASSERT_NATIVE_EIGHT_MIB_UNCHANGED: PASS; ASSERT_NATIVE_EIGHT_MIB_EXACT_FIT: PASS; ASSERT_NATIVE_EIGHT_MIB_ONE_OVER: PASS")
+}
+
+func TestSourceOperatorNativeAggregateSemanticFixtureReduction(t *testing.T) {
+	const upstream, delivery, gaps uint64 = 3100000, 300, 500
+	const adapter uint64 = 8192
+	var peaks [2]uint64
+	for i, ceiling := range []uint64{4096, 2048} {
+		// Independent response-envelope model: S=6*min(raw,semanticLimit)+2048.
+		// Non-semantic supplied terms are fixed; only its one S term changes.
+		semantic := 6*min(adapter, ceiling) + 2048
+		supplied := 10000 + semantic
+		wantWire := 20480 + supplied + delivery + 19*semantic + gaps
+		wantPeak := upstream + 10*(supplied+delivery) + 168*semantic + 8*gaps + 204800
+		wire, peak, err := nativeAggregateUpper(upstream, supplied, delivery, semantic, gaps, ^uint64(0))
+		if err != nil || wire != wantWire || peak != wantPeak {
+			t.Fatal("ASSERT_NATIVE_FIXTURE_INDEPENDENT_FORMULA", ceiling, wire, peak, wantWire, wantPeak, err)
+		}
+		peaks[i] = peak
+	}
+	// 168 S copies plus 10 supplied copies: 178 * 12288 = 2187264.
+	if peaks[0]-peaks[1] != 2187264 {
+		t.Fatal("ASSERT_NATIVE_FIXTURE_CEILING_DELTA", peaks)
+	}
+	t.Log("ASSERT_NATIVE_FIXTURE_INDEPENDENT_FORMULA: PASS; ASSERT_NATIVE_FIXTURE_CEILING_DELTA: PASS")
+}
+
 // Err cancels only after both actual owned publication roots have closed. This
 // is a test-local context seam, not a replaceable production close/clock hook.
 type terminalCloseContext struct {

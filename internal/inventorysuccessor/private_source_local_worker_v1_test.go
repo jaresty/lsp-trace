@@ -25,6 +25,33 @@ import (
 	tp "lsp-trace/internal/targetpacket"
 )
 
+const managedSemanticFixtureCeiling = 2048
+const localWorkerSemanticFixture = `{"verdict":"ABSTAINED","target_role":"controlled source fixture","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"fixture body only","consumer_relative":false},"boundary_contribution":"unknown","limitations":["controlled fake worker; not model qualification"]}`
+
+// Pure parser control: no managed owner, shell, SELF responder or worker starts.
+func TestSourceOperatorManagedSemanticFixtureParser(t *testing.T) {
+	limits := describeworker.SuppliedResponseLimits{MaxAdapterBytes: 8192, MaxSemanticBytes: managedSemanticFixtureCeiling}
+	payload := describeworker.EncodeAdapterResultV2(localWorkerSemanticFixture)
+	if managedSemanticFixtureCeiling != 2048 || len(localWorkerSemanticFixture) > limits.MaxSemanticBytes || len(payload) > limits.MaxAdapterBytes {
+		t.Fatal("ASSERT_MANAGED_FIXTURE_PAYLOAD_FITS", len(localWorkerSemanticFixture), len(payload), limits)
+	}
+	candidate, err := describeworker.ParseSuppliedTerminalResponse(payload, limits)
+	if err != nil || candidate.RawAdapterDigest() == "" {
+		t.Fatal("ASSERT_MANAGED_FIXTURE_POSITIVE_PARSE", err)
+	}
+	// Exactly the original malformed worker stdout, including its final newline.
+	malformed := []byte("{\"status\":\"COMPLETE\",\"text\":\"{}\"}\n")
+	if len(malformed) > limits.MaxAdapterBytes || len("{}") > limits.MaxSemanticBytes {
+		t.Fatal("ASSERT_MANAGED_MALFORMED_UNDER_LIMIT")
+	}
+	_, err = describeworker.ParseSuppliedTerminalResponse(malformed, limits)
+	var failure *describeworker.Failure
+	if !errors.As(err, &failure) || failure.Stage() != describeworker.StageOutput || failure.Code() != describeworker.CodeOutputInvalid || (failure.Subcode() != "OUTER_PROTOCOL_OR_CANONICALITY" && failure.Subcode() != "SEMANTIC_SCHEMA_MISMATCH") {
+		t.Fatal("ASSERT_MANAGED_MALFORMED_PROTOCOL_NOT_BYTES", err)
+	}
+	t.Log("ASSERT_MANAGED_FIXTURE_PAYLOAD_FITS: PASS; ASSERT_MANAGED_FIXTURE_POSITIVE_PARSE: PASS; ASSERT_MANAGED_MALFORMED_UNDER_LIMIT: PASS; ASSERT_MANAGED_MALFORMED_PROTOCOL_NOT_BYTES: PASS")
+}
+
 // Controlled shell fixtures are not models, sandbox qualification, or inference.
 // AdapterIdentity explicitly selects the private SOURCE local adapter; ordinary A
 // configurations keep their delivery-disabled behavior.
@@ -102,6 +129,7 @@ func runLocalWorkerFixture(t *testing.T, mode string) {
 		metadataProbe.Fault = "dependency"
 	}
 	var admissionErr error
+	joinFailure := errors.New("controlled cleanup observation failure")
 	owner, root := inv.ControlledLocalOwnerForTest(t)
 	if mode == "underfunded" || mode == "managed-underfunded" {
 		owner, root = inv.ControlledLocalWorkerLimitedOwnerForTest(t)
@@ -155,7 +183,7 @@ func runLocalWorkerFixture(t *testing.T, mode string) {
 		return describeworker.FilePin{Path: p, SHA256: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(content)))}, uint64(len(content))
 	}
 	var c inv.PrivateSourceLocalConfigV1
-	semantic := `{"verdict":"ABSTAINED","target_role":"controlled source fixture","consumer_need":{"status":"UNRESOLVED","value":""},"provided_behavior":{"value":"fixture body only","consumer_relative":false},"boundary_contribution":"unknown","limitations":["controlled fake worker; not model qualification"]}`
+	semantic := localWorkerSemanticFixture
 	if mode == "success-spaced" {
 		semantic = " \n" + semantic + "\t"
 	}
@@ -416,7 +444,7 @@ func runLocalWorkerFixture(t *testing.T, mode string) {
 		if event == "worker-joined" {
 			joins++
 			if mode == "cleanup-observer-failure" || mode == "managed-cleanup-failure" {
-				return fmt.Errorf("controlled cleanup observation failure")
+				return joinFailure
 			}
 		}
 		return nil
@@ -426,6 +454,12 @@ func runLocalWorkerFixture(t *testing.T, mode string) {
 	}
 	digest := func(s string) string { return fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(s))) }
 	q := so.Request{Owner: owner, Capture: inv.PrivateMixedInputRequestV2{Manager: m, Root: root, Start: start, URI: uri, OccurrenceID: "local-source-op", Revision: "source-controlled-revision", Privacy: "private-source-controlled", OccurrencePolicy: "ordinal", CompositionPolicy: "identity", Line: 1, Character: 6, Kinds: []programcadmission.RelationKind{programcadmission.TypedReferencesSymbol}}, CaptureAttempt: digest("worker-capture"), PreparationAttempt: digest("worker-preparation"), RoleAttempt: "worker-local", RunID: "worker-run", SeedNamespace: "original-schedule", Seed: 7, Contract: sourceStageResponseContract(t, 131072), SourceLimits: tp.PrivateSourceLimits{MaxDocumentBytes: 16 << 10, MaxTotalBytes: 64 << 10, MaxWork: 4096, MaxObjects: 16}, Host: host.SourceHostConfig{Protocol: host.SourceHostProtocol, Mailbox: host.AutomaticHandoffConfigPrivateV2{Enabled: true, Directory: filepath.Join(base, "mailbox"), Invocation: "worker-op", InterpreterRole: "local-worker", ReviewerRole: "isolated-reviewer", TimeoutMS: 5000, OverallTimeoutMS: 5000, PollMS: 10, Limits: host.AutomaticLimitsPrivateV2{MaxCalls: 1, MaxRequestBytes: 65536, MaxResponseBytes: 16384, MaxTotalBytes: 147456, MaxOutputBytes: 65536}}}, ResponseLimits: describeworker.SuppliedResponseLimits{MaxAdapterBytes: 8192, MaxSemanticBytes: 4096}, OutputRoots: [2]string{filepath.Join(base, "a"), filepath.Join(base, "b")}, Local: &c}
+	// These later-boundary fixtures need semantic headroom, not a larger native budget.
+	// Keep every other mode and all independent adapter/worker/mailbox caps intact.
+	switch mode {
+	case "managed-malformed", "managed-active-revoke", "managed-cleanup-failure", "managed-reuse":
+		q.ResponseLimits.MaxSemanticBytes = managedSemanticFixtureCeiling
+	}
 	attempts := 1
 	if mode == "managed-reuse" {
 		attempts = 2
@@ -465,6 +499,15 @@ func runLocalWorkerFixture(t *testing.T, mode string) {
 		}
 		grant := inv.ControlledLocalGrantForTest(t, owner)
 		out, runErr := so.Run(ctx, q)
+		switch mode {
+		case "managed-malformed", "managed-active-revoke", "managed-cleanup-failure":
+			if errors.Is(runErr, so.ErrNativeAggregate) {
+				t.Fatal("ASSERT_MANAGED_LATER_REFUSAL_NOT_AGGREGATE", mode, runErr)
+			}
+		}
+		if mode == "managed-cleanup-failure" && !errors.Is(runErr, joinFailure) {
+			t.Fatal("ASSERT_MANAGED_INJECTED_JOIN_FAILURE", runErr)
+		}
 		if isManaged && runErr == nil {
 			localQuote := inv.ControlledManagedLocalQuoteForTest(t, c)
 			tranche := inv.ControlledLocalPTrancheForTest(t, owner)
