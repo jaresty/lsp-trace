@@ -22,6 +22,7 @@ func TestCensusFolderFundedRecursiveBatches(t *testing.T) {
 
 func assertCensusFolderFundedBatches(t *testing.T, workspace string, nestedEntries int) {
 	t.Helper()
+	selectCensusLegacyAcquisition(t)
 	store, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +47,8 @@ func assertCensusFolderFundedBatches(t *testing.T, workspace string, nestedEntri
 	}
 
 	var out, diagnostics bytes.Buffer
-	// Use the folder route and a command that cannot perform acquisition.
+	// Qualify funded preparation on the explicitly declared compatibility route,
+	// not ordinary owner start. The command cannot provide acquisition evidence.
 	code := runCensus([]string{"--server", "/usr/bin/false", "--publication-root", store, workspace}, &out, &diagnostics)
 	runs, err := filepath.Glob(filepath.Join(store, "run-*"))
 	if err != nil || len(runs) != 1 {

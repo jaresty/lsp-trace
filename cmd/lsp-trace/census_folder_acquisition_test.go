@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,7 +56,27 @@ func TestCensusFolderAcquisitionPreparationBinding(t *testing.T) {
 	t.Log("ASSERT_FOLDER_PREPARATION_TRANSFER: PASS; ASSERT_FOLDER_PREPARATION_BINDING: PASS")
 }
 
+// selectCensusLegacyAcquisition selects the explicitly declared compatibility
+// route. These fixtures stop before semantic execution; the declaration is not
+// evidence of a caller, model execution, or a completed inventory. Ordinary
+// owner-start behavior is covered by TestCensusOrdinaryOwnerStartNoAcquisition.
+func selectCensusLegacyAcquisition(t *testing.T) {
+	t.Helper()
+	t.Setenv(censusCallerFDEnv, "")
+	t.Setenv(censusDurableCallerEnv, "")
+	declaration, err := defaultCensusDeclaration()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(declaration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(censusDurableCallerEnv, string(raw))
+}
+
 func TestCensusFolderAcquisitionPartitionBoundBeforeEffects(t *testing.T) {
+	selectCensusLegacyAcquisition(t)
 	workspace := t.TempDir()
 	store, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
