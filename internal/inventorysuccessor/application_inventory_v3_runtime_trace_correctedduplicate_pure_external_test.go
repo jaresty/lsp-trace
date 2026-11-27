@@ -238,8 +238,10 @@ func TestTraceCorrectedDuplicatePure(t *testing.T) {
 	}
 }
 
+// Current accepted frame only: phase14 supersedes the unavailable old baseline;
+// this is not recovered history, byte equivalence, or renewed release authority.
 func traceCorrectedDuplicatePurePreflight() []byte {
-	return []byte(`{"source_frame":[{"path":"internal/inventorysuccessor/private_managed_input_operation_v2.go","sha256":"a922f7411d2d22e3e26b8b43b808009decbf413a8ddd0ca1fe40ae9c33bbb29d"},{"path":"internal/referencegrouping/input.go","sha256":"36f784ae1465eb2477799c610fa6e95226e5f5b40fe2d596984a9c19e912d316"},{"path":"internal/inventorytracediag/trace.go","sha256":"0c6fd9cfddf9576a758d08ab62494c039b95bcce8acdea6847d36bd876cb3613"},{"path":"internal/programcadmission/typed_boundary.go","sha256":"5293bca9a78339c7a371cd34970c7da26dfe0088ac5260c94cb2b2861b41a4bb"},{"path":"internal/programcadmission/empty_admission_clone_regression_test.go","sha256":"dad4edd1d508beb6fb533c313ab9268270ffa53f68b50e2313b85aa67a9b7f23"},{"path":"internal/referencegrouping/empty_calls_predecessors_pure_test.go","sha256":"961d30c5afcdebd4885a7f076f057a8622795682e19e329c83d50069baa43478"},{"path":"internal/referencegrouping/empty_calls_native_codec_pure_test.go","sha256":"f43aaa6f6381e7d4155251577b4c6ddd9b4378c7454099cb69adeb028477912e"},{"path":"internal/inventorysuccessor/duplicate_calls_assembly_pure_test.go","sha256":"072eebe3e282f24236c121e15eb7fbd9aa85707a468a85dbcfeecd7c9beb094a"},{"path":"internal/inventorytracediag/phase14_test.go","sha256":"1b4e9d4f8a4b8f7298f609f6fb84c19bb470621388fb4dc99ba21f1d369b83ed"},{"path":"internal/programcadmission/leiden_projection.go","sha256":"58fe6b796c6541723cf64f7d246b895449bb2974a7e151cbbd6f2553ab921ee1"},{"path":"internal/programcadmission/private_binding_budget.go","sha256":"fc3d091e6ce07b8896abab51067b2fcad15e4374094cbd28f77ad5901589cfd8"},{"path":"internal/programcadmission/private_binding_budget_test.go","sha256":"b7e4dae5d6a31971fe069036b86270336dd68ae7c64e1a24b98519300201c865"},{"path":"internal/inventorysuccessor/sealed_binding_budget_18_pure_test.go","sha256":"18cc95541c0d717874df238bd2b1809871b790f842d190488e29c775076f3a75"},{"path":"internal/inventorysuccessor/application_inventory_v3_configuration_external_test.go","sha256":"76bf3fc9142309665287702d46ca015c79d4266ec543fd2be0ad7982f44ce4e3"},{"path":"internal/inventorysuccessor/application_inventory_v3_configuration_responder_external_test.go","sha256":"dad5a60f35373681d97d693d69f91b230089a02b6123b5aaf3dead880e2ef086"},{"path":"internal/inventorysuccessor/application_inventory_v3_duplicate_literal_pure_external_test.go","sha256":"e136357f229ab23d00e74d290138584bd16fe324f28447b90e10c5e1548882fe"}],"diagnostic_codes":["COMPOSITE_BINDING_BOUND_REFUSED","COMPOSITE_BINDING_JSON_REFUSED","NATIVE_PREDECESSOR_COUNT_REFUSED","NATIVE_PREDECESSOR_BYTES_REFUSED","NATIVE_AGGREGATE_BOUND_REFUSED"]}`)
+	return []byte(`{"source_frame":[{"path":"internal/inventorysuccessor/private_managed_input_operation_v2.go","sha256":"650f79f91b5ccef3194937cdb57aa4ffdceea84027c85ca3b9b1309b5c0f7eba"},{"path":"internal/referencegrouping/input.go","sha256":"36f784ae1465eb2477799c610fa6e95226e5f5b40fe2d596984a9c19e912d316"},{"path":"internal/inventorytracediag/trace.go","sha256":"0c6fd9cfddf9576a758d08ab62494c039b95bcce8acdea6847d36bd876cb3613"},{"path":"internal/programcadmission/typed_boundary.go","sha256":"5293bca9a78339c7a371cd34970c7da26dfe0088ac5260c94cb2b2861b41a4bb"},{"path":"internal/programcadmission/empty_admission_clone_regression_test.go","sha256":"dad4edd1d508beb6fb533c313ab9268270ffa53f68b50e2313b85aa67a9b7f23"},{"path":"internal/referencegrouping/empty_calls_predecessors_pure_test.go","sha256":"961d30c5afcdebd4885a7f076f057a8622795682e19e329c83d50069baa43478"},{"path":"internal/referencegrouping/empty_calls_native_codec_pure_test.go","sha256":"f43aaa6f6381e7d4155251577b4c6ddd9b4378c7454099cb69adeb028477912e"},{"path":"internal/inventorysuccessor/duplicate_calls_assembly_pure_test.go","sha256":"072eebe3e282f24236c121e15eb7fbd9aa85707a468a85dbcfeecd7c9beb094a"},{"path":"internal/inventorytracediag/phase14_test.go","sha256":"5cf132be68a897f637a6c3534543fbf58e66c54bfbe464896f8f3e953fd08bfc"},{"path":"internal/programcadmission/leiden_projection.go","sha256":"58fe6b796c6541723cf64f7d246b895449bb2974a7e151cbbd6f2553ab921ee1"},{"path":"internal/programcadmission/private_binding_budget.go","sha256":"fc3d091e6ce07b8896abab51067b2fcad15e4374094cbd28f77ad5901589cfd8"},{"path":"internal/programcadmission/private_binding_budget_test.go","sha256":"b7e4dae5d6a31971fe069036b86270336dd68ae7c64e1a24b98519300201c865"},{"path":"internal/inventorysuccessor/sealed_binding_budget_18_pure_test.go","sha256":"18cc95541c0d717874df238bd2b1809871b790f842d190488e29c775076f3a75"},{"path":"internal/inventorysuccessor/application_inventory_v3_configuration_external_test.go","sha256":"76bf3fc9142309665287702d46ca015c79d4266ec543fd2be0ad7982f44ce4e3"},{"path":"internal/inventorysuccessor/application_inventory_v3_configuration_responder_external_test.go","sha256":"dad5a60f35373681d97d693d69f91b230089a02b6123b5aaf3dead880e2ef086"},{"path":"internal/inventorysuccessor/application_inventory_v3_duplicate_literal_pure_external_test.go","sha256":"e136357f229ab23d00e74d290138584bd16fe324f28447b90e10c5e1548882fe"}],"diagnostic_codes":["COMPOSITE_BINDING_BOUND_REFUSED","COMPOSITE_BINDING_JSON_REFUSED","NATIVE_PREDECESSOR_COUNT_REFUSED","NATIVE_PREDECESSOR_BYTES_REFUSED","NATIVE_AGGREGATE_BOUND_REFUSED"]}`)
 }
 
 // Source binding is pure; it does not claim native DTO raw multiplicity.
@@ -269,6 +271,61 @@ func TestTraceCorrectedDuplicateCurrent20(t *testing.T) {
 			}
 		}
 		t.Log("ASSERT_PHASE21_CANONICAL PASS")
+	})
+	t.Run("SourceFrameReconciliation", func(t *testing.T) {
+		t.Log("PROCEDURE ASSERT_PHASE21_FRAME_RECONCILIATION: both tables agree; each mandatory path refuses missing, duplicate, and wrong hash")
+		pre := traceCorrectedDuplicatePurePreflight()
+		if !traceCorrectedDuplicateSourceFrameValid(pre) {
+			t.Fatal("ASSERT_PHASE21_FRAME_RECONCILIATION FAIL table divergence")
+		}
+		var p struct {
+			SourceFrame []struct {
+				Path string `json:"path"`
+				SHA  string `json:"sha256"`
+			} `json:"source_frame"`
+			DiagnosticCodes []string `json:"diagnostic_codes"`
+		}
+		if err := json.Unmarshal(pre, &p); err != nil || len(p.SourceFrame) != 16 {
+			t.Fatal("ASSERT_PHASE21_FRAME_RECONCILIATION FAIL fixture")
+		}
+		for i, entry := range p.SourceFrame {
+			for _, kind := range []string{"missing", "duplicate", "wrong-hash"} {
+				t.Run(entry.Path+"/"+kind, func(t *testing.T) {
+					bad := p
+					bad.SourceFrame = append(p.SourceFrame[:0:0], p.SourceFrame...)
+					switch kind {
+					case "missing":
+						bad.SourceFrame = append(bad.SourceFrame[:i], bad.SourceFrame[i+1:]...)
+					case "duplicate":
+						bad.SourceFrame = append(bad.SourceFrame, entry)
+					case "wrong-hash":
+						bad.SourceFrame[i].SHA = strings.Repeat("0", 64)
+					}
+					raw, err := json.Marshal(bad)
+					if err != nil || traceCorrectedDuplicateSourceFrameValid(raw) {
+						t.Fatal("ASSERT_PHASE21_FRAME_RECONCILIATION FAIL", kind, entry.Path)
+					}
+					t.Log("ASSERT_PHASE21_FRAME_RECONCILIATION PASS", kind, entry.Path)
+				})
+			}
+		}
+		// Synthetic historical pins only: no historical preflight or release is read.
+		old := []byte(strings.NewReplacer(
+			"650f79f91b5ccef3194937cdb57aa4ffdceea84027c85ca3b9b1309b5c0f7eba", "a922f7411d2d22e3e26b8b43b808009decbf413a8ddd0ca1fe40ae9c33bbb29d",
+			"5cf132be68a897f637a6c3534543fbf58e66c54bfbe464896f8f3e953fd08bfc", "1b4e9d4f8a4b8f7298f609f6fb84c19bb470621388fb4dc99ba21f1d369b83ed",
+		).Replace(string(pre)))
+		if bytes.Equal(old, pre) || traceCorrectedDuplicateSourceFrameValid(old) {
+			t.Fatal("ASSERT_PHASE21_OLD_RELEASE FAIL old frame")
+		}
+		q := traceCorrectedDuplicateRelease{Phase: traceCorrectedDuplicatePhase, PreflightSHA: traceCorrectedDuplicateSHA(old), AllowNative: true, Cases: append([]string(nil), traceCorrectedDuplicateCases[:]...), MaxAttempts: 1, TraceCap: traceCorrectedDuplicateCap, TraceTotal: traceCorrectedDuplicateCap, Expires: 1600}
+		if traceCorrectedDuplicateReleaseValid(q, pre, 1000) {
+			t.Fatal("ASSERT_PHASE21_OLD_RELEASE FAIL old hash accepted")
+		}
+		q.PreflightSHA = traceCorrectedDuplicateSHA(pre)
+		if !traceCorrectedDuplicateReleaseValid(q, pre, 1000) {
+			t.Fatal("ASSERT_PHASE21_OLD_RELEASE FAIL current hash refused")
+		}
+		t.Log("ASSERT_PHASE21_OLD_RELEASE PASS")
 	})
 	t.Run("CurrentSources", func(t *testing.T) {
 		t.Log("PROCEDURE ASSERT_PHASE21_CURRENT_SOURCES: current20 and owner-budget source hashes must match mandatory pins")

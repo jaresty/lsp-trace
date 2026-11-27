@@ -252,8 +252,11 @@ func traceCorrectedDuplicateSourceFrameValid(pre []byte) bool {
 			return false
 		}
 	}
+	// Current accepted frame, not renewed historical release authority. The phase14
+	// baseline supersedes the unavailable old pin; it does not recover old history
+	// or assert old/new byte equivalence.
 	want := map[string]string{
-		"internal/inventorysuccessor/private_managed_input_operation_v2.go":                             "a922f7411d2d22e3e26b8b43b808009decbf413a8ddd0ca1fe40ae9c33bbb29d",
+		"internal/inventorysuccessor/private_managed_input_operation_v2.go":                             "650f79f91b5ccef3194937cdb57aa4ffdceea84027c85ca3b9b1309b5c0f7eba",
 		"internal/referencegrouping/input.go":                                                           "36f784ae1465eb2477799c610fa6e95226e5f5b40fe2d596984a9c19e912d316",
 		"internal/inventorytracediag/trace.go":                                                          "0c6fd9cfddf9576a758d08ab62494c039b95bcce8acdea6847d36bd876cb3613",
 		"internal/programcadmission/typed_boundary.go":                                                  "5293bca9a78339c7a371cd34970c7da26dfe0088ac5260c94cb2b2861b41a4bb",
@@ -261,7 +264,7 @@ func traceCorrectedDuplicateSourceFrameValid(pre []byte) bool {
 		"internal/referencegrouping/empty_calls_predecessors_pure_test.go":                              "961d30c5afcdebd4885a7f076f057a8622795682e19e329c83d50069baa43478",
 		"internal/referencegrouping/empty_calls_native_codec_pure_test.go":                              "f43aaa6f6381e7d4155251577b4c6ddd9b4378c7454099cb69adeb028477912e",
 		"internal/inventorysuccessor/duplicate_calls_assembly_pure_test.go":                             "072eebe3e282f24236c121e15eb7fbd9aa85707a468a85dbcfeecd7c9beb094a",
-		"internal/inventorytracediag/phase14_test.go":                                                   "1b4e9d4f8a4b8f7298f609f6fb84c19bb470621388fb4dc99ba21f1d369b83ed",
+		"internal/inventorytracediag/phase14_test.go":                                                   "5cf132be68a897f637a6c3534543fbf58e66c54bfbe464896f8f3e953fd08bfc",
 		"internal/programcadmission/leiden_projection.go":                                               "58fe6b796c6541723cf64f7d246b895449bb2974a7e151cbbd6f2553ab921ee1",
 		"internal/programcadmission/private_binding_budget.go":                                          "fc3d091e6ce07b8896abab51067b2fcad15e4374094cbd28f77ad5901589cfd8",
 		"internal/programcadmission/private_binding_budget_test.go":                                     "b7e4dae5d6a31971fe069036b86270336dd68ae7c64e1a24b98519300201c865",
