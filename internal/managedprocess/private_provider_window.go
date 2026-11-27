@@ -43,6 +43,8 @@ type privateProviderWindow struct {
 	deadline                                                           time.Time
 	mu                                                                 sync.Mutex
 	stderr, censusBytes, censusLines, censusMembers, censusInvocations int
+	// Candidate engine only: no launch admission or census dispatch uses it yet.
+	linuxCensus *linuxCensusEngine
 }
 
 // PrivateProviderWindowContext binds the actual backend before command creation.
@@ -219,6 +221,23 @@ func parsePrivateCensus(src io.Reader, b *privateProviderWindow) GroupCensusObse
 		result.Truncated = true
 	}
 	return result
+}
+
+// bindLinuxCensus installs one original residual/profile on this owner. It is
+// package-private preparation, not funding or Linux runtime authority. Future
+// lifecycle integration must retain this engine, not bind a replacement.
+func (b *privateProviderWindow) bindLinuxCensus(pgid int32, adapter linuxCensusAdapter) (*linuxCensusEngine, error) {
+	if b == nil {
+		return nil, ErrPrivateProviderWindow
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.linuxCensus != nil || b.manager == nil || b.ctx == nil || b.ctx.Err() != nil ||
+		b.profile != b.manager.PrivateProviderWindowProfile() || b.deadline.IsZero() || pgid <= 0 || adapter == nil {
+		return nil, ErrPrivateProviderWindow
+	}
+	b.linuxCensus = newLinuxCensusEngine(b, pgid, adapter)
+	return b.linuxCensus, nil
 }
 
 type privateCensusReader struct {
