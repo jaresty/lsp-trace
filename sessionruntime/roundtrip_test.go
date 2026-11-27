@@ -56,6 +56,58 @@ type roundTripChild struct {
 	teardowns       int
 	requestSeen     chan struct{}
 	releaseResponse chan struct{}
+	observation     *roundTripObservation // opt-in; protected by mu
+}
+
+// roundTripObservation separates consumed frames from recorded messages. Hooks
+// run outside mu so tests can inspect the stream while recording is held.
+type roundTripObservation struct {
+	beforeAppend func(int, lspwire.Message)
+	changed      chan struct{}
+	done         chan struct{}
+	attempts     int
+	bytes        int
+}
+
+type roundTripObservedWriter struct{ child *roundTripChild }
+
+func (w roundTripObservedWriter) Write(p []byte) (int, error) {
+	c := w.child
+	c.mu.Lock()
+	c.observation.attempts++
+	c.observation.bytes += len(p) // attempted bytes, including blocked/failed writes
+	c.mu.Unlock()
+	return c.stdin.Write(p)
+}
+func (w roundTripObservedWriter) Close() error { return w.child.stdin.Close() }
+
+func (c *roundTripChild) observeWrites(beforeAppend func(int, lspwire.Message)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.observation = &roundTripObservation{beforeAppend: beforeAppend, changed: make(chan struct{}), done: make(chan struct{})}
+}
+
+func (c *roundTripChild) awaitRecorded(want int) {
+	for {
+		c.mu.Lock()
+		if len(c.requests) >= want {
+			c.mu.Unlock()
+			return
+		}
+		changed, done := c.observation.changed, c.observation.done
+		c.mu.Unlock()
+		select {
+		case <-changed:
+		case <-done:
+			return
+		}
+	}
+}
+
+func (c *roundTripChild) observedWrites() (attempts, bytes int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.observation.attempts, c.observation.bytes
 }
 
 func newRoundTripChild(mode string) *roundTripChild {
@@ -66,6 +118,13 @@ func newRoundTripChild(mode string) *roundTripChild {
 	return c
 }
 func (c *roundTripChild) serve() {
+	defer func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.observation != nil {
+			close(c.observation.done)
+		}
+	}()
 	r := lspwire.NewReader(c.input, lspwire.DefaultLimits())
 	w := lspwire.NewWriter(c.output, lspwire.DefaultLimits())
 	for {
@@ -74,7 +133,17 @@ func (c *roundTripChild) serve() {
 			return
 		}
 		c.mu.Lock()
+		observation, ordinal := c.observation, len(c.requests)+1
+		c.mu.Unlock()
+		if observation != nil && observation.beforeAppend != nil {
+			observation.beforeAppend(ordinal, msg)
+		}
+		c.mu.Lock()
 		c.requests = append(c.requests, msg)
+		if c.observation != nil {
+			close(c.observation.changed)
+			c.observation.changed = make(chan struct{})
+		}
 		c.mu.Unlock()
 		if msg.Method == "$/cancelRequest" {
 			if c.mode == "call-hierarchy-hang-incoming" || c.mode == "call-hierarchy-hang-outgoing" {
@@ -153,7 +222,14 @@ func (c *roundTripChild) serve() {
 		}
 	}
 }
-func (c *roundTripChild) Stdin() io.WriteCloser { return c.stdin }
+func (c *roundTripChild) Stdin() io.WriteCloser {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.observation != nil {
+		return roundTripObservedWriter{c}
+	}
+	return c.stdin
+}
 func (c *roundTripChild) Stdout() io.ReadCloser { return c.stdout }
 func (c *roundTripChild) Teardown(context.Context) managedprocess.TeardownObservation {
 	c.mu.Lock()

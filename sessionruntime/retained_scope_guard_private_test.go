@@ -10,16 +10,29 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
 
 func retainedScopeFixture(t *testing.T) (*Manager, StartResult, *roundTripChild, []RetainedScopeMemberPrivate) {
 	t.Helper()
+	return retainedScopeObservedFixture(t, nil, true)
+}
+
+func retainedScopeObservedFixture(t *testing.T, beforeAppend func(int, lspwire.Message), acknowledge bool) (*Manager, StartResult, *roundTripChild, []RetainedScopeMemberPrivate) {
+	t.Helper()
 	m, s, c, first := ownedDocumentFixture(t, true)
-	t.Cleanup(func() { c.Teardown(context.Background()); c.Close() })
+	c.observeWrites(beforeAppend)
+	t.Cleanup(func() {
+		c.Teardown(context.Background())
+		c.Close()
+		<-c.observation.done
+	})
 	members := make([]RetainedScopeMemberPrivate, 6)
 	for i := range members {
 		uri := first.URI
@@ -41,8 +54,272 @@ func retainedScopeFixture(t *testing.T) (*Manager, StartResult, *roundTripChild,
 		}
 		members[i] = RetainedScopeMemberPrivate{URI: uri, LanguageID: "go", Expected: content, Role: role}
 	}
+	if acknowledge {
+		acknowledgeRetainedScopeSetup(t, c, members)
+	}
 	return m, s, c, members
 }
+
+func acknowledgeRetainedScopeSetup(t *testing.T, c *roundTripChild, members []RetainedScopeMemberPrivate) {
+	t.Helper()
+	c.awaitRecorded(len(members))
+	messages, _ := c.snapshot()
+	if len(messages) != len(members) {
+		t.Fatalf("setup acknowledgment: got %d messages, want %d", len(messages), len(members))
+	}
+	for i, msg := range messages {
+		var params struct {
+			TextDocument struct {
+				URI string `json:"uri"`
+			} `json:"textDocument"`
+		}
+		if json.Unmarshal(msg.Params, &params) != nil || msg.Method != "textDocument/didOpen" || len(msg.ID) != 0 || params.TextDocument.URI != members[i].URI {
+			t.Fatalf("setup acknowledgment: message %d = %+v", i, msg)
+		}
+	}
+}
+
+type retainedScopeTraffic struct {
+	messages        []lspwire.Message
+	attempts, bytes int
+}
+
+func retainedScopeTrafficSnapshot(c *roundTripChild) retainedScopeTraffic {
+	messages, _ := c.snapshot()
+	attempts, bytes := c.observedWrites()
+	return retainedScopeTraffic{messages, attempts, bytes}
+}
+
+func (before retainedScopeTraffic) unchanged(after retainedScopeTraffic) bool {
+	return reflect.DeepEqual(before.messages, after.messages) && before.attempts == after.attempts && before.bytes == after.bytes
+}
+
+// The schedule is deliberately synthetic: it witnesses the observation gap,
+// not the identity of a notification in a historical CI execution.
+func TestRetainedScopeRefusalObservationBoundary(t *testing.T) {
+	for _, kind := range []string{"version", "digest"} {
+		t.Run(kind, func(t *testing.T) {
+			held, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(release) }) }
+			defer unblock()
+			m, s, c, members := retainedScopeObservedFixture(t, func(n int, msg lspwire.Message) {
+				if n == 6 {
+					close(held)
+					<-release
+				}
+			}, false)
+			<-held // complete frame consumed; its append is still held
+			g, f := m.BindRetainedScopePrivate(context.Background(), s.SessionID, s.Generation, members)
+			if f != "" {
+				t.Fatal(f)
+			}
+			r := m.sessions[s.SessionID]
+			d := r.documents[members[5].URI]
+			if kind == "version" {
+				d.version++
+				d.supply.DocumentVersion = d.version
+				d.supply.Method = "textDocument/didChange"
+				d.supply.Params, _ = json.Marshal(map[string]any{"textDocument": map[string]any{"uri": members[5].URI, "version": d.version}, "contentChanges": []map[string]string{{"text": string(d.supply.Content)}}})
+				if !validRetainedScopeDocumentPrivate(d, members[5], s.SessionID, s.Generation) {
+					t.Fatal("incoherent version witness")
+				}
+			} else {
+				d.digest[0] ^= 1
+			}
+			r.documents[members[5].URI] = d
+			req := retainedScopeRequest(s, g, "callHierarchy/incomingCalls", members[0].URI)
+			old := retainedScopeTrafficSnapshot(c)
+			got := m.RoundTrip(context.Background(), req)
+			if got.Failure != DocumentSupplyUnavailable || got.Key.ID != 0 || len(r.requests) != 0 || got.RequestMessages != 0 || got.RequestBytes != 0 {
+				t.Fatalf("witness refusal not pre-effect: %+v pending=%d", got, len(r.requests))
+			}
+			unblock()
+			acknowledgeRetainedScopeSetup(t, c, members)
+			before := retainedScopeTrafficSnapshot(c)
+			methods := func(ms []lspwire.Message) []string {
+				var out []string
+				for _, msg := range ms {
+					out = append(out, msg.Method)
+				}
+				return out
+			}
+			t.Logf("old snapshot false failure: before=%d %v after=%d %v pending=%d failure=%s id=%d attempts=%d/%d bytes=%d/%d", len(old.messages), methods(old.messages), len(before.messages), methods(before.messages), len(r.requests), got.Failure, got.Key.ID, old.attempts, before.attempts, old.bytes, before.bytes)
+			if len(old.messages) != 5 || len(before.messages) != 6 || old.attempts != before.attempts || old.bytes != before.bytes {
+				t.Fatal("setup scheduling witness did not isolate receiver append")
+			}
+			got = m.RoundTrip(context.Background(), req)
+			after := retainedScopeTrafficSnapshot(c)
+			if !before.unchanged(after) || got.Failure != DocumentSupplyUnavailable || got.Key.ID != 0 || len(r.requests) != 0 {
+				t.Fatalf("acknowledged refusal not pre-effect: %+v pending=%d before=%+v after=%+v", got, len(r.requests), before, after)
+			}
+		})
+	}
+}
+
+func TestRetainedScopeObserverDetectsHeldTraffic(t *testing.T) {
+	held, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer unblock()
+	_, _, c, _ := retainedScopeObservedFixture(t, func(n int, msg lspwire.Message) {
+		if n == 7 {
+			close(held)
+			<-release
+		}
+	}, true)
+	before := retainedScopeTrafficSnapshot(c)
+	written := make(chan error, 1)
+	go func() {
+		written <- lspwire.NewWriter(c.Stdin(), lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "textDocument/didChange", Params: json.RawMessage(`{}`)})
+	}()
+	if err := awaitRetainedScopeHeldWrite(c, held, written); err != nil {
+		t.Fatal(err)
+	}
+	after := retainedScopeTrafficSnapshot(c)
+	if !reflect.DeepEqual(before.messages, after.messages) {
+		t.Fatal("receiver was not held")
+	}
+	if before.unchanged(after) {
+		t.Fatalf("prohibited held traffic escaped observer: before=%+v after=%+v", before, after)
+	}
+	t.Logf("held traffic detected: receiver=%d/%d attempts=%d/%d bytes=%d/%d", len(before.messages), len(after.messages), before.attempts, after.attempts, before.bytes, after.bytes)
+	unblock()
+	c.awaitRecorded(7)
+	if before.unchanged(retainedScopeTrafficSnapshot(c)) {
+		t.Fatal("recorded traffic escaped observer")
+	}
+}
+
+// A successful pipe write can finish before beforeAppend runs. Wait for both
+// observations, but never strand the caller on held after a terminal failure.
+func awaitRetainedScopeHeldWrite(c *roundTripChild, held <-chan struct{}, written <-chan error) error {
+	defer func() {
+		if written != nil {
+			// Receiver exit must also join a writer whose result is not yet read.
+			_ = c.stdin.Close()
+			<-written
+		}
+	}()
+	for held != nil || written != nil {
+		select {
+		case <-held:
+			held = nil
+		case err := <-written:
+			written = nil
+			if err != nil {
+				return fmt.Errorf("held write failed: %w", err)
+			}
+		case <-c.observation.done:
+			return fmt.Errorf("receiver exited before held write completed")
+		}
+	}
+	return nil
+}
+
+func TestRetainedScopeHeldWriteTermination(t *testing.T) {
+	for _, kind := range []string{"closed-writer", "receiver-exit"} {
+		t.Run(kind, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				c := newRoundTripChild("references-empty")
+				receiverEntered, receiverRelease := make(chan struct{}), make(chan struct{})
+				var hook func(int, lspwire.Message)
+				if kind == "closed-writer" {
+					hook = func(int, lspwire.Message) { close(receiverEntered); <-receiverRelease }
+				}
+				c.observeWrites(hook)
+				defer func() {
+					close(receiverRelease)
+					c.Teardown(context.Background())
+					c.Close()
+					<-c.observation.done
+				}()
+				held := make(chan struct{})
+				written := make(chan error, 1)
+				if kind == "closed-writer" {
+					// Keep the receiver alive on an earlier frame, so receiver exit
+					// cannot mask a missing early-write-error select case.
+					if err := lspwire.NewWriter(c.Stdin(), lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "textDocument/didChange", Params: json.RawMessage(`{}`)}); err != nil {
+						t.Fatal(err)
+					}
+					<-receiverEntered
+					_ = c.stdin.Close()
+				}
+				go func() {
+					written <- lspwire.NewWriter(c.Stdin(), lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "textDocument/didChange", Params: json.RawMessage(`{}`)})
+				}()
+				// Obtain the actual pipe result before testing the wait. In the
+				// receiver-exit case it is nil, but no held callback ever occurred.
+				writeErr := <-written
+				if (writeErr != nil) != (kind == "closed-writer") {
+					t.Fatalf("unexpected real-pipe result: %v", writeErr)
+				}
+				written <- writeErr
+				if kind == "receiver-exit" {
+					_ = c.input.Close()
+					<-c.observation.done
+				}
+				returned := make(chan error, 1)
+				go func() { returned <- awaitRetainedScopeHeldWrite(c, held, written) }()
+				synctest.Wait()
+				select {
+				case err := <-returned:
+					if err == nil {
+						t.Fatal("terminal wait accepted absent hold")
+					}
+					if len(written) != 0 {
+						t.Fatal("terminal wait did not join writer result")
+					}
+					t.Logf("terminal wait returned: case=%s write=%v wait=%v writer joined; receiver release/join deferred", kind, writeErr, err)
+				default:
+					// Recovery is after the observation: make the old unconditional
+					// held wait joinable, rather than hanging the negative control.
+					close(held)
+					<-returned
+					t.Fatal("terminal wait stranded before held acknowledgment")
+				}
+			})
+		})
+	}
+}
+
+func TestRetainedScopeHeldWriteNeedsAcknowledgment(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		entered, allowHold := make(chan struct{}), make(chan struct{})
+		held, release := make(chan struct{}), make(chan struct{})
+		var allowOnce, releaseOnce sync.Once
+		allow := func() { allowOnce.Do(func() { close(allowHold) }) }
+		unblock := func() { releaseOnce.Do(func() { close(release) }) }
+		c := newRoundTripChild("references-empty")
+		c.observeWrites(func(int, lspwire.Message) { close(entered); <-allowHold; close(held); <-release })
+		defer func() { allow(); unblock(); c.Teardown(context.Background()); c.Close(); <-c.observation.done }()
+		written := make(chan error, 1)
+		go func() {
+			written <- lspwire.NewWriter(c.Stdin(), lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "textDocument/didChange", Params: json.RawMessage(`{}`)})
+		}()
+		<-entered
+		if err := <-written; err != nil {
+			t.Fatal(err)
+		}
+		written <- nil
+		returned := make(chan error, 1)
+		go func() { returned <- awaitRetainedScopeHeldWrite(c, held, written) }()
+		synctest.Wait()
+		select {
+		case err := <-returned:
+			t.Fatalf("nil write completion substituted for acknowledgment: %v", err)
+		default:
+		}
+		allow()
+		if err := <-returned; err != nil {
+			t.Fatal(err)
+		}
+		unblock()
+		c.awaitRecorded(1)
+		t.Log("nil write completion waited for real hold acknowledgment; writer joined")
+	})
+}
+
 func retainedScopeRequest(s StartResult, g *RetainedScopeGuardPrivate, method, uri string) RoundTripRequest {
 	key := "textDocument"
 	if method == "callHierarchy/incomingCalls" || method == "callHierarchy/outgoingCalls" {
@@ -166,11 +443,12 @@ func TestRetainedScopePrivateRequestRefusals(t *testing.T) {
 				cp := *g
 				req.RetainedScopePrivate = &cp
 			case "foreign-manager":
-				other, otherSession, _, otherMembers := retainedScopeFixture(t)
+				other, otherSession, otherChild, otherMembers := retainedScopeFixture(t)
 				if _, failure := other.BindRetainedScopePrivate(ctx, otherSession.SessionID, otherSession.Generation, otherMembers); failure != "" {
 					t.Fatal(failure)
 				}
-				m = other
+				m, c = other, otherChild
+				r = other.sessions[otherSession.SessionID]
 				req.SessionID, req.Generation = otherSession.SessionID, otherSession.Generation
 			case "foreign-session":
 				req.SessionID = "missing"
@@ -217,11 +495,14 @@ func TestRetainedScopePrivateRequestRefusals(t *testing.T) {
 			case "poisoned":
 				r.record.State = session.Poisoned
 			}
-			before, _ := c.snapshot()
+			before := retainedScopeTrafficSnapshot(c)
 			got := m.RoundTrip(ctx, req)
-			after, _ := c.snapshot()
-			if got.Failure == "" || got.Key.ID != 0 || len(r.requests) != 0 || len(after) != len(before) {
-				t.Fatalf("not pre-effect: %+v", got)
+			after := retainedScopeTrafficSnapshot(c)
+			if got.Failure == "" || got.Key.ID != 0 || len(r.requests) != 0 || !before.unchanged(after) {
+				t.Fatalf("not pre-effect: %+v pending=%d before=%+v after=%+v", got, len(r.requests), before, after)
+			}
+			if (kind == "version" || kind == "digest") && got.Failure != DocumentSupplyUnavailable {
+				t.Fatalf("wrong refusal classification: %+v", got)
 			}
 		})
 	}
