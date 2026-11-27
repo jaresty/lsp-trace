@@ -57,4 +57,3 @@ func BindGroupingPairPrivate(c GroupingEvaluationCasePrivate, r GroupingEvaluati
 	}
 	return GroupingPairBindingPrivate{Case: cc, Result: rg.CompositionCommitment{ID: r.id, Digest: r.id, ByteLength: len(r.canonical)}, Projection: pc, Bindings: d.Bindings, CaseID: d.CaseID, RunID: d.RunID, SelectorID: d.Selector.ID, SelectorDigest: d.Selector.Digest, ClaimCeiling: r.doc.ClaimCeiling, Seed: d.Seed, Nodes: n, Occurrences: o, Custody: u, Members: members, Communities: len(r.doc.Partition.Communities), ActiveOccurrences: r.doc.ActiveOccurrenceCount}, nil
 }
-
