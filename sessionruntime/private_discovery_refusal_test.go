@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unsafe"
 )
 
 func refusal53Window() *privateDiscoveryWindow {
@@ -27,55 +28,166 @@ func (refusal53Child) Teardown(context.Context) managedprocess.TeardownObservati
 	panic("unexpected teardown")
 }
 func TestRefusal53SourceAccounting(t *testing.T) {
+	// Independent oracle qualified for the supported 64-bit layouts. A layout
+	// change requires reviewing the fixed ownership prices, not copying observed
+	// remaining balances or calling the production pricing function as an oracle.
+	if unsafe.Sizeof(uintptr(0)) != 8 || unsafe.Sizeof(privateDiscoveryFrame{}) != 304 {
+		t.Fatal("ASSERT_REVIEW_64BIT_FRAME_LAYOUT")
+	}
+	const wire = "Content-Length: 36\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[]}"
+	const sourceBytes, sourceRetained, sourceWork = 1048577, 16777232, 33620000
+	// Header/hash + acquisition/raw + decoder depth/plan + decoded fields +
+	// padded runtime frame record. This small frame's retention is NOT 4*cap.
+	const frameRetained = (2*8192 + 175) + 2*58 + (10000 + 192) + 9 + 304
 	for _, cap := range []uint64{1 << 20, 64 << 10} {
-		t.Run(map[uint64]string{1 << 20: "exhausted", 64 << 10: "control"}[cap], func(t *testing.T) {
+		t.Run(map[uint64]string{1 << 20: "cap-1MiB", 64 << 10: "cap-64KiB"}[cap], func(t *testing.T) {
 			w := refusal53Window()
-			w.limits.FrameBytes = cap
-			if !w.work(4<<20) || !w.spend(&w.remaining.RetainedBytes, 4<<20) || !w.prepayBackend() {
-				t.Fatal("fixture accounting")
+			want := PrivateDiscoveryLimits{SourceBytes: 16777232, RequestBytes: 33554432, ResponseBytes: 16777216, WireBytes: 50331648, RetainedBytes: 536870912, Work: 4294967296, Messages: 256, Requests: 128, FrameBytes: 1048576, HeaderBytes: 8192}
+			if w.limits != want || w.remaining != want {
+				t.Fatal("ASSERT_ORIGINAL_CEILINGS")
 			}
-			for i := 0; i < 15; i++ {
-				if w.sourceLimit() == 0 {
-					t.Fatal("early source refusal")
+			w.limits.FrameBytes = cap
+			check := func(stage string) {
+				t.Helper()
+				if w.remaining != want || w.failed || w.refusal.Valid() {
+					t.Fatalf("ASSERT_SOURCE_ACCOUNTING_VECTOR %s: got=%+v want=%+v refusal=%+v", stage, w.remaining, want, w.refusal)
 				}
 			}
-			// Actual bounded frame reader, synthetic response only, no process or source.
+			if !w.work(4<<20) || !w.spend(&w.remaining.RetainedBytes, 4<<20) {
+				t.Fatal("fixture bookkeeping")
+			}
+			want.Work -= 4194304
+			want.RetainedBytes -= 4194304
+			check("bookkeeping")
+			if !w.prepayBackend() {
+				t.Fatal("fixture backend")
+			}
+			want.Work -= 5046272
+			want.RetainedBytes -= 86016
+			want.ResponseBytes -= 69632
+			want.WireBytes -= 69632
+			check("backend")
+			for i := 0; i < 15; i++ {
+				if w.sourceLimit() != 1048576 {
+					t.Fatal("early source refusal")
+				}
+				want.SourceBytes -= sourceBytes
+				want.RetainedBytes -= sourceRetained
+				want.Work -= sourceWork
+				check("source 1..15")
+			}
+			// A single genuine child owns the full inert stream. No request writes,
+			// slots, selected-result copies, capture or source opens are performed.
+			child, inert := refusal53BoundChild(w, strings.Repeat(wire, 65))
 			for i := 0; i < 65; i++ {
 				if !w.quoteRequest(0) {
 					t.Fatal("request")
 				}
-				c := refusal53Child{io.NopCloser(bytes.NewBufferString("Content-Length: 36\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[]}"))}
-				if _, _, _, _, e := w.frame(c); e != nil {
-					t.Fatal("frame", e)
+				want.Requests--
+				want.Work -= 65536
+				check("request quote")
+				message, observation, raw, available, err := w.frame(child)
+				if err != nil || !available || string(raw) != wire || string(message.Result) != "[]" || observation.FrameBytes != 58 || inert.reads != (i+1)*58 {
+					t.Fatalf("ASSERT_FRAME_WIRE_ACCOUNTING: frame=%d reads=%d err=%v", i, inert.reads, err)
 				}
+				want.Messages--
+				want.ResponseBytes -= 58
+				want.WireBytes -= 58
+				want.RetainedBytes -= frameRetained
+				want.Work -= 16*cap + 25417
+				check("frame")
 			}
-			before := w.remaining
-			n := w.sourceLimit()
+			// Independent final table also checks the staged arithmetic above.
+			before16 := PrivateDiscoveryLimits{SourceBytes: 1048577, RequestBytes: 33554432, ResponseBytes: 16703814, WireBytes: 50258246, RetainedBytes: 279165412, Work: 2684995735, Messages: 191, Requests: 63, FrameBytes: 1048576, HeaderBytes: 8192}
 			if cap == 64<<10 {
-				if before.RetainedBytes != 263892752 {
-					t.Fatal("ASSERT_CONTROL_REMAINING", before.RetainedBytes)
-				}
-				if n == 0 || w.refusal.Valid() {
-					t.Fatal("ASSERT_CONTROL_SOURCE16")
-				}
-				return
+				before16.Work = 3707357335
 			}
-			if n != 0 {
-				t.Fatal("ASSERT_REFUSED_SOURCE16")
+			if want != before16 || w.remaining != before16 || inert.reads != 3770 {
+				t.Fatal("ASSERT_BEFORE_SOURCE16_TABLE", w.remaining)
+			}
+			if w.sourceLimit() != 1048576 {
+				t.Fatal("ASSERT_SOURCE16_FITS")
+			}
+			want.SourceBytes = 0
+			want.RetainedBytes = 262388180
+			want.Work = 2651375735
+			if cap == 64<<10 {
+				want.Work = 3673737335
+			}
+			check("source16")
+			before := w.remaining
+			if w.sourceLimit() != 0 {
+				t.Fatal("ASSERT_SOURCE17_REFUSED")
 			}
 			d, ok := PrivateDiscoveryRefusalFromError(w.refusalError(PrivateDiscoveryAllSupplied, false))
-			if !ok || d.Stage != PrivateDiscoverySource || d.Currency != PrivateDiscoveryRetainedBytes || !d.AmountsAvailable || d.Requested != 16777232 || d.Remaining != 8302352 {
-				t.Fatalf("ASSERT_SOURCE_REFUSAL_DIAGNOSTIC: %+v", d)
-			}
-			if w.remaining != before {
-				t.Fatal("ASSERT_REFUSAL_BEFORE_COUNTERS")
+			if !ok || d.Stage != PrivateDiscoverySource || d.Currency != PrivateDiscoverySourceBytes || !d.AmountsAvailable || d.Requested != 2 || d.Remaining != 0 || w.remaining != before {
+				t.Fatalf("ASSERT_SOURCE17_PRE_EFFECT: %+v", d)
 			}
 			first := d
 			w.work(math.MaxUint64)
 			d, _ = PrivateDiscoveryRefusalFromError(w.refusalError(PrivateDiscoveryCleanup, true))
 			first.CleanupUncertain = true
-			if d != first {
+			if d != first || w.remaining != before {
 				t.Fatal("ASSERT_FIRST_REFUSAL_CLEANUP_PRESERVED")
+			}
+		})
+	}
+}
+
+func TestRefusal53SourceRetainedBoundary(t *testing.T) {
+	// Separate minimal-capacity contract, not the 512-MiB trajectory above.
+	for _, capacity := range []uint64{16777232, 16777231} {
+		w := refusal53Window()
+		w.limits.RetainedBytes = capacity
+		w.remaining.RetainedBytes = capacity
+		before := w.remaining
+		n := w.sourceLimit()
+		if capacity == 16777232 {
+			want := before
+			want.SourceBytes -= 1048577
+			want.Work -= 33620000
+			want.RetainedBytes = 0
+			if n != 1048576 || w.remaining != want || w.failed || w.refusal.Valid() {
+				t.Fatal("ASSERT_SOURCE_RETAINED_EQUALITY", w.remaining)
+			}
+			continue
+		}
+		d, ok := PrivateDiscoveryRefusalFromError(w.refusalError(PrivateDiscoveryUnknownStage, false))
+		if n != 0 || !ok || d.Stage != PrivateDiscoverySource || d.Currency != PrivateDiscoveryRetainedBytes || !d.AmountsAvailable || d.Requested != 16777232 || d.Remaining != 16777231 || w.remaining != before {
+			t.Fatalf("ASSERT_SOURCE_RETAINED_ATOMIC_REFUSAL: %+v before=%+v after=%+v", d, before, w.remaining)
+		}
+	}
+}
+
+func TestRefusal53SourceAdmissionBeforeFilesystem(t *testing.T) {
+	// Existing inert manager fixture: oneChildStarter returns a memory transport,
+	// never an OS process. External reader-entry instrumentation independently
+	// proves the below-boundary case does not enter the filesystem reader.
+	t.Setenv("TMPDIR", capture88PrivateDirectory(t))
+	for _, name := range []string{"below", "equal"} {
+		t.Run(name, func(t *testing.T) {
+			content := []byte("package fixture\n")
+			m, req, _, writer := supplyFixture(t, content)
+			t.Cleanup(func() { m.Shutdown(context.Background()) })
+			w := refusal53Window()
+			w.manager = m
+			w.remaining.RetainedBytes = 16777232
+			if name == "below" {
+				w.remaining.RetainedBytes--
+			}
+			req.PreparedNoFollow = true
+			before := w.remaining
+			ctx := context.WithValue(context.Background(), privateDiscoveryContextKey{}, w)
+			got := m.PrepareDocument(ctx, req)
+			if name == "equal" {
+				if got.Failure != "" || got.Supply == nil || !bytes.Equal(got.Supply.Content, content) || writer.Len() == 0 || w.remaining.RetainedBytes != 0 {
+					t.Fatalf("ASSERT_SOURCE_CALLER_EQUALITY: %+v", got)
+				}
+				return
+			}
+			d, ok := PrivateDiscoveryRefusalFromError(w.refusalError(PrivateDiscoveryUnknownStage, false))
+			if got.Failure != DocumentSupplyUnavailable || got.Supply != nil || writer.Len() != 0 || w.remaining != before || !ok || d.Stage != PrivateDiscoverySource || d.Currency != PrivateDiscoveryRetainedBytes || d.Requested != 16777232 || d.Remaining != 16777231 || !d.AmountsAvailable {
+				t.Fatalf("ASSERT_SOURCE_CALLER_PRE_EFFECT: result=%+v refusal=%+v", got, d)
 			}
 		})
 	}
@@ -103,6 +215,47 @@ func TestRefusal53RealFinalizer(t *testing.T) {
 		}
 	}
 }
+
+// Genuine window/child identity with an inert counted transport. No Starter,
+// process, native authority, or fabricated admission receipt is involved.
+func refusal53BoundChild(w *privateDiscoveryWindow, body string) (*privateDiscoveryChild, *discoveryInertChild) {
+	inert := &discoveryInertChild{in: io.NopCloser(strings.NewReader(body))}
+	child := &privateDiscoveryChild{wireChild: inert, window: w}
+	w.child = child
+	return child, inert
+}
+
+func TestRefusal53ConcreteChildBinding(t *testing.T) {
+	const wire = "Content-Length: 36\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":[]}"
+	for _, mode := range []string{"bound", "window-child", "child-window"} {
+		t.Run(mode, func(t *testing.T) {
+			w := refusal53Window()
+			child, inert := refusal53BoundChild(w, wire)
+			switch mode {
+			case "window-child":
+				w.child = nil
+			case "child-window":
+				child.window = refusal53Window()
+			}
+			before := w.remaining
+			message, observation, raw, available, err := w.frame(child)
+			if mode == "bound" {
+				// Independently specified: 22 header bytes + 36 body bytes. The
+				// concrete reader must debit actual requested wire/response bytes.
+				if err != nil || !available || string(message.Result) != "[]" || string(raw) != wire || observation.FrameBytes != 58 || inert.reads != 58 ||
+					w.remaining.ResponseBytes != before.ResponseBytes-58 || w.remaining.WireBytes != before.WireBytes-58 || w.remaining.Messages != before.Messages-1 || w.refusal.Valid() {
+					t.Fatalf("ASSERT_BOUND_FRAME_ACCOUNTING: observation=%+v remaining=%+v reads=%d err=%v", observation, w.remaining, inert.reads, err)
+				}
+				return
+			}
+			d, ok := PrivateDiscoveryRefusalFromError(w.refusalError(PrivateDiscoveryUnknownStage, false))
+			if !errors.Is(err, ErrPrivateDiscovery) || available || raw != nil || inert.reads != 0 || w.remaining != before || !ok || d.Stage != PrivateDiscoveryFrame || d.AmountsAvailable {
+				t.Fatalf("ASSERT_BINDING_REFUSAL_BEFORE_READ: diagnostic=%+v reads=%d err=%v", d, inert.reads, err)
+			}
+		})
+	}
+}
+
 func TestRefusal53PreEffectCurrencies(t *testing.T) {
 	for _, stage := range []PrivateDiscoveryRefusalStage{PrivateDiscoveryBackend, PrivateDiscoveryFrame, PrivateDiscoveryWrite, PrivateDiscoveryRead, PrivateDiscoverySource} {
 		w := refusal53Window()
@@ -137,8 +290,12 @@ func TestRefusal53PreEffectCurrencies(t *testing.T) {
 				t.Fatal("backend admitted")
 			}
 		case PrivateDiscoveryFrame:
-			if _, _, _, _, e := w.frame(refusal53Child{}); e == nil {
+			child, inert := refusal53BoundChild(w, "")
+			if _, _, _, _, e := w.frame(child); e == nil {
 				t.Fatal("frame admitted")
+			}
+			if inert.reads != 0 {
+				t.Fatal("ASSERT_FRAME_CURRENCY_BEFORE_READ")
 			}
 		case PrivateDiscoveryWrite:
 			if _, e := (privateDiscoveryWriter{w: w}).Write([]byte("abc")); e == nil {

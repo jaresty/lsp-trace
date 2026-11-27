@@ -328,13 +328,41 @@ func TestCapture88AggregateAndPrimary(t *testing.T) {
 		}
 	}
 }
-func TestCapture88PrivateFiles(t *testing.T) {
-	path := t.TempDir()
-	os.Chmod(path, 0700)
-	path, e := filepath.EvalSymlinks(path)
-	if e != nil {
-		t.Fatal("fixture")
+
+// capture88PrivateDirectory owns only its fresh namespace, never HOME or its
+// ancestors. The real opener must admit the complete canonical path: a private
+// leaf below a writable ancestor is not an acceptable positive fixture.
+func capture88PrivateDirectory(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal("fixture HOME", err)
 	}
+	home, err = filepath.EvalSymlinks(home)
+	if err != nil || !filepath.IsAbs(home) {
+		t.Fatal("fixture canonical HOME", err)
+	}
+	root, err := os.MkdirTemp(home, ".capture88-owned-")
+	if err != nil {
+		t.Fatal("fixture private namespace", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Error("fixture cleanup", err)
+		}
+	})
+	f, err := openPrivateCaptureDirectory(context.Background(), root)
+	if err != nil {
+		t.Fatal("fixture ancestor admission", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal("fixture descriptor close", err)
+	}
+	return root
+}
+
+func TestCapture88PrivateFiles(t *testing.T) {
+	path := capture88PrivateDirectory(t)
 	w, _, _ := discoveryWindow(nil)
 	o := &PrivateDiscoveryCaptureOptions{Permission: true, Destination: path}
 	admissions := 0
@@ -375,14 +403,7 @@ func TestCapture88PrivateFiles(t *testing.T) {
 	other.close(context.Background())
 }
 func TestCapture88DirectoryAndSchema(t *testing.T) {
-	root := t.TempDir()
-	if err := os.Chmod(root, 0700); err != nil {
-		t.Fatal("fixture setup")
-	}
-	root, e := filepath.EvalSymlinks(root)
-	if e != nil {
-		t.Fatal("fixture setup")
-	}
+	root := capture88PrivateDirectory(t)
 	f, e := openPrivateCaptureDirectory(context.Background(), root)
 	if e != nil {
 		t.Fatal("ASSERT_CAPTURE88_SAFE_DIRECTORY")
