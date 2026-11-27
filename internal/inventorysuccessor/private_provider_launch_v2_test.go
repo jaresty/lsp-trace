@@ -57,14 +57,8 @@ func ControlledProviderLaunchForTest(t *testing.T, base string, source *PrivateM
 func providerLaunchFixtureV2(t *testing.T) (PendingProviderLaunchV2, string, *PrivateManagedInputOwnerV2, *PrivateManagedInputOwnerV2) {
 	t.Helper()
 	source, _ := ControlledRPrepCanonicalOwnerForTest(t)
-	base, e := filepath.EvalSymlinks(t.TempDir())
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e = os.Chmod(base, 0700); e != nil {
-		t.Fatal(e)
-	}
-	if e = os.Mkdir(filepath.Join(base, "control"), 0700); e != nil {
+	base := providerProtectedScratchV2(t)
+	if e := os.Mkdir(filepath.Join(base, "control"), 0700); e != nil {
 		t.Fatal(e)
 	}
 	q, p, o := ControlledProviderLaunchForTest(t, base, source)
@@ -184,6 +178,70 @@ func TestProviderLaunchUnderfundBeforeMetadataV2(t *testing.T) {
 	t.Log("ASSERT_LAUNCH_UNDERFUND_NO_METADATA PASS")
 }
 
+func TestProviderLaunchWritableAncestorV2(t *testing.T) {
+	ctx := context.Background()
+	limits := PrivateManagedInputVerificationV2{400, 4 << 20, 400}
+	o, pin, n := providerControlFixtureV2(t, func(a *authorizationV2) {
+		fundProviderLaunchFixtureV2(t, a, limits)
+	})
+	receipt, e := o.verifyProviderControlV2(ctx, hashLabelV2("verify"), time.Now().Add(5*time.Second), pin, n)
+	if e != nil {
+		t.Fatal(e)
+	}
+	before, e := o.k.reopen(ctx, o.job, o.limits)
+	if e != nil || before.Disposition != "OBSERVED" || before.Windows != 1 {
+		t.Fatal("ASSERT_LAUNCH_ANCESTOR_CONTROL_OBSERVED", e)
+	}
+	ancestor := providerProtectedScratchV2(t)
+	base := filepath.Join(ancestor, "metadata")
+	if e = os.Mkdir(base, 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Mkdir(filepath.Join(base, "control"), 0700); e != nil {
+		t.Fatal(e)
+	}
+	// The provider pin and metadata leaf remain private. Only this test-owned
+	// metadata ancestor becomes writable, isolating launch ancestry admission.
+	if e = os.Chmod(ancestor, 0777); e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		if e := os.Chmod(ancestor, 0700); e != nil {
+			t.Error(e)
+		}
+	})
+	attempt := hashLabelV2("launch-writable-ancestor")
+	// Match Begin's charge clock to the persisted Unix-nanosecond timestamps
+	// used below to reconstruct the exact debit, without changing the deadline.
+	deadline := time.Now().Add(time.Second).Round(0)
+	pending, e := BeginProviderLaunchV2(ctx, receipt, attempt, deadline, base, limits)
+	defer pending.Close()
+	if e == nil || pending.state != nil {
+		t.Fatal("ASSERT_LAUNCH_WRITABLE_ANCESTOR_REFUSED", e)
+	}
+	after, e := o.k.reopen(ctx, o.job, o.limits)
+	if e != nil || after.Identity != o.head || after.Previous != before.Identity || after.Disposition != "PENDING" || after.Event != "RESERVE" || after.Windows != before.Windows+1 || after.Attempt != attempt {
+		t.Fatal("ASSERT_LAUNCH_ANCESTOR_CONFIRMED_RESERVATION", e)
+	}
+	budget, e := budgetV2(o.limits)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var reservation reservationV2
+	if e = o.k.read(ctx, after.ReservationSelector, &reservation, budget); e != nil {
+		t.Fatal(e)
+	}
+	charge, e := providerLaunchChargeV2(o.limits, limits, time.Duration(reservation.Deadline-reservation.ClaimedAt))
+	if e != nil {
+		t.Fatal(e)
+	}
+	want, e := addCountersV2(before.Charged, charge)
+	if e != nil || reservation.Attempt != attempt || reservation.PreviousHead != before.Identity || reservation.Disposition != "PENDING" || reservation.Tranche != charge || reservation.Charged != want || after.Charged != want {
+		t.Fatal("ASSERT_LAUNCH_ANCESTOR_RETAINS_EXACT_DEBIT", e)
+	}
+	t.Log("ASSERT_LAUNCH_WRITABLE_ANCESTOR_REFUSED PASS; ASSERT_LAUNCH_ANCESTOR_CONFIRMED_RESERVATION PASS; ASSERT_LAUNCH_ANCESTOR_RETAINS_EXACT_DEBIT PASS")
+}
+
 // Test-only stdio fixture bridge: cmd/main cannot import another package's
 // _test.go helpers. No production fixture API, provider override or DTO credit.
 func TestProviderLaunchFinalCloseCLIFixtureV2(t *testing.T) {
@@ -193,15 +251,11 @@ func TestProviderLaunchFinalCloseCLIFixtureV2(t *testing.T) {
 	source, _ := ControlledRPrepCanonicalOwnerForTest(t)
 	sv := PrivateManagedInputVerificationV2{source.limits.Records, source.limits.Bytes, source.limits.Work}
 	owner, pin, n := providerControlFixtureV2(t, func(a *authorizationV2) { fundProviderLaunchFixtureV2(t, a, sv) })
-	base, e := filepath.EvalSymlinks(t.TempDir())
-	if e != nil {
+	base := filepath.Join(providerProtectedScratchV2(t), "host-assisted-full-definition-r-XoBFapmT")
+	if e := os.Mkdir(base, 0700); e != nil {
 		t.Fatal(e)
 	}
-	base = filepath.Join(base, "host-assisted-full-definition-r-XoBFapmT")
-	if e = os.Mkdir(base, 0700); e != nil {
-		t.Fatal(e)
-	}
-	if e = os.Mkdir(filepath.Join(base, "control"), 0700); e != nil {
+	if e := os.Mkdir(filepath.Join(base, "control"), 0700); e != nil {
 		t.Fatal(e)
 	}
 	m := struct {

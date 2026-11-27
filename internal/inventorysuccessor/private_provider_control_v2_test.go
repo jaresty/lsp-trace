@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-func providerControlFixtureV2(t *testing.T, change ...func(*authorizationV2)) (*PrivateManagedInputOwnerV2, describeworker.FilePin, uint64) {
+// providerProtectedScratchV2 admits the real HOME chain before creating a
+// test-owned directory. Launch metadata needs the same protected ancestry as
+// the provider pin; chmodding a temporary leaf cannot protect its ancestors.
+func providerProtectedScratchV2(t *testing.T) string {
 	t.Helper()
 	home, e := os.UserHomeDir()
 	if e != nil {
@@ -40,6 +43,12 @@ func providerControlFixtureV2(t *testing.T, change ...func(*authorizationV2)) (*
 			t.Error(e)
 		}
 	})
+	return dir
+}
+
+func providerControlFixtureV2(t *testing.T, change ...func(*authorizationV2)) (*PrivateManagedInputOwnerV2, describeworker.FilePin, uint64) {
+	t.Helper()
+	dir := providerProtectedScratchV2(t)
 	p := filepath.Join(dir, "provider")
 	b := []byte("tiny controlled provider; never executed\n")
 	if e := os.WriteFile(p, b, 0700); e != nil {
@@ -183,13 +192,7 @@ func TestProviderLaunchPaidBeginV2(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	base, e := filepath.EvalSymlinks(t.TempDir())
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e = os.Chmod(base, 0700); e != nil {
-		t.Fatal(e)
-	}
+	base := providerProtectedScratchV2(t)
 	if e = os.Mkdir(filepath.Join(base, "control"), 0700); e != nil {
 		t.Fatal(e)
 	}
@@ -199,6 +202,64 @@ func TestProviderLaunchPaidBeginV2(t *testing.T) {
 	}
 	defer q.Close()
 	t.Log("ASSERT_PAID_LAUNCH_BEGIN PASS")
+}
+
+// This entrypoint exercises only scratch creation, descriptor admission and
+// cleanup. It neither constructs a provider fixture nor starts an OS child.
+func TestProviderProtectedScratchV2(t *testing.T) {
+	var dir string
+	t.Run("admitted", func(t *testing.T) {
+		dir = providerProtectedScratchV2(t)
+		home, e := os.UserHomeDir()
+		if e != nil {
+			t.Fatal(e)
+		}
+		home, e = filepath.EvalSymlinks(home)
+		if e != nil || filepath.Dir(dir) != home {
+			t.Fatal("ASSERT_SCRATCH_HOME", e)
+		}
+		var scratch [4096]byte
+		f, info, e := openProtectedLocalDirectoryV1(dir, &scratch, nil)
+		if e != nil {
+			t.Fatal("ASSERT_SCRATCH_ADMITTED", e)
+		}
+		defer f.Close()
+		if !protectedLocalDirectoryInfoV1(info, true) {
+			t.Fatal("ASSERT_SCRATCH_PRIVATE_MODE")
+		}
+		t.Log("ASSERT_SCRATCH_HOME PASS; ASSERT_SCRATCH_ADMITTED PASS; ASSERT_SCRATCH_PRIVATE_MODE PASS")
+	})
+	if dir == "" {
+		t.Fatal("ASSERT_SCRATCH_CREATED")
+	}
+	if _, e := os.Lstat(dir); !os.IsNotExist(e) {
+		t.Fatal("ASSERT_SCRATCH_CLEANUP", e)
+	}
+	t.Log("ASSERT_SCRATCH_CLEANUP PASS")
+
+	ancestor := providerProtectedScratchV2(t)
+	base := filepath.Join(ancestor, "metadata")
+	if e := os.Mkdir(base, 0700); e != nil {
+		t.Fatal(e)
+	}
+	// Mutate only this test's ancestor, never HOME or a shared temp parent.
+	if e := os.Chmod(ancestor, 0777); e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		if e := os.Chmod(ancestor, 0700); e != nil {
+			t.Error(e)
+		}
+	})
+	var scratch [4096]byte
+	f, _, e := openProtectedLocalDirectoryV1(base, &scratch, nil)
+	if f != nil {
+		_ = f.Close()
+	}
+	if e == nil || f != nil {
+		t.Fatal("ASSERT_SCRATCH_WRITABLE_ANCESTOR_REFUSED")
+	}
+	t.Log("ASSERT_SCRATCH_WRITABLE_ANCESTOR_REFUSED PASS")
 }
 
 func TestFixedProviderControlQuoteV2(t *testing.T) {
