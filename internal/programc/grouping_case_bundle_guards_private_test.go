@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	pc "lsp-trace/internal/programc"
 	rg "lsp-trace/internal/referencegrouping"
@@ -150,27 +151,72 @@ func TestGroupingCaseBundlePrivateCanonicalAndBounds(t *testing.T) {
 }
 func TestGroupingCaseBundlePrivateResealedPredecessorActuallyReplayed(t *testing.T) {
 	r, _ := bundleRequest(t, 7, "U")
-	s := &r.Slots[0]
-	// Preserve predecessor byte length and update the canonical input commitment.
-	// Hash-only verification would now accept this corrupted evidence; replay must
-	// still parse the supplied predecessor and refuse it. No fake Q/source is used.
-	for i := range s.Predecessors {
-		p := &s.Predecessors[i]
-		if p.Role != "RETAINED_COMPOSITE" {
-			continue
+	original := bundleRaw(t, r)
+	t.Run("valid", func(t *testing.T) {
+		b, e := pc.NewGroupingCaseBundlePrivate(r)
+		if e != nil || len(b.CanonicalBytes()) == 0 {
+			t.Fatalf("ASSERT_UNMODIFIED_PREDECESSOR_ACCEPTED: %v", e)
 		}
-		old := bundleExpectation(p.Bytes).Digest
-		p.Bytes[0] = '!'
-		newID := bundleExpectation(p.Bytes).Digest
-		s.InputBytes = bytes.Replace(s.InputBytes, []byte(old), []byte(newID), 1)
+		t.Log("ASSERT_UNMODIFIED_PREDECESSOR_ACCEPTED: PASS")
+	})
+
+	for _, reseal := range []bool{false, true} {
+		name := "unsealed"
+		if reseal {
+			name = "resealed"
+		}
+		t.Run(name, func(t *testing.T) {
+			x := cloneBundleRequest(t, r)
+			s := &x.Slots[0]
+			target, count := -1, 0
+			for i, p := range s.Predecessors {
+				if p.Role == "RETAINED_COMPOSITE" {
+					target, count = i, count+1
+				}
+			}
+			if count != 1 {
+				t.Fatalf("BLOCKED_NOT_REPLAY: retained composite count = %d", count)
+			}
+			p := &s.Predecessors[target]
+			if len(p.Bytes) == 0 || p.Bytes[0] == '!' {
+				t.Fatal("BLOCKED_NOT_REPLAY: missing valid composite first byte")
+			}
+			old := bundleExpectation(p.Bytes).Digest
+			compositeLength, inputLength := len(p.Bytes), len(s.InputBytes)
+			// Corrupt only detached evidence. Resealing admits the hash, not the
+			// JSON: replay must still reject the malformed first byte.
+			p.Bytes[0] = '!'
+			newID := bundleExpectation(p.Bytes).Digest
+			if old == newID || bytes.Count(s.InputBytes, []byte(old)) != 1 || bytes.Count(s.InputBytes, []byte(newID)) != 0 {
+				t.Fatal("BLOCKED_NOT_REPLAY: expected one distinct commitment target")
+			}
+			if reseal {
+				s.InputBytes = bytes.Replace(s.InputBytes, []byte(old), []byte(newID), 1)
+				if bytes.Count(s.InputBytes, []byte(old)) != 0 || bytes.Count(s.InputBytes, []byte(newID)) != 1 {
+					t.Fatal("BLOCKED_NOT_REPLAY: expected one commitment replacement")
+				}
+			}
+			if len(p.Bytes) != compositeLength || len(s.InputBytes) != inputLength || !bytes.Equal(bundleRaw(t, r), original) {
+				t.Fatal("BLOCKED_NOT_REPLAY: mutation changed length or original request")
+			}
+			if _, e := rg.ParseInput(s.InputBytes, rg.ParseLimits{MaxRawBytes: 1 << 20, MaxArtifacts: 16, MaxNodes: 8192, MaxOccurrences: 4096, MaxContributions: 4096, MaxCanonicalBytes: 1 << 20, MaxStringBytes: 4096}); e != nil {
+				t.Fatal("BLOCKED_NOT_REPLAY: canonical input prerequisite", e)
+			}
+			b, e := pc.NewGroupingCaseBundlePrivate(x)
+			var syntaxError *json.SyntaxError
+			if !reseal {
+				if e == nil || e.Error() != "predecessor digest mismatch" || errors.As(e, &syntaxError) || len(b.CanonicalBytes()) != 0 {
+					t.Fatalf("ASSERT_UNSEALED_PREDECESSOR_DIGEST_REFUSED: %v; canonical bytes = %d", e, len(b.CanonicalBytes()))
+				}
+				t.Log("ASSERT_UNSEALED_PREDECESSOR_DIGEST_REFUSED: PASS")
+				return
+			}
+			if !errors.As(e, &syntaxError) || syntaxError.Offset != 1 || len(b.CanonicalBytes()) != 0 {
+				t.Fatalf("ASSERT_RESEALED_PREDECESSOR_REPLAY_REFUSED: %v; syntax = %+v; canonical bytes = %d", e, syntaxError, len(b.CanonicalBytes()))
+			}
+			t.Log("ASSERT_RESEALED_PREDECESSOR_REPLAY_REFUSED: PASS")
+		})
 	}
-	if _, e := rg.ParseInput(s.InputBytes, rg.ParseLimits{MaxRawBytes: 1 << 20, MaxArtifacts: 16, MaxNodes: 8192, MaxOccurrences: 4096, MaxContributions: 4096, MaxCanonicalBytes: 1 << 20, MaxStringBytes: 4096}); e != nil {
-		t.Fatal("BLOCKED_NOT_REPLAY: canonical input prerequisite", e)
-	}
-	if _, e := pc.NewGroupingCaseBundlePrivate(r); e == nil || e.Error() != "invalid retained composite" {
-		t.Fatalf("ASSERT_RESEALED_PREDECESSOR_REPLAY_REFUSED: %v", e)
-	}
-	t.Log("ASSERT_RESEALED_PREDECESSOR_REPLAY_REFUSED: PASS")
 }
 func TestGroupingCaseBundlePrivateScheduleReportAndDetachedBytes(t *testing.T) {
 	r, _ := bundleRequest(t, 7, "L")
