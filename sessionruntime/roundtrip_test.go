@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"lsp-trace/internal/lspwire"
@@ -65,6 +66,7 @@ type roundTripObservation struct {
 	beforeAppend func(int, lspwire.Message)
 	changed      chan struct{}
 	done         chan struct{}
+	writeEntered chan struct{} // opt-in signal immediately before the underlying pipe write
 	attempts     int
 	bytes        int
 }
@@ -76,7 +78,14 @@ func (w roundTripObservedWriter) Write(p []byte) (int, error) {
 	c.mu.Lock()
 	c.observation.attempts++
 	c.observation.bytes += len(p) // attempted bytes, including blocked/failed writes
+	entered := c.observation.writeEntered
 	c.mu.Unlock()
+	if entered != nil {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+	}
 	return c.stdin.Write(p)
 }
 func (w roundTripObservedWriter) Close() error { return w.child.stdin.Close() }
@@ -111,10 +120,21 @@ func (c *roundTripChild) observedWrites() (attempts, bytes int) {
 }
 
 func newRoundTripChild(mode string) *roundTripChild {
+	return newRoundTripChildWithReadGate(mode, nil)
+}
+
+// The optional gate is installed before the receiver starts; existing fixtures
+// retain their immediate-read behavior.
+func newRoundTripChildWithReadGate(mode string, readGate <-chan struct{}) *roundTripChild {
 	input, stdin := io.Pipe()
 	stdout, output := io.Pipe()
 	c := &roundTripChild{input: input, stdin: stdin, output: output, stdout: stdout, mode: mode}
-	go c.serve()
+	go func() {
+		if readGate != nil {
+			<-readGate
+		}
+		c.serve()
+	}()
 	return c
 }
 func (c *roundTripChild) serve() {
@@ -369,8 +389,60 @@ func TestRoundTripMatchesWithinBoundsAndRetainsInterleaving(t *testing.T) {
 }
 
 func TestRoundTripRejectsNonReadyStaleAndConcurrentLifecycle(t *testing.T) {
-	child := newRoundTripChild("hang")
-	m, _ := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}})
+	synctest.Test(t, func(t *testing.T) { testRoundTripCancellationOrdering(t, false, false) })
+}
+
+func TestRoundTripCancellationBeforeRequestWriteCompletes(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) { testRoundTripCancellationOrdering(t, true, false) })
+}
+
+func TestRoundTripCancellationWaitsForReceiverAcknowledgment(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) { testRoundTripCancellationOrdering(t, false, true) })
+}
+
+func testRoundTripCancellationOrdering(t *testing.T, prewrite, holdAppend bool) {
+	t.Helper()
+	readGate, appendGate := make(chan struct{}), make(chan struct{})
+	var readOnce, appendOnce sync.Once
+	releaseRead := func() { readOnce.Do(func() { close(readGate) }) }
+	releaseAppend := func() { appendOnce.Do(func() { close(appendGate) }) }
+	child := newRoundTripChildWithReadGate("hang", readGate)
+	child.requestSeen = make(chan struct{}, 1)
+	child.observeWrites(func(ordinal int, _ lspwire.Message) {
+		if holdAppend && ordinal == 1 {
+			<-appendGate
+		}
+	})
+	entered := make(chan struct{}, 1)
+	child.observation.writeEntered = entered
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan RoundTripResult, 1)
+	started, joined := false, false
+	restoreHook := func() {}
+	defer func() {
+		cancel()
+		// Close first: early assertion failures must not accidentally complete a
+		// held request, nor strand either the writer or the receiver.
+		_ = child.stdin.Close()
+		_ = child.input.Close()
+		_ = child.output.Close()
+		_ = child.stdout.Close()
+		releaseAppend()
+		releaseRead()
+		if started && !joined {
+			<-done
+		}
+		<-child.observation.done
+		restoreHook()
+	}()
+	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	written := make(chan struct{})
+	previousHook := m.roundTripRequestWriteAccountedTestHook
+	m.roundTripRequestWriteAccountedTestHook = func() { close(written) }
+	restoreHook = func() { m.roundTripRequestWriteAccountedTestHook = previousHook }
 	s := m.Start(context.Background(), StartRequest{Profile: profile(t)})
 	if got := m.RoundTrip(context.Background(), RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "x"}); got.Failure != session.LifecycleConflict {
 		t.Fatalf("ASSERT_ROUNDTRIP_READY_ONLY: %+v", got)
@@ -379,14 +451,47 @@ func TestRoundTripRejectsNonReadyStaleAndConcurrentLifecycle(t *testing.T) {
 	if got := m.RoundTrip(context.Background(), RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation + 1, Method: "x"}); got.Failure != session.StaleGeneration {
 		t.Fatalf("ASSERT_ROUNDTRIP_EXACT_GENERATION: %+v", got)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan RoundTripResult, 1)
+	started = true
 	go func() {
 		done <- m.RoundTrip(ctx, RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "x", Deadline: time.Now().Add(time.Second), MaxMessages: 1, MaxBytes: 1024})
 	}()
-	deadline := time.Now().Add(time.Second)
-	for m.Census().Workers == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	synctest.Wait()
+	select {
+	case <-entered:
+	default:
+		t.Fatal("ASSERT_ROUNDTRIP_WRITE_ENTRY: writer never entered pipe write")
+	}
+	if m.Census().Workers != 1 {
+		t.Fatalf("ASSERT_ROUNDTRIP_ADMITTED_WORKER: %+v", m.Census())
+	}
+	if !prewrite {
+		releaseRead()
+		synctest.Wait()
+		select {
+		case <-written:
+		default:
+			t.Fatal("ASSERT_ROUNDTRIP_COMPLETED_REQUEST_WRITE: no successful sender completion")
+		}
+		if holdAppend {
+			select {
+			case <-child.requestSeen:
+				t.Fatal("ASSERT_ROUNDTRIP_RECEIVER_HELD: write completion substituted for recording")
+			default:
+			}
+			releaseAppend()
+			synctest.Wait()
+		}
+		select {
+		case <-child.requestSeen:
+		default:
+			t.Fatal("ASSERT_ROUNDTRIP_RECEIVER_ACK: no recorded request")
+		}
+	} else {
+		select {
+		case <-written:
+			t.Fatal("ASSERT_ROUNDTRIP_PREWRITE_BLOCKED: request completed without consumption")
+		default:
+		}
 	}
 	if second := m.RoundTrip(context.Background(), RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "y"}); second.Failure != session.LifecycleConflict {
 		t.Fatalf("ASSERT_ROUNDTRIP_EXCLUSIVE_REJECT: %+v", second)
@@ -395,20 +500,41 @@ func TestRoundTripRejectsNonReadyStaleAndConcurrentLifecycle(t *testing.T) {
 		t.Fatalf("ASSERT_ROUNDTRIP_LIFECYCLE_CONFLICT: %+v", stop)
 	}
 	cancel()
-	got := <-done
+	synctest.Wait()
+	var got RoundTripResult
+	select {
+	case got = <-done:
+		joined = true
+	default:
+		t.Fatal("ASSERT_ROUNDTRIP_CANCEL_JOIN: cancellation stranded the request")
+	}
 	if got.Failure != session.RequestCancelled {
 		t.Fatalf("ASSERT_ROUNDTRIP_CANCEL_TERMINAL: %+v", got)
 	}
-	requests, teardowns := child.waitForCancels(1)
+	// Prewrite cancellation joins before consumption is released. A postwrite
+	// cancel is verified from decoded frames, never from the cancel counter.
+	releaseRead()
+	synctest.Wait()
+	requests, teardowns := child.snapshot()
 	cancels := 0
 	for _, r := range requests {
 		if r.Method == "$/cancelRequest" {
 			cancels++
 		}
 	}
-	if cancels != 1 {
-		t.Fatalf("ASSERT_ROUNDTRIP_CANCEL_EXACTLY_ONCE: count=%d requests=%+v", cancels, requests)
+	wantCancels, wantRequests := 1, 2
+	if prewrite {
+		wantCancels, wantRequests = 0, 0
+		select {
+		case <-written:
+			t.Fatal("ASSERT_ROUNDTRIP_PREWRITE_COMPLETION: cancelled initial write was accounted")
+		default:
+		}
 	}
+	if cancels != wantCancels || len(requests) != wantRequests {
+		t.Fatalf("ASSERT_ROUNDTRIP_CANCEL_EXACTLY_ONCE: prewrite=%t count=%d requests=%+v", prewrite, cancels, requests)
+	}
+	t.Logf("cancellation witness: prewrite=%t heldAppend=%t recorded=%d cancels=%d joined=%t", prewrite, holdAppend, len(requests), cancels, joined)
 	if teardowns != 1 || m.Census().Workers != 0 || m.Census().Requests != 0 {
 		t.Fatalf("ASSERT_ROUNDTRIP_FAIL_CLOSED_RELEASE: teardown=%d census=%+v", teardowns, m.Census())
 	}
