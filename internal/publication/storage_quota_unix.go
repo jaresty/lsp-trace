@@ -124,14 +124,19 @@ func storageOpen(ctx context.Context, path string) (*storageReservationState, er
 	return s, nil
 }
 
-// Discovery is bounded and checks the caller's pinned root against its current
-// name. Configured writes deliberately refuse renamed/aliased namespace rather
-// than falling back to unaccounted descriptor-only writes.
+// Discovery checks canonical ancestry before legacy fallback. Stable ancestor
+// aliases share the configured ledger; configured writes require the current
+// names to match the pinned directory. Genuinely unconfigured roots retain the
+// legacy descriptor-only contract, including pathname replacement.
 func storageFind(root *Root) (string, error) {
 	if root == nil {
 		return "", ErrStorageIntegrity
 	}
-	if !root.storageExpected && !storageNamespaceExpected(root.path) {
+	p, e := filepath.EvalSymlinks(root.path)
+	if e != nil {
+		return "", errors.Join(ErrStorageIntegrity, e)
+	}
+	if !root.storageExpected && !storageNamespaceExpected(root.path) && !storageNamespaceExpected(p) {
 		return "", nil
 	}
 	if root.ValidatePrivate() != nil {
@@ -141,9 +146,9 @@ func storageFind(root *Root) (string, error) {
 	if e != nil || !os.SameFile(info, root.info) {
 		return "", ErrStorageIntegrity
 	}
-	p, e := filepath.EvalSymlinks(root.path)
-	if e != nil {
-		return "", e
+	canonicalInfo, e := os.Lstat(p)
+	if e != nil || !os.SameFile(canonicalInfo, root.info) {
+		return "", ErrStorageIntegrity
 	}
 	for n := 0; n < 128; n++ {
 		_, e = os.Lstat(filepath.Join(p, storageLedgerName))

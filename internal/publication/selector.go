@@ -81,7 +81,23 @@ func OpenRoot(path string) (*Root, error) {
 		}
 		return nil, errors.New("publication root identity changed")
 	}
-	return &Root{path: path, file: file, handle: handle, info: info, storageExpected: storageNamespaceExpected(path)}, nil
+	// Classify canonical ancestry while the path is still bound to the admitted
+	// directory identity. An ancestor alias must not hide a configured store;
+	// retain that expectation even if its marker subsequently disappears.
+	canonical, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		handle.Close()
+		file.Close()
+		return nil, errors.Join(ErrStorageIntegrity, err)
+	}
+	canonicalInfo, err := os.Lstat(canonical)
+	if err != nil || !os.SameFile(info, canonicalInfo) {
+		handle.Close()
+		file.Close()
+		return nil, errors.Join(ErrStorageIntegrity, err)
+	}
+	expected := storageNamespaceExpected(path) || storageNamespaceExpected(canonical)
+	return &Root{path: path, file: file, handle: handle, info: info, storageExpected: expected}, nil
 }
 
 func (r *Root) Close() error {
@@ -303,6 +319,16 @@ func targetLock(key string) *sync.Mutex {
 
 func failure(stage, code string, cleanup, renamed bool, cause error) Result {
 	return Result{Failure: &Failure{Stage: stage, Code: code, Cleanup: cleanup, AtomicRename: renamed, cause: cause}}
+}
+
+// A completion failure withholds success, but cannot undo an already-known
+// namespace install or erase the failure that preceded completion.
+func withStorageCompletion(result Result, err error) Result {
+	if err == nil {
+		return result
+	}
+	committed := result.Receipt != nil || result.Failure != nil && result.Failure.AtomicRename
+	return failure("storage", CodePublicationFailed, false, committed, errors.Join(result.Err(), err))
 }
 
 type target struct {
@@ -530,9 +556,7 @@ func (p *Publisher) Publish(req Request) (result Result) {
 		return failure("storage", CodePublicationFailed, true, false, err)
 	}
 	defer func() {
-		if e := quota.Complete(result.Receipt != nil && result.Failure == nil); e != nil {
-			result = failure("storage", CodePublicationFailed, false, result.Receipt != nil, e)
-		}
+		result = withStorageCompletion(result, quota.Complete(result.Receipt != nil && result.Failure == nil))
 	}()
 	tracePublication(req, "ENTER", "START", true)
 	target, err := safeTarget(req.Root, req.Selector)
