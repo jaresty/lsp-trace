@@ -5,9 +5,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,5 +106,61 @@ func TestCensusFolderAcquisitionPartitionBoundBeforeEffects(t *testing.T) {
 	if d.Operation != "start" || d.Action != "STOP" || d.Retry || d.Recovery != nil {
 		t.Fatal("ASSERT_FOLDER_PARTITION_BOUND: wrong refusal", diagnostics.String())
 	}
+	// Operation diagnostics intentionally hide raw causes. Keep the original
+	// assertions above, then observe the existing machine diagnostic on the same
+	// explicit compatibility route. Only the diagnostic writer changes here;
+	// resolution, preparation and every production acquisition guard remain live.
+	nativeCatalog := deps.runNativeCatalog
+	catalogCalls := 0
+	deps.runNativeCatalog = func(o censusCLIOptions, cfg censusCoreConfig, stdout, stderr io.Writer) int {
+		catalogCalls++
+		// The earlier depth guard shares the bound sentinel; exclude that cause.
+		if !o.FolderInvocation || o.DownDepth > 1 || o.UpDepth > 1 {
+			t.Fatal("ASSERT_FOLDER_PARTITION_REASON: wrong route or depth bound")
+		}
+		folder, ok := stderr.(censusFolderDiagnosticWriter)
+		if !ok {
+			t.Fatal("ASSERT_FOLDER_PARTITION_REASON: missing folder diagnostic writer")
+		}
+		operation, ok := folder.Writer.(censusOperationDiagnosticWriter)
+		if !ok {
+			t.Fatal("ASSERT_FOLDER_PARTITION_REASON: missing operation diagnostic writer")
+		}
+		folder.Writer = operation.Writer
+		o.Machine = true
+		return nativeCatalog(o, cfg, stdout, folder)
+	}
+	isPartitionBound := func(raw []byte) bool {
+		var diagnostic censusCLIDiagnostic
+		if err := json.Unmarshal(raw, &diagnostic); err != nil {
+			return false
+		}
+		return diagnostic.SchemaVersion == censusDiagnosticSchemaVersion &&
+			diagnostic.Status == "FAILED" && diagnostic.Stage == censusStageDiscovery &&
+			diagnostic.Code == censusCodeDiscoveryFailed &&
+			strings.SplitN(diagnostic.Detail, "\n", 2)[0] == errNativeCatalogBoundReached.Error()
+	}
+	out.Reset()
+	diagnostics.Reset()
+	code = runCensusWithDependencies([]string{workspace, "--server", "controlled", "--publication-root", store}, &out, &diagnostics, deps)
+	if code != 1 || starts != 0 || out.Len() != 0 || catalogCalls != 1 || !isPartitionBound(diagnostics.Bytes()) {
+		t.Fatalf("ASSERT_FOLDER_PARTITION_REASON: code=%d starts=%d catalog=%d out=%s diagnostic=%s", code, starts, catalogCalls, out.String(), diagnostics.String())
+	}
+	t.Logf("ASSERT_FOLDER_PARTITION_REASON: %s", diagnostics.String())
+
+	// An earlier configuration refusal must not masquerade as the partition
+	// bound. This control cannot reach acquisition: resolution fails first.
+	deps.resolveFolder = func(o censusCLIOptions) (censusCLIOptions, error) {
+		return o, errors.New("controlled earlier configuration refusal")
+	}
+	catalogCalls = 0
+	out.Reset()
+	diagnostics.Reset()
+	code = runCensusWithDependencies([]string{workspace, "--server", "controlled", "--publication-root", store}, &out, &diagnostics, deps)
+	control := checkOperationBytes(t, diagnostics.Bytes())
+	if code != 1 || starts != 0 || out.Len() != 0 || catalogCalls != 0 || control.Operation != "start" || string(control.Reason) != "CONFIG_UNCLASSIFIED" || isPartitionBound(diagnostics.Bytes()) {
+		t.Fatalf("ASSERT_FOLDER_PARTITION_REASON_CONTROL: code=%d starts=%d catalog=%d out=%s diagnostic=%s", code, starts, catalogCalls, out.String(), diagnostics.String())
+	}
+	t.Log("ASSERT_FOLDER_PARTITION_REASON_CONTROL: PASS earlier configuration refusal rejected")
 	t.Log("ASSERT_FOLDER_PARTITION_BOUND: PASS")
 }
