@@ -114,7 +114,12 @@ func executeRetainedMixedInputV1(ctx context.Context, op PrivateMixedInputOperat
 		return fail(nil)
 	}
 	s.mu.Unlock()
-	execution, cancel := context.WithDeadline(ctx, q.Start.Deadline)
+	// The reservation owns execution; the independent caller can cancel it but
+	// cannot replace its lifetime or renew the original acquisition deadline.
+	execution, cancel, err := preparedDescribeContextsV1(ctx, s.retainedContext, q.Start.Deadline)
+	if err != nil {
+		return fail(nil)
+	}
 	defer cancel()
 	o := s.owner
 	o.mu.Lock()
@@ -156,6 +161,11 @@ func executeRetainedMixedInputV1(ctx context.Context, op PrivateMixedInputOperat
 	if _, ok := out.sourceEvidence.EncodedBound(); !ok {
 		return fail(nil)
 	}
+	// AfterFunc propagation is asynchronous. Check the caller synchronously at
+	// the completion boundary as well as the reservation-derived execution.
+	if ctx.Err() != nil {
+		return fail(ctx.Err())
+	}
 	if e := operation.completeFixed(execution); e != nil {
 		return fail(e)
 	}
@@ -163,7 +173,7 @@ func executeRetainedMixedInputV1(ctx context.Context, op PrivateMixedInputOperat
 	readback, e := o.k.reopen(execution, o.job, o.limits)
 	valid = e == nil && readback.Identity == o.head && readback.Disposition == "OBSERVED" && readback.Attempt == s.attempt
 	o.mu.Unlock()
-	if !valid {
+	if !valid || execution.Err() != nil || ctx.Err() != nil {
 		return fail(e)
 	}
 	out.retainedCompletion = &privateRetainedCompletionV1{operation: operation.state, retained: r, source: out.sourceOriginal, input: out.sourceInputOriginal.ID(), head: readback.Identity}
