@@ -6,11 +6,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -154,6 +152,11 @@ func runPrivateHostProductV3(args []string, stdin io.Reader, stdout, stderr io.W
 	if len(args) == 0 {
 		return fail("INVALID_INVOCATION")
 	}
+	// Retire before arity/config admission, signal setup, claims, publication or
+	// process creation. Other operations retain their existing contracts.
+	if args[0] == "run" {
+		return fail("RETIRED_OPERATION_RUN: use ordinary census; historical V3 guarantees are not a drop-in contract")
+	}
 	if args[0] == "ready" {
 		if len(args) != 5 {
 			return fail("INVALID_READY")
@@ -290,48 +293,6 @@ func runPrivateHostProductV3(args []string, stdin io.Reader, stdout, stderr io.W
 		_ = hostProductMailboxV3(r).Terminal(report)
 		code := encodeHostProductV3(stdout, report)
 		if runErr != nil {
-			return 1
-		}
-		return code
-	case "run":
-		if r.RuntimeGrantSHA256 != hostProductRequestDigestV3(r) || setupHostProductV3(r) != nil || hostProductMailboxV3(r).CheckReady() != nil {
-			return fail("RUNTIME_ADMISSION_REFUSED")
-		}
-		if product.CheckOriginalFresh(r.Configuration) != nil {
-			return emitEarly("ORIGINAL_CLAIM_PREFLIGHT", "ORIGINAL_CLAIM_SPENT")
-		}
-		exe, e := os.Executable()
-		if e != nil {
-			return fail("EXECUTABLE_UNAVAILABLE")
-		}
-		child := exec.CommandContext(ctx, exe, "private-host-v3", "acquire", requestPath)
-		// Provider stdout/stderr are not echoed. Source/error/environment bytes never
-		// become terminal diagnostics. The original producer dies before admission.
-		if e = child.Run(); e != nil {
-			return emitEarly("ORIGINAL_PROCESS", "FAILED_OR_CANCELLED")
-		}
-		t, e := product.ReadTransfer(filepath.Join(r.AuxiliaryRoot, "transfer.json"))
-		if e != nil {
-			return fail("TRANSFER_REFUSED")
-		}
-		if validateHostProductTransferV3(r, t) != nil {
-			return emitEarly("TRANSFER_METADATA_PINS", "TRANSFER_PIN_REFUSED")
-		}
-		bootstrap := r.BootstrapAllowance
-		owner, close, e := product.OpenTransfer(ctx, t, &bootstrap, r.Configuration.Exchange)
-		if e != nil {
-			return emitEarly("VALIDATED_LEDGER_AND_SOURCE", "RETAINED_ADMISSION_REFUSED")
-		}
-		backend := hostProductMailboxV3(r)
-		backend.Observation = t.Cleanup
-		backend.Observation.OuterOriginalProcessWaited = true
-		report, runErr := product.RunRetained(ctx, r.Configuration, owner, backend)
-		closeErr := close()
-		// Inner managed provider cleanup happened in acquire; this outer process wait
-		// is a separate observation and does not substitute for it.
-		_ = hostProductMailboxV3(r).Terminal(report)
-		code := encodeHostProductV3(stdout, report)
-		if errors.Join(runErr, closeErr) != nil {
 			return 1
 		}
 		return code

@@ -13,13 +13,13 @@ import (
 	product "lsp-trace/internal/privatehostproductv3"
 )
 
-func TestHostProductCLIHostCancelNoOriginalReplay(t *testing.T) {
+func TestHostProductRetainedCoreCancelNoOriginalReplay(t *testing.T) {
 	r, path, base := hostProductCLIRequestFixture(t)
 	tool := filepath.Join(base, "lsp-trace")
 	if raw, e := exec.Command("go", "build", "-o", tool, ".").CombinedOutput(); e != nil {
 		t.Fatalf("build %s %v", raw, e)
 	}
-	first, e := runHostProductFixtureCommand(t, tool, "run", path, r, 3)
+	first, e := runHostProductFixtureCommand(t, tool, "retained-core", path, r, 3)
 	if e == nil || first.Status != "CANCELLED" || first.Completed != 1 || first.Pending != 19 || first.Spend.Calls != 3 {
 		t.Fatalf("ASSERT_HOST_CANCEL_RETAINS_PRIOR: %+v %v", first, e)
 	}
@@ -37,7 +37,7 @@ func TestHostProductCLIHostCancelNoOriginalReplay(t *testing.T) {
 	if e = os.Remove(filepath.Join(options.Workspace, "owned.go")); e != nil {
 		t.Fatal(e)
 	}
-	cmd := exec.Command(tool, "private-host-v3", "run", path)
+	cmd := exec.Command(tool, "private-host-v3", "acquire", path)
 	var out, errout bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errout

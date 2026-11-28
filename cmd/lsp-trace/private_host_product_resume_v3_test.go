@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,7 +49,16 @@ func runHostProductFixtureCommand(t *testing.T, tool, operation, path string, r 
 					cancel()
 					return
 				}
+				if task.ConfigSHA256 != product.ConfigDigest(r.Configuration) || task.ScopeSHA256 != r.Configuration.ScopeSHA256 || task.Application != r.Configuration.Application || task.Revision != 1 {
+					t.Error("ASSERT_TASK_SOURCE_CONFIG_REVISION_PINS")
+					cancel()
+					return
+				}
 				if len(cancelAt) > 0 && task.Sequence == cancelAt[0] {
+					if operation == "retained-core" {
+						cancel()
+						return
+					}
 					<-started
 					if cmd.Process != nil {
 						cmd.Process.Signal(syscall.SIGTERM)
@@ -65,6 +75,42 @@ func runHostProductFixtureCommand(t *testing.T, tool, operation, path string, r 
 				after = task.Sequence
 			}
 		}(role)
+	}
+	if operation == "retained-core" {
+		// Hosted fixture only: exercise supported acquisition and retained APIs
+		// directly, not a replacement production orchestration command.
+		acquire := exec.CommandContext(ctx, tool, "private-host-v3", "acquire", path)
+		acquire.Env = append(os.Environ(), "LSP_HOST_PRODUCT_OWNED_SERVER=1")
+		if raw, e := acquire.CombinedOutput(); e != nil {
+			cancel()
+			services.Wait()
+			t.Fatalf("retained-core acquisition: %v %s", e, raw)
+		}
+		transfer, e := product.ReadTransfer(filepath.Join(r.AuxiliaryRoot, "transfer.json"))
+		if e == nil {
+			e = validateHostProductTransferV3(r, transfer)
+		}
+		if e != nil {
+			cancel()
+			services.Wait()
+			t.Fatal("retained-core transfer admission", e)
+		}
+		bootstrap := r.BootstrapAllowance
+		owner, closeOwner, e := product.OpenTransfer(ctx, transfer, &bootstrap, r.Configuration.Exchange)
+		if e != nil {
+			cancel()
+			services.Wait()
+			t.Fatal("retained-core owner admission", e)
+		}
+		backend := hostProductMailboxV3(r)
+		backend.Observation = transfer.Cleanup
+		// Observed above: acquire.CombinedOutput returned after waiting.
+		backend.Observation.OuterOriginalProcessWaited = true
+		report, runErr := product.RunRetained(ctx, r.Configuration, owner, backend)
+		closeErr := closeOwner()
+		cancel()
+		services.Wait()
+		return report, errors.Join(runErr, closeErr)
 	}
 	cmd = exec.CommandContext(ctx, tool, "private-host-v3", operation, path)
 	cmd.Env = append(os.Environ(), "LSP_HOST_PRODUCT_OWNED_SERVER=1")
@@ -85,7 +131,7 @@ func runHostProductFixtureCommand(t *testing.T, tool, operation, path string, r 
 	}
 	return report, e
 }
-func TestHostProductCLIActualBudgetPauseResume(t *testing.T) {
+func TestHostProductRetainedCoreBudgetPauseCLIResume(t *testing.T) {
 	r, path, base := hostProductCLIRequestFixture(t)
 	r.Configuration.MaxCalls = 2
 	r.Configuration.ApprovalSHA256 = product.ConfigDigest(r.Configuration)
@@ -96,7 +142,7 @@ func TestHostProductCLIActualBudgetPauseResume(t *testing.T) {
 	if raw, e := exec.Command("go", "build", "-o", tool, ".").CombinedOutput(); e != nil {
 		t.Fatalf("build %s %v", raw, e)
 	}
-	first, e := runHostProductFixtureCommand(t, tool, "run", path, r)
+	first, e := runHostProductFixtureCommand(t, tool, "retained-core", path, r)
 	if e == nil || first.Status != "PAUSED_BUDGET" || first.Completed != 1 || first.Pending != 19 || first.Spend.Calls != 2 {
 		t.Fatalf("ASSERT_ACTUAL_CLI_PAUSE: %+v %v", first, e)
 	}

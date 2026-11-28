@@ -15,7 +15,7 @@ import (
 	product "lsp-trace/internal/privatehostproductv3"
 )
 
-// None_Model; actual CLI pause, changed pinned source, explicit new allowance.
+// None_Model; direct retained-core pause, actual CLI resume admission, new allowance.
 func TestHostProductCLIResumeAdmissionFailureQualified(t *testing.T) {
 	for _, mode := range []string{"source", "corrupt_ledger", "stale_tip", "bootstrap", "transfer", "runtime_grant"} {
 		t.Run(mode, func(t *testing.T) { hostProductResumeRefusalFixture(t, mode) })
@@ -41,7 +41,7 @@ func hostProductResumeRefusalFixture(t *testing.T, mode string) {
 	if raw, e := exec.Command("go", "build", "-o", tool, ".").CombinedOutput(); e != nil {
 		t.Fatalf("build: %s %v", raw, e)
 	}
-	first, e := runHostProductFixtureCommand(t, tool, "run", path, r)
+	first, e := runHostProductFixtureCommand(t, tool, "retained-core", path, r)
 	if e == nil || first.Status != "PAUSED_BUDGET" || first.Completed != 1 {
 		t.Fatalf("pause prerequisite: %+v %v", first, e)
 	}
