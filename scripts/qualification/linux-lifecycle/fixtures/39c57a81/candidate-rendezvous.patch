@@ -1,0 +1,115 @@
+--- a/internal/managedprocess/process_linux_supervision_test.go
++++ b/internal/managedprocess/process_linux_supervision_test.go
+@@ -433,50 +433,102 @@
+ }
+ 
+ func TestOwnedLinuxFinalSignalReturnFence(t *testing.T) {
++	// External qualification harness only. The negative branch MUST be paired
++	// with one of the manifest-bound broken pure lifecycle implementations.
++	const requireEarlyWaitWitness = false
++	deadline := time.Now().Add(time.Second)
++	if d, ok := t.Deadline(); ok && d.Before(deadline) {
++		deadline = d
++	}
++	await := func(done <-chan struct{}, what string) bool {
++		if channelClosed(done) {
++			return true
++		}
++		timer := time.NewTimer(time.Until(deadline))
++		defer timer.Stop()
++		select {
++		case <-done:
++			return true
++		case <-timer.C:
++			if channelClosed(done) {
++				return true
++			}
++			t.Errorf("CONTROL_RENDEZVOUS_UNAVAILABLE: %s", what)
++			return false
++		}
++	}
+ 	p := &Process{cmd: &exec.Cmd{}, done: make(chan struct{})}
+ 	entered, release, fenceDone, atGate := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
++	actualWaitEntered, abort := make(chan struct{}), make(chan struct{})
+ 	var releaseOnce sync.Once
+ 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+ 	var waits atomic.Int32
+-	s := &ownedLinux{p: p, pgid: 99, stop: make(chan struct{}), observed: make(chan struct{}), fenced: make(chan struct{}), observeExit: func(int) error { return nil }, waitChild: func() error { waits.Add(1); return syscall.ECHILD }, signal: func(_ int, sig syscall.Signal) error {
++	s := &ownedLinux{p: p, pgid: 99, stop: make(chan struct{}), observed: make(chan struct{}), fenced: make(chan struct{}), observeExit: func(int) error { return nil }, waitChild: func() error {
++		// Actual injected consuming-call ENTRY, not the earlier trace marker.
++		if waits.Add(1) == 1 {
++			close(actualWaitEntered)
++		}
++		return syscall.ECHILD
++	}, signal: func(_ int, sig syscall.Signal) error {
+ 		if sig != syscall.SIGKILL {
+ 			t.Error("unexpected pure signal")
+ 		}
+ 		close(entered)
+ 		<-release
+-		return nil // hold RETURN, not just entry
++		return nil
+ 	}}
+ 	trace := &ownedLinuxTrace{}
+ 	s.events.Store(&ownedLinuxEventSink{record: func(e ownedLinuxEvent) {
+-		trace.record(e)
++		trace.record(e) // releases trace.mu before the rendezvous below
+ 		if e == linuxWaitGateEntered {
+ 			close(atGate)
++			// Do not let either implementation reach its wait call until the
++			// final signal really entered and is held inside its injected call.
++			select {
++			case <-entered:
++			case <-abort:
++			}
+ 		}
+ 	}})
+ 	fenceStarted := false
+ 	defer func() {
+-		unblock()
++		close(abort) // release gate callback even if signal never entered
++		unblock()    // release signal BEFORE trying to acquire authority
+ 		s.fence(false)
+-		awaitOwnedLinuxTest(t, p.done, "pure reaper cleanup")
++		await(p.done, "pure reaper cleanup")
+ 		if fenceStarted {
+-			awaitOwnedLinuxTest(t, fenceDone, "pure fence cleanup")
++			await(fenceDone, "pure fence cleanup")
+ 		}
+ 	}()
+ 	go s.observeAndReap()
+-	if !awaitOwnedLinuxTest(t, atGate, "reaper reached wait gate") {
++	if !await(atGate, "reaper reached wait gate") {
+ 		t.FailNow()
+ 	}
+ 	fenceStarted = true
+ 	go func() { s.fence(true); close(fenceDone) }()
+-	if !awaitOwnedLinuxTest(t, entered, "final signal actually entered") {
++	if !await(entered, "final signal actually entered") {
+ 		t.FailNow()
+ 	}
+-	// Both contenders reached their exact seams; no sleep or scheduler guess.
++	if requireEarlyWaitWitness {
++		// Only the broken branch can reach this event while return is held.
++		// A missing event is UNAVAILABLE, never an intended negative result.
++		if !await(actualWaitEntered, "actual consuming wait entry while held") {
++			t.FailNow()
++		}
++		if waits.Load() != 1 || channelClosed(release) || trace.count(linuxFinalSignalReturned) != 0 {
++			t.Fatal("CONTROL_RENDEZVOUS_INVALID")
++		}
++		t.Log("CONTROL_ACTUAL_WAIT_ENTERED_WHILE_SIGNAL_HELD")
++	}
+ 	if waits.Load() != 0 || trace.count(linuxWaitEntered) != 0 || channelClosed(s.fenced) {
+ 		t.Error("ASSERT_LINUX_FINAL_RETURN_REQUIRED_WHILE_HELD")
+ 	}
+ 	unblock()
+-	if !awaitOwnedLinuxTest(t, fenceDone, "final signal/fence returned") || !awaitOwnedLinuxTest(t, p.done, "consuming wait returned") {
++	// Check BOTH joins, even if the first fails. Never orphan the second
++	// owned join behind short-circuit evaluation; cleanup also attempts both.
++	fenceJoined := await(fenceDone, "final signal/fence returned")
++	waitJoined := await(p.done, "consuming wait returned")
++	if !fenceJoined || !waitJoined {
+ 		t.FailNow()
+ 	}
+ 	trace.assertOrder(t)

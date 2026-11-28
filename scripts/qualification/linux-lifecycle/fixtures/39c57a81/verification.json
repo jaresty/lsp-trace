@@ -1,0 +1,107 @@
+{
+  "host": "darwin/arm64",
+  "toolchain": "go1.26.5",
+  "runtimeExecuted": false,
+  "records": [
+    {
+      "variant": "candidate-original",
+      "target": "linux/amd64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/candidate-original.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/candidate-original-amd64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.4
+    },
+    {
+      "variant": "candidate-original",
+      "target": "linux/arm64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/candidate-original.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/candidate-original-arm64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.3
+    },
+    {
+      "variant": "candidate-rendezvous",
+      "target": "linux/amd64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/candidate-rendezvous.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/candidate-rendezvous-amd64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.3
+    },
+    {
+      "variant": "candidate-rendezvous",
+      "target": "linux/arm64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/candidate-rendezvous.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/candidate-rendezvous-arm64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.3
+    },
+    {
+      "variant": "old-snapshot",
+      "target": "linux/amd64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/old-snapshot.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/old-snapshot-amd64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.1
+    },
+    {
+      "variant": "old-snapshot",
+      "target": "linux/arm64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/old-snapshot.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/old-snapshot-arm64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.1
+    },
+    {
+      "variant": "early-wait",
+      "target": "linux/amd64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/early-wait.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/early-wait-amd64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.2
+    },
+    {
+      "variant": "early-wait",
+      "target": "linux/arm64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/early-wait.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/early-wait-arm64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.2
+    },
+    {
+      "variant": "early-fence",
+      "target": "linux/amd64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/early-fence.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/early-fence-amd64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.2
+    },
+    {
+      "variant": "early-fence",
+      "target": "linux/arm64",
+      "kind": "compile-only",
+      "command": "cd /Users/schwa/dev/lsp-trace-variable-v2-TSZxdY && /tmp/lsp-linux-lifecycle-go.vAI9JG/run /usr/bin/env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 /opt/homebrew/bin/go test -overlay /tmp/lsp-linux-controls-39c57a81/early-fence.overlay.json -c -o /tmp/lsp-linux-controls-39c57a81/early-fence-arm64.test ./internal/managedprocess",
+      "output": "",
+      "truncated": false,
+      "exit_code": 0,
+      "wall_time_seconds": 0.2
+    }
+  ]
+}

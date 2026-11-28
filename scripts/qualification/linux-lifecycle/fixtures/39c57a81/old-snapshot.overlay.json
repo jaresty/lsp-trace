@@ -1,0 +1,5 @@
+{
+  "Replace": {
+    "/Users/schwa/dev/lsp-trace-variable-v2-TSZxdY/internal/managedprocess/supervision_linux.go": "/tmp/lsp-linux-controls-39c57a81/old-snapshot.go"
+  }
+}

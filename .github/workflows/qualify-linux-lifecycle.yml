@@ -1,0 +1,103 @@
+name: Linux lifecycle qualification (inactive pending pin review)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# This is NOT a FIFO. GitHub may replace a pending run with a newer pending run.
+# Never cancel an evidence-producing run or automatically retry/dispatch another.
+concurrency:
+  group: qualify-linux-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        mode: [normal, race]
+    env:
+      CANDIDATE_SHA: 39c57a81d067b8868710fc88eddafb6f13340e77
+      CONTROL_SHA: UNRESOLVED_REVIEWED_CONTROL_COMMIT
+      # Workflow identity is distinct from candidate/control identity. This value
+      # records execution; it cannot authenticate arbitrary branch workflow YAML.
+      EXECUTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      QUALIFICATION_MODE: ${{ matrix.mode }}
+      GOTELEMETRY: 'off'
+    steps:
+      # Earliest step: no checkout/setup-go/action or Go invocation precedes this.
+      - name: Start original budget and seed private Linux telemetry modes
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY'
+          import json, os, pathlib, time
+          started = time.monotonic()
+          q = pathlib.Path(os.environ['RUNNER_TEMP']) / 'linux-lifecycle'
+          q.mkdir(mode=0o700)
+          for name in ('home', 'xdg-config', 'xdg-cache', 'tmp', 'gopath', 'modcache', 'buildcache', 'evidence'):
+              (q / name).mkdir(mode=0o700)
+          for relative in ('xdg-config/go/telemetry/mode', 'home/.config/go/telemetry/mode'):
+              mode = q / relative
+              mode.parent.mkdir(mode=0o700, parents=True)
+              mode.write_bytes(b'off\n')
+              mode.chmod(0o600)
+              assert mode.read_bytes() == b'off\n' and mode.stat().st_mode & 0o777 == 0o600
+          (q / 'start.json').write_text(json.dumps({'monotonic': started, 'deadline': started + 480, 'upload_reserve_seconds': 120}) + '\n')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              for key, value in {'HOME': q/'home', 'XDG_CONFIG_HOME': q/'xdg-config', 'XDG_CACHE_HOME': q/'xdg-cache', 'TMPDIR': q/'tmp'}.items():
+                  assert '\n' not in str(value) and '\r' not in str(value)
+                  env.write(f'{key}={value}\n')
+          PY
+      - name: Fail closed - reviewed control and action pins unresolved
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, pathlib
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'linux-lifecycle/evidence'
+          (evidence / 'inactive.json').write_text(json.dumps({
+              'verdict': 'UNQUALIFIED', 'executed': False,
+              'reason': 'UNRESOLVED_CONTROL_PIN_AND_ACTION_PINS',
+              'candidate_sha': os.environ['CANDIDATE_SHA'],
+              'control_sha': None,
+              'workflow_sha': os.environ['EXECUTED_WORKFLOW_SHA'],
+              'mode': os.environ['QUALIFICATION_MODE'],
+              'upload_available': False
+          }, indent=2) + '\n')
+          raise SystemExit('Inactive: no checkout, setup-go, dependency acquisition, Go tests, or upload action is authorized by unresolved pins.')
+          PY
+
+# ACTIVATION GATE, not executable placeholders:
+# 1. Independently review/commit control runner+19-file bundle; no default push.
+# 2. Review immutable checkout/setup-go/upload-artifact action SHAs offline from
+#    trusted fetched evidence when separately permitted. No such SHAs are known.
+#    Inspect setup-go's actual earliest Go behavior/environment preservation and
+#    the pinned Go 1.26.5 telemetry source. Seal runner ACTION_REVIEW accordingly.
+# 3. In a subsequent reviewed workflow-only revision replace the failure step:
+#    - checkout literal reviewed CONTROL_SHA to control, persist-credentials false;
+#    - checkout literal CANDIDATE_SHA to candidate, persist-credentials false;
+#    - make candidate go.mod/go.sum and tracked internal/managedprocess files
+#      read-only, and remove write bits from candidate/internal/package directories;
+#    - setup-go exact 1.26.5, cache false, check-latest false, respecting seeded HOME;
+#    - bound preparation to the ORIGINAL start.json deadline (no renewed clocks);
+#    - PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover
+#      -s control/scripts/qualification/linux-lifecycle -p test_runner.py;
+#    - python3 control/scripts/qualification/linux-lifecycle/runner.py
+#      --mode "$QUALIFICATION_MODE" (env allow-list and offline tests in runner);
+#    - pinned upload-artifact, if always(), if-no-files-found error, ONLY
+#      $RUNNER_TEMP/linux-lifecycle/evidence, no HOME/cache/workspace-wide glob.
+#    Upload/setup/preparation must fit the 10-minute job, reserving final 120s.
+#    An upload/cancellation/job failure invalidates the aggregate claim.
+# 4. Install via normal reviewed default-branch merge: workflow_dispatch requires
+#    default-branch presence. Record workflow SHA separately in external review;
+#    self-checking YAML cannot authenticate itself. Explicit dispatch authorization
+#    and remaining hosted allowance must be confirmed; ceilings are not funding.
+# No PR/push/schedule/workflow_run trigger, inputs, secrets, new infrastructure,
+# ordinary CI edits, native mutant execution, or automatic cascade is present.

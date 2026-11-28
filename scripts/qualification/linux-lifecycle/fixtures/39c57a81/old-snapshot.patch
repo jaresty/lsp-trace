@@ -1,0 +1,20 @@
+--- a/internal/managedprocess/supervision_linux.go
++++ b/internal/managedprocess/supervision_linux.go
+@@ -399,7 +399,7 @@
+ 	// Acquire completion BEFORE reading results. A closed channel synchronizes
+ 	// with its publisher's final result writes. Any open channel makes THIS
+ 	// snapshot incomplete even if it closes while the results are being read.
+-	completion := s.completion()
++	completion := ownedLinuxCompletion{wait: channelClosed(s.p.done)}
+ 	d := DeathObservation{Kind: DeathUnknown, ExitCode: -1, Evidence: linuxOwnedEvidence, Reap: ReapObservation{Kind: ReapFailed, Err: errLinuxJoin, Evidence: linuxOwnedEvidence}}
+ 	if completion.wait {
+ 		d = s.p.death
+@@ -414,7 +414,7 @@
+ 	fault := s.fault
+ 	s.mu.Unlock()
+ 	fault = errors.Join(fault, s.pipeFailures())
+-	if !completion.all() {
++	if !s.joined() {
+ 		fault = errors.Join(fault, errLinuxJoin)
+ 	}
+ 	if d.Stderr.Truncated || d.StdoutDelivery.Err != nil || d.StderrDelivery.Err != nil {

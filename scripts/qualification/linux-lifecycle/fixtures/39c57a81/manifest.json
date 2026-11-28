@@ -1,0 +1,204 @@
+{
+  "head": "39c57a81d067b8868710fc88eddafb6f13340e77",
+  "repository": "/Users/schwa/dev/lsp-trace-variable-v2-TSZxdY",
+  "sources": [
+    {
+      "path": "internal/managedprocess/process.go",
+      "head_sha256": "2f6c15af994f1986e1de29a18f155d9ecf35a193835feea8186bb58e46554c13",
+      "current_sha256": "2f6c15af994f1986e1de29a18f155d9ecf35a193835feea8186bb58e46554c13",
+      "bytes": 16005,
+      "unchanged": true
+    },
+    {
+      "path": "internal/managedprocess/private_provider_window.go",
+      "head_sha256": "c99173a1e9d497792bccd1c81d05353fbb3bec2161b52b118a6f6c8280dfa4d3",
+      "current_sha256": "c99173a1e9d497792bccd1c81d05353fbb3bec2161b52b118a6f6c8280dfa4d3",
+      "bytes": 8791,
+      "unchanged": true
+    },
+    {
+      "path": "internal/managedprocess/supervision_linux.go",
+      "head_sha256": "fc6c96db10598968096bdcbc70c693ee74d8db10fa92d32ce3c099ae49f4352d",
+      "current_sha256": "fc6c96db10598968096bdcbc70c693ee74d8db10fa92d32ce3c099ae49f4352d",
+      "bytes": 17324,
+      "unchanged": true
+    },
+    {
+      "path": "internal/managedprocess/process_linux_supervision_test.go",
+      "head_sha256": "baa697699f5076106551c658039de6182e4acb0ad1f1d9f90169ade0d3cdd101",
+      "current_sha256": "baa697699f5076106551c658039de6182e4acb0ad1f1d9f90169ade0d3cdd101",
+      "bytes": 22623,
+      "unchanged": true
+    },
+    {
+      "path": "internal/managedprocess/supervision_linux_unsupported.go",
+      "head_sha256": "fc55bb1b4f0ca6dec503afc85472d1ab9b3eb02b88b756b22c2d6a724a46aff7",
+      "current_sha256": "fc55bb1b4f0ca6dec503afc85472d1ab9b3eb02b88b756b22c2d6a724a46aff7",
+      "bytes": 418,
+      "unchanged": true
+    }
+  ],
+  "tracked_changes": 0,
+  "index_changes": 0,
+  "excluded_capsules_by_name": 40,
+  "external_go_sources": 5,
+  "variants": [
+    {
+      "variant": "candidate-original",
+      "pair": {
+        "head": "39c57a81d067b8868710fc88eddafb6f13340e77",
+        "production_sha256": "fc6c96db10598968096bdcbc70c693ee74d8db10fa92d32ce3c099ae49f4352d",
+        "test_sha256": "baa697699f5076106551c658039de6182e4acb0ad1f1d9f90169ade0d3cdd101",
+        "selection": "^TestOwnedLinuxFinalSignalReturnFence$"
+      },
+      "pair_sha256": "3e7eb7f3c5481ebca27c76879b3c546afda744c06c2be5f08741f8f6202cd21e",
+      "overlay": "/tmp/lsp-linux-controls-39c57a81/candidate-original.overlay.json",
+      "overlay_sha256": "b3d17abb4df6e7981bbacf51ccb3040f509add6a7f642d3f8daa35a54c7c8484",
+      "patch": "/tmp/lsp-linux-controls-39c57a81/candidate-original.patch",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "changed_external_paths": [],
+      "expected": "PASS",
+      "required_negative_markers": [],
+      "execution": "NOT RUN; compile-only pending/recorded separately"
+    },
+    {
+      "variant": "candidate-rendezvous",
+      "pair": {
+        "head": "39c57a81d067b8868710fc88eddafb6f13340e77",
+        "production_sha256": "fc6c96db10598968096bdcbc70c693ee74d8db10fa92d32ce3c099ae49f4352d",
+        "test_sha256": "b4c012570f498b2f5638c5bc0bc3b041e14d3fa60e130ae4d425e6ef2ac5c4b3",
+        "selection": "^TestOwnedLinuxFinalSignalReturnFence$"
+      },
+      "pair_sha256": "f6667ade683387604c2682287a2eb727217a9c645ab13e64e2f9861e86aa3ff1",
+      "overlay": "/tmp/lsp-linux-controls-39c57a81/candidate-rendezvous.overlay.json",
+      "overlay_sha256": "d8520048389e3b0b8cd74dd87a6ae4fe6598e67957de405d19af49ed30b9bbca",
+      "patch": "/tmp/lsp-linux-controls-39c57a81/candidate-rendezvous.patch",
+      "patch_sha256": "5d5a8cba6d002c3cb25e4ca927ffece03638391c356b224901c31c0d4d86132a",
+      "changed_external_paths": [
+        {
+          "repository_path": "internal/managedprocess/process_linux_supervision_test.go",
+          "external_path": "/tmp/lsp-linux-controls-39c57a81/positive_test.go",
+          "baseline_sha256": "baa697699f5076106551c658039de6182e4acb0ad1f1d9f90169ade0d3cdd101",
+          "controlled_sha256": "b4c012570f498b2f5638c5bc0bc3b041e14d3fa60e130ae4d425e6ef2ac5c4b3",
+          "bytes": 24301
+        }
+      ],
+      "expected": "PASS",
+      "required_negative_markers": [],
+      "execution": "NOT RUN; compile-only pending/recorded separately"
+    },
+    {
+      "variant": "old-snapshot",
+      "pair": {
+        "head": "39c57a81d067b8868710fc88eddafb6f13340e77",
+        "production_sha256": "fcdef82a8d2b4daaf429f976342b61b7a59df4ec827e312dacb52b4d0046ff5b",
+        "test_sha256": "baa697699f5076106551c658039de6182e4acb0ad1f1d9f90169ade0d3cdd101",
+        "selection": "^TestOwnedLinuxSnapshotCompletionCoherent$"
+      },
+      "pair_sha256": "5fda26865782773b7d0a4a9c01cac408a9444be28df3b90b014828b8dea5110b",
+      "overlay": "/tmp/lsp-linux-controls-39c57a81/old-snapshot.overlay.json",
+      "overlay_sha256": "c475c53602ff60df0630151e557fbdb8c853ca5b472bb7b870cf195ec353c892",
+      "patch": "/tmp/lsp-linux-controls-39c57a81/old-snapshot.patch",
+      "patch_sha256": "4562a9e5fa1e25b596b18af5a3725a63810e7b5b0747ff59d9e8d8ea9016cdde",
+      "changed_external_paths": [
+        {
+          "repository_path": "internal/managedprocess/supervision_linux.go",
+          "external_path": "/tmp/lsp-linux-controls-39c57a81/old-snapshot.go",
+          "baseline_sha256": "fc6c96db10598968096bdcbc70c693ee74d8db10fa92d32ce3c099ae49f4352d",
+          "controlled_sha256": "fcdef82a8d2b4daaf429f976342b61b7a59df4ec827e312dacb52b4d0046ff5b",
+          "bytes": 17355
+        }
+      ],
+      "expected": "FAIL at named assertions; not timeout/panic/race",
+      "required_negative_markers": [
+        "ASSERT_LINUX_SNAPSHOT_COMPLETION_COHERENT"
+      ],
+      "execution": "NOT RUN; compile-only pending/recorded separately"
+    },
+    {
+      "variant": "early-wait",
+      "pair": {
+        "head": "39c57a81d067b8868710fc88eddafb6f13340e77",
+        "production_sha256": "1b1dc93510dae016f8b7579804ed9d611b1f394b622c50e2f40d28325339a894",
+        "test_sha256": "dcff566a3362a6f4afce9a4579b2f22a37b1c170c02d7b5ef6838dc4be1c36a5",
+        "selection": "^TestOwnedLinuxFinalSignalReturnFence$"
+      },
+      "pair_sha256": "6c66c85406bdbd911e0c4ec40d9a04cb1253e1ea2ba0b70c8bb1db9da2156637",
+      "overlay": "/tmp/lsp-linux-controls-39c57a81/early-wait.overlay.json",
+      "overlay_sha256": "cca5f5adee0150cd77c656e52408d10dc69a78aae98d5dab1048c7982b8cc0b3",
+      "patch": "/tmp/lsp-linux-controls-39c57a81/early-wait.patch",
+      "patch_sha256": "244d19bc38db4391ea6bb8dc5093b696556a22f8f91d9f01817d77d702e90331",
+      "changed_external_paths": [
+        {
+          "repository_path": "internal/managedprocess/supervision_linux.go",
+          "external_path": "/tmp/lsp-linux-controls-39c57a81/early-wait.go",
+          "baseline_sha256": "fc6c96db10598968096bdcbc70c693ee74d8db10fa92d32ce3c099ae49f4352d",
+          "controlled_sha256": "1b1dc93510dae016f8b7579804ed9d611b1f394b622c50e2f40d28325339a894",
+          "bytes": 17324
+        },
+        {
+          "repository_path": "internal/managedprocess/process_linux_supervision_test.go",
+          "external_path": "/tmp/lsp-linux-controls-39c57a81/negative_test.go",
+          "baseline_sha256": "baa697699f5076106551c658039de6182e4acb0ad1f1d9f90169ade0d3cdd101",
+          "controlled_sha256": "dcff566a3362a6f4afce9a4579b2f22a37b1c170c02d7b5ef6838dc4be1c36a5",
+          "bytes": 24300
+        }
+      ],
+      "expected": "FAIL at named assertions; not timeout/panic/race",
+      "required_negative_markers": [
+        "CONTROL_ACTUAL_WAIT_ENTERED_WHILE_SIGNAL_HELD",
+        "ASSERT_LINUX_FINAL_RETURN_REQUIRED_WHILE_HELD",
+        "ASSERT_LINUX_FINAL_RETURN_FENCE_WAIT_ORDER",
+        "LINUX_ORDERED_EVENTS="
+      ],
+      "execution": "NOT RUN; compile-only pending/recorded separately"
+    },
+    {
+      "variant": "early-fence",
+      "pair": {
+        "head": "39c57a81d067b8868710fc88eddafb6f13340e77",
+        "production_sha256": "26d7f243de78447ed1b37db8a2975236119e5c711722d5c3dfee6df6eca2e686",
+        "test_sha256": "dcff566a3362a6f4afce9a4579b2f22a37b1c170c02d7b5ef6838dc4be1c36a5",
+        "selection": "^TestOwnedLinuxFinalSignalReturnFence$"
+      },
+      "pair_sha256": "61aad9bc94e7268aecff06d501b35eeb0b4d899c49f345ed647484b305f1f422",
+      "overlay": "/tmp/lsp-linux-controls-39c57a81/early-fence.overlay.json",
+      "overlay_sha256": "487e1d2ad858f25b952eafbd41d948e6e2df58b4aa1b80eb7215810524d13edf",
+      "patch": "/tmp/lsp-linux-controls-39c57a81/early-fence.patch",
+      "patch_sha256": "0c2d7cfe678c9081e0df642228fdac797c1b71be649140fae31fad9a96696694",
+      "changed_external_paths": [
+        {
+          "repository_path": "internal/managedprocess/supervision_linux.go",
+          "external_path": "/tmp/lsp-linux-controls-39c57a81/early-fence.go",
+          "baseline_sha256": "fc6c96db10598968096bdcbc70c693ee74d8db10fa92d32ce3c099ae49f4352d",
+          "controlled_sha256": "26d7f243de78447ed1b37db8a2975236119e5c711722d5c3dfee6df6eca2e686",
+          "bytes": 17323
+        },
+        {
+          "repository_path": "internal/managedprocess/process_linux_supervision_test.go",
+          "external_path": "/tmp/lsp-linux-controls-39c57a81/negative_test.go",
+          "baseline_sha256": "baa697699f5076106551c658039de6182e4acb0ad1f1d9f90169ade0d3cdd101",
+          "controlled_sha256": "dcff566a3362a6f4afce9a4579b2f22a37b1c170c02d7b5ef6838dc4be1c36a5",
+          "bytes": 24300
+        }
+      ],
+      "expected": "FAIL at named assertions; not timeout/panic/race",
+      "required_negative_markers": [
+        "CONTROL_ACTUAL_WAIT_ENTERED_WHILE_SIGNAL_HELD",
+        "ASSERT_LINUX_FINAL_RETURN_REQUIRED_WHILE_HELD",
+        "ASSERT_LINUX_FINAL_RETURN_FENCE_WAIT_ORDER",
+        "LINUX_ORDERED_EVENTS="
+      ],
+      "execution": "NOT RUN; compile-only pending/recorded separately"
+    }
+  ],
+  "variant_count": 5,
+  "negative_control_count": 3,
+  "positive_variant_count": 2,
+  "linux_runtime_executions_this_phase": 0,
+  "new_workflow_edits": 0,
+  "funding_changes": 0,
+  "hosted_mapping": "Not provisioned. Remap BOTH overlay sides to exact verified absolute hosted candidate/control roots; preserve pair digests and exact pure selection. Negative test harness must NEVER be paired with good production or native selections.",
+  "successful_compile_count": 10,
+  "verification_sha256": "09cd958b563ea29773958d5e1922994ce9efd0999e52aa3435869e06a054023a"
+}

@@ -1,0 +1,6 @@
+{
+  "Replace": {
+    "/Users/schwa/dev/lsp-trace-variable-v2-TSZxdY/internal/managedprocess/supervision_linux.go": "/tmp/lsp-linux-controls-39c57a81/early-wait.go",
+    "/Users/schwa/dev/lsp-trace-variable-v2-TSZxdY/internal/managedprocess/process_linux_supervision_test.go": "/tmp/lsp-linux-controls-39c57a81/negative_test.go"
+  }
+}

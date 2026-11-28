@@ -1,0 +1,514 @@
+//go:build linux && (amd64 || arm64)
+
+package managedprocess
+
+import (
+	"context"
+	"errors"
+	"io"
+	"math"
+	"os"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
+
+	"golang.org/x/sys/unix"
+)
+
+const linuxOwnedEvidence = "UNADMITTED_LINUX_OWNED_GROUP_CANDIDATE"
+const linuxOwnedLimitations = "requires exclusive parent wait custody, no SIGCHLD autoreap, no interfering tracing/reparenting or parent replacement; process groups are not containment; no owner-death helper or production authority"
+
+var errLinuxJoin = errors.New("managedprocess: Linux lifecycle join incomplete")
+var errLinuxCustody = errors.New("managedprocess: Linux child wait custody uncertain")
+
+// This candidate assumes exclusive parent custody for the entire unreaped interval.
+// A disposition precheck cannot enforce that embedding contract against later
+// process-global mutation. No helper survives parent death to signal a stale PGID.
+// Lifecycle costs are NOT charged to fixedLinuxCensusQuote. One API call is not
+// one raw syscall: in particular Go Start/Wait may allocate pidfds or retry EINTR.
+type ownedLinuxEvent uint8
+
+const (
+	linuxObserverReturned ownedLinuxEvent = iota
+	linuxWaitGateEntered
+	linuxFinalSignalEntered
+	linuxFinalSignalReturned
+	linuxFencePublished
+	linuxWaitEntered
+	linuxWaitReturned
+)
+
+// Only closed package tests install a sink. Production constructors leave it nil.
+// A sink must not reenter this owner: signal/fence events run under authority.
+// Atomic publication lets a fixture install tracing before releasing its child.
+type ownedLinuxEventSink struct{ record func(ownedLinuxEvent) }
+
+type ownedLinux struct {
+	events                 atomic.Pointer[ownedLinuxEventSink]
+	p                      *Process
+	ctx                    context.Context
+	deadline               time.Time
+	engine                 *linuxCensusEngine // published before returning from start
+	pipes                  [6]*ownedLinuxPipe
+	stop                   chan struct{}
+	stopStarted            chan struct{} // publication/cancellation acknowledgement
+	observed               chan struct{}
+	fenced                 chan struct{}
+	stdoutDone, stderrDone chan struct{}
+	finished               chan struct{}
+	stopOnce               sync.Once
+	authority              sync.Mutex // held through signal eligibility, reservation AND return
+	closed                 bool
+	attempted              [2]bool
+	pgid                   int
+	firstStop, due         time.Time
+	signal                 func(int, syscall.Signal) error
+	observeExit            func(int) error
+	waitChild              func() error // sole consuming-wait call site; production cmd.Wait
+	mu                     sync.Mutex   // results only; NEVER held across external Write or native work
+	fault                  error
+	viewMu                 sync.Mutex // serializes phase/history, never the window mutex
+	history                [2]TeardownObservation
+	used                   [2]bool
+	closeOnce              sync.Once
+	resources              ResourceObservation
+}
+
+type ownedLinuxPipe struct {
+	file *os.File
+	once sync.Once
+	mu   sync.Mutex
+	err  error
+}
+
+func (f *ownedLinuxPipe) Read(b []byte) (int, error)  { return f.file.Read(b) }
+func (f *ownedLinuxPipe) Write(b []byte) (int, error) { return f.file.Write(b) }
+func (f *ownedLinuxPipe) Close() error {
+	f.once.Do(func() { err := f.file.Close(); f.mu.Lock(); f.err = err; f.mu.Unlock() })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.err
+}
+func (f *ownedLinuxPipe) failure() error { f.mu.Lock(); defer f.mu.Unlock(); return f.err }
+
+func startOwnedLinux(m *Manager, ctx context.Context, spec Spec, dst io.Writer) (*Process, StartObservation) {
+	fail := func(err error) (*Process, StartObservation) {
+		return nil, StartObservation{Kind: StartFailed, Reason: "Linux candidate start refused", Err: err, Evidence: linuxOwnedEvidence, Limitations: linuxOwnedLimitations}
+	}
+	b := privateProviderWindowFrom(ctx)
+	if ctx == nil || ctx.Err() != nil || b == nil || !b.valid(m) || !m.linuxCandidate {
+		return fail(ErrPrivateProviderWindow)
+	}
+	cmd, err := m.factory(ctx, spec)
+	if err != nil {
+		return fail(err)
+	}
+	// No inherited factory authority, namespace/ptrace flags, extra descriptors,
+	// prestarted commands, custom stdio or custom wait watcher can enter this path.
+	if cmd == nil || cmd.SysProcAttr != nil || cmd.Process != nil || cmd.ProcessState != nil || len(cmd.ExtraFiles) != 0 || cmd.Stdin != nil || cmd.Stdout != nil || cmd.Stderr != nil {
+		return fail(ErrPrivateProviderWindow)
+	}
+	cmd.Cancel = nil
+	cmd.WaitDelay = 0
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: 0}
+	p := &Process{cmd: cmd, stderr: &boundedBuffer{limit: m.options.StderrLimit}, gracePeriod: m.options.GracePeriod, done: make(chan struct{}), privateWindow: b, evidence: linuxOwnedEvidence}
+	s := &ownedLinux{p: p, ctx: ctx, deadline: b.deadline, stop: make(chan struct{}), stopStarted: make(chan struct{}), observed: make(chan struct{}), fenced: make(chan struct{}), stdoutDone: make(chan struct{}), stderrDone: make(chan struct{}), finished: make(chan struct{}), signal: syscall.Kill, observeExit: observeOwnedLinuxExit, waitChild: cmd.Wait}
+	p.linux = s
+	for i := 0; i < 6; i += 2 {
+		r, w, e := os.Pipe()
+		if e != nil {
+			s.closePipes()
+			return fail(errors.Join(e, s.pipeFailures()))
+		}
+		s.pipes[i], s.pipes[i+1] = &ownedLinuxPipe{file: r}, &ownedLinuxPipe{file: w}
+	}
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = s.pipes[0].file, s.pipes[3].file, s.pipes[5].file
+	p.stdin = s.pipes[1]
+	if dst == nil {
+		p.stdout = s.pipes[2]
+		close(s.stdoutDone)
+	} else {
+		p.stdoutDelivery = &deliveryWriter{writer: dst}
+	}
+	p.stderrDelivery = &deliveryWriter{writer: p.stderr}
+	if err = cmd.Start(); err != nil {
+		s.closePipes()
+		return fail(errors.Join(err, s.pipeFailures()))
+	}
+	// Only successful Start supplies this identity. Before publication there is
+	// no coordinator, no watcher and no signal path. Cancellation remains latched
+	// in ctx and is processed before binding; the child is not yet reaped.
+	s.pgid = cmd.Process.Pid
+	for _, i := range []int{0, 3, 5} {
+		_ = s.pipes[i].Close()
+	}
+	if s.pgid <= 1 || int64(s.pgid) > math.MaxInt32 {
+		s.addFault(errLinuxCustody)
+		s.fence(false)
+	}
+	if dst != nil {
+		go s.copyOutput(s.pipes[2], p.stdoutDelivery, s.stdoutDone, false)
+	}
+	go s.copyOutput(s.pipes[4], p.stderrDelivery, s.stderrDone, true)
+	go s.coordinate()
+	go s.observeAndReap()
+	if ctx.Err() != nil || !time.Now().Before(s.deadline) {
+		s.requestStop()
+		<-s.stopStarted // pending stop processed before binding work
+	}
+	s.engine, err = b.bindLinuxCensus(int32(s.pgid), nativeLinuxCensusAdapter{ownedPGID: int32(s.pgid)})
+	if err != nil {
+		s.addFault(err)
+		s.requestStop()
+		// Non-nil Process preserves ownership even on post-Start binding failure.
+		// The coordinator and sole reaper continue cleanup independent of the caller.
+		return p, StartObservation{Kind: StartFailed, Reason: "Linux candidate binding failed; cleanup owned", Err: err, Evidence: linuxOwnedEvidence, Limitations: linuxOwnedLimitations}
+	}
+	return p, StartObservation{Kind: StartStarted, Evidence: linuxOwnedEvidence, Limitations: linuxOwnedLimitations}
+}
+
+func observeOwnedLinuxExit(pid int) error {
+	var info unix.Siginfo
+	// One non-consuming attempt through the pinned architecture-specific wrapper.
+	err := unix.Waitid(unix.P_PID, pid, &info, unix.WEXITED|unix.WNOWAIT, nil)
+	if err != nil {
+		return err
+	}
+	// CLD_EXITED/KILLED/DUMPED are 1/2/3 on the admitted Linux ABIs. No opaque
+	// siginfo union is decoded: exact P_PID and no WNOHANG establish selection.
+	if info.Signo != int32(unix.SIGCHLD) || info.Errno != 0 || info.Code < 1 || info.Code > 3 {
+		return errLinuxCustody
+	}
+	return nil
+}
+func (s *ownedLinux) addFault(err error) {
+	if err != nil {
+		s.mu.Lock()
+		s.fault = errors.Join(s.fault, err)
+		s.mu.Unlock()
+	}
+}
+func (s *ownedLinux) emit(event ownedLinuxEvent) {
+	if sink := s.events.Load(); sink != nil {
+		sink.record(event)
+	}
+}
+func (s *ownedLinux) requestStop() { s.stopOnce.Do(func() { close(s.stop) }) }
+func (s *ownedLinux) observeAndReap() {
+	var err error
+	if s.pgid <= 1 || int64(s.pgid) > math.MaxInt32 {
+		err = errLinuxCustody
+	} else {
+		err = s.observeExit(s.pgid)
+	}
+	s.emit(linuxObserverReturned)
+	s.recordObservation(err)
+	close(s.observed)
+	s.requestStop()
+	s.emit(linuxWaitGateEntered)
+	<-s.fenced
+	// Sole consuming wait; it never depends on a pipe drainer or writer lock.
+	s.emit(linuxWaitEntered)
+	err = s.waitChild()
+	s.emit(linuxWaitReturned)
+	s.p.death = deathFromWait(s.p.cmd, err, StderrObservation{})
+	s.p.death.Evidence, s.p.death.Reap.Evidence = linuxOwnedEvidence, linuxOwnedEvidence
+	close(s.p.done)
+}
+func (s *ownedLinux) recordObservation(err error) {
+	if err != nil {
+		s.addFault(err)
+		// Only these bounded observation failures retain custody. Everything else
+		// (especially ECHILD or impossible siginfo) irreversibly forbids new signals.
+		if !errors.Is(err, syscall.EINTR) && !errors.Is(err, syscall.ENOSYS) && !errors.Is(err, syscall.EINVAL) {
+			s.fence(false)
+		}
+	}
+}
+func (s *ownedLinux) signalLocked(slot int) {
+	if s.closed || s.attempted[slot] {
+		return
+	}
+	if s.pgid <= 1 || int64(s.pgid) > math.MaxInt32 {
+		s.addFault(errLinuxCustody)
+		return
+	}
+	s.attempted[slot] = true
+	sig := syscall.SIGINT
+	if slot == 1 {
+		sig = syscall.SIGKILL
+		s.emit(linuxFinalSignalEntered)
+	}
+	s.addFault(s.signal(-s.pgid, sig))
+	if slot == 1 {
+		s.emit(linuxFinalSignalReturned)
+	}
+}
+func (s *ownedLinux) fence(kill bool) {
+	s.authority.Lock()
+	defer s.authority.Unlock()
+	if s.closed {
+		return
+	}
+	if kill {
+		s.signalLocked(1)
+	}
+	s.closed = true
+	// Record the irreversible state before releasing its gate, so a waking
+	// reaper cannot publish wait entry ahead of the closure marker.
+	s.emit(linuxFencePublished)
+	close(s.fenced) // final syscall has returned; no signal can pass eligibility now
+}
+func (s *ownedLinux) beginStop(now time.Time) time.Time {
+	s.authority.Lock()
+	defer s.authority.Unlock()
+	if s.firstStop.IsZero() {
+		s.firstStop = now
+		s.due = now.Add(s.p.gracePeriod)
+		if s.deadline.Before(s.due) {
+			s.due = s.deadline
+		}
+		s.signalLocked(0)
+		if s.stopStarted != nil {
+			close(s.stopStarted)
+		}
+	}
+	return s.due
+}
+func (s *ownedLinux) coordinate() {
+	defer close(s.finished)
+	timer := time.NewTimer(time.Until(s.deadline))
+	defer timer.Stop()
+	select {
+	case <-s.stop:
+	case <-s.ctx.Done():
+	case <-s.observed:
+	case <-s.fenced:
+	case <-timer.C:
+	}
+	due := s.beginStop(time.Now())
+	if !channelClosed(s.fenced) && time.Now().Before(due) {
+		timer.Stop()
+		timer.Reset(time.Until(due))
+		select {
+		case <-timer.C:
+		case <-s.fenced:
+		}
+	}
+	s.fence(true)
+	// One timer, at most two resets: stop due, then original delivery deadline.
+	// No callback is entrusted with signal authority. Late events cannot reopen it.
+	timer.Stop()
+	timer.Reset(time.Until(s.deadline))
+	wait, out, stderr := s.p.done, s.stdoutDone, s.stderrDone
+	for wait != nil || out != nil || stderr != nil {
+		select {
+		case <-wait:
+			wait = nil
+		case <-out:
+			out = nil
+		case <-stderr:
+			stderr = nil
+		case <-timer.C:
+			s.closePipes()
+			return // outstanding Wait/Write remains owned, never described as joined
+		}
+	}
+	s.closePipes()
+}
+func channelClosed(c <-chan struct{}) bool {
+	select {
+	case <-c:
+		return true
+	default:
+		return false
+	}
+}
+func (s *ownedLinux) copyOutput(src *ownedLinuxPipe, dst *deliveryWriter, done chan struct{}, bounded bool) {
+	defer close(done)
+	defer src.Close()
+	var err error
+	if bounded {
+		err = s.p.privateWindow.copyStderr(src, dst)
+	} else {
+		var scratch [PrivateProviderStderrScratch]byte
+		// Avoid io.Copy's optional ReaderFrom/WriterTo delegation and growing buffers.
+		for {
+			n, e := src.Read(scratch[:])
+			if n > 0 {
+				_, err = dst.Write(scratch[:n])
+				if err != nil {
+					break
+				}
+			}
+			if e != nil {
+				if e != io.EOF {
+					err = e
+				}
+				break
+			}
+		}
+	}
+	if err != nil {
+		dst.mu.Lock()
+		dst.err = errors.Join(dst.err, err)
+		dst.mu.Unlock()
+	}
+}
+func (s *ownedLinux) closePipes() {
+	for _, f := range s.pipes {
+		if f != nil {
+			_ = f.Close()
+		}
+	}
+}
+func (s *ownedLinux) pipeFailures() error {
+	var err error
+	for _, f := range s.pipes {
+		if f != nil {
+			err = errors.Join(err, f.failure())
+		}
+	}
+	return err
+}
+
+type ownedLinuxCompletion struct{ wait, stdout, stderr bool }
+
+func (c ownedLinuxCompletion) all() bool { return c.wait && c.stdout && c.stderr }
+func (s *ownedLinux) completion() ownedLinuxCompletion {
+	return ownedLinuxCompletion{channelClosed(s.p.done), channelClosed(s.stdoutDone), channelClosed(s.stderrDone)}
+}
+func (s *ownedLinux) joined() bool { return s.completion().all() }
+func (s *ownedLinux) await(ctx context.Context) bool {
+	if channelClosed(s.finished) {
+		return true
+	}
+	select {
+	case <-s.finished:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+func (s *ownedLinux) snapshot() DeathObservation { return s.snapshotAt(nil) }
+
+// snapshotAt is the production snapshot body. The optional, non-retained result
+// barrier is used only by the closed deterministic publication regression.
+func (s *ownedLinux) snapshotAt(afterResults func()) DeathObservation {
+	// Acquire completion BEFORE reading results. A closed channel synchronizes
+	// with its publisher's final result writes. Any open channel makes THIS
+	// snapshot incomplete even if it closes while the results are being read.
+	completion := ownedLinuxCompletion{wait: channelClosed(s.p.done)}
+	d := DeathObservation{Kind: DeathUnknown, ExitCode: -1, Evidence: linuxOwnedEvidence, Reap: ReapObservation{Kind: ReapFailed, Err: errLinuxJoin, Evidence: linuxOwnedEvidence}}
+	if completion.wait {
+		d = s.p.death
+	}
+	d.Stderr = s.p.stderr.snapshot()
+	d.StdoutDelivery = s.p.stdoutDelivery.snapshot()
+	d.StderrDelivery = s.p.stderrDelivery.snapshot()
+	if afterResults != nil {
+		afterResults()
+	}
+	s.mu.Lock()
+	fault := s.fault
+	s.mu.Unlock()
+	fault = errors.Join(fault, s.pipeFailures())
+	if !s.joined() {
+		fault = errors.Join(fault, errLinuxJoin)
+	}
+	if d.Stderr.Truncated || d.StdoutDelivery.Err != nil || d.StderrDelivery.Err != nil {
+		fault = errors.Join(fault, errLinuxJoin, d.StdoutDelivery.Err, d.StderrDelivery.Err)
+	}
+	if fault != nil {
+		d.Reap.Kind = ReapFailed
+		d.Reap.Err = errors.Join(d.Reap.Err, fault)
+	}
+	return d
+}
+func (s *ownedLinux) wait(ctx context.Context) DeathObservation { s.await(ctx); return s.snapshot() }
+func (s *ownedLinux) observe() SurvivorObservation {
+	kind := SurvivorRunning
+	// SurvivorObservation is leader-only, never a delivery/cleanup claim.
+	if s.completion().wait {
+		kind = SurvivorDead
+	}
+	return SurvivorObservation{Kind: kind, Evidence: linuxOwnedEvidence}
+}
+func cloneLinuxObservation(o TeardownObservation) TeardownObservation {
+	o.Phases = append([]TeardownPhase(nil), o.Phases...)
+	o.Death.Stderr.Bytes = append([]byte(nil), o.Death.Stderr.Bytes...)
+	return o
+}
+func (s *ownedLinux) observation(ctx context.Context, reconcile bool) TeardownObservation {
+	finished := s.await(ctx)
+	pending := TeardownObservation{Phases: []TeardownPhase{PhaseWait}, Death: s.snapshot(), Census: GroupCensusObservation{Bounded: true, Truncated: true, Err: errLinuxJoin, Evidence: linuxOwnedEvidence}}
+	// Do not queue callers behind a native census syscall. Kernel completion is
+	// not a hard deadline guarantee. The in-flight owner retains the phase result.
+	if !finished || !s.viewMu.TryLock() {
+		pending.Death.Reap.Kind = ReapFailed
+		pending.Death.Reap.Err = errors.Join(pending.Death.Reap.Err, errLinuxJoin)
+		return pending
+	}
+	defer s.viewMu.Unlock()
+	phase := linuxTerminal
+	if reconcile {
+		phase = linuxReconciliation
+	}
+	for i := linuxTerminal; i <= phase; i++ {
+		if s.used[i] {
+			continue
+		}
+		o := TeardownObservation{Death: s.snapshot()}
+		s.authority.Lock()
+		if i == linuxTerminal && s.attempted[0] {
+			o.Phases = append(o.Phases, PhaseInterrupt)
+		}
+		o.Phases = append(o.Phases, PhaseWait)
+		if i == linuxTerminal && s.attempted[1] {
+			o.Phases = append(o.Phases, PhaseKill)
+		}
+		s.authority.Unlock()
+		if channelClosed(s.p.done) {
+			o.Phases = append(o.Phases, PhaseReap)
+		}
+		qualifiedAbsence := false
+		if s.engine == nil {
+			o.Census = pending.Census
+		} else {
+			result := s.engine.observe(s.engine.binding, i) // observe owns window.mu
+			o.Census = result.Group
+			qualifiedAbsence = result.cleanupReady()
+		}
+		if !qualifiedAbsence {
+			o.Death.Reap.Kind = ReapFailed
+			o.Death.Reap.Err = errors.Join(o.Death.Reap.Err, errLinuxCensus)
+		}
+		if i == linuxReconciliation && s.history[linuxTerminal].Death.Reap.Kind == ReapFailed {
+			o.Death.Reap.Kind = ReapFailed
+			o.Death.Reap.Err = errors.Join(o.Death.Reap.Err, s.history[linuxTerminal].Death.Reap.Err)
+		}
+		s.history[i] = o
+		s.used[i] = true
+	}
+	return cloneLinuxObservation(s.history[phase])
+}
+func (s *ownedLinux) teardown(ctx context.Context) TeardownObservation {
+	s.requestStop()
+	return s.observation(ctx, false)
+}
+func (s *ownedLinux) reconcile(ctx context.Context) TeardownObservation {
+	return s.observation(ctx, true)
+}
+func (s *ownedLinux) close() ResourceObservation {
+	s.closeOnce.Do(func() {
+		s.requestStop()
+		o := s.observation(context.Background(), false)
+		s.resources = ResourceObservation{Kind: ResourcesClosed, Evidence: linuxOwnedEvidence}
+		if o.Death.Reap.Kind != ReapComplete {
+			s.resources.Kind = ResourcesCloseFailed
+			s.resources.Err = o.Death.Reap.Err
+		}
+	})
+	return s.resources
+}
