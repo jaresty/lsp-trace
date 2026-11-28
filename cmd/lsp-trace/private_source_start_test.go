@@ -12,11 +12,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"lsp-trace/internal/describeworker"
 	inv "lsp-trace/internal/inventorysuccessor"
 	"lsp-trace/internal/publication"
@@ -135,6 +135,23 @@ func TestConnectedParentStartBindingsV2(t *testing.T) {
 		})
 	}
 }
+
+// Duplicate into raw ownership and retire the original wrapper before EOF can
+// be observed. The caller must transfer the returned FD to the owned opener.
+func duplicateApplicationStartupWriter(t *testing.T, w *os.File) int {
+	t.Helper()
+	fd, dupErr := unix.Dup(int(w.Fd()))
+	closeErr := w.Close()
+	if dupErr != nil {
+		t.Fatal(dupErr)
+	}
+	if closeErr != nil || fd < 3 {
+		_ = unix.Close(fd) // this raw duplicate has not been transferred yet
+		t.Fatalf("writer duplicate custody: fd=%d close=%v", fd, closeErr)
+	}
+	return fd
+}
+
 func TestConnectedBridgeCanonicalJoinV2(t *testing.T) {
 	c := startConfigFixtureV2(t)
 	if e := os.Mkdir(c.Base, 0700); e != nil {
@@ -162,10 +179,11 @@ func TestConnectedBridgeCanonicalJoinV2(t *testing.T) {
 				t.Fatal(e)
 			}
 			defer r.Close()
-			n, e := openApplicationStartupNotifier(strconv.Itoa(int(w.Fd())))
+			n, e := openOwnedApplicationStartupNotifier(duplicateApplicationStartupWriter(t, w))
 			if e != nil {
-				t.Fatal(e)
+				t.Fatal(e) // the owned opener has already consumed the duplicate
 			}
+			defer n.close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			if mode == "cancelled" {

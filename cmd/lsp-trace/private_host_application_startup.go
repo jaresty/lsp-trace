@@ -30,44 +30,126 @@ type applicationStartupNotifier struct {
 	attempted bool
 }
 
-// No pathname is opened. Zero links and the held descriptor's filesystem
-// distinguish an anonymous pipe even from an unlinked named FIFO; exact
-// write-only mode excludes read ends and sockets.
-// Ownership transfers only for this explicit flag, never standard descriptors.
+// Descriptor metadata is kept separate from acquisition so both platform rules
+// can be tested without opening descriptors or substituting production syscalls.
+type applicationStartupDescriptorMetadata struct {
+	flags                    int
+	mode                     uint32
+	nlink, dev, fsType       uint64
+	flagsErr, statErr, fsErr error
+}
+
+// No pathname is opened. Linux pipefs has one link; Darwin anonymous pipes
+// have zero links and no vnode/filesystem. Filesystem identity also excludes
+// unlinked named FIFOs; exact write-only mode excludes read ends and O_RDWR.
+func classifyApplicationStartupDescriptor(goos string, fd int, m applicationStartupDescriptorMetadata) error {
+	if fd < 3 {
+		return product.ErrInvalid
+	}
+	if m.flagsErr != nil {
+		return m.flagsErr
+	}
+	if m.statErr != nil || m.mode&unix.S_IFMT != unix.S_IFIFO || m.flags&unix.O_ACCMODE != unix.O_WRONLY {
+		return product.ErrInvalid
+	}
+	switch goos {
+	case "linux":
+		if m.nlink == 1 && m.fsErr == nil && m.fsType == 0x50495045 {
+			return nil
+		}
+	case "darwin":
+		if m.nlink == 0 && m.dev == 0 && m.fsErr == unix.EINVAL {
+			return nil
+		}
+	}
+	return product.ErrInvalid
+}
+
+func readApplicationStartupDescriptor(fd int) applicationStartupDescriptorMetadata {
+	var m applicationStartupDescriptorMetadata
+	m.flags, m.flagsErr = unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
+	if m.flagsErr != nil {
+		return m
+	}
+	var st unix.Stat_t
+	m.statErr = unix.Fstat(fd, &st)
+	if m.statErr != nil {
+		return m
+	}
+	m.mode, m.nlink, m.dev = uint32(st.Mode), uint64(st.Nlink), uint64(st.Dev)
+	var fs unix.Statfs_t
+	m.fsErr = unix.Fstatfs(fd, &fs)
+	m.fsType = uint64(fs.Type)
+	return m
+}
+
+// Malformed/standard descriptors are never owned. Classification failures leave
+// the caller's descriptor open; setup failures consume it (the existing contract).
 func openApplicationStartupNotifier(value string) (*applicationStartupNotifier, error) {
 	fd, e := strconv.Atoi(value)
 	if e != nil || fd < 3 || strconv.Itoa(fd) != value {
 		return nil, product.ErrInvalid
 	}
-	flags, e := unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
-	if e != nil {
-		return nil, e
+	return openApplicationStartupNotifierFD(fd, false, nativeApplicationStartupDescriptorOps())
+}
+
+// The caller transfers an exclusively owned raw descriptor, not an os.File's
+// borrowed Fd(). Every fd >= 3 is consumed: closed on rejection or transferred
+// to the notifier on success. Invalid/standard descriptors are never acquired.
+func openOwnedApplicationStartupNotifier(fd int) (*applicationStartupNotifier, error) {
+	return openApplicationStartupNotifierFD(fd, true, nativeApplicationStartupDescriptorOps())
+}
+
+// Per-call operations permit pure failure-stage custody tests. Both production
+// entry points always supply real operations; no mutable global syscall hooks.
+type applicationStartupDescriptorOps struct {
+	metadata func(int) applicationStartupDescriptorMetadata
+	cloexec  func(int) error
+	nonblock func(int) error
+	newFile  func(int) *os.File
+	close    func(int) error
+}
+
+func nativeApplicationStartupDescriptorOps() applicationStartupDescriptorOps {
+	return applicationStartupDescriptorOps{
+		metadata: readApplicationStartupDescriptor,
+		cloexec: func(fd int) error {
+			_, err := unix.FcntlInt(uintptr(fd), unix.F_SETFD, unix.FD_CLOEXEC)
+			return err
+		},
+		nonblock: func(fd int) error { return unix.SetNonblock(fd, true) },
+		newFile:  func(fd int) *os.File { return os.NewFile(uintptr(fd), "application-startup-notify") },
+		close:    unix.Close,
 	}
-	var st unix.Stat_t
-	if e = unix.Fstat(fd, &st); e != nil || st.Mode&unix.S_IFMT != unix.S_IFIFO || st.Nlink != 0 || flags&unix.O_ACCMODE != unix.O_WRONLY {
+}
+
+func openApplicationStartupNotifierFD(fd int, owned bool, ops applicationStartupDescriptorOps) (*applicationStartupNotifier, error) {
+	if fd < 3 {
 		return nil, product.ErrInvalid
 	}
-	var fs unix.Statfs_t
-	fsErr := unix.Fstatfs(fd, &fs)
-	// Darwin pipes have no vnode/filesystem (EINVAL from fstatfs despite a
-	// successful fstat, device0). Linux identifies anonymous pipefs directly.
-	if runtime.GOOS == "darwin" && (fsErr != unix.EINVAL || st.Dev != 0) || runtime.GOOS == "linux" && (fsErr != nil || uint64(fs.Type) != 0x50495045) {
-		return nil, product.ErrInvalid
+	closeOnReturn := owned
+	defer func() {
+		if closeOnReturn {
+			_ = ops.close(fd) // exactly one attempt; never retry a possibly reused FD
+		}
+	}()
+	if err := classifyApplicationStartupDescriptor(runtime.GOOS, fd, ops.metadata(fd)); err != nil {
+		return nil, err
 	}
-	// Prevent acquisition grandchildren from writing or holding this writer open.
-	if _, e = unix.FcntlInt(uintptr(fd), unix.F_SETFD, unix.FD_CLOEXEC); e != nil {
-		_ = unix.Close(fd)
-		return nil, e
+	// Preserve public late-failure custody while the owned entry also consumes
+	// early failures. Prevent grandchildren from holding or writing this pipe.
+	closeOnReturn = true
+	if err := ops.cloexec(fd); err != nil {
+		return nil, err
 	}
-	if e = unix.SetNonblock(fd, true); e != nil {
-		_ = unix.Close(fd)
-		return nil, e
+	if err := ops.nonblock(fd); err != nil {
+		return nil, err
 	}
-	f := os.NewFile(uintptr(fd), "application-startup-notify")
+	f := ops.newFile(fd)
 	if f == nil {
-		_ = unix.Close(fd)
 		return nil, product.ErrInvalid
 	}
+	closeOnReturn = false // the notifier is now the only owner
 	return &applicationStartupNotifier{file: f}, nil
 }
 func (n *applicationStartupNotifier) close() error {
