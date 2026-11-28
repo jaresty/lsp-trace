@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	product "lsp-trace/internal/privatehostproductv3"
 )
@@ -18,17 +19,39 @@ import (
 // None_Model; direct retained-core pause, actual CLI resume admission, new allowance.
 func TestHostProductCLIResumeAdmissionFailureQualified(t *testing.T) {
 	for _, mode := range []string{"source", "corrupt_ledger", "stale_tip", "bootstrap", "transfer", "runtime_grant"} {
-		t.Run(mode, func(t *testing.T) { hostProductResumeRefusalFixture(t, mode) })
+		t.Run(mode, func(t *testing.T) { hostProductResumeRefusalFixture(t, mode, "") })
 	}
 }
 
 func TestHostProductCLIPriorPublicationAdmission(t *testing.T) {
+	// Only the immutable executable is shared; each case prepares fresh mutable state.
+	tool := filepath.Join(t.TempDir(), "lsp-trace")
+	buildHostProductResumeRefusalCLI(t, tool, "root-build")
 	for _, mode := range []string{"partial", "earlypartial", "machine_mismatch", "human_mismatch", "outside_paths", "counts", "candidate", "ledger", "profile", "lifecycle", "noncanonical", "complete", "checkpoint", "reservation", "config", "status", "gap", "ledger_tip", "citation_overflow"} {
-		t.Run(mode, func(t *testing.T) { hostProductResumeRefusalFixture(t, "prior_"+mode) })
+		t.Run(mode, func(t *testing.T) { hostProductResumeRefusalFixture(t, "prior_"+mode, tool) })
 	}
 }
 
-func hostProductResumeRefusalFixture(t *testing.T, mode string) {
+func buildHostProductResumeRefusalCLI(t *testing.T, tool, phase string) {
+	t.Helper()
+	started := time.Now()
+	defer func() {
+		t.Logf("HOST_PRODUCT_FIXTURE_TIMING phase=%s elapsed=%s", phase, time.Since(started))
+	}()
+	if raw, e := exec.Command("go", "build", "-o", tool, ".").CombinedOutput(); e != nil {
+		t.Fatalf("build: %s %v", raw, e)
+	}
+}
+
+func hostProductResumeRefusalFixture(t *testing.T, mode, tool string) {
+	phase, started := "request-preparation", time.Now()
+	// Log the active phase on Fatal as well as normal return. These are elapsed
+	// durations, not CPU time; inclusive command phases include setup and cleanup.
+	defer func() {
+		if phase != "" {
+			t.Logf("HOST_PRODUCT_FIXTURE_TIMING phase=%s elapsed=%s", phase, time.Since(started))
+		}
+	}()
 	r, path, base := hostProductCLIRequestFixture(t)
 	r.Configuration.MaxCalls = 2
 	r.Configuration.ApprovalSHA256 = product.ConfigDigest(r.Configuration)
@@ -37,11 +60,17 @@ func hostProductResumeRefusalFixture(t *testing.T, mode string) {
 	if e := os.WriteFile(path, raw, 0600); e != nil {
 		t.Fatal(e)
 	}
-	tool := filepath.Join(base, "lsp-trace")
-	if raw, e := exec.Command("go", "build", "-o", tool, ".").CombinedOutput(); e != nil {
-		t.Fatalf("build: %s %v", raw, e)
+	t.Logf("HOST_PRODUCT_FIXTURE_TIMING phase=%s elapsed=%s", phase, time.Since(started))
+	phase = ""
+	if tool == "" {
+		tool = filepath.Join(base, "lsp-trace")
+		buildHostProductResumeRefusalCLI(t, tool, "fixture-build")
 	}
+	// Includes setup, native acquisition, retained execution and joined cleanup.
+	phase, started = "retained-core-inclusive", time.Now()
 	first, e := runHostProductFixtureCommand(t, tool, "retained-core", path, r)
+	t.Logf("HOST_PRODUCT_FIXTURE_TIMING phase=%s elapsed=%s", phase, time.Since(started))
+	phase, started = "resume-preparation", time.Now()
 	if e == nil || first.Status != "PAUSED_BUDGET" || first.Completed != 1 {
 		t.Fatalf("pause prerequisite: %+v %v", first, e)
 	}
@@ -212,12 +241,17 @@ func hostProductResumeRefusalFixture(t *testing.T, mode string) {
 			t.Fatal(e)
 		}
 	}
+	t.Logf("HOST_PRODUCT_FIXTURE_TIMING phase=%s elapsed=%s", phase, time.Since(started))
 	var final product.Report
 	if mode == "prior_earlypartial" {
+		phase, started = "early-failure-delivery", time.Now()
 		final, e = product.DeliverEarlyFailure(r.Configuration, "CONTROLLED_EARLY_FAILURE", "RETAINED_ADMISSION_REFUSED")
 	} else {
+		phase, started = "resume-inclusive", time.Now()
 		final, e = runHostProductFixtureCommand(t, tool, "resume", path, r)
 	}
+	t.Logf("HOST_PRODUCT_FIXTURE_TIMING phase=%s elapsed=%s", phase, time.Since(started))
+	phase = ""
 	if (e == nil && mode != "prior_earlypartial") || (e != nil && mode == "prior_earlypartial") || final.Profile != product.Profile || final.Status != "FAILED" || final.Failure == nil || final.Completed != first.Completed || final.Pending != first.Pending || final.Gaps != first.Gaps || !reflect.DeepEqual(final.Candidates, first.Candidates) {
 		t.Fatalf("ASSERT_RESUME_ADMISSION_QUALIFIED_RETAINED_FAILURE: profile=%q status=%q completed=%d pending=%d failure=%+v err=%v", final.Profile, final.Status, final.Completed, final.Pending, final.Failure, e)
 	}

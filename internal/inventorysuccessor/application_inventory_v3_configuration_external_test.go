@@ -456,6 +456,8 @@ func TestConfigurationV3ProviderStates(t *testing.T) {
 				t.Fatal("ASSERT_CONFIGURATION_V3_PROVIDER_CLEANUP", c.ID, e)
 			}
 			if e != nil {
+				codes := inv.ProjectPrivatePrepareFailureV1(e)
+				rec.NativeDiagnostic = codes
 				if rec.NativeReturnWorkers != 0 {
 					q.Manager.Shutdown(ctx)
 				}
@@ -463,8 +465,6 @@ func TestConfigurationV3ProviderStates(t *testing.T) {
 				if rec.FixtureCleanupWorkers != 0 {
 					t.Fatal("ASSERT_CONFIGURATION_V3_PROVIDER_CLEANUP", c.ID, e)
 				}
-				codes := inv.ProjectPrivatePrepareFailureV1(e)
-				rec.NativeDiagnostic = codes
 				rec.Layer = "CONTROLLED_NATIVE.CAPTURE_REFUSAL"
 				rec.Actual = fmt.Sprintf("%s/%s; native workers=%d; separate fixture cleanup=%d", codes.Stage.String(), codes.Reason.String(), rec.NativeReturnWorkers, rec.FixtureCleanupWorkers)
 				if codes.Stage.String() != "CAPTURE" && codes.Stage.String() != "READINESS" {
