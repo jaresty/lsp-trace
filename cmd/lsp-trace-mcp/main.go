@@ -26,7 +26,6 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/observationadapter"
 	"lsp-trace/internal/operation"
-	"lsp-trace/internal/programc"
 	"lsp-trace/internal/provider"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/retainedoperation"
@@ -69,9 +68,6 @@ func buildIdentity() (string, string, bool) {
 }
 
 func main() {
-	if handled, code := programc.RunPrivateWorker(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
-		os.Exit(code)
-	}
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 

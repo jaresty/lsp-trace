@@ -29,7 +29,6 @@ import (
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/normativeanalytics"
-	"lsp-trace/internal/programc"
 	"lsp-trace/internal/schema"
 	"lsp-trace/internal/server"
 	"lsp-trace/internal/source"
@@ -181,9 +180,6 @@ type config struct {
 }
 
 func main() {
-	if handled, code := programc.RunPrivateWorker(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
-		os.Exit(code)
-	}
 	code := run(os.Args[1:])
 	os.Exit(code)
 }

@@ -1,5 +1,3 @@
-//go:build darwin && arm64
-
 package programc_test
 
 import (
@@ -132,28 +130,26 @@ func typedOwnerHeadV2(t *testing.T, r *publication.Root, s string) map[string]js
 func TestTypedBundleOwnerBaselineV2(t *testing.T) {
 	_, _, f, _ := typedOwnerRootV2(t)
 	q, direct := typedOwnerBindingV2(t, f.Head)
-	trace := pc.ObserveTypedOwnerForTest(t)
-	got, _, failed := pc.ExecuteGroupingCaseBundleSupervisedPrivate(context.Background(), q.Expected, q.Candidate)
-	if failed != nil || !bytes.Equal(got, direct) || trace().Delivered != 1 || trace().Reaped != 1 {
-		t.Fatalf("ASSERT_TYPED_OWNER_WORKER_BASELINE: failure=%v bytes=%d trace=%+v", failed, len(got), trace())
+	got, obs, failed := pc.ExecuteGroupingCaseBundlePrivate(context.Background(), q.Expected, q.Candidate)
+	if failed != nil || !bytes.Equal(got, direct) || !obs.Imported || !obs.Executed || !obs.Checked {
+		t.Fatalf("ASSERT_TYPED_OWNER_EXECUTION_BASELINE: failure=%v bytes=%d observation=%+v", failed, len(got), obs)
 	}
-	t.Log("ASSERT_TYPED_OWNER_WORKER_BASELINE: PASS")
+	t.Log("ASSERT_TYPED_OWNER_EXECUTION_BASELINE: PASS")
 }
 func TestTypedBundleOwnerSuccessV2(t *testing.T) {
 	owner, root, f, current := typedOwnerRootV2(t)
 	q, direct := typedOwnerBindingV2(t, f.Head)
-	trace := pc.ObserveTypedOwnerForTest(t)
 	operation, err := owner.Reserve(context.Background(), q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _, failed := owner.Execute(context.Background(), operation, q)
+	got, obs, failed := owner.Execute(context.Background(), operation, q)
 	h := typedOwnerHeadV2(t, root, current)
-	if failed != nil || !bytes.Equal(got, direct) || string(h["disposition"]) != `"OBSERVED"` || trace().Delivered != 1 || trace().Reaped != 1 {
-		t.Fatalf("ASSERT_TYPED_OWNER_EXACT_OBSERVED: failure=%v bytes=%d head=%s trace=%+v", failed, len(got), h["disposition"], trace())
+	if failed != nil || !bytes.Equal(got, direct) || string(h["disposition"]) != `"OBSERVED"` || !obs.Imported || !obs.Executed || !obs.Checked {
+		t.Fatalf("ASSERT_TYPED_OWNER_EXACT_OBSERVED: failure=%v bytes=%d head=%s trace=%+v", failed, len(got), h["disposition"], obs)
 	}
-	again, _, f2 := owner.Execute(context.Background(), operation, q)
-	if again != nil || f2 == nil || trace().Delivered != 1 {
+	again, obsAgain, f2 := owner.Execute(context.Background(), operation, q)
+	if again != nil || f2 == nil || obsAgain.Imported || obsAgain.Executed || obsAgain.Checked {
 		t.Fatal("ASSERT_TYPED_OWNER_COPY_RETIRED")
 	}
 	t.Log("ASSERT_TYPED_OWNER_EXACT_OBSERVED: PASS")
@@ -168,10 +164,10 @@ func TestTypedBundleOwnerSuccessV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got2, _, failed2 := owner.Execute(context.Background(), op2, second)
+	got2, obs2, failed2 := owner.Execute(context.Background(), op2, second)
 	h2 := typedOwnerHeadV2(t, root, current)
-	if failed2 != nil || !bytes.Equal(got2, direct) || string(h2["consumed_windows"]) != "2" || trace().Delivered != 2 || trace().Reaped != 2 {
-		t.Fatalf("ASSERT_ORDINARY_NEXT_PAID_OPERATION: failure=%v head=%s trace=%+v", failed2, h2["consumed_windows"], trace())
+	if failed2 != nil || !bytes.Equal(got2, direct) || string(h2["consumed_windows"]) != "2" || !obs2.Checked {
+		t.Fatalf("ASSERT_ORDINARY_NEXT_PAID_OPERATION: failure=%v head=%s observation=%+v", failed2, h2["consumed_windows"], obs2)
 	}
 	t.Log("ASSERT_ORDINARY_NEXT_PAID_OPERATION: PASS")
 }
@@ -179,16 +175,10 @@ func TestTypedBundleOwnerSuccessV2(t *testing.T) {
 func TestTypedBundleOwnerNoConfirmationV2(t *testing.T) {
 	owner, _, f, _ := typedOwnerRootV2(t)
 	q, _ := typedOwnerBindingV2(t, f.Head)
-	pidfile := filepath.Join(t.TempDir(), "preconfirmation-worker.json")
-	t.Setenv("PROGRAMC_TEST_WORKER", "typed-stage-record")
-	t.Setenv("PROGRAMC_TEST_PIDFILE", pidfile)
-	trace := pc.ObserveTypedOwnerForTest(t)
-	got, _, failed := owner.Execute(context.Background(), inv.PrivateTypedBundleOperationV2{}, q)
-	_, pidErr := os.Stat(pidfile)
-	if got != nil || failed == nil || trace().Delivered != 0 || trace().Reaped != 0 || !os.IsNotExist(pidErr) {
-		t.Fatalf("ASSERT_CONFIRMED_RESERVE_BEFORE_EFFECTS: bytes=%d failure=%v trace=%+v actual_SELF_PID_marker=%v", len(got), failed, trace(), pidErr == nil)
+	got, obs, failed := owner.Execute(context.Background(), inv.PrivateTypedBundleOperationV2{}, q)
+	if got != nil || failed == nil || obs.Imported || obs.Executed || obs.Checked {
+		t.Fatalf("ASSERT_CONFIRMED_RESERVE_BEFORE_EFFECTS: %v %+v", failed, obs)
 	}
-	t.Log("ASSERT_CONFIRMED_RESERVE_BEFORE_EFFECTS: PASS")
 }
 
 func TestTypedBundleOwnerOrderedScheduleV2(t *testing.T) {
@@ -262,94 +252,44 @@ func TestTypedBundleOwnerOrderedScheduleV2(t *testing.T) {
 }
 
 func TestTypedBundleOwnerStageFailuresV2(t *testing.T) {
-	for _, phase := range []string{"execution", "replay"} {
-		for _, mode := range []string{"cancel", "wall", "rss", "cleanup"} {
-			t.Run(phase+"-"+mode, func(t *testing.T) {
-				owner, root, f, current := typedOwnerRootV2(t)
-				b := pc.TypedOwnerStageBundleForTest(t)
-				expected, e := pc.NewGroupingBundleExpectationPrivate(b)
-				if e != nil {
-					t.Fatal(e)
-				}
-				stage := filepath.Join(t.TempDir(), "stage.jsonl")
-				pidfile := filepath.Join(t.TempDir(), "worker.json")
-				workerMode := "typed-stage-" + phase
-				if mode == "rss" {
-					workerMode += "-rss"
-				}
-				t.Setenv("PROGRAMC_TEST_WORKER", workerMode)
-				t.Setenv("PROGRAMC_TEST_STAGE_FILE", stage)
-				t.Setenv("PROGRAMC_TEST_PIDFILE", pidfile)
-				t.Setenv("PROGRAMC_TEST_PARENT_WATCHDOG", "1")
-				q := inv.PrivateTypedBundleBindingV2{Expected: expected, Candidate: b.CanonicalBytes(), Attempt: fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(t.Name()))), Head: f.Head, Deadline: time.Now().Add(6 * time.Second)}
-				op, e := owner.Reserve(context.Background(), q)
-				if e != nil {
-					t.Fatal(e)
-				}
-				trace := pc.ObserveTypedOwnerForTest(t)
-				run := func() {
-					ctx, cancel := context.WithCancel(context.Background())
-					defer cancel()
-					type terminal struct {
-						report []byte
-						failed *pc.SupervisionFailure
-					}
-					done := make(chan terminal, 1)
-					go func() { report, _, failed := owner.Execute(ctx, op, q); done <- terminal{report, failed} }()
-					reached := false
-					for time.Now().Before(q.Deadline) {
-						raw, _ := os.ReadFile(stage)
-						if bytes.Contains(raw, []byte(`"Phase":"`+phase+`"`)) {
-							reached = true
-							break
-						}
-						time.Sleep(5 * time.Millisecond)
-					}
-					if (mode != "wall" && mode != "rss") || !reached {
-						cancel()
-					}
-					var result terminal
-					select {
-					case result = <-done:
-					case <-time.After(9 * time.Second):
-						t.Fatal("stage SELF operation did not return")
-					}
-					if !reached {
-						t.Fatal("ASSERT_REAL_TYPED_STAGE_REACHED")
-					}
-					if mode == "rss" && (result.failed == nil || result.failed.Code != pc.CodeMemoryLimit) {
-						t.Fatalf("ASSERT_STAGE_REAL_RSS_FAILURE: %v", result.failed)
-					}
-					if result.report != nil || result.failed == nil {
-						t.Fatalf("ASSERT_STAGE_FAILURE_NIL_REPORT: bytes=%d failure=%v", len(result.report), result.failed)
-					}
-					h := typedOwnerHeadV2(t, root, current)
-					if string(h["disposition"]) != `"PENDING"` || string(h["consumed_windows"]) != "1" {
-						t.Fatalf("ASSERT_STAGE_PENDING_CHARGE: %s", h["disposition"])
-					}
-					if mode == "cleanup" {
-						if result.failed.Code != pc.CodeCleanupFailure || trace().Reaped != 0 {
-							t.Fatalf("ASSERT_CLEANUP_NO_FALSE_REAP: failure=%v trace=%+v", result.failed, trace())
-						}
-					} else {
-						if trace().Reaped != 1 {
-							t.Fatalf("ASSERT_STAGE_ACTUAL_REAP: %+v failure=%v", trace(), result.failed)
-						}
-						pc.VerifyTypedOwnerGoneForTest(t, pidfile)
-					}
-					again := q
-					again.Attempt = fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(t.Name()+"retry")))
-					if _, e := owner.Reserve(context.Background(), again); e == nil {
-						t.Fatal("ASSERT_STAGE_OWNER_STOP")
-					}
-					t.Logf("ASSERT_REAL_TYPED_STAGE_REACHED: PASS phase=%s mode=%s failure=%s delivered=%d supervisor_reaped=%d", phase, mode, result.failed.Code, trace().Delivered, trace().Reaped)
-				}
-				if mode == "cleanup" {
-					pc.WithTypedOwnerCleanupFaultForTest(t, pidfile, run)
-				} else {
-					run()
-				}
-			})
-		}
+	for _, phase := range []string{"execution", "replay", "invalid-canonical"} {
+		t.Run(phase, func(t *testing.T) {
+			owner, root, f, current := typedOwnerRootV2(t)
+			q, _ := typedOwnerBindingV2(t, f.Head)
+			if phase == "invalid-canonical" {
+				q.Candidate = []byte("{}\n")
+			}
+			op, e := owner.Reserve(context.Background(), q)
+			if e != nil {
+				t.Fatal(e)
+			}
+			ctx := context.Background()
+			if phase != "invalid-canonical" {
+				ctx = pc.TypedExecutionCancellationForTest(ctx, phase == "replay")
+			}
+			report, obs, failed := owner.Execute(ctx, op, q)
+			if report != nil || failed == nil {
+				t.Fatalf("ASSERT_STAGE_FAILURE_NIL_REPORT: %v", failed)
+			}
+			if phase == "execution" && (!obs.Executed || obs.Checked) {
+				t.Fatalf("ASSERT_REAL_TYPED_STAGE_REACHED: %+v", obs)
+			}
+			if phase == "replay" && (!obs.Executed || !obs.Checked) {
+				t.Fatalf("ASSERT_REAL_TYPED_STAGE_REACHED: %+v", obs)
+			}
+			h := typedOwnerHeadV2(t, root, current)
+			if string(h["disposition"]) != "\"PENDING\"" || string(h["consumed_windows"]) != "1" {
+				t.Fatalf("ASSERT_STAGE_PENDING_CHARGE: %s", h["disposition"])
+			}
+			again := q
+			again.Attempt = fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(t.Name()+"retry")))
+			if _, e = owner.Reserve(context.Background(), again); e == nil {
+				t.Fatal("ASSERT_STAGE_OWNER_STOP")
+			}
+			repeated, _, f2 := owner.Execute(context.Background(), op, q)
+			if repeated != nil || f2 == nil {
+				t.Fatal("ASSERT_TYPED_OWNER_COPY_RETIRED")
+			}
+		})
 	}
 }

@@ -45,7 +45,7 @@ func OpenPrivateTypedBundleOwnerV2(ctx context.Context, root *publication.Root, 
 }
 
 // The expectation is independently constructed and opaque. Candidate is never
-// imported in this process to infer its own expected commitment or workload.
+// imported to infer its own expected commitment or workload.
 // Head and Attempt bind the requested accounting window; Deadline is absolute.
 type PrivateTypedBundleBindingV2 struct {
 	Expected      programc.GroupingBundleExpectationPrivate
@@ -67,43 +67,21 @@ type privateTypedBundleOperationV2 struct {
 	used                     bool
 }
 
-// Closed logical units, NOT physical RSS, CPU instructions, disk bytes or money.
-// B=8MiB whole candidate; S=128 slots; N=8192 endpoints; O=4096 occurrences;
-// R=8MiB canonical per-case result; T=64MiB parent/child frame; E=64KiB stderr.
-// Import reconstructs each slot once. Execute calls Eval + CheckEvaluation (2
-// kernels/slot), CheckReport repeats the entire batch (2 more). Admission,
-// projection, judgments, case/result hashing, canonical copies, response decode
-// and four kernel verifications (Open, Reserve, pre-execution, Observe) are
-// charged independently of successful output. No successful-work discount exists.
-// The 32 per-slot R passes allocate 8 to import/reconstruction, 4 to frozen
-// declaration checks, 8 to four evaluator/result passes, and 12 to scoring,
-// aggregates and exact full-report replay/copies. The 64*(B+T) envelope covers
-// raw admission/hash, bounded decoding/base64/encoding/copies in both processes,
-// response canonical/hash verification, and rejecting transport bytes. These are
-// closed logical allowances, not measured allocations. Four verifications each
-// admit <=4096 records, <=64MiB and <=16384 verification work units. Sixteen
-// accounting publication/readback waves cover reservation/head/CAS artifacts and
-// their bounded metadata; there is no report publication. Records also include
-// 16 predecessors, 128 judgments, 8 endpoint and 16 occurrence visits per slot.
-// Work uses (N+O)^2 dense-envelope CREDITS per kernel invocation, not actual
-// Gonum loop visits, instruction counts or runtime. Four kernel invocations per
-// slot are included. 16384 OBSERVATION-METHOD-CALL credits cover the production
-// supervisor defaults, not test overrides. With I(w,p)=ceil(w/p)+1, live sampling
-// costs <=3*I(60s,20ms)=9003 (GroupState, optional zombie ProcessStart, treeRSS);
-// identity setup <=2*I(1s,20ms)=102; initialTreeRSS retries <=I(2s,1ms)=2001;
-// cleanup <=4*I(1s,20ms)=204 (GroupState, leader ProcessStart, confirming
-// GroupState and ProcessStart). Failed iterations sleep before retrying; helper
-// deadlines/context checks stop retries, and terminal branches enter cleanup at
-// most once. Sixteen further credits cover finite final/failure zombie fallback
-// (at most two methods), so 11326 < 16384. CommandContext/WaitDelay may extend
-// latency, not these retry counts; earlier deadline failures reduce calls.
-// These are logical method calls, NOT snapshot bytes, host process-table volume,
-// RAM, CPU, physical performance or an empirically observed poll count.
-// ActiveNS includes the existing one-second CLEANUP-ONLY allowance; neither the
-// worker nor Observe gains a fresh deadline. Wall/RSS enforcement remains the
-// existing supervisor's mechanism, with its documented synchronous-work limits.
+// Closed logical credits, NOT measured allocations, process work, RSS, CPU or
+// physical time. Preserve the original conservative 14-coordinate charge vector
+// for this retirement: no refunds or successful-work discount. Import, execution,
+// full replay, canonical copies and four kernel verifications remain charged.
+// Historical transport (64MiB input/output, 64KiB stderr), observation-method
+// (16384), and one-second cleanup allowances remain RESERVED LOGICAL CREDITS;
+// no transport, process sampling, cleanup, or hard wall/RSS enforcement occurs.
+// The deadline is an admission/release boundary, not an interruption guarantee.
+// A future funding-policy change is separate from this execution retirement.
+const privateTypedBundleWindowV2 = 60 * time.Second
+const privateTypedBundleOutputCreditsV2 = 64 << 20
+const privateTypedBundleStderrCreditsV2 = 64 << 10
+
 func privateTypedBundleChargeV2(now, deadline time.Time) (countersV2, error) {
-	if deadline.IsZero() || !now.Before(deadline) || deadline.Sub(now) > programc.SupervisorWall {
+	if deadline.IsZero() || !now.Before(deadline) || deadline.Sub(now) > privateTypedBundleWindowV2 {
 		return countersV2{}, ErrPrivateTypedBundleOperationV2
 	}
 	const b uint64 = programc.GroupingCaseBundleMaxBytesPrivate
@@ -111,10 +89,11 @@ func privateTypedBundleChargeV2(now, deadline time.Time) (countersV2, error) {
 	const n uint64 = rg.EvaluationMaxNodesPrivate
 	const occ uint64 = rg.EvaluationMaxOccurrencesPrivate
 	const result uint64 = rg.EvaluationMaxBytesPrivate
-	const transport uint64 = uint64(programc.MaxWorkerInputBytes+programc.MaxWorkerOutputBytes+programc.MaxWorkerStderrBytes) + 3
+	const transport uint64 = uint64(programc.MaxWorkerInputBytes+privateTypedBundleOutputCreditsV2+privateTypedBundleStderrCreditsV2) + 3
 	const verify uint64 = 4 * (64 << 20)
 	const observationCalls uint64 = 16384
-	// Every operand is a fixed enforced cap, not a candidate-controlled integer.
+	// Every operand is a fixed admission cap or reserved logical allowance,
+	// not a candidate-controlled integer.
 	// Checked operations precede any candidate copy or process serialization.
 	mul := func(a, b uint64) (uint64, error) {
 		if b != 0 && a > ^uint64(0)/b {
@@ -158,11 +137,11 @@ func privateTypedBundleChargeV2(now, deadline time.Time) (countersV2, error) {
 	}
 	records := uint64(4*4096) + slots*(16+128+8*n+16*occ)
 	writes := uint64(16 * (recordLimitV2 + 2*headLimitV2))
-	return countersV2{LogicalBytes: data, ReadHashBytes: verify + data, WriteBytes: writes, Records: records, ParserBytes: verify + data, ProviderRequests: 0, ProviderMessages: 0, Work: work, ActiveNS: uint64(deadline.Sub(now)) + uint64(time.Second), Calls: 4*16384 + records + 4*slots + observationCalls, RequestBytes: uint64(programc.MaxWorkerInputBytes) + 1, ResponseBytes: uint64(programc.MaxWorkerOutputBytes+programc.MaxWorkerStderrBytes) + 2, WireBytes: transport, OutputBytes: uint64(programc.MaxWorkerOutputBytes)}, nil
+	return countersV2{LogicalBytes: data, ReadHashBytes: verify + data, WriteBytes: writes, Records: records, ParserBytes: verify + data, ProviderRequests: 0, ProviderMessages: 0, Work: work, ActiveNS: uint64(deadline.Sub(now)) + uint64(time.Second), Calls: 4*16384 + records + 4*slots + observationCalls, RequestBytes: uint64(programc.MaxWorkerInputBytes) + 1, ResponseBytes: uint64(privateTypedBundleOutputCreditsV2+privateTypedBundleStderrCreditsV2) + 2, WireBytes: transport, OutputBytes: uint64(privateTypedBundleOutputCreditsV2)}, nil
 }
 
 func validPrivateTypedBindingV2(q PrivateTypedBundleBindingV2, now time.Time) bool {
-	return len(q.Candidate) > 0 && len(q.Candidate) <= programc.GroupingCaseBundleMaxBytesPrivate && q.Expected != (programc.GroupingBundleExpectationPrivate{}) && hashV2(q.Attempt) && hashV2(q.Head) && !q.Deadline.IsZero() && now.Before(q.Deadline) && q.Deadline.Sub(now) <= programc.SupervisorWall
+	return len(q.Candidate) > 0 && len(q.Candidate) <= programc.GroupingCaseBundleMaxBytesPrivate && q.Expected != (programc.GroupingBundleExpectationPrivate{}) && hashV2(q.Attempt) && hashV2(q.Head) && !q.Deadline.IsZero() && now.Before(q.Deadline) && q.Deadline.Sub(now) <= privateTypedBundleWindowV2
 }
 
 // Reserve returns a capability ONLY after confirmed existing-kernel commit.
@@ -208,11 +187,11 @@ func (o *PrivateTypedBundleOwnerV2) Reserve(ctx context.Context, q PrivateTypedB
 
 // Execute is deliberately a fixed operation, not a caller runner or completion
 // protocol. The opaque handle is shared by copies and retired before any check.
-func (o *PrivateTypedBundleOwnerV2) Execute(ctx context.Context, op PrivateTypedBundleOperationV2, q PrivateTypedBundleBindingV2) ([]byte, programc.SupervisionObservation, *programc.SupervisionFailure) {
-	refuse := func(observation programc.SupervisionObservation, code programc.SupervisionCode) ([]byte, programc.SupervisionObservation, *programc.SupervisionFailure) {
-		return nil, observation, &programc.SupervisionFailure{Code: code, Message: ErrPrivateTypedBundleOperationV2.Error()}
+func (o *PrivateTypedBundleOwnerV2) Execute(ctx context.Context, op PrivateTypedBundleOperationV2, q PrivateTypedBundleBindingV2) ([]byte, programc.ExecutionObservation, *programc.ExecutionFailure) {
+	refuse := func(observation programc.ExecutionObservation, code programc.ExecutionCode) ([]byte, programc.ExecutionObservation, *programc.ExecutionFailure) {
+		return nil, observation, &programc.ExecutionFailure{Code: code, Message: ErrPrivateTypedBundleOperationV2.Error()}
 	}
-	var observation programc.SupervisionObservation
+	var observation programc.ExecutionObservation
 	if op.state == nil {
 		return refuse(observation, programc.CodeInternalAdmission)
 	}
@@ -243,7 +222,7 @@ func (o *PrivateTypedBundleOwnerV2) Execute(ctx context.Context, op PrivateTyped
 		o.uncertain = true
 		return refuse(observation, programc.CodeInternalAdmission)
 	}
-	report, observed, failed := programc.ExecuteGroupingCaseBundleSupervisedPrivate(execution, s.expected, candidate)
+	report, observed, failed := programc.ExecuteGroupingCaseBundlePrivate(execution, s.expected, candidate)
 	observation = observed
 	if failed != nil {
 		o.uncertain = true

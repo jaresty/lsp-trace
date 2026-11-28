@@ -30,6 +30,34 @@ const (
 	algorithm      = "gonum.org/v1/gonum/graph/community.Leiden"
 )
 
+// MaxWorkerInputBytes is the shared decompressed-input admission limit retained
+// for in-process consumers. The historical name does not imply a worker exists.
+const MaxWorkerInputBytes int64 = 64 << 20
+
+func validCanonicalCommunities(communities []Community, nodes []string) bool {
+	seen := make(map[string]bool, len(nodes))
+	for i, community := range communities {
+		if len(community.Members) == 0 || !sort.StringsAreSorted(community.Members) || (i > 0 && compareStrings(communities[i-1].Members, community.Members) >= 0) {
+			return false
+		}
+		for _, member := range community.Members {
+			if seen[member] {
+				return false
+			}
+			seen[member] = true
+		}
+	}
+	if len(seen) != len(nodes) {
+		return false
+	}
+	for _, node := range nodes {
+		if !seen[node] {
+			return false
+		}
+	}
+	return true
+}
+
 type FailureCode string
 
 const (
