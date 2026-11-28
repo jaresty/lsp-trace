@@ -173,7 +173,7 @@ class CIShardsTest(unittest.TestCase):
         cases = [None, [], {}, {'packages': ['unknown'], 'max_roots': 0}]
         baseline = valid['root_batching']
         for field, values in {'packages': [[], ['unknown'], baseline['packages'] * 2, 'not-a-list', [{}]],
-                              'max_roots': [0, 33, True, 32.0, '32'],
+                              'max_roots': [0, 5, 32, 33, True, 4.0, '4', 32.0, '32'],
                               'toolchain': ['', 'go1.26.6', None],
                               'compatibility': ['', None]}.items():
             for value in values:
@@ -205,7 +205,7 @@ class CIShardsTest(unittest.TestCase):
                 results.append(output.read_text())
             self.assertEqual(results[0], results[1])
             plan = json.loads(results[0])
-            self.assertEqual([len(i['roots']) for i in plan['invocations']], [32, 32, 1])
+            self.assertEqual([len(i['roots']) for i in plan['invocations']], [4] * 16 + [1])
             self.assertEqual([r for i in plan['invocations'] for r in i['roots']], sorted(inventory['packages'][package]['roots']))
 
     def test_unseen_packages_use_conservative_fallback(self):

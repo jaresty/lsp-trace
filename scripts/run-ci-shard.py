@@ -8,7 +8,7 @@ terminals have distinct invocation identities. Legacy single-stream summarizatio
 still available for old artifacts; new consumers must use manifest + plan.
 
 Listing executes init. Every batch repeats init and TestMain. Metadata identifies
-compiler-selected inputs, not initialization compatibility. Cap 32 is provisional;
+compiler-selected inputs, not initialization compatibility. Cap 4 is provisional;
 complete hosted accounting and runtime within unchanged job limits remain required.
 No global test selector is exported; self-executing helpers keep explicit selectors.
 """

@@ -110,12 +110,12 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual(summary['evidence_qualification'], 'parent-exit-observation')
             self.assertEqual(summary['cleanup_status'], 'not_observed')
             tests = [a for a in calls if a[:2] == ['go', 'test'] and '-list' not in a]
-            self.assertEqual(len(tests), 4)
+            self.assertEqual(len(tests), 18)
             self.assertNotIn('-run', tests[0])
             self.assertEqual(tests[0][-1], OTHER)
             self.assertTrue(all('-timeout=10m' in a and '-count=1' in a for a in tests[1:]))
             self.assertEqual(summary['logical_package_count'], 2)
-            self.assertEqual(summary['invocation_count'], 4)
+            self.assertEqual(summary['invocation_count'], 18)
             plan = json.loads((out / 'plan.json').read_text())
             roots = [r for i in plan['invocations'] for r in i['roots']]
             self.assertEqual(len(roots), 68)
@@ -140,7 +140,7 @@ class RunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             status, manifest, summary, calls, _ = self.execute(td, wrap)
             self.assertEqual(status, 1)
-            self.assertEqual(len([a for a in calls if '-run' in a]), 3)
+            self.assertEqual(len([a for a in calls if '-run' in a]), 17)
             self.assertEqual(summary['status'], 'failure')
             self.assertEqual(next(p for p in summary['packages'] if p['package'] == PACKAGE)['status'], 'fail')
 
@@ -199,7 +199,7 @@ class RunnerTest(unittest.TestCase):
                             stdout.write_text(lines(events(selected, package)))
                         return 0
                     self.assertEqual(self.runner.run_shard(shard, context, Path(td) / 'evidence', launcher=fake), 0)
-                    self.assertEqual(len([a for a in calls if '-run' in a]), 3)
+                    self.assertEqual(len([a for a in calls if '-run' in a]), 17)
                     self.assertTrue(all(a[-1] == package for a in calls))
 
     def test_shard_without_affected_packages_stays_one_ordinary_invocation(self):
@@ -286,7 +286,7 @@ class RunnerTest(unittest.TestCase):
                 self.assertEqual(len([a for a in calls if '-run' in a]), 1)
                 self.assertEqual(manifest['cleanup_status'], 'externally-unresolved')
                 self.assertEqual(manifest['evidence_qualification'], 'quarantined-mutable')
-                self.assertEqual([i['state'] for i in manifest['invocations'][2:]], ['not_run', 'not_run'])
+                self.assertEqual([i['state'] for i in manifest['invocations'][2:]], ['not_run'] * 16)
                 receipt = json.loads((out / 'invocations' / manifest['invocations'][1]['id'] / 'command.json').read_text())
                 self.assertEqual(receipt['capture_stability'], 'quarantined-mutable')
                 self.assertNotIn('stdout_sha256', receipt)
@@ -343,6 +343,56 @@ class RunnerTest(unittest.TestCase):
             status, _, _, calls, _ = self.execute(td)
             self.assertEqual(status, 1)
             self.assertEqual(calls, [])
+
+    def test_full_inventory_cap_change_preserves_exact_eligible_union(self):
+        # Same complete synthetic listing at both caps, never a sampled subset.
+        for platform in ('linux', 'darwin'):
+            for package in sorted(self.checker.BATCH_PACKAGES):
+                for count in (1100, 391, 2337):
+                    with self.subTest(platform=platform, package=package, roots=count), tempfile.TemporaryDirectory() as td:
+                        context, shard, _, _, _ = self.fixture(td, platform)
+                        shard['packages'] = [package, OTHER]
+                        names = ['Test%04d' % n for n in range(count - 2)] + ['Example', 'FuzzSeeds', 'BenchmarkExcluded']
+                        eligible = sorted(n for n in names if n != 'BenchmarkExcluded')
+                        def fake(argv, stdout, stderr):
+                            stderr.write_text('')
+                            if argv[:3] == ['go', 'list', '-deps']:
+                                stdout.write_text(json.dumps({'ImportPath': package, 'Dir': td, 'GoFiles': ['selected.go']}))
+                            elif '-list' in argv:
+                                stdout.write_text(lines(listing(names, package)))
+                            else:
+                                selected = argv[argv.index('-run') + 1][2:-2].split('|') if '-run' in argv else []
+                                stdout.write_text(lines(events(selected, package if selected else OTHER)))
+                            return 0
+                        out = Path(td) / 'evidence'
+                        self.assertEqual(self.runner.run_shard(shard, context, out, launcher=fake), 0)
+                        inventory = json.loads((out / 'inventory.json').read_text())
+                        plan = json.loads((out / 'plan.json').read_text())
+                        self.assertEqual(self.checker.validate_invocation_plan(plan, inventory, shard, context, out), [])
+                        batches = plan['invocations'][1:]
+                        roots = [r for item in batches for r in item['roots']]
+                        self.assertEqual(roots, eligible)
+                        self.assertEqual(len(roots), len(set(roots)))
+                        self.assertEqual(len(batches), (count + 3) // 4)
+                        self.assertTrue(all(1 <= len(item['roots']) <= 4 for item in batches))
+                        self.assertEqual(plan['invocations'][0], {'id': 'ordinary', 'packages': [OTHER], 'roots': [], 'selector': None})
+                        for oversized_cap in (32, 5):
+                            # Independent counterfactual partition: keep inventory,
+                            # context, ordinary ownership and eligible union fixed.
+                            oversized = copy.deepcopy(plan)
+                            oversized['invocations'] = [copy.deepcopy(plan['invocations'][0])]
+                            for index, offset in enumerate(range(0, count, oversized_cap), 1):
+                                chunk = eligible[offset:offset + oversized_cap]
+                                oversized['invocations'].append({
+                                    'id': package.replace('/', '_') + '-%04d' % index,
+                                    'packages': [package], 'roots': chunk,
+                                    'selector': '^(' + '|'.join(chunk) + ')$'})
+                            old_roots = [r for item in oversized['invocations'][1:] for r in item['roots']]
+                            self.assertEqual(old_roots, roots)
+                            self.assertEqual(len(old_roots), len(set(old_roots)))
+                            self.assertGreater(len(batches), len(oversized['invocations']) - 1)
+                            self.assertEqual(self.checker.validate_invocation_plan(oversized, inventory, shard, context, out),
+                                             ['unknown package or invalid batch size'])
 
     def test_independent_plan_red_controls(self):
         with tempfile.TemporaryDirectory() as td:

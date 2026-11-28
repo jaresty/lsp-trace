@@ -74,7 +74,7 @@ def validate_batch_policy(policy=None):
     if (not isinstance(packages, list) or not all(isinstance(p, str) for p in packages)
             or len(packages) != 2 or set(packages) != BATCH_PACKAGES):
         return ['unsupported batching policy package allowlist']
-    if type(value['max_roots']) is not int or value['max_roots'] != 32:
+    if type(value['max_roots']) is not int or value['max_roots'] != 4:
         return ['unsupported batching policy root cap']
     if value['toolchain'] != 'go1.26.5':
         return ['unsupported batching policy toolchain']
