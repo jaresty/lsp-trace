@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import copy
+import runpy
+from unittest import mock
 import json
 import subprocess
 import tempfile
@@ -163,6 +165,48 @@ class CIShardsTest(unittest.TestCase):
         for name, manifest, diagnostic in cases:
             with self.subTest(name=name):
                 self.assertEqual(self.check(manifest, expected=False), diagnostic)
+
+    def test_malformed_batch_policy_is_rejected_by_package_and_runtime_guards(self):
+        checker = runpy.run_path(str(CHECK))
+        valid = copy.deepcopy(checker['POLICY'])
+        manifest = self.generate()
+        cases = [None, [], {}, {'packages': ['unknown'], 'max_roots': 0}]
+        baseline = valid['root_batching']
+        for field, values in {'packages': [[], ['unknown'], baseline['packages'] * 2, 'not-a-list', [{}]],
+                              'max_roots': [0, 33, True, 32.0, '32'],
+                              'toolchain': ['', 'go1.26.6', None],
+                              'compatibility': ['', None]}.items():
+            for value in values:
+                bad = copy.deepcopy(baseline); bad[field] = value; cases.append(bad)
+            bad = copy.deepcopy(baseline); del bad[field]; cases.append(bad)
+        bad = copy.deepcopy(baseline); bad['unsupported'] = True; cases.append(bad)
+        for policy in cases:
+            with self.subTest(policy=policy), mock.patch.dict(checker['POLICY'], {'root_batching': policy}):
+                self.assertTrue(checker['validate'](manifest, PACKAGES))
+        with mock.patch.dict(checker['POLICY'], {}, clear=True):
+            self.assertTrue(checker['validate'](manifest, PACKAGES))
+
+    def test_separate_invocation_planning_mode_is_pure_and_deterministic(self):
+        # CLI planning takes retained inventory, never calls native go list/test.
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            package = 'lsp-trace/cmd/lsp-trace'
+            inventory = {'version': 1, 'context': {'platform': 'darwin'}, 'inventory_id': 'fixture',
+                         'packages': {package: {'roots': {'Test%03d' % n: 'Test' for n in range(65)}}}}
+            ownership = {'platforms': {'darwin': {'shards': [{'id': 'darwin-2', 'packages': [package]}]}}}
+            for name, value in (('inventory', inventory), ('ownership', ownership)):
+                (directory / (name + '.json')).write_text(json.dumps(value))
+            results = []
+            for suffix in ('a', 'b'):
+                output = directory / suffix
+                subprocess.run(['python3', str(GENERATE), '--inventory', str(directory / 'inventory.json'),
+                                '--manifest', str(directory / 'ownership.json'), '--shard', 'darwin-2',
+                                '--output', str(output)], check=True)
+                results.append(output.read_text())
+            self.assertEqual(results[0], results[1])
+            plan = json.loads(results[0])
+            self.assertEqual([len(i['roots']) for i in plan['invocations']], [32, 32, 1])
+            self.assertEqual([r for i in plan['invocations'] for r in i['roots']], sorted(inventory['packages'][package]['roots']))
 
     def test_unseen_packages_use_conservative_fallback(self):
         packages = copy.deepcopy(PACKAGES)

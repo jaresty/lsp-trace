@@ -19,6 +19,7 @@ NEW_PYTHON_FILES = [
     "scripts/check-ci-shards.py", "scripts/generate-ci-shards.py", "scripts/map-ci-affected-packages.py",
     "scripts/summarize-go-test-json.py", "scripts/check-ci-topology.py", "scripts/test-ci-shards.py",
     "scripts/test-ci-affected-packages.py", "scripts/test-summarize-go-test-json.py", "scripts/test-ci-topology.py",
+    "scripts/run-ci-shard.py", "scripts/test-run-ci-shard.py",
 ]
 
 
@@ -70,69 +71,114 @@ def executable_shell_lines(script):
 
 
 def validate_shard_script(script):
+    """One checked plan replaces one pipeline, not the exact-execution invariant.
+
+    Exact shell form prevents extra/dead commands, status masking, unchecked runner
+    variants and relative telemetry. Runner unit tests own argv/plan/exit semantics.
+    """
     lines = executable_shell_lines(script)
-    go_test_lines = [line for line in lines if re.search(r"(?:^|(?:&&|\|\||;|\|)\s*)go\s+test(?:\s|$)", line)]
-    if len(go_test_lines) != 1:
+    runners = [line for line in lines if 'scripts/run-ci-shard.py' in line]
+    if len(runners) != 1 or any(re.search(r'\bgo\s+test\b', line) for line in lines):
         return False, False, False
+    telemetry = 'telemetry_dir=$(mktemp -d "$RUNNER_TEMP/go-test-${{ matrix.shard.id }}-XXXXXX")'
+    command = ('exec python3 scripts/run-ci-shard.py --platform "$PLATFORM" '
+               '--shard "${{ matrix.shard.id }}" --revision "$GITHUB_SHA" --output "$telemetry_dir"')
+    telemetry_ok = telemetry in lines and '--output "$telemetry_dir"' in runners[0] and lines.index(telemetry) < lines.index(runners[0])
+    return True, lines == [telemetry, command], telemetry_ok
 
-    pipeline = go_test_lines[0]
-    segments = [segment.strip() for segment in re.split(r"(?<!\|)\|(?!\|)", pipeline)]
-    try:
-        tee_tokens = shlex.split(segments[1]) if len(segments) == 2 else []
-    except ValueError:
-        tee_tokens = []
-    exact_pipeline = (
-        len(segments) == 2
-        and re.match(r"^go\s+test(?:\s|$)", segments[0]) is not None
-        and tee_tokens == ["tee", "$go_test_json"]
-    )
-    if not exact_pipeline:
-        return False, False, False
-    try:
-        go_tokens = shlex.split(segments[0])
-    except ValueError:
-        return True, False, False
-    flags_ok = "-json" in go_tokens and "-timeout=10m" in go_tokens
 
-    telemetry = [
-        'telemetry_dir=$(mktemp -d "$RUNNER_TEMP/go-test-${{ matrix.shard.id }}-XXXXXX")',
-        'go_test_json="$telemetry_dir/go-test.json"',
-        'go_test_summary="$telemetry_dir/go-test-summary.json"',
-    ]
-    required = [
-        'statuses=("${PIPESTATUS[@]}")',
-        "test_status=${statuses[0]}",
-        "tee_status=${statuses[1]}",
-        "summary_status=$?",
-        'if [ "$test_status" -ne 0 ]; then exit "$test_status"; fi',
-        'if [ "$tee_status" -ne 0 ]; then exit "$tee_status"; fi',
-        'exit "$summary_status"',
-    ]
-    pipeline_position = lines.index(pipeline)
-    summarizers = [line for line in lines if line.startswith("python3 scripts/summarize-go-test-json.py ")]
-    try:
-        telemetry_positions = [lines.index(fragment) for fragment in telemetry]
-    except ValueError:
-        telemetry_positions = []
-    telemetry_ok = (
-        len(telemetry_positions) == len(telemetry)
-        and telemetry_positions == sorted(telemetry_positions)
-        and telemetry_positions[-1] < pipeline_position
-        and len(summarizers) == 1
-        and '--input "$go_test_json"' in summarizers[0]
-        and '--output "$go_test_summary"' in summarizers[0]
-    )
-    try:
-        positions = [lines.index(fragment) for fragment in required]
-    except ValueError:
-        positions = []
-    statuses_ok = (
-        len(positions) == len(required)
-        and positions[0] == pipeline_position + 1
-        and positions == sorted(positions)
-        and len(set(positions)) == len(positions)
-    )
-    return True, flags_ok and statuses_ok, telemetry_ok
+# Normative postchecks copied from the preserved 42698e5 workflow, not derived
+# from the candidate under validation. Their implicit success() guard is retained.
+POSTCHECKS = {
+    'Check controlled inventory source identity': (
+        "matrix.shard.id == 'linux-1' || matrix.shard.id == 'darwin-1'",
+        "go test -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusFreshIdentityCaptureV3$' -count=1 -timeout=2m", {}),
+    'Check Go-only normal-folder caller': (
+        "matrix.shard.id == 'darwin-1'",
+        "go test -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusFolder(GoHost|HostNeutralBuild|AdmissionRequest|CrossFileInventory)$' -count=1 -timeout=2m", {}),
+    'Check durable inventory and legacy Describe across process exit': (
+        "matrix.shard.id == 'darwin-1'",
+        "go test -race ./internal/inventorysuccessor -run '^TestDurableDescribe(ProcessBoundary|CompetingProcesses|KilledClaim)$' -count=1 -timeout=2m\n"
+        "go test -race ./internal/inventorysuccessor/sourcecontinuation -run '^TestDurableMutationDeadline$' -count=1 -timeout=1m\n"
+        "go test -race ./cmd/lsp-trace -run '^TestCensusDurable(HeldOpenInput|InputComplete|InputDeadlineNotification)$' -count=1 -timeout=1m\n"
+        "go test -race -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusDurableNormalFolderProcesses$' -count=1 -timeout=3m\n"
+        "go test -race ./internal/publication -run '^TestTimedCompletion(KilledWriter|RejectsLateProof)$' -count=1 -timeout=1m\n"
+        "go test -race -tags lsp_trace_controlled_describe_fixture ./cmd/lsp-trace -run '^TestCensusDefaultDurableInventoryProcesses$' -count=1 -timeout=3m",
+        {'GOPROXY': 'off', 'GOSUMDB': 'off', 'GOTOOLCHAIN': 'local', 'GOTELEMETRY': 'off'}),
+}
+
+
+def condition_matches(owner, expected='success()'):
+    """Only baseline conditions and harmless expression wrappers are supported.
+
+    No condition/true has Actions' implicit success() guard. always()/cancelled()
+    do not, so they are NOT interchangeable with true, even if currently truthy.
+    YAML booleans are tested by identity, never Python truthiness of strings.
+    """
+    if 'if' not in owner:
+        return expected == 'success()'
+    value = owner['if']
+    if type(value) is bool:
+        return value is True and expected == 'success()'
+    if not isinstance(value, str):
+        return False
+    value = value.strip()
+    if value.startswith('${{') and value.endswith('}}'):
+        value = value[3:-2].strip()
+    return value == expected or (expected == 'success()' and value == 'true')
+
+
+def unmasked(owner):
+    return 'continue-on-error' not in owner or owner['continue-on-error'] is False
+
+
+def validate_shard_envelope(job, platform, errors):
+    """Bounded contract for the existing shared steps, including their containers."""
+    name = 'test-' + platform
+    allowed_job_keys = {'strategy', 'runs-on', 'env', 'steps', 'if', 'continue-on-error', 'timeout-minutes'}
+    if not condition_matches(job) or not unmasked(job) or set(job) - allowed_job_keys:
+        fail(errors, f'{name}: required job execution contract mismatch')
+    if job.get('env') != {'PLATFORM': platform}:
+        fail(errors, f'{name}: native platform/environment contract mismatch')
+    strategy = job.get('strategy', {})
+    if (set(strategy) != {'matrix', 'fail-fast'} or strategy.get('fail-fast') is not False
+            or set(strategy.get('matrix', {})) != {'shard'}):
+        fail(errors, f'{name}: full matrix execution contract mismatch')
+    expected_steps = ['actions/checkout@v4', 'actions/setup-go@v5', 'Validate manifest and resolve packages',
+                      'Install pinned gopls', 'Run shard once and summarize', *POSTCHECKS, 'Upload shard timing']
+    steps = job.get('steps', [])
+    # The first two roles are action identities, never human-facing display names.
+    if [s.get('uses') if i < 2 else s.get('name', s.get('uses'))
+            for i, s in enumerate(steps)] != expected_steps:
+        fail(errors, f'{name}: required steps must occur exactly once in baseline order')
+    for index, step in enumerate(steps):
+        label = expected_steps[index] if index < 2 else step.get('name', step.get('uses', '<unnamed>'))
+        allowed_keys = {'name', 'id', 'uses', 'with', 'run', 'if', 'env', 'shell', 'working-directory', 'continue-on-error'}
+        environment = POSTCHECKS.get(label, (None, None, {}))[2]
+        common_ok = (unmasked(step) and not (set(step) - allowed_keys)
+                     and step.get('env', {}) == environment
+                     and step.get('working-directory', '.') == '.'
+                     and step.get('shell', 'bash') == 'bash')
+        if label not in {*POSTCHECKS, 'Install pinned gopls', 'Upload shard timing'}:
+            common_ok = common_ok and condition_matches(step)
+        if label == 'Run shard once and summarize':
+            common_ok = common_ok and step.get('shell') == 'bash' and 'uses' not in step
+        if label == 'Upload shard timing':
+            common_ok = (common_ok and step.get('uses') == 'actions/upload-artifact@v4'
+                         and 'run' not in step and set(step.get('with', {})) == {'name', 'path'})
+        if not common_ok:
+            fail(errors, f'{name}: {label} execution contract mismatch')
+        if label == 'actions/checkout@v4' and (step.get('uses') != 'actions/checkout@v4'
+                                               or step.get('with', {}) or 'run' in step):
+            fail(errors, f'{name}: checkout must use the default exact workflow revision')
+        if label == 'actions/setup-go@v5' and (step.get('uses') != 'actions/setup-go@v5'
+                                               or step.get('with') != {'go-version-file': 'go.mod'} or 'run' in step):
+            fail(errors, f'{name}: setup-go contract mismatch')
+        if label in POSTCHECKS:
+            condition, command, _ = POSTCHECKS[label]
+            if (not condition_matches(step, condition) or step.get('run', '').strip() != command
+                    or 'uses' in step):
+                fail(errors, f'{name}: {label} postcheck contract mismatch')
 
 
 def validate(data):
@@ -140,11 +186,16 @@ def validate(data):
     jobs = data.get("jobs")
     if not isinstance(jobs, dict):
         return ["workflow jobs must be a mapping"]
+    if data.get('env') or data.get('defaults'):
+        fail(errors, 'workflow: unsupported inherited environment/defaults')
     for platform, runner, count in (("linux", "ubuntu-latest", 5), ("darwin", "macos-latest", 4)):
         name = f"test-{platform}"
         job = jobs.get(name, {})
+        validate_shard_envelope(job, platform, errors)
         matrix = job.get("strategy", {}).get("matrix", {}).get("shard", [])
         expected_ids = [f"{platform}-{i}" for i in range(1, count + 1)]
+        if any(set(entry) != {'id', 'needs_gopls'} or type(entry.get('needs_gopls')) is not bool for entry in matrix):
+            fail(errors, f'{name}: unsupported matrix entry schema')
         if job.get("runs-on") != runner:
             fail(errors, f"{name}: wrong runner")
         if [entry.get("id") for entry in matrix] != expected_ids:
@@ -157,22 +208,20 @@ def validate(data):
         run_step = step_by_name(job, "Run shard once and summarize") or {}
         pipeline_ok, script_ok, telemetry_ok = validate_shard_script(run_step.get("run", ""))
         if not pipeline_ok:
-            fail(errors, f"{name}: test invocation must be exactly one effective pipeline")
+            fail(errors, f"{name}: test invocation must be exactly one checked exhaustive plan")
         elif not telemetry_ok:
             fail(errors, f"{name}: test telemetry must use unique absolute paths under RUNNER_TEMP")
         elif not script_ok:
-            lines = executable_shell_lines(run_step.get("run", ""))
-            go_line = next(line for line in lines if re.match(r"^go\s+test(?:\s|$)", line))
-            go_tokens = shlex.split(re.split(r"(?<!\|)\|(?!\|)", go_line)[0])
-            if "-json" not in go_tokens or "-timeout=10m" not in go_tokens:
-                fail(errors, f"{name}: test invocation must include -json and -timeout=10m")
-            else:
-                fail(errors, f"{name}: test and telemetry statuses must remain separate with test status primary")
+            fail(errors, f"{name}: checked runner arguments and unmasked exit status required")
         upload = step_by_name(job, "Upload shard timing") or {}
         if upload.get("if") != "always()":
             fail(errors, f"{name}: upload step must use if: always()")
-        if upload.get("with", {}).get("path") != "${{ runner.temp }}/go-test-*/go-test.json\n${{ runner.temp }}/go-test-*/go-test-summary.json\n":
+        if upload.get("with", {}).get("path") != "${{ runner.temp }}/go-test-*/**\n":
             fail(errors, f"{name}: uploaded telemetry must use absolute runner.temp paths")
+        if upload.get('with', {}).get('name') != 'go-test-${{ matrix.shard.id }}':
+            fail(errors, f'{name}: existing shard artifact names must be preserved')
+        if 'timeout-minutes' in job:
+            fail(errors, f'{name}: job timeout policy must remain unchanged')
         install = step_by_name(job, "Install pinned gopls") or {}
         if install.get("if") != "matrix.shard.needs_gopls" or install.get("run") != "go install golang.org/x/tools/gopls@v0.23.0":
             fail(errors, f"{name}: gopls step mismatch")

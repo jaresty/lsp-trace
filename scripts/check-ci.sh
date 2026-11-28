@@ -3,6 +3,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-ci-shards.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-run-ci-shard.py
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-ci-affected-packages.py
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-summarize-go-test-json.py
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-ci-topology.py

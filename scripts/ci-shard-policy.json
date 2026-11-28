@@ -1,4 +1,10 @@
 {
+  "root_batching": {
+    "packages": ["lsp-trace/cmd/lsp-trace", "lsp-trace/internal/censuslineagepilot"],
+    "max_roots": 32,
+    "toolchain": "go1.26.5",
+    "compatibility": "Listing executes initialization; batches repeat initialization and TestMain. Hosted complete root accounting is required; source grep is not compatibility evidence. Cap 32 is provisional, not a runtime guarantee."
+  },
   "default_weight": 100,
   "fallback_weight": 300,
   "exclusive_shards": {

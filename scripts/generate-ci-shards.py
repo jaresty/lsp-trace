@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import runpy
 import subprocess
 from pathlib import Path
 
@@ -72,12 +73,61 @@ def build(packages_by_os):
     }
 
 
+def root_selector(roots):
+    """Go regexp.QuoteMeta, NOT Python re.escape; slash is Go subtest syntax."""
+    if not roots or any(not r or '/' in r or '\n' in r for r in roots):
+        raise ValueError('empty or slash-containing root')
+    meta = set('\\\\.+*?()|[]{}^$')
+    return '^(' + '|'.join(''.join('\\' + c if c in meta else c for c in r) for r in roots) + ')$'
+
+
+def invocation_plan(inventory, shard):
+    """Pure runtime mode. Package ownership is not regenerated or reassigned."""
+    admission = runpy.run_path(str(Path(__file__).with_name('check-ci-shards.py')))['validate_batch_policy']
+    errors = admission(POLICY)
+    if errors:
+        raise ValueError('; '.join(errors))
+    policy = POLICY['root_batching']
+    allowed = set(policy['packages'])
+    records = inventory['packages']
+    invocations = []
+    ordinary = [p for p in shard['packages'] if p not in allowed]
+    if ordinary:
+        invocations.append({'id': 'ordinary', 'packages': ordinary, 'roots': [], 'selector': None})
+    blocked = []
+    for package in sorted(set(shard['packages']) & allowed):
+        record = records.get(package)
+        if record is None or record.get('error'):
+            blocked.append(package)
+            continue
+        roots = sorted(n for n, kind in record['roots'].items() if kind != 'Benchmark')
+        if not roots:
+            raise ValueError('empty runnable inventory: ' + package)
+        for offset in range(0, len(roots), policy['max_roots']):
+            chunk = roots[offset:offset + policy['max_roots']]
+            invocations.append({'id': package.replace('/', '_') + '-%04d' % (offset // policy['max_roots'] + 1),
+                                'packages': [package], 'roots': chunk, 'selector': root_selector(chunk)})
+    return {'version': 1, 'context': inventory['context'], 'shard': shard['id'],
+            'inventory_id': inventory['inventory_id'], 'blocked_packages': blocked,
+            'invocations': invocations}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--packages-file")
+    parser.add_argument("--inventory", help="pure invocation planning; does not execute Go")
+    parser.add_argument("--shard")
+    parser.add_argument("--manifest", default="scripts/ci-shards.json")
     parser.add_argument("--output", default="scripts/ci-shards.json")
     args = parser.parse_args()
-    manifest = build(load_packages(args.packages_file))
+    if args.inventory:
+        inventory = json.loads(Path(args.inventory).read_text())
+        ownership = json.loads(Path(args.manifest).read_text())
+        shards = ownership['platforms'][inventory['context']['platform']]['shards']
+        shard = next(s for s in shards if s['id'] == args.shard)
+        manifest = invocation_plan(inventory, shard)
+    else:
+        manifest = build(load_packages(args.packages_file))
     Path(args.output).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
