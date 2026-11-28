@@ -1,0 +1,647 @@
+//go:build linux && (amd64 || arm64)
+
+package managedprocess
+
+import (
+	"context"
+	"errors"
+	"io"
+	"os"
+	"os/exec"
+	"os/signal"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"testing"
+	"time"
+)
+
+// Closed construction seam: no environment bypass, exported constructor, or
+// caller-selected PGID. Native tests below run ONLY on authorized hosted Linux.
+// The harness owns SIGCHLD policy and must not install autoreap/competing waits.
+func newOwnedLinuxLifecycleTestManager(deadline time.Time) (*Manager, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := &Manager{available: true, linuxCandidate: true, options: normalizedOptions(Options{StderrLimit: 32, GracePeriod: 30 * time.Millisecond}), factory: commandFromSpec}
+	b := &privateProviderWindow{ctx: ctx, manager: m, profile: m.PrivateProviderWindowProfile(), deadline: deadline, stderr: PrivateProviderStderrReadLimit}
+	return m, context.WithValue(ctx, privateProviderWindowKey{}, b), cancel
+}
+func ownedLinuxFixtureSpec(mode string) Spec {
+	return Spec{Path: os.Args[0], Args: []string{"-test.run=^TestOwnedLinuxFixture$", "--", "owned-linux-fixture", mode}}
+}
+func TestOwnedLinuxFixture(t *testing.T) {
+	if len(os.Args) < 3 || os.Args[len(os.Args)-2] != "owned-linux-fixture" {
+		return
+	}
+	mode := os.Args[len(os.Args)-1]
+	fixtureDeadline := time.Now().Add(3 * time.Second)
+	switch mode {
+	case "exit0", "exit7":
+		ownedLinuxFixtureExitGate(fixtureDeadline)
+		if mode == "exit7" {
+			os.Exit(7)
+		}
+		os.Exit(0)
+	case "output":
+		_, _ = io.WriteString(os.Stdout, "output")
+		_, _ = io.WriteString(os.Stderr, strings.Repeat("x", 64))
+		os.Exit(0)
+	case "hold", "hold-ready":
+		signal.Ignore(os.Interrupt)
+		if mode == "hold-ready" {
+			ack := os.NewFile(3, "owned-child-ready")
+			if ack == nil {
+				os.Exit(82)
+			}
+			if _, err := ack.Write([]byte{'R'}); err != nil {
+				os.Exit(82)
+			}
+			_ = ack.Close()
+		}
+		_, _ = io.WriteString(os.Stdout, "ready\n")
+		time.Sleep(time.Until(fixtureDeadline)) // original finite fixture lifetime, no renewed wait
+		os.Exit(0)
+	case "survivor":
+		ready, ack, err := os.Pipe()
+		if err != nil {
+			os.Exit(80)
+		}
+		child := exec.Command(os.Args[0], "-test.run=^TestOwnedLinuxFixture$", "--", "owned-linux-fixture", "hold-ready")
+		child.Stdout, child.Stderr = os.Stdout, os.Stderr // inherits the parent's owned group
+		child.ExtraFiles = []*os.File{ack}                // fixture-only child readiness, not candidate stdio
+		if child.Start() != nil {
+			_ = ready.Close()
+			_ = ack.Close()
+			os.Exit(80)
+		}
+		_ = ack.Close()
+		var token [1]byte
+		err = ready.SetReadDeadline(fixtureDeadline)
+		if err == nil {
+			_, err = io.ReadFull(ready, token[:])
+		}
+		_ = ready.Close()
+		if err != nil || token[0] != 'R' {
+			// This fixture still owns its unreaped direct child; no recovered target.
+			_ = child.Process.Kill()
+			_ = child.Wait()
+			os.Exit(82)
+		}
+		// ACK establishes ignored SIGINT before leader exit. The original test
+		// installs its trace before opening this gate; no sleep selects the order.
+		ownedLinuxFixtureExitGate(fixtureDeadline)
+		os.Exit(0)
+	default:
+		os.Exit(81)
+	}
+}
+func ownedLinuxFixtureExitGate(deadline time.Time) {
+	// Independently bounded even when a test assertion fails before release.
+	// Inherited blocking stdin need not support File.SetReadDeadline. This
+	// fixture-only watchdog preserves the existing three-second live limit.
+	timer := time.AfterFunc(time.Until(deadline), func() { os.Exit(82) })
+	defer timer.Stop()
+	var token [1]byte
+	if _, err := io.ReadFull(os.Stdin, token[:]); err != nil || token[0] != 'G' {
+		os.Exit(82)
+	}
+}
+func startedOwnedLinux(t *testing.T, mode string, dst io.Writer, lifetime time.Duration) (*Process, *ownedLinux, context.CancelFunc) {
+	t.Helper()
+	m, ctx, cancel := newOwnedLinuxLifecycleTestManager(time.Now().Add(lifetime))
+	var p *Process
+	var obs StartObservation
+	if dst == nil {
+		p, obs = m.Start(ctx, ownedLinuxFixtureSpec(mode))
+	} else {
+		p, obs = m.StartWithStdout(ctx, ownedLinuxFixtureSpec(mode), dst)
+	}
+	if p != nil {
+		t.Cleanup(func() {
+			p.linux.teardown(context.Background())
+			_ = p.Close()
+			cancel()
+			owner := p.linux.(*ownedLinux)
+			awaitOwnedLinuxTest(t, p.done, "native owned wait cleanup")
+			awaitOwnedLinuxTest(t, owner.stdoutDone, "native stdout cleanup")
+			awaitOwnedLinuxTest(t, owner.stderrDone, "native stderr cleanup")
+		})
+	} else {
+		t.Cleanup(cancel)
+	}
+	if p == nil || obs.Kind != StartStarted {
+		t.Fatalf("owned start: %+v", obs)
+	}
+	return p, p.linux.(*ownedLinux), cancel
+}
+func TestOwnedLinuxNativeExitFence(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		code int
+	}{{"exit0", 0}, {"exit7", 7}} {
+		t.Run(tc.mode, func(t *testing.T) {
+			p, s, _ := startedOwnedLinux(t, tc.mode, nil, 2*time.Second)
+			trace := installOwnedLinuxTrace(s)
+			if _, err := p.Stdin().Write([]byte{'G'}); err != nil {
+				t.Fatal(err)
+			}
+			d := p.Wait()
+			trace.assertOrder(t)
+			if d.ExitCode != tc.code || d.Kind != DeathExited {
+				t.Fatalf("ASSERT_LINUX_EXIT_STATUS: %+v", d)
+			}
+			if !channelClosed(s.observed) || !channelClosed(s.fenced) || !channelClosed(p.done) {
+				t.Fatal("ASSERT_LINUX_WAIT_AFTER_FENCE")
+			}
+			if !s.closed || !s.attempted[0] || !s.attempted[1] {
+				t.Fatal("ASSERT_LINUX_SINGLE_SCHEDULE")
+			}
+			before := s.firstStop
+			_ = p.Teardown(context.Background())
+			_ = p.ReconcileReap(context.Background())
+			_ = p.Close()
+			if s.firstStop != before {
+				t.Fatal("ASSERT_LINUX_NO_SCHEDULE_RESET")
+			}
+		})
+	}
+}
+func TestOwnedLinuxNativeCancelEscalation(t *testing.T) {
+	p, s, cancel := startedOwnedLinux(t, "hold", nil, 2*time.Second)
+	var ready [6]byte
+	if _, err := io.ReadFull(p.Stdout(), ready[:]); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	d := p.Wait()
+	if d.Kind != DeathSignaled || !s.attempted[1] || s.due.After(s.deadline) {
+		t.Fatalf("ASSERT_LINUX_ESCALATE: %+v", d)
+	}
+	if !channelClosed(p.done) {
+		t.Fatal("ASSERT_LINUX_SOLE_WAIT_JOINED")
+	}
+}
+func TestOwnedLinuxNativeLeaderExitInheritedPipes(t *testing.T) {
+	p, s, _ := startedOwnedLinux(t, "survivor", io.Discard, 2*time.Second)
+	trace := installOwnedLinuxTrace(s)
+	if _, err := p.Stdin().Write([]byte{'G'}); err != nil {
+		t.Fatal(err)
+	}
+	d := p.Wait()
+	if d.Kind != DeathExited || d.ExitCode != 0 {
+		t.Fatalf("ASSERT_LINUX_SURVIVOR_ACK_BEFORE_LEADER_EXIT: %+v", d)
+	}
+	trace.assertOrder(t)
+	if !channelClosed(s.fenced) || !channelClosed(p.done) || !s.attempted[1] {
+		t.Fatal("ASSERT_LINUX_SURVIVOR_SIGNAL_BEFORE_WAIT")
+	}
+	// A hosted init may retain orphan zombies: no false claim of census absence.
+	if !s.joined() {
+		t.Fatal("ASSERT_LINUX_INHERITED_PIPES_JOINED")
+	}
+}
+func TestOwnedLinuxNativeBlockedWriterHistory(t *testing.T) {
+	w := newOwnedLinuxBlockedWriter(nil)
+	var s *ownedLinux
+	// Both release and cleanup are installed before startup can fail.
+	defer w.unblock()
+	t.Cleanup(func() {
+		w.unblock()
+		if channelClosed(w.started) {
+			awaitOwnedLinuxTest(t, w.returned, "writer return")
+		}
+		if s != nil {
+			awaitOwnedLinuxTest(t, s.stdoutDone, "delivery cleanup join")
+		}
+	})
+	p, owner, _ := startedOwnedLinux(t, "output", w, 300*time.Millisecond)
+	s = owner
+	select {
+	case <-w.started:
+	case <-time.After(time.Second):
+		t.Fatal("fixture did not write")
+	}
+	_ = p.Wait()
+	terminal := p.Teardown(context.Background())
+	if terminal.Death.Reap.Kind != ReapFailed || channelClosed(s.stdoutDone) {
+		t.Fatal("ASSERT_LINUX_BLOCKED_WRITE_NOT_JOINED")
+	}
+	if !terminal.Death.Stderr.Truncated {
+		t.Fatal("ASSERT_LINUX_STDERR_TRUNCATION")
+	}
+	// Release explicitly rather than force-closing an external writer.
+	w.unblock()
+	select {
+	case <-s.stdoutDone:
+	case <-time.After(time.Second):
+		t.Fatal("eventual writer join")
+	}
+	again := p.Teardown(context.Background())
+	if again.Death.Reap.Kind != ReapFailed || !errors.Is(again.Death.Reap.Err, errLinuxJoin) {
+		t.Fatal("ASSERT_LINUX_TERMINAL_FAILURE_IMMUTABLE")
+	}
+	if p.ReconcileReap(context.Background()).Death.Reap.Kind != ReapFailed {
+		t.Fatal("ASSERT_LINUX_RECONCILE_RETAINS_FAILURE")
+	}
+}
+
+// Fixed event buffer: instrumentation is private and never grants authority.
+type ownedLinuxTrace struct {
+	mu       sync.Mutex
+	events   [8]ownedLinuxEvent
+	n        int
+	overflow bool
+}
+
+func (e ownedLinuxEvent) String() string {
+	return [...]string{"observer-return", "wait-gate-entry", "final-signal-entry", "final-signal-return", "fence-publication", "wait-entry", "wait-return"}[e]
+}
+func (l *ownedLinuxTrace) record(e ownedLinuxEvent) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.n == len(l.events) {
+		l.overflow = true
+		return
+	}
+	l.events[l.n] = e
+	l.n++
+}
+func (l *ownedLinuxTrace) count(e ownedLinuxEvent) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := 0
+	for _, got := range l.events[:l.n] {
+		if got == e {
+			n++
+		}
+	}
+	return n
+}
+func installOwnedLinuxTrace(s *ownedLinux) *ownedLinuxTrace {
+	l := &ownedLinuxTrace{}
+	s.events.Store(&ownedLinuxEventSink{record: l.record})
+	return l
+}
+func (l *ownedLinuxTrace) assertOrder(t *testing.T) {
+	t.Helper()
+	l.mu.Lock()
+	events, n, overflow := l.events, l.n, l.overflow
+	l.mu.Unlock()
+	positions := [7]int{-1, -1, -1, -1, -1, -1, -1}
+	for i, e := range events[:n] {
+		if positions[e] != -1 {
+			t.Fatalf("ASSERT_LINUX_EVENT_ONCE: %v", events[:n])
+		}
+		positions[e] = i
+	}
+	if overflow || n != len(positions) {
+		t.Fatalf("ASSERT_LINUX_EVENT_TRACE_COMPLETE: %v", events[:n])
+	}
+	for _, pair := range [][2]ownedLinuxEvent{{linuxFinalSignalEntered, linuxFinalSignalReturned}, {linuxFinalSignalReturned, linuxFencePublished}, {linuxFencePublished, linuxWaitEntered}, {linuxWaitEntered, linuxWaitReturned}, {linuxObserverReturned, linuxWaitGateEntered}, {linuxWaitGateEntered, linuxWaitEntered}} {
+		if positions[pair[0]] >= positions[pair[1]] {
+			t.Errorf("ASSERT_LINUX_FINAL_RETURN_FENCE_WAIT_ORDER: %v", events[:n])
+		}
+	}
+	t.Logf("LINUX_ORDERED_EVENTS=%v", events[:n])
+}
+func awaitOwnedLinuxTest(t *testing.T, done <-chan struct{}, what string) bool {
+	t.Helper()
+	remaining := time.Second
+	if deadline, ok := t.Deadline(); ok && time.Until(deadline) < remaining {
+		remaining = time.Until(deadline)
+	}
+	timer := time.NewTimer(remaining)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		t.Errorf("fixture join timeout: %s", what)
+		return false
+	}
+}
+
+type ownedLinuxBlockedWriter struct {
+	started, release, returned         chan struct{}
+	startOnce, releaseOnce, returnOnce sync.Once
+	err                                error
+}
+
+func newOwnedLinuxBlockedWriter(err error) *ownedLinuxBlockedWriter {
+	return &ownedLinuxBlockedWriter{started: make(chan struct{}), release: make(chan struct{}), returned: make(chan struct{}), err: err}
+}
+func (w *ownedLinuxBlockedWriter) unblock() { w.releaseOnce.Do(func() { close(w.release) }) }
+func (w *ownedLinuxBlockedWriter) Write(p []byte) (int, error) {
+	w.startOnce.Do(func() { close(w.started) })
+	<-w.release
+	defer w.returnOnce.Do(func() { close(w.returned) })
+	if w.err != nil {
+		return 0, w.err
+	}
+	return len(p), nil
+}
+
+type ownedLinuxFailWriter struct{}
+
+func (ownedLinuxFailWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+func TestOwnedLinuxNativeWriteFailure(t *testing.T) {
+	p, _, _ := startedOwnedLinux(t, "output", ownedLinuxFailWriter{}, 2*time.Second)
+	d := p.Wait()
+	if d.StdoutDelivery.Err == nil || d.Reap.Kind != ReapFailed {
+		t.Fatal("ASSERT_LINUX_WRITE_FAILURE_RETAINED")
+	}
+}
+func TestOwnedLinuxPrestartRefusal(t *testing.T) {
+	m, ctx, cancel := newOwnedLinuxLifecycleTestManager(time.Now().Add(time.Second))
+	cancel()
+	m.factory = func(context.Context, Spec) (*exec.Cmd, error) {
+		t.Fatal("factory after cancelled context")
+		return nil, nil
+	}
+	if p, o := m.Start(ctx, Spec{}); p != nil || o.Kind == StartStarted {
+		t.Fatal("ASSERT_LINUX_CANCEL_BEFORE_START")
+	}
+	if _, e := m.PrivateProviderWindowContext(context.Background(), m.PrivateProviderWindowProfile(), time.Now().Add(time.Second)); e == nil {
+		t.Fatal("ASSERT_LINUX_PUBLIC_WINDOW_REFUSED")
+	}
+}
+
+// Pure state witnesses: no process, native provider, SELF or proc calls.
+func TestOwnedLinuxSnapshotCompletionCoherent(t *testing.T) {
+	for _, mode := range []string{"stdout-error", "stderr-error", "stderr-truncation", "stdout-success"} {
+		t.Run(mode, func(t *testing.T) {
+			p := &Process{done: make(chan struct{}), stderr: &boundedBuffer{limit: 1}, death: DeathObservation{Reap: ReapObservation{Kind: ReapComplete}}}
+			close(p.done)
+			s := &ownedLinux{p: p, stdoutDone: make(chan struct{}), stderrDone: make(chan struct{})}
+			done := s.stdoutDone
+			if strings.HasPrefix(mode, "stderr") {
+				done = s.stderrDone
+				close(s.stdoutDone)
+			} else {
+				close(s.stderrDone)
+			}
+			err := error(io.ErrClosedPipe)
+			if mode == "stdout-success" {
+				err = nil
+			}
+			w := newOwnedLinuxBlockedWriter(err)
+			// Release/join remains registered even if a guard fails inside snapshotAt.
+			defer w.unblock()
+			t.Cleanup(func() { w.unblock(); awaitOwnedLinuxTest(t, done, "snapshot publisher") })
+			delivery := &deliveryWriter{writer: w}
+			if mode == "stderr-error" {
+				p.stderrDelivery = delivery
+			} else if mode != "stderr-truncation" {
+				p.stdoutDelivery = delivery
+			}
+			go func() {
+				defer close(done)
+				if mode == "stderr-truncation" {
+					close(w.started)
+					<-w.release
+					_, _ = p.stderr.Write([]byte("xx"))
+				} else {
+					_, _ = delivery.Write([]byte("x"))
+				}
+			}()
+			if !awaitOwnedLinuxTest(t, w.started, "withheld publisher") {
+				t.FailNow()
+			}
+			got := s.snapshotAt(func() {
+				// The OLD body has already sampled error-free results here. Complete the
+				// actual deliveryWriter publication before its former trailing joined().
+				w.unblock()
+				if !awaitOwnedLinuxTest(t, done, "publication at snapshot barrier") {
+					t.FailNow()
+				}
+			})
+			if got.Reap.Kind != ReapFailed || !errors.Is(got.Reap.Err, errLinuxJoin) {
+				t.Fatalf("ASSERT_LINUX_SNAPSHOT_COMPLETION_COHERENT: %+v", got)
+			}
+			later := s.snapshot()
+			if mode == "stdout-error" && later.StdoutDelivery.Err == nil || mode == "stderr-error" && later.StderrDelivery.Err == nil || mode == "stderr-truncation" && !later.Stderr.Truncated {
+				t.Fatalf("ASSERT_LINUX_JOINED_RESULTS_PUBLISHED: %+v", later)
+			}
+			if mode == "stdout-success" && later.Reap.Kind != ReapComplete || mode != "stdout-success" && later.Reap.Kind != ReapFailed {
+				t.Fatalf("ASSERT_LINUX_JOINED_RESULT_CLASSIFICATION: %+v", later)
+			}
+			if got.Reap.Kind != ReapFailed {
+				t.Fatal("ASSERT_LINUX_PRIOR_SNAPSHOT_IMMUTABLE")
+			}
+		})
+	}
+}
+
+func TestOwnedLinuxFinalSignalReturnFence(t *testing.T) {
+	p := &Process{cmd: &exec.Cmd{}, done: make(chan struct{})}
+	entered, release, fenceDone, atGate := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	var waits atomic.Int32
+	s := &ownedLinux{p: p, pgid: 99, stop: make(chan struct{}), observed: make(chan struct{}), fenced: make(chan struct{}), observeExit: func(int) error { return nil }, waitChild: func() error { waits.Add(1); return syscall.ECHILD }, signal: func(_ int, sig syscall.Signal) error {
+		if sig != syscall.SIGKILL {
+			t.Error("unexpected pure signal")
+		}
+		close(entered)
+		<-release
+		return nil // hold RETURN, not just entry
+	}}
+	trace := &ownedLinuxTrace{}
+	s.events.Store(&ownedLinuxEventSink{record: func(e ownedLinuxEvent) {
+		trace.record(e)
+		if e == linuxWaitGateEntered {
+			close(atGate)
+		}
+	}})
+	fenceStarted := false
+	defer func() {
+		unblock()
+		s.fence(false)
+		awaitOwnedLinuxTest(t, p.done, "pure reaper cleanup")
+		if fenceStarted {
+			awaitOwnedLinuxTest(t, fenceDone, "pure fence cleanup")
+		}
+	}()
+	go s.observeAndReap()
+	if !awaitOwnedLinuxTest(t, atGate, "reaper reached wait gate") {
+		t.FailNow()
+	}
+	fenceStarted = true
+	go func() { s.fence(true); close(fenceDone) }()
+	if !awaitOwnedLinuxTest(t, entered, "final signal actually entered") {
+		t.FailNow()
+	}
+	// Both contenders reached their exact seams; no sleep or scheduler guess.
+	if waits.Load() != 0 || trace.count(linuxWaitEntered) != 0 || channelClosed(s.fenced) {
+		t.Error("ASSERT_LINUX_FINAL_RETURN_REQUIRED_WHILE_HELD")
+	}
+	unblock()
+	if !awaitOwnedLinuxTest(t, fenceDone, "final signal/fence returned") || !awaitOwnedLinuxTest(t, p.done, "consuming wait returned") {
+		t.FailNow()
+	}
+	trace.assertOrder(t)
+	if waits.Load() != 1 {
+		t.Fatal("ASSERT_LINUX_ONE_CONSUMING_WAIT_ENTRY")
+	}
+}
+
+func TestOwnedLinuxFenceState(t *testing.T) {
+	now := time.Unix(100, 0)
+	calls := []syscall.Signal{}
+	s := &ownedLinux{p: &Process{gracePeriod: time.Second}, pgid: 99, deadline: now.Add(500 * time.Millisecond), fenced: make(chan struct{}), signal: func(pid int, sig syscall.Signal) error {
+		if pid != -99 {
+			t.Fatal("ASSERT_LINUX_STORED_TARGET")
+		}
+		calls = append(calls, sig)
+		return nil
+	}}
+	due := s.beginStop(now)
+	if due != s.deadline || s.beginStop(now.Add(time.Second)) != due {
+		t.Fatal("ASSERT_LINUX_ORIGINAL_DUE")
+	}
+	s.fence(true)
+	for i := 0; i < 4; i++ {
+		s.beginStop(now.Add(time.Hour))
+		s.fence(true)
+	}
+	if len(calls) != 2 || calls[0] != syscall.SIGINT || calls[1] != syscall.SIGKILL || !channelClosed(s.fenced) {
+		t.Fatal("ASSERT_LINUX_NO_POST_FENCE_SIGNAL")
+	}
+}
+func TestOwnedLinuxObserverWaitFence(t *testing.T) {
+	p := &Process{cmd: &exec.Cmd{}, done: make(chan struct{})}
+	var observations, waits atomic.Int32
+	s := &ownedLinux{p: p, pgid: 99, stop: make(chan struct{}), observed: make(chan struct{}), fenced: make(chan struct{}), observeExit: func(int) error { observations.Add(1); return nil }}
+	s.waitChild = func() error {
+		if !channelClosed(s.fenced) {
+			t.Error("ASSERT_LINUX_WAIT_CALL_AFTER_FENCE")
+		}
+		waits.Add(1)
+		return syscall.ECHILD
+	}
+	go s.observeAndReap()
+	<-s.observed
+	if waits.Load() != 0 {
+		t.Error("ASSERT_LINUX_NO_CONSUMING_WAIT_BEFORE_FENCE")
+	}
+	s.fence(false)
+	<-p.done
+	if observations.Load() != 1 || waits.Load() != 1 {
+		t.Fatal("ASSERT_LINUX_ONE_OBSERVER_ONE_WAIT")
+	}
+}
+func TestOwnedLinuxObserverErrorPolicy(t *testing.T) {
+	for _, err := range []error{syscall.EINTR, syscall.ENOSYS, syscall.EINVAL, syscall.ECHILD, errLinuxCustody, syscall.EPERM} {
+		t.Run(err.Error(), func(t *testing.T) {
+			calls := 0
+			s := &ownedLinux{p: &Process{gracePeriod: time.Second}, pgid: 99, deadline: time.Now().Add(time.Second), fenced: make(chan struct{}), signal: func(int, syscall.Signal) error { calls++; return syscall.ESRCH }}
+			s.recordObservation(err)
+			s.beginStop(time.Now())
+			s.fence(true)
+			retain := err == syscall.EINTR || err == syscall.ENOSYS || err == syscall.EINVAL
+			want := 0
+			if retain {
+				want = 2
+			}
+			if calls != want || !s.closed || !errors.Is(s.fault, err) {
+				t.Fatal("ASSERT_LINUX_OBSERVER_ERROR_CUSTODY_POLICY")
+			}
+		})
+	}
+}
+func TestOwnedLinuxNativeBindingFailureOwnsCleanup(t *testing.T) {
+	m, ctx, cancel := newOwnedLinuxLifecycleTestManager(time.Now().Add(time.Second))
+	defer cancel()
+	// Force rejection of a second binding, without binding any native target.
+	privateProviderWindowFrom(ctx).linuxCensus = &linuxCensusEngine{}
+	p, o := m.Start(ctx, ownedLinuxFixtureSpec("hold"))
+	if p == nil {
+		t.Fatalf("successful start owner missing: %+v", o)
+	}
+	t.Cleanup(func() { _ = p.Teardown(context.Background()); _ = p.Close() })
+	if o.Kind != StartFailed {
+		t.Fatal("ASSERT_LINUX_BINDING_FAILURE_RETAINED")
+	}
+	_ = p.Wait()
+	s := p.linux.(*ownedLinux)
+	if !channelClosed(p.done) || !channelClosed(s.fenced) || !s.attempted[1] {
+		t.Fatal("ASSERT_LINUX_BINDING_FAILURE_CLEANUP_OWNED")
+	}
+}
+func TestOwnedLinuxLostCustodyFence(t *testing.T) {
+	s := &ownedLinux{p: &Process{gracePeriod: time.Second}, pgid: 99, deadline: time.Now().Add(time.Second), fenced: make(chan struct{}), signal: func(int, syscall.Signal) error { t.Fatal("ASSERT_LINUX_CUSTODY_LOST_NO_SIGNAL"); return nil }}
+	s.fence(false)
+	s.beginStop(time.Now())
+	s.fence(true)
+	if !s.closed || s.attempted[0] || s.attempted[1] {
+		t.Fatal("ASSERT_LINUX_CUSTODY_LOST_NO_SIGNAL")
+	}
+}
+func TestOwnedLinuxSignalSerialization(t *testing.T) {
+	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var firstReturned atomic.Bool
+	s := &ownedLinux{p: &Process{gracePeriod: time.Second}, pgid: 99, deadline: time.Now().Add(time.Second), fenced: make(chan struct{}), signal: func(_ int, sig syscall.Signal) error {
+		if sig == syscall.SIGINT {
+			close(entered)
+			<-release
+			firstReturned.Store(true)
+		} else if !firstReturned.Load() {
+			t.Error("ASSERT_LINUX_SIGNAL_RESERVATION_SERIALIZED")
+		}
+		return nil
+	}}
+	go func() { s.beginStop(time.Now()); close(done) }()
+	<-entered
+	go s.fence(true)
+	if channelClosed(s.fenced) {
+		t.Error("ASSERT_LINUX_FENCE_AFTER_SIGNAL_RETURN")
+	}
+	close(release)
+	<-done
+	select {
+	case <-s.fenced:
+	case <-time.After(time.Second):
+		t.Fatal("fence did not complete")
+	}
+	s.fence(true)
+}
+func TestOwnedLinuxReconciliationRetainsUncertainty(t *testing.T) {
+	e, f := newLinuxFixture(t)
+	f.probes = []linuxCensusErrno{0, linuxESRCH}
+	f.dirErr = 5
+	p := &Process{done: make(chan struct{}), stderr: &boundedBuffer{}, death: DeathObservation{Reap: ReapObservation{Kind: ReapComplete}}}
+	s := &ownedLinux{p: p, engine: e, stop: make(chan struct{}), finished: make(chan struct{}), stdoutDone: make(chan struct{}), stderrDone: make(chan struct{})}
+	close(p.done)
+	close(s.finished)
+	close(s.stdoutDone)
+	close(s.stderrDone)
+	terminal := s.teardown(context.Background())
+	f.dirErr = 0
+	reconciled := s.reconcile(context.Background())
+	if terminal.Death.Reap.Kind != ReapFailed || reconciled.Census.Err != nil || reconciled.Death.Reap.Kind != ReapFailed {
+		t.Fatal("ASSERT_LINUX_SUCCESSFUL_RECONCILIATION_RETAINS_TERMINAL_FAILURE")
+	}
+	if s.close().Kind != ResourcesCloseFailed {
+		t.Fatal("ASSERT_LINUX_CLOSE_RETAINS_UNCERTAINTY")
+	}
+}
+func TestOwnedLinuxReconciliationPhases(t *testing.T) {
+	e, f := newLinuxFixture(t)
+	f.probes = []linuxCensusErrno{linuxESRCH}
+	p := &Process{done: make(chan struct{}), stderr: &boundedBuffer{}, death: DeathObservation{Reap: ReapObservation{Kind: ReapComplete}}}
+	s := &ownedLinux{p: p, engine: e, stop: make(chan struct{}), finished: make(chan struct{}), stdoutDone: make(chan struct{}), stderrDone: make(chan struct{})}
+	close(p.done)
+	close(s.finished)
+	close(s.stdoutDone)
+	close(s.stderrDone)
+	o := s.reconcile(context.Background())
+	if !s.used[0] || !s.used[1] || o.Death.Reap.Kind != ReapComplete {
+		t.Fatalf("ASSERT_LINUX_PHASE_ORDER: %+v", o)
+	}
+	calls := f.calls
+	f.now = f.now.Add(time.Hour)
+	_ = s.teardown(context.Background())
+	if f.calls != calls {
+		t.Fatal("ASSERT_LINUX_CACHED_HISTORY_NO_IO")
+	}
+}

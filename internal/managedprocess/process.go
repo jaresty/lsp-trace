@@ -144,10 +144,11 @@ type TeardownObservation struct {
 type commandFactory func(context.Context, Spec) (*exec.Cmd, error)
 
 type Manager struct {
-	available   bool
-	localDarwin bool
-	options     Options
-	factory     commandFactory
+	available      bool
+	localDarwin    bool
+	linuxCandidate bool // package-private, never selected by a public constructor
+	options        Options
+	factory        commandFactory
 }
 
 // New consumes only the sealed production gate. Current containment gates are
@@ -231,6 +232,9 @@ func (m *Manager) start(ctx context.Context, spec Spec, stdoutWriter io.Writer) 
 	if window != nil && !window.valid(m) {
 		return nil, StartObservation{Kind: StartUnavailable, Reason: "private provider window unavailable", Evidence: evidence, Limitations: limitations}
 	}
+	if m.linuxCandidate {
+		return startOwnedLinux(m, ctx, spec, stdoutWriter)
+	}
 	cmd, err := m.factory(ctx, spec)
 	if err != nil {
 		return nil, StartObservation{Kind: StartFailed, Reason: "command construction failed", Err: err, Evidence: evidence, Limitations: limitations}
@@ -304,7 +308,17 @@ func (m *Manager) start(ctx context.Context, spec Spec, stdoutWriter io.Writer) 
 	return p, StartObservation{Kind: StartStarted, Evidence: evidence, Limitations: limitations}
 }
 
+// ownedLinuxLifecycle keeps platform dispatch private without changing Darwin.
+type ownedLinuxLifecycle interface {
+	wait(context.Context) DeathObservation
+	observe() SurvivorObservation
+	teardown(context.Context) TeardownObservation
+	reconcile(context.Context) TeardownObservation
+	close() ResourceObservation
+}
+
 type Process struct {
+	linux          ownedLinuxLifecycle
 	cmd            *exec.Cmd
 	stdin          io.WriteCloser
 	stdout         io.ReadCloser
@@ -345,6 +359,9 @@ func (p *Process) reap() {
 }
 
 func (p *Process) Wait() DeathObservation {
+	if p.linux != nil {
+		return p.linux.wait(context.Background())
+	}
 	<-p.done
 	return p.death
 }
@@ -354,6 +371,9 @@ func (p *Process) Wait() DeathObservation {
 // Local Darwin supervision also proves the original process group has no
 // remaining helper children before reporting a complete reconciliation.
 func (p *Process) ReconcileReap(ctx context.Context) TeardownObservation {
+	if p.linux != nil {
+		return p.linux.reconcile(ctx)
+	}
 	observation := TeardownObservation{Phases: []TeardownPhase{PhaseWait}}
 	select {
 	case <-p.done:
@@ -375,6 +395,9 @@ func (p *Process) ReconcileReap(ctx context.Context) TeardownObservation {
 }
 
 func (p *Process) Observe() SurvivorObservation {
+	if p.linux != nil {
+		return p.linux.observe()
+	}
 	select {
 	case <-p.done:
 		return SurvivorObservation{Kind: SurvivorDead, Evidence: localEvidence}
@@ -384,6 +407,9 @@ func (p *Process) Observe() SurvivorObservation {
 }
 
 func (p *Process) Teardown(ctx context.Context) TeardownObservation {
+	if p.linux != nil {
+		return p.linux.teardown(ctx)
+	}
 	phases := []TeardownPhase{PhaseInterrupt}
 	census := GroupCensusObservation{}
 	if p.localDarwin {
@@ -430,6 +456,9 @@ func (p *Process) Teardown(ctx context.Context) TeardownObservation {
 }
 
 func (p *Process) Close() ResourceObservation {
+	if p.linux != nil {
+		return p.linux.close()
+	}
 	p.closeOnce.Do(func() {
 		var errs []error
 		if p.stdin != nil {

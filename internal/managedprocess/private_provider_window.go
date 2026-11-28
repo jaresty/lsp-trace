@@ -23,6 +23,7 @@ const PrivateProviderCensusReadLimit = 4096
 type PrivateProviderWindowProfile struct {
 	owner                                           *Manager
 	Available, LocalDarwin                          bool
+	LinuxOwnedGroupCandidate                        bool // comparable quote only; not admission
 	StderrRetention                                 int
 	StderrReadLimit, StderrScratch, CensusReadLimit int
 	GracePeriod                                     time.Duration
@@ -32,7 +33,7 @@ func (m *Manager) PrivateProviderWindowProfile() PrivateProviderWindowProfile {
 	if m == nil {
 		return PrivateProviderWindowProfile{}
 	}
-	return PrivateProviderWindowProfile{owner: m, Available: m.available, LocalDarwin: m.localDarwin, StderrRetention: m.options.StderrLimit, StderrReadLimit: PrivateProviderStderrReadLimit, StderrScratch: PrivateProviderStderrScratch, CensusReadLimit: PrivateProviderCensusReadLimit, GracePeriod: m.options.GracePeriod}
+	return PrivateProviderWindowProfile{owner: m, Available: m.available, LocalDarwin: m.localDarwin, LinuxOwnedGroupCandidate: m.linuxCandidate, StderrRetention: m.options.StderrLimit, StderrReadLimit: PrivateProviderStderrReadLimit, StderrScratch: PrivateProviderStderrScratch, CensusReadLimit: PrivateProviderCensusReadLimit, GracePeriod: m.options.GracePeriod}
 }
 
 type privateProviderWindowKey struct{}
